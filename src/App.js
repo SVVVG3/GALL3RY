@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
-import NftGrid from './components/NftGrid';
+import NftGrid from './components/NFTGrid';
 import SearchBar from './components/SearchBar';
 import SignInButton from './components/SignInButton';
 import FolderManager from './components/FolderManager';
