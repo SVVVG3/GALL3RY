@@ -1,43 +1,33 @@
 import React from 'react';
 
 /**
- * NftCard Component
- * Displays an individual NFT
+ * NftCard component for displaying a single NFT
+ * @param {Object} nft - The NFT object to display
+ * @param {Function} onClick - Function to call when the card is clicked
  */
-const NftCard = ({ nft }) => {
-  const imageUrl = nft.media?.[0]?.gateway || 
-                  nft.metadata?.image || 
-                  'https://via.placeholder.com/400?text=No+Image';
+const NftCard = ({ nft, onClick }) => {
+  if (!nft) return null;
 
-  const title = nft.title || nft.metadata?.name || 'Unnamed NFT';
-  const collection = nft.contract?.name || 'Unknown Collection';
-  const tokenId = nft.id?.tokenId ? 
-    `#${parseInt(nft.id.tokenId, 16)}` : 
-    nft.tokenId ? `#${nft.tokenId}` : '';
+  // Handle different NFT data structures
+  const name = nft.name || nft.metadata?.name || nft.token_id || 'Unnamed NFT';
+  const image = nft.image || nft.metadata?.image || 'https://via.placeholder.com/300x300?text=No+Image';
+  const collection = nft.collection?.name || nft.contract_name || 'Unknown Collection';
 
   return (
-    <div className="bg-white rounded-xl shadow-md overflow-hidden hover:shadow-lg transition-shadow">
-      <div className="w-full aspect-square bg-gray-100">
+    <div className="nft-card" onClick={onClick}>
+      <div className="nft-image-container">
         <img 
-          src={imageUrl} 
-          alt={title}
-          className="w-full h-full object-cover"
+          src={image} 
+          alt={name} 
+          className="nft-image"
           onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = 'https://via.placeholder.com/400?text=Error+Loading+Image';
+            e.target.src = 'https://via.placeholder.com/300x300?text=Error+Loading';
           }}
         />
       </div>
-      <div className="p-4">
-        <h3 className="text-lg font-semibold text-gray-800 mb-1 truncate" title={title}>
-          {title} {tokenId}
-        </h3>
-        <p className="text-sm text-gray-600 mb-2 truncate" title={collection}>
-          {collection}
-        </p>
-        <button className="w-full py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
-          View Details
-        </button>
+      <div className="nft-details">
+        <h3 className="nft-name">{name}</h3>
+        <p className="nft-collection">{collection}</p>
       </div>
     </div>
   );
