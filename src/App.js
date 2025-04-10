@@ -11,9 +11,10 @@ import PublicFolderManager from './components/PublicFolderManager';
 import { useAuth } from './contexts/AuthContext';
 import zapperService from './services/zapperService';
 import UserDashboard from './pages/UserDashboard';
-import DiscoveryPage from './pages/DiscoveryPage';
 import LoginPage from './pages/LoginPage';
 import { AuthProvider } from './contexts/AuthContext';
+import FarcasterUserSearch from './components/FarcasterUserSearch';
+import FolderDetail from './components/FolderDetail';
 
 function App() {
   return (
@@ -33,9 +34,6 @@ function App() {
                 <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
                   My Collections
                 </NavLink>
-                <NavLink to="/discover" className={({ isActive }) => isActive ? 'active' : ''}>
-                  Discover
-                </NavLink>
               </nav>
               
               <div className="auth-actions">
@@ -49,13 +47,12 @@ function App() {
               <Route path="/" element={<HomePage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/dashboard" element={<UserDashboard />} />
-              <Route path="/discover" element={<DiscoveryPage />} />
             </Routes>
           </main>
           
           <footer className="app-footer">
             <div className="container">
-              <p>&copy; {new Date().getFullYear()} GALL3RY. All rights reserved.</p>
+              <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
             </div>
           </footer>
         </div>
@@ -64,38 +61,72 @@ function App() {
   );
 }
 
-// Simple HomePage component
+// Combined HomePage component with Discover functionality
 const HomePage = () => {
+  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'collections'
+  const [selectedFolderId, setSelectedFolderId] = useState(null);
+  const { isAuthenticated, profile, token } = useAuth();
+  
+  const handleFolderSelect = (folderId) => {
+    setSelectedFolderId(folderId);
+  };
+  
+  // Render the main content based on selected tab
+  const renderContent = () => {
+    if (selectedFolderId) {
+      return (
+        <div className="selected-folder-view">
+          <button 
+            className="back-button" 
+            onClick={() => setSelectedFolderId(null)}
+          >
+            &larr; Back to Gallery
+          </button>
+          
+          <FolderDetail 
+            folderId={selectedFolderId} 
+            isReadOnly={true}
+          />
+        </div>
+      );
+    }
+    
+    if (activeTab === 'search') {
+      return <FarcasterUserSearch />;
+    }
+    
+    return (
+      <PublicFolderManager 
+        userId={isAuthenticated ? profile?.fid : null}
+        token={token}
+        onFolderSelect={handleFolderSelect}
+      />
+    );
+  };
+  
   return (
     <div className="home-container">
       <div className="hero-section">
-        <h1>Organize & Share Your NFT Collection</h1>
-        <p>Create beautiful galleries, organize your NFTs, and share your collection with the world.</p>
-        <div className="hero-actions">
-          <NavLink to="/dashboard" className="btn btn-primary">Get Started</NavLink>
-          <NavLink to="/discover" className="btn btn-secondary">Explore Collections</NavLink>
-        </div>
+        <h1>Discover NFTs in the Farcaster Ecosystem</h1>
+        <p>Search Farcaster users to explore their NFT collections or browse shared galleries.</p>
       </div>
       
-      <div className="features-section">
-        <div className="feature-card">
-          <div className="feature-icon">🖼️</div>
-          <h3>Organize Your NFTs</h3>
-          <p>Group your NFTs into collections and folders for better organization.</p>
-        </div>
-        
-        <div className="feature-card">
-          <div className="feature-icon">🌐</div>
-          <h3>Share Publicly</h3>
-          <p>Make your collections public and share them with the world.</p>
-        </div>
-        
-        <div className="feature-card">
-          <div className="feature-icon">🔍</div>
-          <h3>Discover Collections</h3>
-          <p>Explore public collections from other users and find inspiration.</p>
-        </div>
+      <div className="discovery-tabs">
+        <button 
+          className={`tab-button ${activeTab === 'search' ? 'active' : ''}`}
+          onClick={() => setActiveTab('search')}
+        >
+          Search Farcaster Users
+        </button>
+        <button 
+          className={`tab-button ${activeTab === 'collections' ? 'active' : ''}`}
+          onClick={() => setActiveTab('collections')}
+        >
+          Public Collections
+        </button>
       </div>
+      
+      {renderContent()}
     </div>
   );
 };

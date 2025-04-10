@@ -18,10 +18,11 @@ const FarcasterUserSearch = () => {
   const [userNfts, setUserNfts] = useState([]);
   const [fetchNftsError, setFetchNftsError] = useState(null);
   
-  // Modal state
+  // UI state
   const [selectedNft, setSelectedNft] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [walletsExpanded, setWalletsExpanded] = useState(false);
 
   // Handle search for Farcaster user
   const handleSearch = async (e) => {
@@ -33,6 +34,7 @@ const FarcasterUserSearch = () => {
     setUserProfile(null);
     setUserNfts([]);
     setFetchNftsError(null);
+    setWalletsExpanded(false);
 
     try {
       console.log(`Searching for Farcaster user: ${searchQuery}`);
@@ -245,6 +247,22 @@ const FarcasterUserSearch = () => {
     setImageError(true);
   };
 
+  // Toggle wallets dropdown
+  const toggleWallets = () => {
+    setWalletsExpanded(!walletsExpanded);
+  };
+
+  // Get wallet count
+  const getWalletCount = () => {
+    if (!userProfile) return 0;
+    
+    let count = 0;
+    if (userProfile.connectedAddresses?.length) count += userProfile.connectedAddresses.length;
+    if (userProfile.custodyAddress) count += 1;
+    
+    return count;
+  };
+
   // Log when NFT data changes
   useEffect(() => {
     console.log(`NFT state updated: ${userNfts.length} NFTs available`);
@@ -291,48 +309,60 @@ const FarcasterUserSearch = () => {
             <div className="profile-info">
               <h3>{userProfile.displayName || userProfile.username}</h3>
               <p className="username">@{userProfile.username} · FID: {userProfile.fid}</p>
-              {userProfile.bio && <p className="bio">{userProfile.bio}</p>}
             </div>
           </div>
           
-          {/* Connected Wallets */}
-          <div className="connected-wallets">
-            <h4>Connected Wallets</h4>
-            {userProfile.connectedAddresses?.length > 0 || userProfile.custodyAddress ? (
-              <ul>
-                {userProfile.connectedAddresses?.map((address, index) => (
-                  <li key={index}>
-                    <span className="wallet-address">{address}</span>
-                    <a 
-                      href={`https://etherscan.io/address/${address}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="etherscan-link"
-                    >
-                      View on Etherscan
-                    </a>
-                  </li>
-                ))}
-                {userProfile.custodyAddress && (
-                  <li>
-                    <span className="wallet-address custody">
-                      {userProfile.custodyAddress} (Custody Address)
-                    </span>
-                    <a 
-                      href={`https://etherscan.io/address/${userProfile.custodyAddress}`} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="etherscan-link"
-                    >
-                      View on Etherscan
-                    </a>
-                  </li>
-                )}
-              </ul>
-            ) : (
-              <p className="no-wallets">No connected wallets found</p>
-            )}
-          </div>
+          {/* Connected Wallets Dropdown */}
+          {(userProfile.connectedAddresses?.length > 0 || userProfile.custodyAddress) && (
+            <div className="connected-wallets">
+              <div 
+                className="wallets-header" 
+                onClick={toggleWallets}
+              >
+                <h4>
+                  <span>Connected Wallets ({getWalletCount()})</span>
+                  <span className={`dropdown-arrow ${walletsExpanded ? 'expanded' : ''}`}>▼</span>
+                </h4>
+              </div>
+              
+              {walletsExpanded && (
+                <ul className="wallet-list">
+                  {userProfile.connectedAddresses?.map((address, index) => (
+                    <li key={index} className="wallet-item">
+                      <span className="wallet-address">
+                        {address.substring(0, 6)}...{address.substring(address.length - 4)}
+                      </span>
+                      <a 
+                        href={`https://etherscan.io/address/${address}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="etherscan-link"
+                      >
+                        View on Etherscan
+                      </a>
+                    </li>
+                  ))}
+                  {userProfile.custodyAddress && (
+                    <li className="wallet-item">
+                      <span className="wallet-address custody">
+                        {userProfile.custodyAddress.substring(0, 6)}...
+                        {userProfile.custodyAddress.substring(userProfile.custodyAddress.length - 4)}
+                        <span className="custody-label">(Custody)</span>
+                      </span>
+                      <a 
+                        href={`https://etherscan.io/address/${userProfile.custodyAddress}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="etherscan-link"
+                      >
+                        View on Etherscan
+                      </a>
+                    </li>
+                  )}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
       )}
 
