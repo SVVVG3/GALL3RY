@@ -8,6 +8,7 @@ import NftGrid from './NFTGrid';
 const FarcasterUserSearch = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [isLoadingNfts, setIsLoadingNfts] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [userNfts, setUserNfts] = useState([]);
   const [error, setError] = useState(null);
@@ -26,13 +27,27 @@ const FarcasterUserSearch = () => {
     
     try {
       // First fetch the user profile
+      console.log(`Searching for Farcaster user: ${searchQuery.trim()}`);
       const profile = await zapperService.getFarcasterProfile(searchQuery.trim());
       setUserProfile(profile);
       
       // If the profile has connected wallets, fetch NFTs for those wallets
       if (profile && profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-        const nfts = await zapperService.getNftsForAddresses(profile.connectedAddresses);
-        setUserNfts(nfts || []);
+        setIsLoadingNfts(true);
+        console.log(`Fetching NFTs for ${profile.username} with ${profile.connectedAddresses.length} wallets`);
+        
+        try {
+          const nfts = await zapperService.getNftsForAddresses(profile.connectedAddresses);
+          setUserNfts(nfts?.nfts || []);
+          console.log(`Found ${nfts?.nfts?.length || 0} NFTs`);
+        } catch (nftError) {
+          console.error('Error fetching NFTs:', nftError);
+          setError(`User profile found, but couldn't load NFTs: ${nftError.message}`);
+        } finally {
+          setIsLoadingNfts(false);
+        }
+      } else {
+        console.log('No connected wallets found for this user');
       }
     } catch (err) {
       console.error('Error searching for Farcaster user:', err);
@@ -81,6 +96,9 @@ const FarcasterUserSearch = () => {
                 src={userProfile.avatarUrl} 
                 alt={`${userProfile.displayName || userProfile.username}'s avatar`}
                 className="profile-avatar"
+                onError={(e) => {
+                  e.target.src = 'https://via.placeholder.com/80x80?text=No+Image';
+                }}
               />
             )}
             <div className="profile-info">
@@ -91,9 +109,9 @@ const FarcasterUserSearch = () => {
             </div>
           </div>
 
-          {userProfile.connectedAddresses && userProfile.connectedAddresses.length > 0 && (
+          {userProfile.connectedAddresses && userProfile.connectedAddresses.length > 0 ? (
             <div className="connected-wallets">
-              <h3>Connected Wallets</h3>
+              <h3>Connected Wallets ({userProfile.connectedAddresses.length})</h3>
               <ul className="wallet-list">
                 {userProfile.connectedAddresses.map((address, index) => (
                   <li key={index} className="wallet-address">
@@ -110,6 +128,10 @@ const FarcasterUserSearch = () => {
                 ))}
               </ul>
             </div>
+          ) : (
+            <div className="no-wallets-message">
+              <p>No connected wallets found for this user.</p>
+            </div>
           )}
         </div>
       )}
@@ -119,8 +141,14 @@ const FarcasterUserSearch = () => {
           <h3>NFTs {userNfts.length > 0 ? `(${userNfts.length})` : ''}</h3>
           <NftGrid 
             nfts={userNfts}
-            loading={isSearching}
-            emptyMessage="No NFTs found for this user"
+            loading={isLoadingNfts}
+            emptyMessage={
+              isLoadingNfts 
+                ? "Loading NFTs..." 
+                : userProfile.connectedAddresses?.length > 0 
+                  ? "No NFTs found for this user" 
+                  : "No connected wallets to fetch NFTs from"
+            }
             onNftClick={handleNftClick}
           />
         </div>
@@ -137,8 +165,11 @@ const FarcasterUserSearch = () => {
             </button>
             <div className="nft-detail-image">
               <img 
-                src={selectedNft.image || selectedNft.metadata?.image || 'https://via.placeholder.com/400?text=No+Image'} 
+                src={selectedNft.image || selectedNft.imageUrl || selectedNft.metadata?.image || 'https://via.placeholder.com/400?text=No+Image'} 
                 alt={selectedNft.name || 'NFT'} 
+                onError={(e) => {
+                  e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
+                }}
               />
             </div>
             <div className="nft-detail-info">
@@ -148,8 +179,8 @@ const FarcasterUserSearch = () => {
                 <p className="nft-description">{selectedNft.description}</p>
               )}
               <div className="nft-properties">
-                <p><strong>Token ID:</strong> {selectedNft.token_id}</p>
-                <p><strong>Contract:</strong> {selectedNft.contract_address}</p>
+                <p><strong>Token ID:</strong> {selectedNft.tokenId || selectedNft.token_id}</p>
+                <p><strong>Contract:</strong> {selectedNft.contractAddress || selectedNft.contract_address || 'Unknown'}</p>
               </div>
             </div>
           </div>
