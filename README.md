@@ -1,70 +1,121 @@
-# Getting Started with Create React App
+# NFT Gallery App
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A modern web application for managing and displaying NFT collections, with Farcaster authentication.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- Connect with Farcaster authentication
+- View NFTs from connected wallets
+- Create and manage collections of NFTs
+- Share public collections with others
+- Responsive design for all devices
 
-### `npm start`
+## Tech Stack
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Frontend**: React, Tailwind CSS
+- **Backend**: Vercel Serverless Functions (Node.js)
+- **Database**: MongoDB
+- **Authentication**: Farcaster Auth
+- **APIs**: Alchemy, Zapper, Neynar
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Getting Started
 
-### `npm test`
+### Prerequisites
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- Node.js (v16+)
+- npm or yarn
+- MongoDB connection string
+- API keys for Alchemy, Zapper, and Neynar
 
-### `npm run build`
+### Local Development
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd nft-gallery
+   ```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+3. Copy the `.env.example` file to `.env` and fill in your API keys and MongoDB connection string.
 
-### `npm run eject`
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Deployment to GitHub and Vercel
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### GitHub Setup
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+1. Create a new GitHub repository.
 
-## Learn More
+2. Initialize Git and push your code:
+   ```bash
+   git init
+   git add .
+   git commit -m "Initial commit"
+   git branch -M main
+   git remote add origin <your-github-repo-url>
+   git push -u origin main
+   ```
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+### Vercel Deployment
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+1. Sign up or log in to [Vercel](https://vercel.com/).
 
-### Code Splitting
+2. Import your GitHub repository.
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+3. Configure the project:
+   - Framework Preset: Next.js
+   - Build Command: `npm run build`
+   - Output Directory: `build`
 
-### Analyzing the Bundle Size
+4. Add environment variables:
+   - `MONGODB_URI`: Your MongoDB connection string
+   - `ZAPPER_API_KEY`: Your Zapper API key
+   - `REACT_APP_ZAPPER_API_KEY`: Same as above
+   - `REACT_APP_ALCHEMY_ETH_API_KEY`: Your Alchemy Ethereum API key
+   - `REACT_APP_ALCHEMY_BASE_API_KEY`: Your Alchemy Base API key
+   - `REACT_APP_NEYNAR_API_KEY`: Your Neynar API key
+   - `REACT_APP_FARCASTER_DOMAIN`: Your domain (e.g., `nft-gallery.app`)
+   - `REACT_APP_FARCASTER_SIWE_URI`: Your login URI (e.g., `https://nft-gallery.app/login`)
+   - `REACT_APP_OPTIMISM_RPC_URL`: Optimism RPC URL (`https://mainnet.optimism.io`)
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+5. Click "Deploy" and wait for the build to complete.
 
-### Making a Progressive Web App
+## Project Structure
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+```
+nft-gallery/
+├── api/                   # Vercel serverless functions
+│   ├── folders/           # Folder management endpoints
+│   ├── models/            # MongoDB models
+│   └── _utils.js          # Shared utility functions
+├── public/                # Static files
+├── src/
+│   ├── components/        # React components
+│   ├── contexts/          # React contexts
+│   ├── models/            # Data models
+│   ├── services/          # API service functions
+│   ├── utils/             # Utility functions
+│   ├── hooks/             # Custom React hooks
+│   ├── App.js             # Main App component
+│   └── index.js           # Entry point
+├── .env                   # Environment variables (for development)
+├── .env.example           # Example environment variables
+├── .gitignore             # Git ignore file
+├── vercel.json            # Vercel configuration
+├── package.json           # Dependencies and scripts
+├── tailwind.config.js     # Tailwind CSS configuration
+└── README.md              # Project documentation
+```
 
-### Advanced Configuration
+## License
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+MIT
