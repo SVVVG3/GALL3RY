@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import zapperService from '../services/zapperService';
 import NftGrid from './NFTGrid';
+import '../styles/FarcasterUserSearch.css';
 
 /**
  * Component for searching Farcaster users and displaying their NFTs
@@ -69,7 +70,7 @@ const FarcasterUserSearch = () => {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by Farcaster username or FID..."
+          placeholder="Enter Farcaster username or FID"
           className="search-input"
           disabled={isSearching}
         />
@@ -78,7 +79,12 @@ const FarcasterUserSearch = () => {
           className="search-button"
           disabled={isSearching || !searchQuery.trim()}
         >
-          {isSearching ? 'Searching...' : 'Search'}
+          {isSearching ? 'Searching...' : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2"/>
+              <path d="M20 20L16 16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          )}
         </button>
       </form>
 
@@ -122,7 +128,7 @@ const FarcasterUserSearch = () => {
                       rel="noopener noreferrer"
                       className="wallet-link"
                     >
-                      View on Etherscan
+                      View
                     </a>
                   </li>
                 ))}
@@ -165,7 +171,7 @@ const FarcasterUserSearch = () => {
             </button>
             <div className="nft-detail-image">
               <img 
-                src={selectedNft.image || selectedNft.imageUrl || selectedNft.metadata?.image || 'https://via.placeholder.com/400?text=No+Image'} 
+                src={selectedNft.imageUrl || selectedNft.image || selectedNft.metadata?.image || 'https://via.placeholder.com/400?text=No+Image'} 
                 alt={selectedNft.name || 'NFT'} 
                 onError={(e) => {
                   e.target.src = 'https://via.placeholder.com/400x400?text=No+Image';
@@ -180,7 +186,10 @@ const FarcasterUserSearch = () => {
               )}
               <div className="nft-properties">
                 <p><strong>Token ID:</strong> {selectedNft.tokenId || selectedNft.token_id}</p>
-                <p><strong>Contract:</strong> {selectedNft.contractAddress || selectedNft.contract_address || 'Unknown'}</p>
+                <p><strong>Collection:</strong> {selectedNft.collection?.name || selectedNft.contract_name || 'Unknown'}</p>
+                {selectedNft.estimatedValueEth && (
+                  <p><strong>Estimated Value:</strong> {selectedNft.estimatedValueEth} ETH</p>
+                )}
               </div>
             </div>
           </div>

@@ -190,37 +190,32 @@ const zapperService = {
   },
 
   /**
-   * Get a Farcaster user's profile from Neynar API
+   * Get a Farcaster user's profile from Neynar API through our proxy endpoint
    */
   async getFarcasterProfileFromNeynar(usernameOrFid) {
     try {
       const isUsername = isNaN(parseInt(usernameOrFid));
-      const apiKey = process.env.REACT_APP_NEYNAR_API_KEY;
       
-      if (!apiKey) {
-        console.error('Neynar API key is missing');
-        throw new Error('Neynar API key is missing');
-      }
+      console.log(`Fetching Farcaster profile for ${isUsername ? 'username' : 'FID'}: ${usernameOrFid} via Neynar API proxy`);
       
-      console.log(`Fetching Farcaster profile for ${isUsername ? 'username' : 'FID'}: ${usernameOrFid} via Neynar API`);
-      
+      // Use our serverless proxy endpoint instead of direct Neynar API to avoid CORS issues
       let url;
       if (isUsername) {
-        url = `https://api.neynar.com/v2/farcaster/user/search?q=${usernameOrFid}&limit=1`;
+        url = `/api/neynar?endpoint=search&q=${encodeURIComponent(usernameOrFid)}`;
       } else {
-        url = `https://api.neynar.com/v2/farcaster/user?fid=${usernameOrFid}`;
+        url = `/api/neynar?endpoint=user&fid=${usernameOrFid}`;
       }
       
       const response = await fetch(url, {
         method: 'GET',
         headers: {
-          'accept': 'application/json',
-          'api_key': apiKey
+          'accept': 'application/json'
         }
       });
       
       if (!response.ok) {
-        throw new Error(`Neynar API error: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Neynar API error: ${errorData.message || response.statusText}`);
       }
       
       const data = await response.json();
@@ -240,13 +235,12 @@ const zapperService = {
       
       console.log(`Found Farcaster user: ${user.username} (FID: ${user.fid})`);
       
-      // Get connected addresses
+      // Get connected addresses through our proxy
       console.log(`Fetching connected addresses for FID: ${user.fid}`);
-      const addressesResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/addresses?fid=${user.fid}`, {
+      const addressesResponse = await fetch(`/api/neynar?endpoint=addresses&fid=${user.fid}`, {
         method: 'GET',
         headers: {
-          'accept': 'application/json',
-          'api_key': apiKey
+          'accept': 'application/json'
         }
       });
       
