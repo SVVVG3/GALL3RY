@@ -203,7 +203,7 @@ const zapperService = {
             fid
             metadata {
               displayName
-              bio
+              description
               imageUrl
             }
             custodyAddress
@@ -231,7 +231,7 @@ const zapperService = {
         fid: data.farcasterProfile.fid,
         username: data.farcasterProfile.username,
         displayName: data.farcasterProfile.metadata?.displayName || '',
-        bio: data.farcasterProfile.metadata?.bio || '',
+        bio: data.farcasterProfile.metadata?.description || '',
         avatarUrl: data.farcasterProfile.metadata?.imageUrl || '',
         connectedAddresses: data.farcasterProfile.connectedAddresses || [],
         custodyAddress: data.farcasterProfile.custodyAddress || null

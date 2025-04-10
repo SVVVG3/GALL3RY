@@ -36,7 +36,7 @@ module.exports = async (req, res) => {
               fid
               metadata {
                 displayName
-                bio
+                description
                 imageUrl
               }
               custodyAddress

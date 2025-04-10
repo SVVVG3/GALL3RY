@@ -21,7 +21,7 @@ async function testZapperAPI() {
         fid
         metadata {
           displayName
-          bio
+          description
           imageUrl
         }
         custodyAddress
@@ -76,7 +76,7 @@ async function testOurAPIProxy() {
         fid
         metadata {
           displayName
-          bio
+          description
           imageUrl
         }
         custodyAddress
