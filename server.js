@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const path = require('path');
 const config = require('./src/config');
 const folderController = require('./src/server/folderController');
+const zapperHandler = require('./api/zapper');
+const neynarHandler = require('./api/neynar');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,6 +49,10 @@ const apiRouter = express.Router();
 // Public endpoints (no auth required)
 apiRouter.get('/users/:fid/folders/public', folderController.getPublicFoldersByUser);
 apiRouter.get('/folders/featured', folderController.getFeaturedFolders);
+
+// Add Zapper and Neynar API handlers
+apiRouter.post('/zapper', zapperHandler);
+apiRouter.get('/neynar', neynarHandler);
 
 // Protected endpoints (auth required)
 apiRouter.get('/folders', authMiddleware, folderController.getUserFolders);
