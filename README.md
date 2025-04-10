@@ -45,8 +45,8 @@ REACT_APP_API_URL=http://localhost:3001/api
 
 1. Clone the repository
 ```bash
-git clone https://github.com/your-username/nft-gallery.git
-cd nft-gallery
+git clone https://github.com/SVVVG3/GALL3RY.git
+cd gall3ry
 ```
 
 2. Install dependencies
@@ -105,4 +105,4 @@ MIT License
 
 ## Credits
 
-Created by [Your Name](https://github.com/your-username)
+Created by [SVVVG3](https://github.com/SVVVG3)
