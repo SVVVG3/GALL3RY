@@ -253,7 +253,7 @@ const zapperService = {
         throw new Error('At least one wallet address is required');
       }
 
-      console.log(`Fetching NFTs for ${addresses.length} addresses`);
+      console.log(`Fetching NFTs for addresses:`, addresses);
 
       // Updated query to match the current Zapper API schema
       const query = `
@@ -273,35 +273,21 @@ const zapperService = {
               mediasV2 {
                 ... on Image {
                   url
-                  originalUrl
-                  preview
-                  type
+                  originalUri
+                  original
                 }
                 ... on Animation {
                   url
-                  originalUrl
-                  image
-                  preview
-                  type
+                  originalUri
+                  original
                 }
               }
-              mediaUrl
               collection {
                 id
                 name
                 floorPriceEth
                 cardImageUrl
-                imageUrl
               }
-              contract {
-                address
-                name
-                network
-              }
-              estimatedValue {
-                valueUsd
-              }
-              estimatedValueEth
             }
             cursor
           }
@@ -313,155 +299,139 @@ const zapperService = {
       }
     `;
 
-      const data = await this.makeGraphQLRequest(query, { owners: addresses, first, after });
+      console.log(`Sending GraphQL request to fetch NFTs...`);
       
-      // Early return if no data
-      if (!data || !data.nftUsersTokens || !data.nftUsersTokens.edges) {
-        console.warn('No NFT data returned from Zapper API');
-        return {
-          nfts: [],
-          pageInfo: { hasNextPage: false, endCursor: null }
-        };
-      }
-      
-      console.log(`Zapper API returned ${data.nftUsersTokens.edges.length} NFT results`);
-      
-      // Extract the pagination info
-      const pageInfo = data.nftUsersTokens.pageInfo || { hasNextPage: false, endCursor: null };
-      
-      // Helper function to get the best image URL from mediaV2 array - simplified for performance
-      const getBestImageUrl = (nft) => {
-        // Check for direct mediaUrl on the NFT
-        if (nft.mediaUrl && nft.mediaUrl.startsWith('http')) {
-          return nft.mediaUrl;
+      try {
+        const data = await this.makeGraphQLRequest(query, { owners: addresses, first, after });
+        console.log(`GraphQL response received:`, JSON.stringify(data, null, 2).substring(0, 500) + '...');
+        
+        // Early return if no data
+        if (!data) {
+          console.warn('Empty response from Zapper API');
+          return {
+            nfts: [],
+            pageInfo: { hasNextPage: false, endCursor: null }
+          };
         }
         
-        // Try to extract from mediasV2
-        if (nft.mediasV2 && Array.isArray(nft.mediasV2) && nft.mediasV2.length > 0) {
-          // Try to find the best media in order of preference
-          for (const media of nft.mediasV2) {
-            if (!media) continue;
-            
-            // First try originalUrl
-            if (media.originalUrl && media.originalUrl.startsWith('http')) {
-              return media.originalUrl;
-            }
-            
-            // Then try regular url
-            if (media.url && media.url.startsWith('http')) {
-              return media.url;
-            }
-            
-            // Then try image if it's a video
-            if (media.image && media.image.startsWith('http')) {
-              return media.image;
-            }
-            
-            // Last resort, try preview
-            if (media.preview && media.preview.startsWith('http')) {
-              return media.preview;
-            }
-          }
+        if (!data.nftUsersTokens) {
+          console.warn('Missing nftUsersTokens in response:', JSON.stringify(data, null, 2));
+          return {
+            nfts: [],
+            pageInfo: { hasNextPage: false, endCursor: null }
+          };
         }
         
-        // If no media found, check collection images
-        if (nft.collection) {
-          if (nft.collection.imageUrl && nft.collection.imageUrl.startsWith('http')) {
-            return nft.collection.imageUrl;
+        if (!data.nftUsersTokens.edges || !Array.isArray(data.nftUsersTokens.edges)) {
+          console.warn('Invalid edges in nftUsersTokens:', data.nftUsersTokens);
+          return {
+            nfts: [],
+            pageInfo: { hasNextPage: false, endCursor: null }
+          };
+        }
+        
+        console.log(`Zapper API returned ${data.nftUsersTokens.edges.length} NFT results`);
+        
+        // Extract the pagination info
+        const pageInfo = data.nftUsersTokens.pageInfo || { hasNextPage: false, endCursor: null };
+        
+        // Helper function to get the best image URL from mediaV2 array
+        const getBestImageUrl = (nft) => {
+          // Try to extract from mediasV2
+          if (nft.mediasV2 && Array.isArray(nft.mediasV2) && nft.mediasV2.length > 0) {
+            // Try to find the best media in order of preference
+            for (const media of nft.mediasV2) {
+              if (!media) continue;
+              
+              // First try original
+              if (media.original && media.original.startsWith('http')) {
+                return media.original;
+              }
+              
+              // Then try originalUri
+              if (media.originalUri && media.originalUri.startsWith('http')) {
+                return media.originalUri;
+              }
+              
+              // Then try regular url
+              if (media.url && media.url.startsWith('http')) {
+                return media.url;
+              }
+            }
           }
           
-          if (nft.collection.cardImageUrl && nft.collection.cardImageUrl.startsWith('http')) {
+          // If no media found, check collection image
+          if (nft.collection && nft.collection.cardImageUrl) {
             return nft.collection.cardImageUrl;
           }
-        }
+          
+          return null;
+        };
         
-        return null;
-      };
-      
-      // Process and map the NFTs to a clean structure - more efficiently
-      const processedNfts = await Promise.all(
-        data.nftUsersTokens.edges.map(async (edge) => {
+        console.log(`Starting NFT processing...`);
+        
+        // Process and map the NFTs to a clean structure
+        const processedNfts = [];
+        
+        for (const edge of data.nftUsersTokens.edges) {
           const nft = edge.node;
           
-          if (!nft || !nft.id) return null;
+          if (!nft || !nft.id) {
+            console.log('Skipping invalid NFT node:', edge);
+            continue;
+          }
           
           // Get image URL from the NFT data
           let imageUrl = getBestImageUrl(nft);
-          
-          // If no valid image found from Zapper, try Alchemy API
-          if (!imageUrl && nft.contract?.address && nft.tokenId) {
-            try {
-              const networkMap = {
-                'ETHEREUM_MAINNET': 'ethereum',
-                'POLYGON_MAINNET': 'polygon',
-                'OPTIMISM_MAINNET': 'optimism',
-                'ARBITRUM_MAINNET': 'arbitrum',
-                'BASE_MAINNET': 'base'
-              };
-              
-              const network = networkMap[nft.contract.network] || 'ethereum';
-              
-              const alchemyImage = await this.getAlchemyNFTImage(
-                nft.contract.address, 
-                nft.tokenId,
-                network
-              );
-              
-              if (alchemyImage) {
-                imageUrl = alchemyImage;
-              }
-            } catch (error) {
-              // Silently continue if Alchemy fails
-            }
-          }
+          console.log(`Processing NFT: ${nft.name || 'Unnamed'}, tokenId: ${nft.tokenId}, initial imageUrl: ${imageUrl || 'none'}`);
           
           // Process IPFS URLs in image URLs if needed
           if (imageUrl && (imageUrl.startsWith('ipfs://') || imageUrl.startsWith('ar://'))) {
-            imageUrl = this.processImageUrl(imageUrl);
+            const processedUrl = this.processImageUrl(imageUrl);
+            console.log(`Processed IPFS/Arweave URL: ${imageUrl} -> ${processedUrl}`);
+            imageUrl = processedUrl;
           }
           
           // Use placeholder as last resort
           if (!imageUrl) {
             imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
+            console.log(`Using placeholder image`);
           }
           
-          // Return a clean NFT object structure
-          return {
+          // Create clean NFT object
+          const processedNft = {
             id: nft.id,
             name: nft.name || 'Unnamed NFT',
             tokenId: nft.tokenId,
             description: nft.description,
             imageUrl: imageUrl,
-            contract_address: nft.contract?.address || null,
             token_id: nft.tokenId,
             collection: nft.collection ? {
               id: nft.collection.id,
               name: nft.collection.name || 'Unknown Collection',
               floorPriceEth: nft.collection.floorPriceEth,
-              imageUrl: nft.collection.cardImageUrl || nft.collection.imageUrl
+              imageUrl: nft.collection.cardImageUrl
             } : null,
-            contract_name: nft.contract?.name || 'Unknown Contract',
-            estimatedValueEth: nft.estimatedValueEth,
-            estimatedValueUsd: nft.estimatedValue?.valueUsd || (nft.estimatedValueEth ? nft.estimatedValueEth * 3000 : null),
             cursor: edge.cursor
           };
-        })
-      );
-      
-      const filteredNfts = processedNfts.filter(nft => nft !== null);
-      console.log(`Processed ${filteredNfts.length} valid NFTs`);
-      
-      // Filter out null values and return the processed NFTs
-      return {
-        nfts: filteredNfts,
-        pageInfo
-      };
+          
+          processedNfts.push(processedNft);
+        }
+        
+        console.log(`Processed ${processedNfts.length} valid NFTs`);
+        
+        // Return the processed NFTs
+        return {
+          nfts: processedNfts,
+          pageInfo
+        };
+      } catch (graphqlError) {
+        console.error('Error in GraphQL request:', graphqlError);
+        throw new Error(`GraphQL request failed: ${graphqlError.message}`);
+      }
     } catch (error) {
       console.error('Error fetching NFTs:', error.message);
-      return {
-        nfts: [],
-        pageInfo: { hasNextPage: false, endCursor: null }
-      };
+      throw new Error(`Failed to fetch NFTs: ${error.message}`);
     }
   },
 
