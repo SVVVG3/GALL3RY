@@ -4,8 +4,10 @@ const zapperHandler = require('./zapper');
 /**
  * This file handles the deprecated Neynar API requests and redirects them to use the Zapper API
  * It exists to maintain backward compatibility while the app transitions to Zapper only
+ * 
+ * This handler is designed to work with both Express and Vercel serverless functions
  */
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   // Set CORS headers for all responses
   Object.entries(corsHeaders).forEach(([key, value]) => {
     res.setHeader(key, value);
@@ -58,4 +60,6 @@ module.exports = async (req, res) => {
     message: 'The Neynar API endpoint is deprecated. Please use the Zapper GraphQL API at /api/zapper instead.',
     documentation: 'See https://protocol.zapper.xyz/agents.txt for Zapper API documentation'
   });
-}; 
+};
+
+module.exports = handler; 

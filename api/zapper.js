@@ -4,8 +4,10 @@ const { corsHeaders, cache } = require('./_utils');
 /**
  * Proxy API handler for Zapper API GraphQL requests
  * This helps solve CORS issues when calling the Zapper API directly from the frontend
+ * 
+ * This handler is designed to work with both Express and Vercel serverless functions
  */
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   // Set CORS headers for all responses
   Object.entries(corsHeaders).forEach(([key, value]) => {
     res.setHeader(key, value);
@@ -29,7 +31,9 @@ module.exports = async (req, res) => {
 
   try {
     // Extract the GraphQL query and variables from the request body
-    const { query, variables } = req.body;
+    // Handle both direct body (Express) and body property (Vercel)
+    const requestBody = req.body || {};
+    const { query, variables } = requestBody;
 
     if (!query) {
       return res.status(400).json({ error: 'Missing GraphQL query in request body' });
@@ -76,4 +80,6 @@ module.exports = async (req, res) => {
       details: error.response?.data || {}
     });
   }
-}; 
+};
+
+module.exports = handler; 

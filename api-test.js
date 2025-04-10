@@ -87,6 +87,7 @@ async function testOurAPIProxy() {
   
   try {
     console.log('Making request to our API proxy...');
+    console.log('Request URL: http://localhost:3001/api/zapper');
     
     const response = await axios({
       url: 'http://localhost:3001/api/zapper',
@@ -114,6 +115,10 @@ async function testOurAPIProxy() {
     if (error.response) {
       console.error('Response status:', error.response.status);
       console.error('Response data:', error.response.data);
+    } else if (error.request) {
+      console.error('No response received. This might indicate the server is not running on port 3001.');
+    } else {
+      console.error('Error details:', error);
     }
     return false;
   }
