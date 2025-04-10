@@ -1,59 +1,92 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { AuthKitProvider, useProfile } from '@farcaster/auth-kit';
-import '@farcaster/auth-kit/styles.css';
 
-// Create Auth context
-const AuthContext = createContext(null);
-
-// Farcaster AuthKit configuration
-const authKitConfig = {
-  domain: window.location.host,
-  siweUri: `${window.location.origin}/login`,
-  rpcUrl: 'https://mainnet.optimism.io', // Optimism RPC URL for Farcaster
-};
-
-// Provider component for Farcaster authentication
-export const AuthProvider = ({ children }) => {
-  return (
-    <AuthKitProvider config={authKitConfig}>
-      <AuthContextProvider>{children}</AuthContextProvider>
-    </AuthKitProvider>
-  );
-};
-
-// Internal provider that uses the Farcaster hooks
-const AuthContextProvider = ({ children }) => {
-  const { isAuthenticated, profile, logout } = useProfile();
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // When profile state changes, we're no longer loading
-    setLoading(false);
-  }, [profile, isAuthenticated]);
-
-  // Values to be provided to consumers of this context
-  const authContextValue = {
-    isAuthenticated,
-    loading,
-    profile,
-    logout,
-    // Add any custom auth methods here
-  };
-
-  return (
-    <AuthContext.Provider value={authContextValue}>
-      {children}
-    </AuthContext.Provider>
-  );
-};
+// Create the auth context
+const AuthContext = createContext();
 
 // Custom hook to use the auth context
 export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === null) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 };
 
-export default AuthProvider; 
+// Auth provider component
+export const AuthProvider = ({ children }) => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Check for existing auth on component mount
+  useEffect(() => {
+    const storedToken = localStorage.getItem('auth_token');
+    const storedProfile = localStorage.getItem('auth_profile');
+    
+    if (storedToken && storedProfile) {
+      setToken(storedToken);
+      setProfile(JSON.parse(storedProfile));
+      setIsAuthenticated(true);
+    }
+    
+    setLoading(false);
+  }, []);
+
+  // Login function - in a real app, this would authenticate with a server
+  const login = async (farcasterCredentials) => {
+    try {
+      // This is a mock login for demo purposes
+      // In a real app, you would validate credentials with a server
+      
+      // For demo, we'll create a mock profile
+      const mockProfile = {
+        fid: '123456',
+        username: 'demo_user',
+        displayName: 'Demo User',
+        avatarUrl: 'https://i.pravatar.cc/150?u=demo_user',
+        connectedAddresses: ['0x1234...5678'],
+      };
+      
+      // Generate a mock token
+      const mockToken = 'mock_token_' + Math.random().toString(36).substring(2);
+      
+      // Save to state
+      setProfile(mockProfile);
+      setToken(mockToken);
+      setIsAuthenticated(true);
+      
+      // Save to localStorage for persistence
+      localStorage.setItem('auth_token', mockToken);
+      localStorage.setItem('auth_profile', JSON.stringify(mockProfile));
+      
+      return { success: true };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error };
+    }
+  };
+
+  // Logout function
+  const logout = () => {
+    setProfile(null);
+    setToken(null);
+    setIsAuthenticated(false);
+    
+    // Remove from localStorage
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_profile');
+  };
+
+  // Values to share in context
+  const value = {
+    isAuthenticated,
+    profile,
+    token,
+    loading,
+    login,
+    logout
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {!loading && children}
+    </AuthContext.Provider>
+  );
+}; 

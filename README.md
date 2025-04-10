@@ -1,122 +1,108 @@
-# NFT Gallery App
+# GALL3RY - NFT Collection Manager
 
-A modern web application for managing and displaying NFT collections, with Farcaster authentication.
+A web application for creating, organizing, and sharing NFT collections with Farcaster social integration.
 
 ## Features
 
-- Connect with Farcaster authentication
-- View NFTs from connected wallets
-- Create and manage collections of NFTs
-- Share public collections with others
-- Responsive design for all devices
+- **NFT Discovery**: Browse and search for NFTs across different blockchains
+- **Folder Management**: Create private or public folders to organize your NFT collections
+- **Farcaster Integration**: Login with Farcaster and share your collections
+- **Public Galleries**: Discover featured collections from other users
+- **Responsive Design**: Works on desktop and mobile devices
 
 ## Tech Stack
 
 - **Frontend**: React, Tailwind CSS
-- **Backend**: Vercel Serverless Functions (Node.js)
+- **Backend**: Node.js, Express
 - **Database**: MongoDB
-- **Authentication**: Farcaster Auth
-- **APIs**: Alchemy, Zapper, Neynar
+- **Authentication**: Farcaster Auth Kit
+- **NFT Data**: Zapper API
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js (v16+)
-- npm or yarn
-- MongoDB connection string
-- API keys for Alchemy, Zapper, and Neynar
+- Node.js v16+
+- MongoDB instance (local or Atlas)
 
-### Local Development
+### Environment Variables
 
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd nft-gallery
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Copy the `.env.example` file to `.env` and fill in your API keys and MongoDB connection string.
-
-4. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Deployment to GitHub and Vercel
-
-### GitHub Setup
-
-1. Create a new GitHub repository.
-
-2. Initialize Git and push your code:
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin <your-github-repo-url>
-   git push -u origin main
-   ```
-
-### Vercel Deployment
-
-1. Sign up or log in to [Vercel](https://vercel.com/).
-
-2. Import your GitHub repository.
-
-3. Configure the project:
-   - Framework Preset: Next.js
-   - Build Command: `npm run build`
-   - Output Directory: `build`
-
-4. Add environment variables:
-   - `MONGODB_URI`: Your MongoDB connection string
-   - `ZAPPER_API_KEY`: Your Zapper API key
-   - `REACT_APP_ZAPPER_API_KEY`: Same as above
-   - `REACT_APP_ALCHEMY_ETH_API_KEY`: Your Alchemy Ethereum API key
-   - `REACT_APP_ALCHEMY_BASE_API_KEY`: Your Alchemy Base API key
-   - `REACT_APP_NEYNAR_API_KEY`: Your Neynar API key
-   - `REACT_APP_FARCASTER_DOMAIN`: Your domain (e.g., `nft-gallery.app`)
-   - `REACT_APP_FARCASTER_SIWE_URI`: Your login URI (e.g., `https://nft-gallery.app/login`)
-   - `REACT_APP_OPTIMISM_RPC_URL`: Optimism RPC URL (`https://mainnet.optimism.io`)
-
-5. Click "Deploy" and wait for the build to complete.
-
-## Project Structure
+Create a `.env` file in the root directory with the following variables:
 
 ```
-nft-gallery/
-├── api/                   # Vercel serverless functions
-│   ├── folders/           # Folder management endpoints
-│   ├── models/            # MongoDB models
-│   └── _utils.js          # Shared utility functions
-├── public/                # Static files
-├── src/
-│   ├── components/        # React components
-│   ├── contexts/          # React contexts
-│   ├── models/            # Data models
-│   ├── services/          # API service functions
-│   ├── utils/             # Utility functions
-│   ├── hooks/             # Custom React hooks
-│   ├── App.js             # Main App component
-│   └── index.js           # Entry point
-├── .env                   # Environment variables (for development)
-├── .env.example           # Example environment variables
-├── .gitignore             # Git ignore file
-├── vercel.json            # Vercel configuration
-├── package.json           # Dependencies and scripts
-├── tailwind.config.js     # Tailwind CSS configuration
-└── README.md              # Project documentation
+# API Keys
+REACT_APP_ZAPPER_API_KEY=your_zapper_api_key
+REACT_APP_NEYNAR_API_KEY=your_neynar_api_key
+
+# MongoDB
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/<db-name>
+
+# API Configuration
+REACT_APP_API_URL=http://localhost:3001/api
 ```
+
+### Installation
+
+1. Clone the repository
+```bash
+git clone https://github.com/your-username/nft-gallery.git
+cd nft-gallery
+```
+
+2. Install dependencies
+```bash
+npm install
+```
+
+3. Start the development server
+```bash
+npm run dev
+```
+
+This will start both the React frontend on port 3000 and the Express backend on port 3001.
+
+## Folder Service
+
+The folder service provides functionality to create and manage NFT collections:
+
+- Get user folders
+- Create new folders
+- Update folder details
+- Add/remove NFTs to folders
+- Toggle folder visibility (public/private)
+- Browse public and featured folders
+
+## API Endpoints
+
+### Public Endpoints
+
+- `GET /api/users/:fid/folders/public` - Get public folders for a specific user
+- `GET /api/folders/featured` - Get featured public folders
+
+### Protected Endpoints (Authentication Required)
+
+- `GET /api/folders` - Get all folders for the authenticated user
+- `POST /api/folders` - Create a new folder
+- `GET /api/folders/:folderId` - Get details of a specific folder
+- `PUT /api/folders/:folderId` - Update a folder
+- `DELETE /api/folders/:folderId` - Delete a folder
+- `POST /api/folders/:folderId/nfts` - Add an NFT to a folder
+- `DELETE /api/folders/:folderId/nfts/:nftId` - Remove an NFT from a folder
+- `PATCH /api/folders/:folderId/visibility` - Toggle folder visibility
+
+## Deployment
+
+### Vercel
+
+1. Push your code to GitHub
+2. Connect your GitHub repository to Vercel
+3. Configure environment variables in Vercel dashboard
+4. Deploy
 
 ## License
 
-MIT
-# GALL3RY - NFT Gallery App
+MIT License
+
+## Credits
+
+Created by [Your Name](https://github.com/your-username)

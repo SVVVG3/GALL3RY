@@ -1,13 +1,27 @@
-// Determine the API URL based on the current environment
-let apiPort = 3001; // Default port
+/**
+ * Application configuration settings
+ */
+const config = {
+  // API base URL, defaulting to localhost in development
+  apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+  
+  // Authentication settings
+  auth: {
+    storageKey: 'nft_gallery_auth',
+    tokenExpiryDays: 7
+  },
+  
+  // Feature flags
+  features: {
+    enablePublicFolders: true,
+    enableNftMinting: false,
+    enableSocialSharing: true
+  },
+  
+  // Default pagination settings
+  pagination: {
+    itemsPerPage: 12
+  }
+};
 
-// Check if the application is running on a different port
-// The server will be on 3001, while the client might be on 3002
-if (window.location.port === '3002') {
-  apiPort = 3001;
-}
-
-export const API_URL = `http://localhost:${apiPort}`;
-
-// For debugging
-console.log(`Using API URL: ${API_URL}`); 
+export default config; 

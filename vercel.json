@@ -1,27 +1,12 @@
 {
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/$1" }
-  ],
-  "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "ZAPPER_API_KEY": "@zapper_api_key",
-    "REACT_APP_ZAPPER_API_KEY": "@zapper_api_key",
-    "REACT_APP_ALCHEMY_ETH_API_KEY": "@alchemy_eth_api_key",
-    "REACT_APP_ALCHEMY_BASE_API_KEY": "@alchemy_base_api_key",
-    "REACT_APP_NEYNAR_API_KEY": "@neynar_api_key",
-    "REACT_APP_FARCASTER_DOMAIN": "nft-gallery.app",
-    "REACT_APP_FARCASTER_SIWE_URI": "https://nft-gallery.app/login",
-    "REACT_APP_OPTIMISM_RPC_URL": "https://mainnet.optimism.io"
-  },
-  "build": {
-    "env": {
-      "REACT_APP_ZAPPER_API_KEY": "@zapper_api_key",
-      "REACT_APP_ALCHEMY_ETH_API_KEY": "@alchemy_eth_api_key",
-      "REACT_APP_ALCHEMY_BASE_API_KEY": "@alchemy_base_api_key",
-      "REACT_APP_NEYNAR_API_KEY": "@neynar_api_key",
-      "REACT_APP_FARCASTER_DOMAIN": "nft-gallery.app",
-      "REACT_APP_FARCASTER_SIWE_URI": "https://nft-gallery.app/login",
-      "REACT_APP_OPTIMISM_RPC_URL": "https://mainnet.optimism.io"
-    }
-  }
+  "version": 2,
+  "public": true,
+  "framework": "create-react-app",
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "build",
+  "routes": [
+    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/(.*\\.(js|json|css|ico|png|jpg|svg))", "dest": "/$1" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
 } 

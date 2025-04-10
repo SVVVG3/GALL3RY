@@ -17,22 +17,32 @@ const CACHE_KEYS = {
   NFT_IMAGE: (contract, tokenId) => `nft_image_${contract}_${tokenId}`
 };
 
-// Connect to MongoDB
-let dbConnection = null;
+// Connect to MongoDB - optimized for serverless
+let cachedConnection = null;
 const connectToMongoDB = async () => {
-  if (dbConnection) return dbConnection;
+  if (cachedConnection && mongoose.connection.readyState === 1) {
+    return cachedConnection;
+  }
   
   try {
     const MONGODB_URI = process.env.MONGODB_URI;
     console.log('Attempting to connect to MongoDB...');
     
-    dbConnection = await mongoose.connect(MONGODB_URI, {
+    // Close any existing connection if it's not working
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.disconnect();
+    }
+    
+    // Connect with appropriate timeouts for serverless
+    cachedConnection = await mongoose.connect(MONGODB_URI, {
       useNewUrlParser: true,
-      useUnifiedTopology: true
+      useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
     });
     
     console.log('MongoDB connected successfully');
-    return dbConnection;
+    return cachedConnection;
   } catch (err) {
     console.error('MongoDB connection failed:', err);
     throw err;

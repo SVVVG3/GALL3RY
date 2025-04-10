@@ -1,0 +1,669 @@
+/* Folder Grid Styles */
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.folder-grid-loading,
+.folder-grid-error,
+.folder-grid-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  width: 100%;
+  text-align: center;
+  color: #6b7280;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-left-color: #8b5cf6;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Folder Card Styles */
+.folder-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+  cursor: pointer;
+  height: 100%;
+  border: 1px solid #f3f4f6;
+}
+
+.folder-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.folder-card.featured {
+  border: 1px solid #8b5cf6;
+}
+
+.folder-card-cover {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 75%;
+  overflow: hidden;
+  background-color: #f9fafb;
+}
+
+.folder-cover-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.folder-card:hover .folder-cover-image {
+  transform: scale(1.05);
+}
+
+.folder-cover-placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f3f4f6;
+}
+
+.folder-cover-icon {
+  font-size: 3rem;
+  color: #9ca3af;
+}
+
+.folder-visibility-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: #8b5cf6;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.folder-card-content {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.folder-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+  line-height: 1.3;
+}
+
+.folder-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.folder-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: auto;
+  padding-top: 0.75rem;
+}
+
+.nft-count,
+.view-count {
+  font-size: 0.75rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+}
+
+.nft-count::before {
+  content: '🖼️';
+  margin-right: 0.25rem;
+}
+
+.view-count::before {
+  content: '👁️';
+  margin-right: 0.25rem;
+}
+
+.folder-owner {
+  margin-top: 0.75rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.visibility-toggle-btn {
+  margin-top: 1rem;
+  padding: 0.5rem;
+  border: none;
+  border-radius: 0.25rem;
+  background-color: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.visibility-toggle-btn:hover {
+  background-color: #e5e7eb;
+}
+
+/* Public Folder Manager Specific Styles */
+.public-folder-manager h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+.featured-section {
+  margin-top: 3rem;
+}
+
+/* Folder Detail Styles */
+.folder-detail {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.folder-detail-loading,
+.folder-detail-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.folder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.folder-header-content {
+  flex: 1;
+}
+
+.folder-name {
+  font-size: 1.875rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.folder-description {
+  font-size: 1rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+  line-height: 1.5;
+}
+
+.folder-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.public-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background-color: #8b5cf6;
+  color: white;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.folder-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-button,
+.back-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem;
+  background-color: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.edit-button:hover,
+.back-button:hover {
+  background-color: #e5e7eb;
+}
+
+/* Form Styles */
+.folder-edit-form {
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid #e5e7eb;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #4b5563;
+  margin-bottom: 0.5rem;
+}
+
+.form-group input[type="text"],
+.form-group textarea {
+  width: 100%;
+  padding: 0.625rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  color: #1f2937;
+}
+
+.form-group.checkbox {
+  display: flex;
+  align-items: center;
+}
+
+.form-group.checkbox input {
+  margin-right: 0.5rem;
+}
+
+.form-group.checkbox label {
+  margin-bottom: 0;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.save-button,
+.cancel-button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.save-button {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+.save-button:hover {
+  background-color: #7c3aed;
+}
+
+.cancel-button {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.cancel-button:hover {
+  background-color: #e5e7eb;
+}
+
+/* NFT Grid Styles */
+.nft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+}
+
+.empty-nft-grid {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  width: 100%;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.nft-card {
+  display: flex;
+  flex-direction: column;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
+  border: 1px solid #f3f4f6;
+}
+
+.nft-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+.nft-image-container {
+  position: relative;
+  width: 100%;
+  height: 0;
+  padding-bottom: 100%;
+  overflow: hidden;
+  background-color: #f3f4f6;
+}
+
+.nft-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.nft-details {
+  padding: 1rem;
+}
+
+.nft-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.25rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nft-collection {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nft-meta {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-bottom: 0.75rem;
+}
+
+.nft-chain {
+  display: inline-block;
+  padding: 0.125rem 0.375rem;
+  background-color: #f3f4f6;
+  border-radius: 0.25rem;
+  font-size: 0.675rem;
+  color: #4b5563;
+  text-transform: capitalize;
+}
+
+.remove-nft-button {
+  padding: 0.375rem;
+  border: none;
+  border-radius: 0.25rem;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  width: 100%;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+
+.remove-nft-button:hover {
+  background-color: #fecaca;
+}
+
+/* Dashboard Styles */
+.dashboard-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.create-folder-button {
+  padding: 0.5rem 1rem;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.create-folder-button:hover {
+  background-color: #7c3aed;
+}
+
+.delete-option {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2rem;
+}
+
+.delete-button {
+  padding: 0.5rem 1rem;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.delete-button:hover {
+  background-color: #dc2626;
+}
+
+.auth-needed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.auth-needed h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+.auth-needed p {
+  color: #6b7280;
+  margin-bottom: 1.5rem;
+}
+
+.auth-button {
+  padding: 0.625rem 1.25rem;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.auth-button:hover {
+  background-color: #7c3aed;
+}
+
+.error-message {
+  padding: 0.75rem 1rem;
+  background-color: #fee2e2;
+  color: #b91c1c;
+  border-radius: 0.375rem;
+  margin-bottom: 1.5rem;
+}
+
+.create-folder-form {
+  background-color: #f9fafb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid #e5e7eb;
+}
+
+.create-folder-form h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+.folders-section {
+  margin-bottom: 3rem;
+}
+
+.folders-section h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+/* Discovery Page Styles */
+.discovery-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.discovery-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.discovery-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.search-form {
+  display: flex;
+  width: 100%;
+  max-width: 400px;
+}
+
+.search-input {
+  flex: 1;
+  padding: 0.625rem 1rem;
+  border: 1px solid #d1d5db;
+  border-right: none;
+  border-radius: 0.375rem 0 0 0.375rem;
+  font-size: 0.875rem;
+  color: #1f2937;
+}
+
+.search-button {
+  padding: 0.625rem 1rem;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 0 0.375rem 0.375rem 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.search-button:hover {
+  background-color: #7c3aed;
+}
+
+.selected-folder-view {
+  position: relative;
+}
+
+.selected-folder-view .back-button {
+  margin-bottom: 1.5rem;
+} 

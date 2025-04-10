@@ -1,0 +1,268 @@
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  background-color: #f9fafb;
+  color: #111827;
+  line-height: 1.5;
+}
+
+.container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+a {
+  color: #8b5cf6;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+a:hover {
+  color: #7c3aed;
+}
+
+/* Button Styles */
+.btn {
+  display: inline-block;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.btn-primary {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background-color: #7c3aed;
+}
+
+.btn-secondary {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.btn-secondary:hover {
+  background-color: #e5e7eb;
+}
+
+.btn-outline {
+  background-color: transparent;
+  color: #8b5cf6;
+  border: 1px solid #8b5cf6;
+}
+
+.btn-outline:hover {
+  background-color: #f9f6fe;
+}
+
+/* App Layout */
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.app-header {
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 1rem 0;
+}
+
+.app-header .container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logo h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  background: linear-gradient(to right, #8b5cf6, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.main-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.main-nav a {
+  color: #4b5563;
+  font-weight: 500;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.main-nav a:hover {
+  color: #1f2937;
+}
+
+.main-nav a.active {
+  color: #8b5cf6;
+  border-bottom-color: #8b5cf6;
+}
+
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-greeting {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.app-content {
+  flex: 1;
+}
+
+.app-footer {
+  background-color: #f3f4f6;
+  padding: 2rem 0;
+  border-top: 1px solid #e5e7eb;
+  margin-top: 3rem;
+}
+
+.app-footer p {
+  color: #6b7280;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Home Page Styles */
+.home-container {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.hero-section {
+  text-align: center;
+  padding: 3rem 1rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.hero-section h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+.hero-section p {
+  font-size: 1.125rem;
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+.hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.features-section {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 2rem;
+  margin-top: 4rem;
+}
+
+.feature-card {
+  background-color: white;
+  padding: 2rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.feature-icon {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+
+.feature-card h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 0.75rem;
+}
+
+.feature-card p {
+  color: #6b7280;
+}
+
+/* Login Page Styles */
+.login-container {
+  max-width: 500px;
+  margin: 3rem auto;
+  padding: 2rem;
+  background-color: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.login-container h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 1rem;
+}
+
+.login-container p {
+  color: #6b7280;
+  margin-bottom: 2rem;
+}
+
+.login-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-option {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: #f9fafb;
+  border-radius: 0.375rem;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.login-option:hover {
+  background-color: #f3f4f6;
+}
+
+.login-option-farcaster {
+  background-color: #8b5cf6;
+  color: white;
+  border-color: #8b5cf6;
+}
+
+.login-option-farcaster:hover {
+  background-color: #7c3aed;
+} 

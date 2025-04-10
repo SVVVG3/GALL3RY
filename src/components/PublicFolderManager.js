@@ -1,127 +1,152 @@
 import React, { useState, useEffect } from 'react';
-import FolderDetail from './FolderDetail';
+import PropTypes from 'prop-types';
 import folderService from '../services/folderService';
+import config from '../config';
+import FolderGrid from './FolderGrid';
+import FolderDetail from './FolderDetail';
+import '../styles/folder.css';
 
 /**
- * PublicFolderManager component
- * Displays public folders for a specific user
+ * PublicFolderManager component for viewing other users' public folders
+ * Shows only public folders for the specified Farcaster user
  */
-const PublicFolderManager = ({ username, fid }) => {
-  const [publicFolders, setPublicFolders] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+function PublicFolderManager({ username, fid, userId, token, onFolderSelect }) {
+  const [folders, setFolders] = useState([]);
+  const [featuredFolders, setFeaturedFolders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeFolderId, setActiveFolderId] = useState(null);
-  
-  // Fetch public folders when username or fid changes
+
   useEffect(() => {
-    if (username || fid) {
-      fetchPublicFolders();
-    }
-  }, [username, fid]);
-  
+    fetchPublicFolders();
+  }, [fid]);
+
+  // Fetch only public folders for the specified user
   const fetchPublicFolders = async () => {
-    setIsLoading(true);
+    if (!fid) return;
+    
+    setLoading(true);
     setError(null);
     
     try {
-      let folders = [];
+      const publicFolders = await folderService.getPublicFoldersByUser(fid);
       
-      // Try with username first if available
-      if (username) {
-        console.log(`Fetching public folders for username: ${username}`);
-        folders = await folderService.getPublicFolders(username);
-      } 
-      // Use FID as fallback
-      else if (fid) {
-        console.log(`Fetching public folders for FID: ${fid}`);
-        folders = await folderService.getPublicFoldersForUser(fid);
+      if (!publicFolders || publicFolders.length === 0) {
+        setFolders([]);
+        setError('No public folders available for this user');
+      } else {
+        setFolders(publicFolders);
+        setError(null);
       }
-      
-      console.log(`Found ${folders.length} public folders`);
-      setPublicFolders(folders);
     } catch (err) {
       console.error('Error fetching public folders:', err);
-      setError('Failed to load public folders');
+      setError(`Failed to load folders: ${err.message}`);
+      setFolders([]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
-  
-  // Handle folder selection
-  const handleSelectFolder = (folderId) => {
-    setActiveFolderId(folderId);
-  };
-  
-  // Handle back to folder list
-  const handleBackToList = () => {
-    setActiveFolderId(null);
-  };
-  
-  // Show folder details if a folder is selected
-  if (activeFolderId) {
-    return (
-      <FolderDetail 
-        folderId={activeFolderId} 
-        onBack={handleBackToList}
-        readOnly={true} // Public folders are view-only
-      />
-    );
-  }
-  
-  // Show loading state
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500"></div>
-        <span className="ml-2 text-gray-600">Loading folders...</span>
-      </div>
-    );
-  }
-  
-  // Show error state
-  if (error) {
-    return (
-      <div className="bg-red-100 text-red-700 p-4 rounded-lg mb-4">
-        {error}
-      </div>
-    );
-  }
-  
-  // Show empty state
-  if (publicFolders.length === 0) {
-    return (
-      <div className="text-center py-12 text-gray-500">
-        No public folders found for this user
-      </div>
-    );
-  }
-  
-  // Show the list of public folders
-  return (
-    <div className="mb-6">
-      <h2 className="text-xl font-semibold mb-4">Public Folders</h2>
+
+  // Fetch featured folders for discovery
+  useEffect(() => {
+    const fetchFeaturedFolders = async () => {
+      if (!config.features.enablePublicFolders) return;
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {publicFolders.map(folder => (
-          <div 
-            key={folder.id || folder._id} 
-            className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md cursor-pointer transition-all"
-            onClick={() => handleSelectFolder(folder.id || folder._id)}
-          >
-            <h3 className="text-lg font-medium mb-2">{folder.name}</h3>
-            {folder.description && (
-              <p className="text-gray-600 text-sm mb-2">{folder.description}</p>
-            )}
-            <div className="flex items-center mt-2">
-              <span className="text-xs bg-purple-100 text-purple-700 rounded-full px-2 py-1">
-                {folder.nfts?.length || 0} NFTs
-              </span>
-            </div>
-          </div>
-        ))}
+      try {
+        const featured = await folderService.getFeaturedFolders();
+        setFeaturedFolders(featured);
+      } catch (err) {
+        console.error('Failed to fetch featured folders:', err);
+        // Don't set error state here as it's not critical
+      }
+    };
+
+    fetchFeaturedFolders();
+  }, []);
+
+  const handleSelectFolder = (folderId) => {
+    setActiveFolderId(folderId === activeFolderId ? null : folderId);
+  };
+
+  // Toggle folder visibility (public/private)
+  const handleToggleVisibility = async (folderId, isCurrentlyPublic) => {
+    if (!token) {
+      setError('Authentication required to change folder visibility');
+      return;
+    }
+
+    try {
+      await folderService.toggleFolderVisibility(folderId, !isCurrentlyPublic, token);
+      
+      // Update local state to reflect the change
+      setFolders(folders.map(folder => 
+        folder._id === folderId 
+          ? { ...folder, isPublic: !isCurrentlyPublic } 
+          : folder
+      ));
+    } catch (err) {
+      console.error('Failed to toggle folder visibility:', err);
+      setError('Unable to update folder visibility. Please try again.');
+    }
+  };
+
+  // If a specific folder is selected, show its details
+  if (activeFolderId) {
+    const folder = folders.find(f => f._id === activeFolderId);
+    return (
+      <div>
+        <button 
+          onClick={() => setActiveFolderId(null)}
+          className="back-button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          Back to folders
+        </button>
+        <FolderDetail 
+          folderId={activeFolderId} 
+          folder={folder}
+          isReadOnly={true}  // Public folders are read-only for non-owners
+        />
       </div>
+    );
+  }
+
+  return (
+    <div className="public-folder-manager">
+      <h2>Public Folders {username ? `by ${username}` : fid ? `by FID: ${fid}` : ''}</h2>
+      
+      <FolderGrid
+        folders={folders}
+        loading={loading}
+        error={error}
+        emptyMessage={`No public folders available ${username ? `for ${username}` : ''}`}
+        onFolderClick={handleSelectFolder}
+        onToggleVisibility={userId ? handleToggleVisibility : undefined}
+        showVisibilityControls={!!userId && !!token} // Only show controls if authenticated
+      />
+      
+      {featuredFolders.length > 0 && (
+        <div className="featured-section">
+          <h2>Featured Collections</h2>
+          <FolderGrid
+            folders={featuredFolders}
+            onFolderClick={onFolderSelect || handleSelectFolder}
+            featured={true}
+          />
+        </div>
+      )}
     </div>
   );
+}
+
+PublicFolderManager.propTypes = {
+  username: PropTypes.string,
+  fid: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  userId: PropTypes.string,
+  token: PropTypes.string,
+  onFolderSelect: PropTypes.func
 };
 
 export default PublicFolderManager; 
