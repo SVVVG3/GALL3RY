@@ -119,3 +119,4 @@ nft-gallery/
 ## License
 
 MIT
+# GALL3RY - NFT Gallery App
