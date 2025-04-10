@@ -48,11 +48,11 @@ module.exports = async (req, res) => {
     // Forward the request to Zapper's GraphQL API
     console.log('Proxying GraphQL request to Zapper API');
     const response = await axios({
-      url: 'https://api.zapper.xyz/v2/graphql',
+      url: 'https://public.zapper.xyz/graphql',
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-API-KEY': apiKey
+        'x-zapper-api-key': apiKey
       },
       data: {
         query,
