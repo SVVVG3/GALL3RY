@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// Server base URL
-const SERVER_URL = 'http://localhost:3001';
+// Server base URL - Change to relative URL for compatibility with deployed app
+const SERVER_URL = '';
 
 // Get Alchemy API keys from environment variables
 const ALCHEMY_ETH_API_KEY = process.env.REACT_APP_ALCHEMY_ETH_API_KEY;
@@ -188,56 +188,128 @@ const zapperService = {
   },
 
   /**
-   * Get a Farcaster user's profile by username or FID
+   * Get a Farcaster user's profile from Neynar API
+   */
+  async getFarcasterProfileFromNeynar(usernameOrFid) {
+    try {
+      const isUsername = isNaN(parseInt(usernameOrFid));
+      const apiKey = process.env.REACT_APP_NEYNAR_API_KEY;
+      
+      if (!apiKey) {
+        console.error('Neynar API key is missing');
+        throw new Error('API key is missing');
+      }
+      
+      let url;
+      if (isUsername) {
+        url = `https://api.neynar.com/v2/farcaster/user/search?q=${usernameOrFid}&limit=1`;
+      } else {
+        url = `https://api.neynar.com/v2/farcaster/user?fid=${usernameOrFid}`;
+      }
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'api_key': apiKey
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Neynar API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      let user;
+      
+      if (isUsername) {
+        if (!data.users || data.users.length === 0) {
+          throw new Error(`No user found with username: ${usernameOrFid}`);
+        }
+        user = data.users[0];
+      } else {
+        if (!data.user) {
+          throw new Error(`No user found with FID: ${usernameOrFid}`);
+        }
+        user = data.user;
+      }
+      
+      // Get connected addresses
+      const addressesResponse = await fetch(`https://api.neynar.com/v2/farcaster/user/addresses?fid=${user.fid}`, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json',
+          'api_key': apiKey
+        }
+      });
+      
+      let connectedAddresses = [];
+      if (addressesResponse.ok) {
+        const addressesData = await addressesResponse.json();
+        if (addressesData.verified_addresses) {
+          connectedAddresses = addressesData.verified_addresses
+            .filter(addr => addr.eth_address)
+            .map(addr => addr.eth_address);
+        }
+      }
+      
+      return {
+        fid: user.fid,
+        username: user.username,
+        displayName: user.display_name,
+        bio: user.profile.bio.text,
+        avatarUrl: user.pfp.url,
+        connectedAddresses
+      };
+    } catch (error) {
+      console.error('Error fetching Farcaster profile from Neynar:', error);
+      throw error;
+    }
+  },
+
+  /**
+   * Get Farcaster user profile - tries Zapper first, then falls back to Neynar
    */
   async getFarcasterProfile(usernameOrFid) {
     try {
-      console.log(`Fetching Farcaster profile for: ${usernameOrFid}`);
+      // First try using the existing Zapper method
+      const zapperQuery = `
+        query FarcasterProfile($username: String, $fid: Int) {
+          farcasterProfile(username: $username, fid: $fid) {
+            fid
+            username
+            displayName
+            avatar
+            bio
+            connectedAddresses
+          }
+        }
+      `;
       
-      // Use Zapper's direct farcasterProfile query since it's working
       const isUsername = isNaN(parseInt(usernameOrFid));
       const variables = isUsername 
-        ? { username: usernameOrFid } 
+        ? { username: usernameOrFid }
         : { fid: parseInt(usernameOrFid) };
         
-      const query = `
-      query GetFarcasterProfile($username: String, $fid: Int) {
-        farcasterProfile(username: $username, fid: $fid) {
-          fid
-          username
-          metadata {
-            displayName
-            imageUrl
-          }
-          custodyAddress
-          connectedAddresses
+      try {
+        const data = await this.makeGraphQLRequest(zapperQuery, variables);
+        
+        if (data?.farcasterProfile) {
+          return {
+            ...data.farcasterProfile,
+            avatarUrl: data.farcasterProfile.avatar // Normalize the field name
+          };
         }
-      }
-    `;
-    
-      const data = await this.makeGraphQLRequest(query, variables);
-      
-      if (!data || !data.farcasterProfile) {
-        console.warn(`No Farcaster profile found for ${usernameOrFid}`);
-        return null;
+      } catch (zapperError) {
+        console.warn('Zapper API failed, falling back to Neynar:', zapperError);
+        // Fall through to Neynar fallback
       }
       
-      console.log(`Found Farcaster profile:`, data.farcasterProfile);
-      
-      // Transform Zapper's response to match our expected structure
-      return {
-        fid: data.farcasterProfile.fid,
-        username: data.farcasterProfile.username,
-        metadata: {
-          displayName: data.farcasterProfile.metadata?.displayName,
-          imageUrl: data.farcasterProfile.metadata?.imageUrl
-        },
-        custodyAddress: data.farcasterProfile.custodyAddress,
-        connectedAddresses: data.farcasterProfile.connectedAddresses || []
-      };
+      // Fallback to Neynar API
+      return await this.getFarcasterProfileFromNeynar(usernameOrFid);
     } catch (error) {
-      console.error('Error fetching Farcaster profile:', error.message);
-      return null;
+      console.error('Error fetching Farcaster profile:', error);
+      throw error;
     }
   },
 
