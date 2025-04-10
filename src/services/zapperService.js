@@ -273,18 +273,30 @@ const zapperService = {
               mediasV2 {
                 ... on Image {
                   url
-                  originalUri
+                  originalUrl
+                  preview
+                  type
                 }
                 ... on Animation {
                   url
-                  originalUri
+                  originalUrl
+                  image
+                  preview
+                  type
                 }
               }
+              mediaUrl
               collection {
                 id
                 name
                 floorPriceEth
                 cardImageUrl
+                imageUrl
+              }
+              contract {
+                address
+                name
+                network
               }
               estimatedValue {
                 valueUsd
@@ -318,24 +330,75 @@ const zapperService = {
       const pageInfo = data.nftUsersTokens.pageInfo || { hasNextPage: false, endCursor: null };
       
       // Helper function to get the best image URL from mediaV2 array
-      const getBestImageUrl = (medias) => {
-        if (!medias || !Array.isArray(medias) || medias.length === 0) return null;
+      const getBestImageUrl = (nft) => {
+        // Log the media objects for debugging
+        console.log(`Debug image data for NFT ${nft.id} (${nft.name}):`);
         
-        // Try to find a media item with a valid URL
-        for (const media of medias) {
-          if (!media) continue;
+        // Check for direct mediaUrl on the NFT
+        if (nft.mediaUrl && nft.mediaUrl.startsWith('http')) {
+          console.log(`Using direct mediaUrl: ${nft.mediaUrl}`);
+          return nft.mediaUrl;
+        }
+        
+        // Try to extract from mediasV2
+        if (nft.mediasV2 && Array.isArray(nft.mediasV2) && nft.mediasV2.length > 0) {
+          console.log(`mediasV2 items: ${nft.mediasV2.length}`);
           
-          // Prefer original URI if available
-          if (media.originalUri && media.originalUri.startsWith('http')) {
-            return media.originalUri;
-          }
-          
-          // Fall back to regular URL
-          if (media.url && media.url.startsWith('http')) {
-            return media.url;
+          // Try to find the best media in order of preference
+          for (const media of nft.mediasV2) {
+            if (!media) continue;
+            
+            console.log(`Media type: ${media.type || 'unknown'}`);
+            
+            // Log all available URL properties for debugging
+            const urlProps = ['url', 'originalUrl', 'preview', 'image'].filter(
+              prop => media[prop] && typeof media[prop] === 'string'
+            );
+            
+            urlProps.forEach(prop => {
+              console.log(`  - ${prop}: ${media[prop]}`);
+            });
+            
+            // First try originalUrl
+            if (media.originalUrl && media.originalUrl.startsWith('http')) {
+              console.log(`Using originalUrl: ${media.originalUrl}`);
+              return media.originalUrl;
+            }
+            
+            // Then try regular url
+            if (media.url && media.url.startsWith('http')) {
+              console.log(`Using url: ${media.url}`);
+              return media.url;
+            }
+            
+            // Then try image if it's a video
+            if (media.image && media.image.startsWith('http')) {
+              console.log(`Using image: ${media.image}`);
+              return media.image;
+            }
+            
+            // Last resort, try preview
+            if (media.preview && media.preview.startsWith('http')) {
+              console.log(`Using preview: ${media.preview}`);
+              return media.preview;
+            }
           }
         }
         
+        // If no media found, check collection images
+        if (nft.collection) {
+          if (nft.collection.imageUrl && nft.collection.imageUrl.startsWith('http')) {
+            console.log(`Using collection imageUrl: ${nft.collection.imageUrl}`);
+            return nft.collection.imageUrl;
+          }
+          
+          if (nft.collection.cardImageUrl && nft.collection.cardImageUrl.startsWith('http')) {
+            console.log(`Using collection cardImageUrl: ${nft.collection.cardImageUrl}`);
+            return nft.collection.cardImageUrl;
+          }
+        }
+        
+        console.log('No valid image URL found');
         return null;
       };
       
@@ -346,39 +409,50 @@ const zapperService = {
           
           if (!nft || !nft.id) return null;
           
-          // Get the best image URL from mediasV2
-          let imageUrl = getBestImageUrl(nft.mediasV2);
+          // Get image URL from the NFT data
+          let imageUrl = getBestImageUrl(nft);
           
-          // If no valid image found from Zapper's mediasV2, try getting it from Alchemy
-          if (!imageUrl) {
+          // If no valid image found from Zapper, try Alchemy API
+          if (!imageUrl && nft.contract?.address && nft.tokenId) {
             try {
-              // Extract contract address from the NFT ID or another field
-              // Zapper NFT IDs typically follow the format TmZ0VG9rZW4tMjc1Njg2MjMzLTk4NQ==
-              // where after decoding the second part is the contract-specific identifier
-              const idParts = nft.id.split('-');
-              const contractIdentifier = idParts.length > 1 ? idParts[1] : null;
+              console.log(`No Zapper image for NFT ${nft.id}, trying Alchemy fallback`);
+              console.log(`Contract: ${nft.contract.address}, Token ID: ${nft.tokenId}, Network: ${nft.contract.network || 'ethereum'}`);
               
-              if (contractIdentifier && nft.tokenId) {
-                console.log(`No Zapper image for NFT ${nft.id}, trying Alchemy fallback`);
-                const alchemyImage = await this.getAlchemyNFTImage(
-                  contractIdentifier, 
-                  nft.tokenId, 
-                  'ethereum' // Default to Ethereum as we don't have network info anymore
-                );
-                
-                if (alchemyImage) {
-                  imageUrl = alchemyImage;
-                  console.log(`Found Alchemy image for NFT ${nft.id}`);
-                }
+              const networkMap = {
+                'ETHEREUM_MAINNET': 'ethereum',
+                'POLYGON_MAINNET': 'polygon',
+                'OPTIMISM_MAINNET': 'optimism',
+                'ARBITRUM_MAINNET': 'arbitrum',
+                'BASE_MAINNET': 'base'
+              };
+              
+              const network = networkMap[nft.contract.network] || 'ethereum';
+              
+              const alchemyImage = await this.getAlchemyNFTImage(
+                nft.contract.address, 
+                nft.tokenId,
+                network
+              );
+              
+              if (alchemyImage) {
+                imageUrl = alchemyImage;
+                console.log(`Found Alchemy image: ${alchemyImage}`);
               }
             } catch (error) {
               console.warn('Error getting Alchemy image:', error.message);
             }
           }
           
-          // Use collection image as fallback if still no image
-          if (!imageUrl && nft.collection?.cardImageUrl) {
-            imageUrl = nft.collection.cardImageUrl;
+          // Process IPFS URLs in image URLs if needed
+          if (imageUrl && (imageUrl.startsWith('ipfs://') || imageUrl.startsWith('ar://'))) {
+            imageUrl = this.processImageUrl(imageUrl);
+            console.log(`Processed IPFS/Arweave URL to: ${imageUrl}`);
+          }
+          
+          // Use placeholder as last resort
+          if (!imageUrl) {
+            imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
+            console.log('Using placeholder image');
           }
           
           // Return a clean NFT object structure
@@ -388,12 +462,15 @@ const zapperService = {
             tokenId: nft.tokenId,
             description: nft.description,
             imageUrl: imageUrl,
+            contract_address: nft.contract?.address || null,
+            token_id: nft.tokenId,
             collection: nft.collection ? {
               id: nft.collection.id,
               name: nft.collection.name || 'Unknown Collection',
               floorPriceEth: nft.collection.floorPriceEth,
-              imageUrl: nft.collection.cardImageUrl
+              imageUrl: nft.collection.cardImageUrl || nft.collection.imageUrl
             } : null,
+            contract_name: nft.contract?.name || 'Unknown Contract',
             estimatedValueEth: nft.estimatedValueEth,
             estimatedValueUsd: nft.estimatedValue?.valueUsd || (nft.estimatedValueEth ? nft.estimatedValueEth * 3000 : null),
             cursor: edge.cursor
@@ -403,6 +480,11 @@ const zapperService = {
       
       const filteredNfts = processedNfts.filter(nft => nft !== null);
       console.log(`Successfully processed ${filteredNfts.length} valid NFTs out of ${processedNfts.length} total`);
+      
+      // Log image URLs for debugging
+      filteredNfts.forEach(nft => {
+        console.log(`NFT: ${nft.name}, Image: ${nft.imageUrl}`);
+      });
       
       // Filter out null values and return the processed NFTs
       return {
