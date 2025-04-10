@@ -43,7 +43,6 @@ const FarcasterUserSearch = () => {
     
     try {
       // Fetch the user profile using the Zapper API
-      console.log(`Searching for Farcaster user: ${searchQuery.trim()}`);
       const profile = await zapperService.getFarcasterProfile(searchQuery.trim());
       
       if (!profile) {
@@ -56,15 +55,12 @@ const FarcasterUserSearch = () => {
       // If the profile has connected wallets, fetch NFTs for those wallets
       if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
         setIsLoadingNfts(true);
-        console.log(`Fetching NFTs for ${profile.username} with ${profile.connectedAddresses.length} wallets`);
         
         try {
           const nfts = await zapperService.getNftsForAddresses(profile.connectedAddresses);
           if (nfts && Array.isArray(nfts.nfts)) {
             setUserNfts(nfts.nfts);
-            console.log(`Found ${nfts.nfts.length} NFTs`);
           } else {
-            console.warn('NFT response format is unexpected:', nfts);
             setUserNfts([]);
             setNftError('Received unexpected NFT data format');
           }
@@ -148,6 +144,7 @@ const FarcasterUserSearch = () => {
                 alt={`${userProfile.displayName || userProfile.username}'s avatar`}
                 className="profile-avatar"
                 onError={(e) => handleImageError(e)}
+                loading="lazy"
               />
             ) : (
               <div className="profile-avatar-placeholder">
@@ -230,6 +227,7 @@ const FarcasterUserSearch = () => {
                 src={selectedNft.imageUrl || selectedNft.image || selectedNft.metadata?.image || 'https://via.placeholder.com/400?text=No+Image'} 
                 alt={selectedNft.name || 'NFT'} 
                 onError={(e) => handleImageError(e, 'https://via.placeholder.com/400x400?text=No+Image')}
+                loading="lazy"
               />
             </div>
             <div className="nft-detail-info">

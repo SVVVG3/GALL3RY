@@ -14,27 +14,26 @@ const NftCard = ({ nft, onClick }) => {
   const name = nft.name || nft.metadata?.name || nft.token_id || 'Unnamed NFT';
   const collection = nft.collection?.name || nft.contract_name || 'Unknown Collection';
   
-  // Look for image in multiple possible locations
-  const image = !imageError 
+  // Look for image in multiple possible locations with fallbacks
+  const imageUrl = !imageError 
     ? (nft.imageUrl || nft.image || nft.metadata?.image || null)
     : null;
 
   // Show image loading state or error state
-  const handleImageError = (e) => {
-    console.error(`Failed to load image for NFT: ${name}`, e);
+  const handleImageError = () => {
     setImageError(true);
-    e.target.src = 'https://via.placeholder.com/300x300?text=Error+Loading';
   };
 
   return (
     <div className="nft-card" onClick={onClick}>
       <div className="nft-image-container">
-        {image ? (
+        {imageUrl ? (
           <img 
-            src={image} 
+            src={imageUrl} 
             alt={name} 
             className="nft-image"
             onError={handleImageError}
+            loading="lazy"
           />
         ) : (
           <div className="nft-image-placeholder">
