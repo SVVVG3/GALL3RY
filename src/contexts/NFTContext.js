@@ -28,13 +28,29 @@ export const NFTProvider = ({ children }) => {
                 name
                 description
                 imageUrl
+                tokenId
                 collection {
                   name
                   address
+                  imageUrl
+                  floorPrice
+                  network
                 }
                 lastReceivedAt
                 estimatedValue {
                   value
+                  token {
+                    symbol
+                  }
+                }
+                metadata {
+                  name
+                  description
+                  image
+                  attributes {
+                    trait_type
+                    value
+                  }
                 }
               }
             }
@@ -48,8 +64,12 @@ export const NFTProvider = ({ children }) => {
       };
 
       const data = await fetchZapperData(query, variables);
-      setNfts(data.portfolioV2.nftBalances.nfts);
-      setHasMore(data.portfolioV2.nftBalances.nfts.length === 20);
+      const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => ({
+        ...nft,
+        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl
+      }));
+      setNfts(nftsWithImages);
+      setHasMore(nftsWithImages.length === 20);
       setPage(1);
     } catch (err) {
       setError('Failed to fetch NFTs');
@@ -73,6 +93,8 @@ export const NFTProvider = ({ children }) => {
                   displayName
                   imageUrl
                   followersCount
+                  custodyAddress
+                  connectedAddresses
                 }
               }
             }
@@ -85,10 +107,15 @@ export const NFTProvider = ({ children }) => {
 
       // Then check each follower for collection ownership
       const holdersQuery = `
-        query CheckNFTHolding($address: Address!, $collection: Address!) {
-          portfolioV2(addresses: [$address]) {
-            nftBalances(filter: { collectionAddress: $collection }) {
+        query CheckNFTHolding($addresses: [Address!]!, $collectionAddress: Address!) {
+          portfolioV2(addresses: $addresses) {
+            nftBalances(filter: { collectionAddress: $collectionAddress }) {
               totalCount
+              nfts {
+                id
+                name
+                imageUrl
+              }
             }
           }
         }
@@ -96,15 +123,19 @@ export const NFTProvider = ({ children }) => {
 
       const holders = await Promise.all(
         following.map(async ({ node }) => {
+          const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
+          if (!addresses.length) return null;
+
           const holderData = await fetchZapperData(holdersQuery, {
-            address: node.custodyAddress,
-            collection: collectionAddress
+            addresses,
+            collectionAddress
           });
           
           if (holderData.portfolioV2.nftBalances.totalCount > 0) {
             return {
               ...node,
-              holdingCount: holderData.portfolioV2.nftBalances.totalCount
+              holdingCount: holderData.portfolioV2.nftBalances.totalCount,
+              nfts: holderData.portfolioV2.nftBalances.nfts
             };
           }
           return null;

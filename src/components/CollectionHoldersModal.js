@@ -48,8 +48,13 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
                     <div className="text-sm text-gray-400">{holder.displayName}</div>
                   )}
                 </div>
-                <div className="text-sm text-gray-400">
-                  {holder.followersCount.toLocaleString()} followers
+                <div className="text-right">
+                  <div className="text-sm text-gray-400">
+                    {holder.followersCount.toLocaleString()} followers
+                  </div>
+                  <div className="text-sm text-purple-400">
+                    {holder.holdingCount} {holder.holdingCount === 1 ? 'NFT' : 'NFTs'}
+                  </div>
                 </div>
               </Link>
             ))}
