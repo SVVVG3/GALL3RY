@@ -200,7 +200,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             query,
             variables: { 
               owners: addresses,
-              first: 50, // Reduced batch size for better performance
+              first: 100, // Increased batch size for better performance
               after: cursor
             }
           })
@@ -230,21 +230,36 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         console.log(`Total count from API: ${totalCount}`);
         
         // Update pagination state
-        setHasMoreNfts(pageInfo.hasNextPage);
+        // If we have a hard-coded limit of 100 but have exactly 100 NFTs, it's likely there are more
+        // Some APIs return a fixed limit of 100 for totalCount
+        const forceHasMore = totalCount === 100 && edges.length === 100;
+        setHasMoreNfts(pageInfo.hasNextPage || forceHasMore);
         setEndCursor(pageInfo.endCursor);
         
-        // Update total count if available
-        if (totalCount > 0) {
+        // If we get exact totalCount of 100 (suspiciously round number), 
+        // it might be API's hard limit rather than actual count
+        const isPossiblyHardLimit = totalCount === 100 || totalCount === 99;
+        
+        // Update total count if available, but handle potential API limits
+        if (totalCount > 0 && !isPossiblyHardLimit) {
+          // Trust the API's count if it's not exactly 100
           setTotalNftCount(totalCount);
           setHasEstimatedCount(true);
+        } else if (totalCount > 0 && isPossiblyHardLimit) {
+          // For suspicious values like exactly 100, make a more aggressive estimate
+          const estimatedCount = Math.max(totalCount, getWalletCount() * 50);
+          setTotalNftCount(estimatedCount);
+          setHasEstimatedCount(true);
         } else if (!loadMore && edges.length > 0) {
-          // If no totalCount but we have results, make a conservative estimate
-          const initialEstimate = edges.length * (pageInfo.hasNextPage ? 2 : 1);
-          setTotalNftCount(initialEstimate);
+          // If no totalCount but we have results, make a more aggressive estimate
+          // Account for multiple wallets
+          const walletCount = getWalletCount();
+          const initialEstimate = edges.length * (pageInfo.hasNextPage ? 3 : 1.5) * Math.max(1, walletCount);
+          setTotalNftCount(Math.round(initialEstimate));
           setHasEstimatedCount(true);
         } else if (loadMore && edges.length > 0) {
           // Update our estimate when loading more
-          setTotalNftCount(prev => prev + edges.length);
+          setTotalNftCount(prev => Math.max(prev, userNfts.length + edges.length + (pageInfo.hasNextPage ? edges.length : 0)));
         }
         
         if (edges.length === 0 && !loadMore) {
@@ -321,15 +336,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         console.log('Falling back to zapperService method...');
         try {
           const result = await zapperService.getNftsForAddresses(addresses, {
-            first: 50,
+            first: 100, // Increased batch size
             after: cursor
           });
           
           if (result && Array.isArray(result.nfts)) {
             console.log(`Found ${result.nfts.length} NFTs via service fallback`);
             
-            // Update pagination state
-            setHasMoreNfts(result.pageInfo?.hasNextPage || false);
+            // Update pagination state with same logic as above
+            const forceHasMore = result.totalCount === 100 && result.nfts.length === 100;
+            setHasMoreNfts(result.pageInfo?.hasNextPage || forceHasMore);
             setEndCursor(result.pageInfo?.endCursor || null);
             
             // Either append to existing NFTs or replace them
@@ -372,6 +388,19 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       const newEstimate = estimateTotalNftCount();
       setTotalNftCount(newEstimate);
       setHasEstimatedCount(true);
+    } else {
+      // If we already have an estimate, make sure it's at least as big as what we've loaded
+      // plus a bit more if there are likely more NFTs
+      setTotalNftCount(prev => {
+        const minCount = userNfts.length + (hasMoreNfts ? Math.min(userNfts.length, 100) : 0);
+        return Math.max(prev, minCount);
+      });
+    }
+    
+    // If we've loaded exactly 100 NFTs (API limit), we likely need to be more aggressive with count
+    if (userNfts.length === 100 && totalNftCount === 100) {
+      // This is probably an API limit, not the actual total
+      setTotalNftCount(getWalletCount() >= 3 ? 250 : 150);
     }
   };
 
@@ -489,14 +518,25 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     // If we have loaded NFTs but no totalCount from API
     const walletCount = getWalletCount();
     
-    if (walletCount <= 1) {
-      // Just one wallet, return what we have plus a bit more if hasMore is true
-      return userNfts.length * (hasMoreNfts ? 1.5 : 1);
+    // On Farcaster, users with 5+ wallets often have large collections (100+ NFTs)
+    if (walletCount >= 5) {
+      // For users with many wallets, be more aggressive with estimates
+      return Math.max(
+        userNfts.length * 3,
+        Math.round(userNfts.length / walletCount) * walletCount * 5
+      );
+    } else if (walletCount >= 3) {
+      // For users with several wallets
+      return Math.max(
+        userNfts.length * 2, 
+        100 // Many Farcaster users have 100+ NFTs
+      );
+    } else if (walletCount === 2) {
+      // For users with two wallets
+      return userNfts.length * (hasMoreNfts ? 2 : 1.5);
     } else {
-      // Multiple wallets, make a more aggressive estimate
-      // On average, users have more NFTs than what fits in first page
-      const estimatedNftsPerWallet = userNfts.length / walletCount * 2;
-      return Math.round(estimatedNftsPerWallet * walletCount);
+      // Just one wallet
+      return userNfts.length * (hasMoreNfts ? 1.5 : 1.2);
     }
   };
 
@@ -564,9 +604,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   <span className="nft-count-number">
                     {hasEstimatedCount ? totalNftCount : (hasMoreNfts ? estimateTotalNftCount() : userNfts.length)}
                   </span> 
-                  NFTs in collection
+                  <span className="nft-count-label">NFTs</span>
                   {(hasMoreNfts || totalNftCount > userNfts.length) && 
-                    <span className="nft-count-estimate">{hasEstimatedCount ? "(estimated)" : "(showing " + userNfts.length + ")"}</span>}
+                    <span className="nft-count-estimate">{hasEstimatedCount ? "(est.)" : `(${userNfts.length} loaded)`}</span>}
                 </p>
               )}
               {isLoadingNfts && (
