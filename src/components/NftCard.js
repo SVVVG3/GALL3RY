@@ -8,10 +8,16 @@ import NFTImage from './NFTImage';
  */
 const NftCard = ({ nft, onClick }) => {
   const [showHolders, setShowHolders] = useState(false);
-  const { user } = useAuth();
+  const { profile, isAuthenticated } = useAuth();
 
+  // Add debugging
+  console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
+  
   const handleClick = () => {
-    if (user && user.fid) {
+    console.log("NFT Card clicked, auth state:", { isAuthenticated, profile, fid: profile?.fid });
+    
+    if (isAuthenticated && profile && profile.fid) {
+      console.log("Opening collection holders modal for collection address:", nft.collection?.address);
       setShowHolders(true);
     } else if (onClick) {
       onClick(nft);
@@ -118,7 +124,25 @@ const NftCard = ({ nft, onClick }) => {
   const imageUrl = getImageUrl();
   const valueData = getValue();
   const tokenId = getTokenId();
-  const contractAddress = nft.collection?.id?.split(':')[1] || nft.contractAddress || nft.collection?.address;
+  
+  // Extract contract address with more robust fallbacks
+  const contractAddress = (
+    (nft.collection?.address) || 
+    (nft.collection?.id?.split(':')[1]) || 
+    (nft.contractAddress) || 
+    (nft.contract?.address) ||
+    (nft.token?.collection?.address)
+  );
+  
+  // Debug contract address
+  console.log("NFT Contract Address:", {
+    extracted: contractAddress,
+    collectionAddress: nft.collection?.address,
+    collectionId: nft.collection?.id,
+    contractAddress: nft.contractAddress,
+    contractAddressFromContract: nft.contract?.address,
+    tokenCollectionAddress: nft.token?.collection?.address
+  });
 
   return (
     <>
@@ -149,7 +173,7 @@ const NftCard = ({ nft, onClick }) => {
             </p>
           )}
           
-          {user && user.fid && (
+          {isAuthenticated && profile && profile.fid && (
             <div className="text-xs text-blue-500 mt-2 flex items-center">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -161,10 +185,10 @@ const NftCard = ({ nft, onClick }) => {
         </div>
       </div>
 
-      {showHolders && contractAddress && (
+      {showHolders && contractAddress && profile && (
         <CollectionHoldersModal
           collectionAddress={contractAddress}
-          userFid={user.fid}
+          userFid={profile.fid}
           onClose={() => setShowHolders(false)}
         />
       )}

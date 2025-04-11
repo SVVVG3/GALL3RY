@@ -7,11 +7,20 @@ import './CollectionHoldersModal.css';
 const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   const { loading, collectionHolders, fetchCollectionHolders } = useNFT();
 
+  // Debug props
+  console.log("CollectionHoldersModal mounted with:", { collectionAddress, userFid });
+
   useEffect(() => {
-    fetchCollectionHolders(collectionAddress, userFid);
+    console.log("CollectionHoldersModal useEffect running with:", { collectionAddress, userFid });
+    if (collectionAddress && userFid) {
+      fetchCollectionHolders(collectionAddress, userFid);
+    } else {
+      console.error("Missing required props:", { collectionAddress, userFid });
+    }
   }, [collectionAddress, userFid, fetchCollectionHolders]);
 
   const holders = collectionHolders[collectionAddress] || [];
+  console.log("Holders for collection:", { collectionAddress, holdersCount: holders.length, holders });
 
   // Get relationship badge styles and text
   const getRelationshipBadge = (relationship) => {

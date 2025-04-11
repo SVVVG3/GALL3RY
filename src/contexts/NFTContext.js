@@ -177,6 +177,7 @@ export const NFTProvider = ({ children }) => {
   }, [hasMore, loading, nfts, selectedWallets]);
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, userFid) => {
+    console.log("fetchCollectionHolders called with:", { collectionAddress, userFid });
     setLoading(true);
     try {
       // First get user's following list
@@ -213,9 +214,29 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
-      const profileData = await fetchZapperData(followingQuery, { fid: userFid });
-      const following = profileData.farcasterProfile.following.edges;
-      const followers = profileData.farcasterProfile.followers.edges;
+      // Make sure userFid is a number
+      const parsedFid = parseInt(userFid, 10);
+      if (isNaN(parsedFid)) {
+        console.error("Invalid FID provided:", userFid);
+        throw new Error(`Invalid FID: ${userFid}`);
+      }
+
+      console.log("Fetching profile data for FID:", parsedFid);
+      const profileData = await fetchZapperData(followingQuery, { fid: parsedFid });
+      console.log("Profile data received:", profileData);
+      
+      if (!profileData || !profileData.farcasterProfile) {
+        console.error("Invalid profile data received:", profileData);
+        throw new Error("Invalid profile data");
+      }
+      
+      const following = profileData.farcasterProfile.following.edges || [];
+      const followers = profileData.farcasterProfile.followers.edges || [];
+      
+      console.log("Relationship counts:", { 
+        followingCount: following.length, 
+        followersCount: followers.length 
+      });
 
       // Then check each user for collection ownership
       const holdersQuery = `
