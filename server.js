@@ -7,6 +7,7 @@ const config = require('./src/server/config');
 const folderController = require('./src/server/folderController');
 const zapperHandler = require('./api/zapper');
 const neynarHandler = require('./api/neynar');
+const nftImageHandler = require('./api/nft-image');
 const net = require('net');
 
 const app = express();
@@ -69,6 +70,9 @@ apiRouter.get('/folders/featured', folderController.getFeaturedFolders);
 // Add Zapper and Neynar API handlers
 apiRouter.post('/zapper', zapperHandler);
 apiRouter.get('/neynar', neynarHandler);
+
+// Add NFT image proxy endpoint
+apiRouter.get('/nft-image/:network/:contractAddress/:tokenId', nftImageHandler);
 
 // Protected endpoints (auth required)
 apiRouter.get('/folders', authMiddleware, folderController.getUserFolders);

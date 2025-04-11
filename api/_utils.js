@@ -1,3 +1,7 @@
+/**
+ * Shared utilities for API handlers
+ */
+
 // Utility functions for serverless API endpoints
 const mongoose = require('mongoose');
 const axios = require('axios');
@@ -67,22 +71,57 @@ const verifyAuth = async (req) => {
   return { userId: fid };
 };
 
-// Cors headers for all responses - enhanced for mobile browser compatibility
-const corsHeaders = {
-  'Access-Control-Allow-Credentials': 'true',
+// Standard CORS headers for API responses
+exports.corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
-  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, Origin, Cache-Control, Pragma'
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, x-zapper-api-key'
 };
 
 // Helper to handle OPTIONS requests for CORS
 const handleOptions = (req, res) => {
   if (req.method === 'OPTIONS') {
-    res.status(200).send(corsHeaders);
+    res.status(200).send(exports.corsHeaders);
     return true;
   }
   return false;
 };
+
+// Simple in-memory cache
+class Cache {
+  constructor() {
+    this.items = new Map();
+  }
+
+  get(key) {
+    const item = this.items.get(key);
+    if (!item) return null;
+    
+    // Check if item has expired
+    if (item.expiry && Date.now() > item.expiry) {
+      this.items.delete(key);
+      return null;
+    }
+    
+    return item.value;
+  }
+
+  set(key, value, ttlSeconds = 3600) {
+    const expiry = ttlSeconds > 0 ? Date.now() + (ttlSeconds * 1000) : null;
+    this.items.set(key, { value, expiry });
+  }
+
+  delete(key) {
+    this.items.delete(key);
+  }
+
+  clear() {
+    this.items.clear();
+  }
+}
+
+// Export a singleton cache instance
+exports.cache = new Cache();
 
 module.exports = {
   cache,

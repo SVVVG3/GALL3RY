@@ -265,6 +265,69 @@ const zapperService = {
   },
 
   /**
+   * Process and standardize NFT data to ensure compatibility with our components
+   */
+  processNftData(nft) {
+    if (!nft) return null;
+    
+    // Extract collection data
+    const collection = nft.collection || {};
+    
+    // Extract contract address from collection or from NFT directly
+    let contractAddress = null;
+    if (collection && collection.address) {
+      contractAddress = collection.address;
+    } else if (nft.id && nft.id.includes('-')) {
+      // Try to extract from the ID format (e.g., "ethereum-0x1234-123")
+      const parts = nft.id.split('-');
+      if (parts.length >= 2) {
+        contractAddress = parts[1];
+      }
+    }
+    
+    // Determine network from NFT ID or default to ethereum
+    let network = 'ethereum';
+    if (nft.id && nft.id.includes('-')) {
+      const parts = nft.id.split('-');
+      if (parts.length >= 1) {
+        // Convert Zapper network naming to our format
+        const networkMap = {
+          'ethereum': 'ethereum',
+          'optimism': 'optimism',
+          'base': 'base',
+          'polygon': 'polygon',
+          'arbitrum': 'arbitrum'
+        };
+        
+        network = networkMap[parts[0].toLowerCase()] || 'ethereum';
+      }
+    }
+    
+    // Format the NFT data to match our components' expectations
+    return {
+      id: nft.id,
+      name: nft.name || `NFT #${nft.tokenId}`,
+      tokenId: nft.tokenId,
+      imageUrl: nft.imageUrl,
+      estimatedValue: nft.estimatedValueEth || nft.floorPriceEth || '0',
+      contractAddress: contractAddress,
+      network: network,
+      collection: {
+        name: collection.name || 'Unknown Collection',
+        address: collection.address || contractAddress,
+        floorPrice: collection.floorPriceEth || '0'
+      },
+      // For backward compatibility with NFTImage
+      media: [
+        {
+          gateway: nft.imageUrl,
+          raw: nft.imageUrl
+        }
+      ]
+    };
+  },
+
+  /**
    * Get NFTs for a set of wallet addresses
    */
   async getNftsForAddresses(addresses, options = {}) {
@@ -420,24 +483,20 @@ const zapperService = {
             imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
           }
           
-          // Create clean NFT object
-          const processedNft = {
-            id: nft.id,
-            name: nft.name || 'Unnamed NFT',
-            tokenId: nft.tokenId,
-            description: nft.description,
-            imageUrl: imageUrl,
-            token_id: nft.tokenId,
-            collection: nft.collection ? {
-              id: nft.collection.id,
-              name: nft.collection.name || 'Unknown Collection',
-              floorPriceEth: nft.collection.floorPriceEth,
-              imageUrl: nft.collection.cardImageUrl
-            } : null,
-            cursor: edge.cursor
+          // Create clean NFT object with imageUrl
+          const nftWithImage = {
+            ...nft,
+            imageUrl
           };
           
-          processedNfts.push(processedNft);
+          // Process using our standardization function
+          const processedNft = this.processNftData(nftWithImage);
+          if (processedNft) {
+            processedNfts.push({
+              ...processedNft,
+              cursor: edge.cursor
+            });
+          }
         }
         
         console.log(`Processed ${processedNfts.length} valid NFTs`);
