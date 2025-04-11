@@ -1,21 +1,23 @@
 const webpack = require('webpack');
 
 module.exports = function override(config) {
-  const fallback = config.resolve.fallback || {};
-  Object.assign(fallback, {
-    "process": require.resolve("process/browser"),
-    "zlib": require.resolve("browserify-zlib"),
+  // Add polyfills for Node.js core modules
+  config.resolve.fallback = {
+    ...config.resolve.fallback,
+    "buffer": require.resolve("buffer/"),
     "stream": require.resolve("stream-browserify"),
-    "util": require.resolve("util"),
-    "buffer": require.resolve("buffer"),
-    "asset": require.resolve("assert")
-  });
-  config.resolve.fallback = fallback;
-  config.plugins = (config.plugins || []).concat([
+    "util": require.resolve("util/"),
+    "crypto": require.resolve("crypto-browserify"),
+  };
+
+  // Add the necessary plugins
+  config.plugins = [
+    ...config.plugins,
     new webpack.ProvidePlugin({
+      Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',
-      Buffer: ['buffer', 'Buffer']
-    })
-  ]);
+    }),
+  ];
+
   return config;
 }; 
