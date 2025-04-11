@@ -159,6 +159,12 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 name
                 tokenId
                 description
+                acquiredAt
+                lastPrice {
+                  timestamp
+                  value
+                  tokenSymbol
+                }
                 mediasV2 {
                   ... on Image {
                     url
@@ -269,25 +275,56 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               }
             }
             
-            // Process the transfer timestamp data
-            let latestTransferTimestamp = null;
-            if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
+            // Process the acquisition timestamp data
+            let acquisitionTimestamp = null;
+            
+            // First try acquiredAt if available (most accurate)
+            if (nft.acquiredAt && typeof nft.acquiredAt === 'number') {
+              acquisitionTimestamp = nft.acquiredAt;
+              console.log(`NFT ${nft.id} (${nft.name}) has acquisition timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
+            }
+            // Then try lastPrice timestamp
+            else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
+              acquisitionTimestamp = nft.lastPrice.timestamp;
+              console.log(`NFT ${nft.id} (${nft.name}) has lastPrice timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
+            }
+            // Then try transfer data - look for transfers TO the owner's addresses
+            else if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
               // Try to extract timestamps from transfers
-              const timestamps = nft.transfers.edges
-                .filter(edge => edge.node && typeof edge.node.timestamp === 'number')
-                .map(edge => edge.node.timestamp);
+              const transfersToOwner = nft.transfers.edges
+                .filter(edge => edge.node && typeof edge.node.timestamp === 'number' && 
+                  edge.node.to && addresses.some(addr => edge.node.to.toLowerCase() === addr.toLowerCase()))
+                .map(edge => ({ 
+                  timestamp: edge.node.timestamp,
+                  to: edge.node.to
+                }));
               
-              if (timestamps.length > 0) {
-                latestTransferTimestamp = Math.max(...timestamps);
-                console.log(`NFT ${nft.id} (${nft.name}) has transfer timestamp: ${new Date(latestTransferTimestamp * 1000).toISOString()}`);
+              if (transfersToOwner.length > 0) {
+                // Sort by most recent first
+                transfersToOwner.sort((a, b) => b.timestamp - a.timestamp);
+                acquisitionTimestamp = transfersToOwner[0].timestamp;
+                console.log(`NFT ${nft.id} (${nft.name}) has transfer-to-owner timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
+              } else {
+                // If no transfers to owner, use the most recent transfer as fallback
+                const timestamps = nft.transfers.edges
+                  .filter(edge => edge.node && typeof edge.node.timestamp === 'number')
+                  .map(edge => edge.node.timestamp);
+                
+                if (timestamps.length > 0) {
+                  acquisitionTimestamp = Math.max(...timestamps);
+                  console.log(`NFT ${nft.id} (${nft.name}) using most recent transfer: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
+                }
               }
-            } else {
-              // If no transfer data, use a heuristic based on tokenId
-              // Newer NFTs in a collection often have higher tokenIds
+            }
+            
+            // If no acquisition data, use tokenId as a last resort
+            if (!acquisitionTimestamp) {
               const tokenIdNum = parseInt(nft.tokenId, 10);
               if (!isNaN(tokenIdNum)) {
                 // Create a pseudo-timestamp from tokenId (just for relative sorting)
-                latestTransferTimestamp = tokenIdNum;
+                // We'll use a very old timestamp plus the token ID to keep these sorted by ID
+                // but after any real timestamps
+                acquisitionTimestamp = -(10000000000 - tokenIdNum);
                 console.log(`NFT ${nft.id} (${nft.name}) using tokenId for sort: ${tokenIdNum}`);
               }
             }
@@ -349,7 +386,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 description: nft.description,
                 image: imageUrl
               },
-              latestTransferTimestamp
+              acquisitionTimestamp,
+              latestTransferTimestamp: acquisitionTimestamp
             };
           }).filter(Boolean);
           
@@ -570,28 +608,41 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           return valueB - valueA; // Sort descending (highest first)
         });
         
-      case 'recent': // By most recent transfer (latest first)
+      case 'recent': // By acquisition date (latest first)
         return sortedNfts.sort((a, b) => {
-          // First check for actual timestamp data
-          const hasTimestampA = typeof a.latestTransferTimestamp === 'number' && a.latestTransferTimestamp > 0;
-          const hasTimestampB = typeof b.latestTransferTimestamp === 'number' && b.latestTransferTimestamp > 0;
+          // First check for acquisition timestamp - this is our primary data source
+          const hasAcquisitionA = typeof a.acquisitionTimestamp === 'number';
+          const hasAcquisitionB = typeof b.acquisitionTimestamp === 'number';
           
-          // If both have timestamps, compare them
-          if (hasTimestampA && hasTimestampB) {
+          // If both have acquisition timestamps, compare them
+          if (hasAcquisitionA && hasAcquisitionB) {
+            // For pseudo-timestamps (negative values from tokenIds), we want normal ascending order
+            // For real timestamps, we want descending order (newest first)
+            if (a.acquisitionTimestamp < 0 && b.acquisitionTimestamp < 0) {
+              return a.acquisitionTimestamp - b.acquisitionTimestamp;
+            } else if (a.acquisitionTimestamp < 0) {
+              return 1; // Real timestamps come before pseudo-timestamps
+            } else if (b.acquisitionTimestamp < 0) {
+              return -1; // Real timestamps come before pseudo-timestamps
+            } else {
+              return b.acquisitionTimestamp - a.acquisitionTimestamp;
+            }
+          }
+          
+          // If only one has acquisition data, prioritize it
+          if (hasAcquisitionA) return -1;
+          if (hasAcquisitionB) return 1;
+          
+          // Fall back to transfer timestamps if available
+          const hasTransferA = typeof a.latestTransferTimestamp === 'number' && a.latestTransferTimestamp > 0;
+          const hasTransferB = typeof b.latestTransferTimestamp === 'number' && b.latestTransferTimestamp > 0;
+          
+          if (hasTransferA && hasTransferB) {
             return b.latestTransferTimestamp - a.latestTransferTimestamp;
           }
           
-          // If only one has a timestamp, prioritize it
-          if (hasTimestampA) return -1;
-          if (hasTimestampB) return 1;
-          
-          // If neither has a timestamp, try to compare by tokenId (newer NFTs often have higher tokenIds)
-          const tokenIdA = parseInt(a.tokenId || '0', 10);
-          const tokenIdB = parseInt(b.tokenId || '0', 10);
-          
-          if (!isNaN(tokenIdA) && !isNaN(tokenIdB)) {
-            return tokenIdB - tokenIdA; // Higher tokenId is likely more recent
-          }
+          if (hasTransferA) return -1;
+          if (hasTransferB) return 1;
           
           // If all else fails, sort by collection name and then token name
           const collectionA = (a.collection?.name || '').toLowerCase();
