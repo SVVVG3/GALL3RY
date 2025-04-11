@@ -11,7 +11,7 @@ export const NFTProvider = ({ children }) => {
   const [selectedChains, setSelectedChains] = useState(['all']);
   const [selectedWallets, setSelectedWallets] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('collection'); // Add default sort
+  const [sortBy, setSortBy] = useState('collection');
   const [page, setPage] = useState(1);
   const [collectionHolders, setCollectionHolders] = useState({});
 
@@ -20,36 +20,47 @@ export const NFTProvider = ({ children }) => {
     setError(null);
     try {
       const query = `
-        query GetNFTs($addresses: [Address!]!, $orderBy: PortfolioV2NftOrderByOption!) {
-          portfolioV2(addresses: $addresses) {
-            nftBalances(orderBy: { by: $orderBy }) {
-              nfts {
-                id
-                name
-                description
-                imageUrl
-                tokenId
-                collection {
-                  name
-                  address
-                  imageUrl
-                  floorPrice
-                  network
-                }
-                lastReceivedAt
-                estimatedValue {
-                  value
-                  token {
-                    symbol
-                  }
-                }
-                metadata {
+        query getNFTsForUser($addresses: [Address!]!, $first: Int!) {
+          nftUsersTokens(
+            owners: $addresses
+            first: $first
+            input: {
+              owners: $addresses
+              first: $first
+              withOverrides: true
+            }
+          ) {
+            edges {
+              node {
+                token {
+                  id
+                  tokenId
                   name
                   description
-                  image
-                  attributes {
-                    trait_type
+                  estimatedValue {
                     value
+                    currency
+                  }
+                  collection {
+                    name
+                    address
+                    imageUrl
+                    floorPrice
+                    network
+                  }
+                  media {
+                    url
+                    type
+                    format
+                  }
+                  metadata {
+                    name
+                    description
+                    image
+                    attributes {
+                      trait_type
+                      value
+                    }
                   }
                 }
               }
@@ -60,23 +71,32 @@ export const NFTProvider = ({ children }) => {
 
       const variables = {
         addresses,
-        orderBy: sortBy === 'recent' ? 'LAST_RECEIVED' : 'USD_WORTH'
+        first: 100
       };
 
       const data = await fetchZapperData(query, variables);
-      const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => ({
-        ...nft,
-        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl
+      
+      // Transform the response to match our component expectations
+      const transformedNfts = data.nftUsersTokens.edges.map(edge => ({
+        id: edge.node.token.id,
+        name: edge.node.token.name || edge.node.token.metadata?.name,
+        description: edge.node.token.description || edge.node.token.metadata?.description,
+        imageUrl: edge.node.token.media?.[0]?.url || edge.node.token.metadata?.image || edge.node.token.collection?.imageUrl,
+        tokenId: edge.node.token.tokenId,
+        collection: edge.node.token.collection,
+        estimatedValue: edge.node.token.estimatedValue,
+        metadata: edge.node.token.metadata
       }));
-      setNfts(nftsWithImages);
-      setHasMore(nftsWithImages.length === 20);
+
+      setNfts(transformedNfts);
+      setHasMore(transformedNfts.length === 100);
       setPage(1);
     } catch (err) {
       setError('Failed to fetch NFTs');
       console.error(err);
     }
     setLoading(false);
-  }, [sortBy]);
+  }, []);
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, userFid) => {
     setLoading(true);

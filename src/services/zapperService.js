@@ -527,6 +527,75 @@ const zapperService = {
       throw error;
     }
   },
+
+  /**
+   * Get NFTs for a specific address
+   */
+  async getNFTsForUser(addresses, options = {}) {
+    const query = `
+      query getNFTsForUser($addresses: [Address!]!, $networks: [Network!], $first: Int!) {
+        nftUsersTokens(
+          owners: $addresses
+          networks: $networks
+          first: $first
+        ) {
+          edges {
+            node {
+              token {
+                id
+                tokenId
+                name
+                estimatedValue {
+                  value
+                  currency
+                }
+                collection {
+                  name
+                  address
+                  imageUrl
+                }
+                media {
+                  url
+                  type
+                  format
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const variables = {
+      addresses,
+      networks: options.networks || ['ETHEREUM_MAINNET'],
+      first: options.first || 100
+    };
+
+    try {
+      const data = await this.makeGraphQLRequest(query, variables);
+      
+      // Transform the response to match our NftCard component expectations
+      return data.nftUsersTokens.edges.map(edge => ({
+        id: edge.node.token.id,
+        name: edge.node.token.name,
+        token_id: edge.node.token.tokenId,
+        estimatedValue: {
+          value: edge.node.token.estimatedValue?.value,
+          currency: edge.node.token.estimatedValue?.currency
+        },
+        collection: {
+          name: edge.node.token.collection.name,
+          address: edge.node.token.collection.address,
+          imageUrl: edge.node.token.collection.imageUrl
+        },
+        imageUrl: edge.node.token.media?.[0]?.url || edge.node.token.collection.imageUrl
+      }));
+    } catch (error) {
+      console.error('Error fetching NFTs:', error);
+      throw error;
+    }
+  },
 };
 
 export default zapperService; 

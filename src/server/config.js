@@ -1,5 +1,5 @@
 /**
- * Client-side application configuration settings
+ * Server-side application configuration settings
  */
 const config = {
   // API base URL, defaulting to localhost in development
@@ -24,4 +24,4 @@ const config = {
   }
 };
 
-export default config; 
+module.exports = config; 
