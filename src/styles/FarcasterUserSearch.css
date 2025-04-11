@@ -312,4 +312,62 @@
   .nft-details {
     padding: 24px;
   }
+}
+
+/* Load more functionality */
+.load-more-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 24px;
+  margin-bottom: 40px;
+}
+
+.load-more-button {
+  padding: 12px 36px;
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.load-more-button:hover {
+  background-color: var(--color-primary-dark);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.load-more-button:disabled {
+  background-color: var(--color-gray-400);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.loading-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+  color: var(--color-gray-600);
+}
+
+.loading-spinner-small {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(139, 92, 246, 0.2);
+  border-left-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 } 

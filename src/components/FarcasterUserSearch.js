@@ -13,12 +13,18 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [searchQuery, setSearchQuery] = useState(initialUsername || '');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingNfts, setIsLoadingNfts] = useState(false);
+  const [isLoadingMoreNfts, setIsLoadingMoreNfts] = useState(false);
   const [searchError, setSearchError] = useState(null);
   
   // User data state
   const [userProfile, setUserProfile] = useState(null);
   const [userNfts, setUserNfts] = useState([]);
   const [fetchNftsError, setFetchNftsError] = useState(null);
+  
+  // Pagination state
+  const [hasMoreNfts, setHasMoreNfts] = useState(false);
+  const [endCursor, setEndCursor] = useState(null);
+  const [walletAddresses, setWalletAddresses] = useState([]);
   
   // UI state
   const [selectedNft, setSelectedNft] = useState(null);
@@ -43,6 +49,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setUserNfts([]);
     setFetchNftsError(null);
     setWalletsExpanded(false);
+    setHasMoreNfts(false);
+    setEndCursor(null);
+    setWalletAddresses([]);
 
     try {
       console.log(`Searching for Farcaster user: ${query}`);
@@ -57,6 +66,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           ...(profile.connectedAddresses || []),
           ...(profile.custodyAddress ? [profile.custodyAddress] : [])
         ].filter(Boolean);
+        
+        setWalletAddresses(addresses);
         
         if (addresses.length > 0) {
           await fetchUserNfts(addresses);
@@ -79,19 +90,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   };
 
   // Fetch NFTs for the user
-  const fetchUserNfts = async (addresses) => {
-    setIsLoadingNfts(true);
+  const fetchUserNfts = async (addresses, cursor = null, loadMore = false) => {
+    if (loadMore) {
+      setIsLoadingMoreNfts(true);
+    } else {
+      setIsLoadingNfts(true);
+    }
+    
     setFetchNftsError(null);
     
     try {
       console.log(`Fetching NFTs for ${addresses.length} wallet addresses:`, addresses);
+      console.log(loadMore ? 'Loading more NFTs from cursor: ' + cursor : 'Initial NFT load');
       
       // Make direct request to the API using raw query for better control
       const query = `
-        query GetNFTs($owners: [Address!]!, $first: Int) {
+        query GetNFTs($owners: [Address!]!, $first: Int, $after: String) {
           nftUsersTokens(
             owners: $owners
             first: $first
+            after: $after
             withOverrides: true
           ) {
             edges {
@@ -140,7 +158,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             query,
             variables: { 
               owners: addresses,
-              first: 100
+              first: 50, // Reduced batch size for better performance
+              after: cursor
             }
           })
         });
@@ -161,9 +180,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         }
         
         const edges = responseData.data.nftUsersTokens.edges || [];
-        console.log(`Found ${edges.length} NFTs via direct API call`);
+        const pageInfo = responseData.data.nftUsersTokens.pageInfo || {};
         
-        if (edges.length === 0) {
+        console.log(`Found ${edges.length} NFTs via direct API call`);
+        console.log(`Page info: hasNextPage = ${pageInfo.hasNextPage}, endCursor = ${pageInfo.endCursor}`);
+        
+        // Update pagination state
+        setHasMoreNfts(pageInfo.hasNextPage);
+        setEndCursor(pageInfo.endCursor);
+        
+        if (edges.length === 0 && !loadMore) {
           setUserNfts([]);
           return;
         }
@@ -222,20 +248,44 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         }).filter(Boolean);
         
         console.log('Processed NFTs:', processedNfts);
-        setUserNfts(processedNfts);
+        
+        // Either append to existing NFTs or replace them
+        if (loadMore) {
+          setUserNfts(prevNfts => [...prevNfts, ...processedNfts]);
+        } else {
+          setUserNfts(processedNfts);
+        }
         
       } catch (directApiError) {
         console.error('Direct API call failed:', directApiError);
         
         // Fallback to the service method
         console.log('Falling back to zapperService method...');
-        const result = await zapperService.getNftsForAddresses(addresses);
-        
-        if (result && Array.isArray(result.nfts)) {
-          console.log(`Found ${result.nfts.length} NFTs via service fallback`);
-          setUserNfts(result.nfts);
-        } else {
-          console.error('Invalid response from NFT service:', result);
+        try {
+          const result = await zapperService.getNftsForAddresses(addresses, {
+            first: 50,
+            after: cursor
+          });
+          
+          if (result && Array.isArray(result.nfts)) {
+            console.log(`Found ${result.nfts.length} NFTs via service fallback`);
+            
+            // Update pagination state
+            setHasMoreNfts(result.pageInfo?.hasNextPage || false);
+            setEndCursor(result.pageInfo?.endCursor || null);
+            
+            // Either append to existing NFTs or replace them
+            if (loadMore) {
+              setUserNfts(prevNfts => [...prevNfts, ...result.nfts]);
+            } else {
+              setUserNfts(result.nfts);
+            }
+          } else {
+            console.error('Invalid response from NFT service:', result);
+            setFetchNftsError('Failed to fetch NFTs. Please try again.');
+          }
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
           setFetchNftsError('Failed to fetch NFTs. Please try again.');
         }
       }
@@ -243,8 +293,21 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.error('Error fetching NFTs:', error);
       setFetchNftsError(error.message || 'Failed to fetch NFTs. Please try again.');
     } finally {
-      setIsLoadingNfts(false);
+      if (loadMore) {
+        setIsLoadingMoreNfts(false);
+      } else {
+        setIsLoadingNfts(false);
+      }
     }
+  };
+  
+  // Handle loading more NFTs
+  const handleLoadMore = async () => {
+    if (isLoadingMoreNfts || !hasMoreNfts || !endCursor || walletAddresses.length === 0) {
+      return;
+    }
+    
+    await fetchUserNfts(walletAddresses, endCursor, true);
   };
 
   // Handle NFT click to open modal
@@ -279,8 +342,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
 
   // Log when NFT data changes
   useEffect(() => {
-    console.log(`NFT state updated: ${userNfts.length} NFTs available`);
-  }, [userNfts]);
+    console.log(`NFT state updated: ${userNfts.length} NFTs available, has more: ${hasMoreNfts}`);
+  }, [userNfts, hasMoreNfts]);
 
   // Render component
   return (
@@ -385,7 +448,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         <div className="debug-info" style={{margin: '10px 0', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px'}}>
           <h4>Debug Info:</h4>
           <p>Loading NFTs: {isLoadingNfts ? 'Yes' : 'No'}</p>
+          <p>Loading More NFTs: {isLoadingMoreNfts ? 'Yes' : 'No'}</p>
           <p>NFT Count: {userNfts.length}</p>
+          <p>Has More NFTs: {hasMoreNfts ? 'Yes' : 'No'}</p>
+          <p>End Cursor: {endCursor || 'None'}</p>
           <p>Connected Addresses: {userProfile.connectedAddresses?.length || 0}</p>
           <p>Has Custody Address: {userProfile.custodyAddress ? 'Yes' : 'No'}</p>
         </div>
@@ -414,6 +480,27 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   : "No NFTs found for this user's wallets."
             }
           />
+          
+          {/* Load More Button */}
+          {hasMoreNfts && userNfts.length > 0 && (
+            <div className="load-more-container">
+              <button 
+                className="load-more-button"
+                onClick={handleLoadMore}
+                disabled={isLoadingMoreNfts}
+              >
+                {isLoadingMoreNfts ? 'Loading...' : 'Load More NFTs'}
+              </button>
+            </div>
+          )}
+          
+          {/* Loading More Indicator */}
+          {isLoadingMoreNfts && (
+            <div className="loading-more">
+              <div className="loading-spinner-small"></div>
+              <p>Loading more NFTs...</p>
+            </div>
+          )}
         </div>
       )}
 

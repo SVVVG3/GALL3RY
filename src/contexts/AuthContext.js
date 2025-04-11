@@ -17,8 +17,8 @@ export const useAuth = () => {
       fid: farcasterAuth.profile?.fid,
       username: farcasterAuth.profile?.username,
       displayName: farcasterAuth.profile?.displayName,
-      // Using the avatar from Farcaster or a placeholder
-      avatarUrl: farcasterAuth.profile?.pfp || 'https://i.pravatar.cc/150?u=demo_user',
+      // Using the avatar from Farcaster with proper fallback
+      avatarUrl: farcasterAuth.profile?.pfp?.url || farcasterAuth.profile?.pfp || 'https://i.pravatar.cc/150?u=demo_user',
       connectedAddresses: [], // We'll get these from user profile data later
     } : null,
     loading: farcasterAuth.loading,

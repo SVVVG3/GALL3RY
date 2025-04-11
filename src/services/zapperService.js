@@ -247,13 +247,16 @@ const zapperService = {
    */
   async getNftsForAddresses(addresses, options = {}) {
     try {
-      const { first = 100, after = null } = options;
+      const { first = 50, after = null } = options;
       
       if (!addresses || addresses.length === 0) {
         throw new Error('At least one wallet address is required');
       }
 
       console.log(`Fetching NFTs for addresses:`, addresses);
+      if (after) {
+        console.log(`Using pagination cursor: ${after}`);
+      }
 
       // Updated query to match the current Zapper API schema
       const query = `
@@ -303,7 +306,6 @@ const zapperService = {
       
       try {
         const data = await this.makeGraphQLRequest(query, { owners: addresses, first, after });
-        console.log(`GraphQL response received:`, JSON.stringify(data, null, 2).substring(0, 500) + '...');
         
         // Early return if no data
         if (!data) {
@@ -334,6 +336,7 @@ const zapperService = {
         
         // Extract the pagination info
         const pageInfo = data.nftUsersTokens.pageInfo || { hasNextPage: false, endCursor: null };
+        console.log(`Pagination info: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
         
         // Helper function to get the best image URL from mediaV2 array
         const getBestImageUrl = (nft) => {
@@ -383,19 +386,16 @@ const zapperService = {
           
           // Get image URL from the NFT data
           let imageUrl = getBestImageUrl(nft);
-          console.log(`Processing NFT: ${nft.name || 'Unnamed'}, tokenId: ${nft.tokenId}, initial imageUrl: ${imageUrl || 'none'}`);
           
           // Process IPFS URLs in image URLs if needed
           if (imageUrl && (imageUrl.startsWith('ipfs://') || imageUrl.startsWith('ar://'))) {
             const processedUrl = this.processImageUrl(imageUrl);
-            console.log(`Processed IPFS/Arweave URL: ${imageUrl} -> ${processedUrl}`);
             imageUrl = processedUrl;
           }
           
           // Use placeholder as last resort
           if (!imageUrl) {
             imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
-            console.log(`Using placeholder image`);
           }
           
           // Create clean NFT object
