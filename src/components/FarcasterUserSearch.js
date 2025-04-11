@@ -307,7 +307,7 @@ const FarcasterUserSearch = () => {
               />
             )}
             <div className="profile-info">
-              <h3>{userProfile.displayName || userProfile.username}</h3>
+              <h3 className="display-name">{userProfile.displayName || userProfile.username}</h3>
               <p className="username">@{userProfile.username} · FID: {userProfile.fid}</p>
             </div>
           </div>

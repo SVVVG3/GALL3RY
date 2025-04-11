@@ -63,7 +63,6 @@ function App() {
 
 // Combined HomePage component with Discover functionality
 const HomePage = () => {
-  const [activeTab, setActiveTab] = useState('search'); // 'search' or 'collections'
   const [selectedFolderId, setSelectedFolderId] = useState(null);
   const { isAuthenticated, profile, token } = useAuth();
   
@@ -91,39 +90,13 @@ const HomePage = () => {
       );
     }
     
-    if (activeTab === 'search') {
-      return <FarcasterUserSearch />;
-    }
-    
-    return (
-      <PublicFolderManager 
-        userId={isAuthenticated ? profile?.fid : null}
-        token={token}
-        onFolderSelect={handleFolderSelect}
-      />
-    );
+    return <FarcasterUserSearch />;
   };
   
   return (
     <div className="home-container">
       <div className="hero-section">
-        <h1>Discover NFTs in the Farcaster Ecosystem</h1>
-        <p>Search Farcaster users to explore their NFT collections or browse shared galleries.</p>
-      </div>
-      
-      <div className="discovery-tabs">
-        <button 
-          className={`tab-button ${activeTab === 'search' ? 'active' : ''}`}
-          onClick={() => setActiveTab('search')}
-        >
-          Search Farcaster Users
-        </button>
-        <button 
-          className={`tab-button ${activeTab === 'collections' ? 'active' : ''}`}
-          onClick={() => setActiveTab('collections')}
-        >
-          Public Collections
-        </button>
+        <p>Search Farcaster users to explore their NFT collections</p>
       </div>
       
       {renderContent()}
