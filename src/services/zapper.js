@@ -1,12 +1,9 @@
 import axios from 'axios';
 
-const API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
-const API_URL = 'https://public.zapper.xyz/graphql';
-
-const headers = {
-  'Content-Type': 'application/json',
-  'x-zapper-api-key': API_KEY
-};
+// Use server proxy instead of direct API calls
+const API_URL = process.env.NODE_ENV === 'development' 
+  ? 'http://localhost:3001/api/zapper'
+  : '/api/zapper';
 
 // Cache for GraphQL responses
 const cache = new Map();
@@ -24,7 +21,9 @@ export const fetchZapperData = async (query, variables) => {
     const response = await axios({
       url: API_URL,
       method: 'post',
-      headers,
+      headers: {
+        'Content-Type': 'application/json'
+      },
       data: {
         query,
         variables
