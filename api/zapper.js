@@ -41,6 +41,20 @@ const handler = async (req, res) => {
       return res.status(400).json({ error: 'Missing GraphQL query in request body' });
     }
 
+    // Validate query structure
+    if (!query.includes('query') && !query.includes('mutation')) {
+      console.error('Invalid GraphQL query structure');
+      return res.status(400).json({ error: 'Invalid GraphQL query structure' });
+    }
+
+    // Validate variables if present
+    if (variables) {
+      if (variables.addresses && !Array.isArray(variables.addresses)) {
+        console.error('Invalid addresses format in variables');
+        return res.status(400).json({ error: 'Addresses must be an array' });
+      }
+    }
+
     // Log query information (abbreviated to avoid excessive logs)
     console.log('Proxying GraphQL request to Zapper API');
     
@@ -56,44 +70,68 @@ const handler = async (req, res) => {
       return res.status(200).json(cachedData);
     }
 
-    // Forward the request to Zapper's GraphQL API
-    try {
-      const zapperResponse = await axios({
-        url: 'https://public.zapper.xyz/graphql',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-zapper-api-key': apiKey
-        },
-        data: {
-          query,
-          variables
-        },
-        timeout: 20000 // 20 second timeout
-      });
+    // Forward the request to Zapper's GraphQL API with retries
+    const maxRetries = 3;
+    let lastError = null;
 
-      // Cache the successful response (TTL: 5 minutes)
-      cache.set(cacheKey, zapperResponse.data, 300);
-      
-      // Set content type header for mobile browsers
-      res.setHeader('Content-Type', 'application/json');
-      return res.status(200).json(zapperResponse.data);
-    } catch (zError) {
-      console.error('Zapper API request failed:', zError.message);
-      
-      // Handle Zapper API errors specifically
-      if (zError.response) {
-        return res.status(zError.response.status).json({
-          error: 'Zapper API error',
-          message: zError.message,
-          details: zError.response.data
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const zapperResponse = await axios({
+          url: 'https://public.zapper.xyz/graphql',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-zapper-api-key': apiKey,
+            'Accept': 'application/json'
+          },
+          data: {
+            query,
+            variables
+          },
+          timeout: 20000 // 20 second timeout
         });
-      } else {
-        return res.status(500).json({
-          error: 'Zapper API connection error',
-          message: zError.message
-        });
+
+        // Check for GraphQL errors in the response
+        if (zapperResponse.data.errors) {
+          console.error('GraphQL errors:', zapperResponse.data.errors);
+          return res.status(400).json({
+            error: 'GraphQL query error',
+            errors: zapperResponse.data.errors
+          });
+        }
+
+        // Cache the successful response (TTL: 5 minutes)
+        cache.set(cacheKey, zapperResponse.data, 300);
+        
+        // Set content type header for mobile browsers
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(200).json(zapperResponse.data);
+      } catch (zError) {
+        lastError = zError;
+        console.error(`Attempt ${attempt} failed:`, zError.message);
+        
+        if (attempt < maxRetries) {
+          // Wait before retrying (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          continue;
+        }
       }
+    }
+
+    // If we get here, all retries failed
+    console.error('All retry attempts failed:', lastError.message);
+    
+    if (lastError.response) {
+      return res.status(lastError.response.status).json({
+        error: 'Zapper API error',
+        message: lastError.message,
+        details: lastError.response.data
+      });
+    } else {
+      return res.status(500).json({
+        error: 'Zapper API connection error',
+        message: lastError.message
+      });
     }
   } catch (error) {
     console.error('Error in Zapper API handler:', error.message);

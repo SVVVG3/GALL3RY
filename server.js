@@ -7,9 +7,25 @@ const config = require('./src/config');
 const folderController = require('./src/server/folderController');
 const zapperHandler = require('./api/zapper');
 const neynarHandler = require('./api/neynar');
+const net = require('net');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const BASE_PORT = process.env.PORT || 3001;
+
+// Function to find an available port
+const findAvailablePort = (startPort) => {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.listen(startPort, () => {
+      const port = server.address().port;
+      server.close(() => resolve(port));
+    });
+    server.on('error', () => {
+      // Port is in use, try the next one
+      resolve(findAvailablePort(startPort + 1));
+    });
+  });
+};
 
 // Middleware
 app.use(cors());
@@ -81,10 +97,17 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API base URL: ${config.apiUrl}`);
+// Start server with available port
+findAvailablePort(BASE_PORT).then(port => {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    console.log(`API base URL: http://localhost:${port}/api`);
+    
+    // Update the config with the new port
+    if (!process.env.REACT_APP_API_URL) {
+      config.apiUrl = `http://localhost:${port}/api`;
+    }
+  });
 });
 
 // Handle uncaught errors
