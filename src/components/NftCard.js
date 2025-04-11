@@ -18,7 +18,17 @@ const NftCard = ({ nft, onClick }) => {
     
     if (isAuthenticated && profile && profile.fid) {
       console.log("Opening collection holders modal for collection address:", nft.collection?.address);
-      setShowHolders(true);
+      
+      // Make sure we have a collection address before trying to show the modal
+      if (contractAddress) {
+        setShowHolders(true);
+      } else {
+        console.error("Cannot open modal: No collection address available for this NFT");
+        // Could show a toast or alert here
+        if (onClick) {
+          onClick(nft);
+        }
+      }
     } else if (onClick) {
       onClick(nft);
     }

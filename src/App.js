@@ -17,6 +17,7 @@ import UserDashboard from './pages/UserDashboard';
 import { AuthProvider } from './contexts/AuthContext';
 import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
+import { NFTProvider } from './contexts/NFTContext';
 
 // Configure Farcaster Auth Kit
 const farcasterConfig = {
@@ -29,36 +30,38 @@ function App() {
   return (
     <AuthKitProvider config={farcasterConfig}>
       <AuthProvider>
-        <Router>
-          <div className="app">
-            <header className="app-header">
-              <div className="container">
-                <div className="logo">
-                  <Link to="/">
-                    <h1>GALL3RY</h1>
-                  </Link>
+        <NFTProvider>
+          <Router>
+            <div className="app">
+              <header className="app-header">
+                <div className="container">
+                  <div className="logo">
+                    <Link to="/">
+                      <h1>GALL3RY</h1>
+                    </Link>
+                  </div>
+                  
+                  <div className="auth-actions">
+                    <AuthButtons />
+                  </div>
                 </div>
-                
-                <div className="auth-actions">
-                  <AuthButtons />
+              </header>
+              
+              <main className="app-content">
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/user/:username" element={<UserProfilePage />} />
+                </Routes>
+              </main>
+              
+              <footer className="app-footer">
+                <div className="container">
+                  <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
                 </div>
-              </div>
-            </header>
-            
-            <main className="app-content">
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/user/:username" element={<UserProfilePage />} />
-              </Routes>
-            </main>
-            
-            <footer className="app-footer">
-              <div className="container">
-                <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
-              </div>
-            </footer>
-          </div>
-        </Router>
+              </footer>
+            </div>
+          </Router>
+        </NFTProvider>
       </AuthProvider>
     </AuthKitProvider>
   );

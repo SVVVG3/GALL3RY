@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
@@ -6,6 +6,7 @@ import './CollectionHoldersModal.css';
 
 const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   const { loading, collectionHolders, fetchCollectionHolders } = useNFT();
+  const [error, setError] = useState(null);
 
   // Debug props
   console.log("CollectionHoldersModal mounted with:", { collectionAddress, userFid });
@@ -13,9 +14,19 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   useEffect(() => {
     console.log("CollectionHoldersModal useEffect running with:", { collectionAddress, userFid });
     if (collectionAddress && userFid) {
-      fetchCollectionHolders(collectionAddress, userFid);
+      try {
+        fetchCollectionHolders(collectionAddress, userFid)
+          .catch(err => {
+            console.error("Error fetching collection holders:", err);
+            setError(err.message || "Failed to fetch collection holders");
+          });
+      } catch (err) {
+        console.error("Error in fetchCollectionHolders:", err);
+        setError(err.message || "Failed to fetch collection holders");
+      }
     } else {
       console.error("Missing required props:", { collectionAddress, userFid });
+      setError("Missing collection address or user FID");
     }
   }, [collectionAddress, userFid, fetchCollectionHolders]);
 
@@ -48,20 +59,28 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
     }
   };
 
+  const handleClose = () => {
+    if (onClose) onClose();
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 collection-holders-modal">
       <div className="bg-[#1c1c1c] rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">Collection Holders</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="text-gray-400 hover:text-white transition-colors"
           >
             ✕
           </button>
         </div>
 
-        {loading ? (
+        {error ? (
+          <div className="text-center py-8 text-red-400">
+            {error}
+          </div>
+        ) : loading ? (
           <div className="flex justify-center items-center py-8">
             <LoadingSpinner size="small" />
           </div>
@@ -77,6 +96,10 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
                   src={holder.imageUrl}
                   alt={holder.username}
                   className="w-12 h-12 rounded-full"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "/placeholder.png";
+                  }}
                 />
                 <div className="flex-1">
                   <div className="font-medium text-white flex items-center">
