@@ -107,23 +107,7 @@ const AuthButtons = () => {
     return (
       <>
         <Link to={`/user/${profile.username}`} className="user-profile-link">
-          <div className="user-avatar">
-            {profile.avatarUrl ? (
-              <img 
-                src={profile.avatarUrl} 
-                alt={profile.username || 'User'}
-                onError={(e) => {
-                  console.log('Header avatar failed to load, using fallback');
-                  e.target.src = 'https://via.placeholder.com/40?text=User';
-                }}
-              />
-            ) : (
-              <div className="avatar-placeholder">
-                {profile.username ? profile.username.charAt(0).toUpperCase() : 'U'}
-              </div>
-            )}
-          </div>
-          <span className="username">{profile.username || 'User'}</span>
+          <span className="username">@{profile.username || 'User'}</span>
         </Link>
         <button onClick={logout} className="btn btn-outline">Sign Out</button>
       </>
