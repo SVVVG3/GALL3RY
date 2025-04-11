@@ -251,25 +251,52 @@ const handler = async (req, res) => {
                   imageUrl = node.collection.cardImageUrl;
                 }
                 
+                // Process potential IPFS URLs for better compatibility
+                if (imageUrl && imageUrl.startsWith('ipfs://')) {
+                  imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+                }
+                
+                // Process potential Arweave URLs for better compatibility
+                if (imageUrl && imageUrl.startsWith('ar://')) {
+                  imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+                }
+                
                 // Build a compatible object structure
                 return {
                   id: node.id,
                   tokenId: node.tokenId,
-                  name: node.name,
+                  name: node.name || `NFT #${node.tokenId}`,
                   collection: {
                     id: node.collection?.id,
-                    name: node.collection?.name,
+                    name: node.collection?.name || 'Unknown Collection',
                     floorPrice: {
-                      value: node.collection?.floorPriceEth,
+                      value: node.collection?.floorPriceEth || 0,
                       symbol: 'ETH'
                     },
                     imageUrl: node.collection?.cardImageUrl
+                  },
+                  token: {
+                    id: node.id,
+                    tokenId: node.tokenId,
+                    name: node.name || `NFT #${node.tokenId}`,
+                    contractAddress: node.collection?.id ? node.collection.id.split(':')[1] : null,
+                    networkId: node.collection?.id ? (node.collection.id.includes('ethereum') ? 1 : 
+                                 node.collection.id.includes('polygon') ? 137 : 
+                                 node.collection.id.includes('optimism') ? 10 : 
+                                 node.collection.id.includes('arbitrum') ? 42161 : 
+                                 node.collection.id.includes('base') ? 8453 : 1) : 1
                   },
                   imageUrl: imageUrl,
                   metadata: {
                     name: node.name,
                     description: node.description,
                     image: imageUrl
+                  },
+                  estimatedValue: {
+                    value: node.collection?.floorPriceEth || 0,
+                    token: {
+                      symbol: 'ETH'
+                    }
                   }
                 };
               }).filter(Boolean)

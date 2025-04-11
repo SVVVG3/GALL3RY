@@ -275,18 +275,54 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
             }
             
+            // Extract contract address from collection ID if available
+            let contractAddress = null;
+            let networkId = 1; // Default to Ethereum
+            
+            if (nft.collection?.id) {
+              const parts = nft.collection.id.split(':');
+              if (parts.length > 1) {
+                contractAddress = parts[1];
+                
+                // Determine network from collection ID
+                const network = parts[0].toLowerCase();
+                if (network.includes('polygon')) networkId = 137;
+                else if (network.includes('optimism')) networkId = 10;
+                else if (network.includes('arbitrum')) networkId = 42161;
+                else if (network.includes('base')) networkId = 8453;
+              }
+            }
+            
+            // Create a normalized NFT object with consistent properties
             return {
               id: nft.id,
-              name: nft.name || 'Unnamed NFT',
+              name: nft.name || `NFT #${nft.tokenId}`,
               tokenId: nft.tokenId,
               description: nft.description,
               imageUrl,
               collection: nft.collection ? {
                 id: nft.collection.id,
                 name: nft.collection.name || 'Unknown Collection',
-                floorPriceEth: nft.collection.floorPriceEth,
+                floorPriceEth: nft.collection.floorPriceEth || 0,
                 cardImageUrl: nft.collection.cardImageUrl
-              } : null
+              } : null,
+              token: {
+                id: nft.id,
+                tokenId: nft.tokenId,
+                name: nft.name || `NFT #${nft.tokenId}`,
+                contractAddress,
+                networkId
+              },
+              estimatedValue: {
+                value: nft.collection?.floorPriceEth || 0,
+                token: { symbol: 'ETH' }
+              },
+              // Additional metadata for compatibility
+              metadata: {
+                name: nft.name,
+                description: nft.description,
+                image: imageUrl
+              }
             };
           }).filter(Boolean);
           
