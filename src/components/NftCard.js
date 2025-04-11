@@ -135,7 +135,7 @@ const NftCard = ({ nft, onClick }) => {
   const valueData = getValue();
   const tokenId = getTokenId();
   
-  // Extract contract address from collection ID
+  // Extract collection address from collection ID
   let contractAddress = null;
   
   // First try direct access to address property
@@ -157,6 +157,7 @@ const NftCard = ({ nft, onClick }) => {
           const collectionId = parts[1];
           // Use the collection ID as the address
           contractAddress = collectionId;
+          console.log("Successfully extracted collection ID:", collectionId);
         }
       }
     } catch (e) {
@@ -173,11 +174,22 @@ const NftCard = ({ nft, onClick }) => {
     );
   }
   
+  // Try one more approach if we still don't have a contract address
+  if (!contractAddress && nft.id) {
+    // NFT IDs often include collection info
+    const idParts = nft.id.split(':');
+    if (idParts.length >= 2) {
+      contractAddress = idParts[1];
+      console.log("Extracted contract address from NFT ID:", contractAddress);
+    }
+  }
+  
   // Debug contract address
   console.log("NFT Contract Address:", {
     extracted: contractAddress,
     collectionAddress: nft.collection?.address,
     collectionId: nft.collection?.id,
+    nftId: nft.id,
     contractAddress: nft.contractAddress,
     contractAddressFromContract: nft.contract?.address,
     tokenCollectionAddress: nft.token?.collection?.address

@@ -262,17 +262,19 @@ export const NFTProvider = ({ children }) => {
 
       // Try using both collection ID and collection address approaches
       const holdersQuery = `
-        query CheckNFTHolding($addresses: [Address!]!, $collectionIds: [Int!], $collectionAddress: Address) {
+        query CheckNFTHolding($addresses: [Address!]!) {
           portfolioV2(addresses: $addresses) {
-            nftBalances(filter: { 
-              collectionIds: $collectionIds, 
-              collectionAddress: $collectionAddress 
-            }) {
+            nftBalances {
               totalCount
               nfts {
                 id
                 name
                 imageUrl
+                collection {
+                  id
+                  name
+                  address
+                }
               }
             }
           }
@@ -289,19 +291,10 @@ export const NFTProvider = ({ children }) => {
         isNumeric: isNumericCollection
       });
 
-      // Try both approaches: numeric ID and string address
+      // Since the API doesn't support direct filtering by collection ID,
+      // we'll fetch all NFTs and filter client-side
       const createHolderVariables = (addresses) => {
-        // Base variables
-        const vars = { addresses };
-        
-        // Add the appropriate collection identifier
-        if (isNumericCollection) {
-          vars.collectionIds = [collectionId];
-        } else {
-          vars.collectionAddress = collectionAddress;
-        }
-        
-        return vars;
+        return { addresses };
       };
 
       // Monitor successful queries
@@ -324,16 +317,45 @@ export const NFTProvider = ({ children }) => {
           const holderVariables = createHolderVariables(addresses);
           const holderData = await fetchZapperData(holdersQuery, holderVariables);
           
-          console.log(`Holdings result for ${node.username}:`, 
-            holderData.portfolioV2.nftBalances.totalCount);
+          // Extract all NFTs and filter by collection ID/address client-side
+          const nfts = holderData.portfolioV2.nftBalances.nfts || [];
+          
+          // Find NFTs that match our collection
+          const matchingNfts = nfts.filter(nft => {
+            if (isNumericCollection) {
+              // Try to extract numeric ID from collection.id (which is a base64 string)
+              try {
+                const collectionIdStr = nft.collection?.id;
+                if (collectionIdStr) {
+                  const decoded = atob(collectionIdStr);
+                  const parts = decoded.split('-');
+                  if (parts.length > 1) {
+                    const nftCollectionId = parseInt(parts[1], 10);
+                    return nftCollectionId === collectionId;
+                  }
+                }
+              } catch (e) {
+                console.error("Error parsing collection ID:", e);
+              }
+              return false;
+            } else {
+              // Match by address
+              return nft.collection?.address === collectionAddress;
+            }
+          });
+          
+          console.log(`Holdings result for ${node.username}:`, {
+            totalNfts: nfts.length,
+            matchingCollection: matchingNfts.length
+          });
           
           successfulChecks++;
           
-          if (holderData.portfolioV2.nftBalances.totalCount > 0) {
+          if (matchingNfts.length > 0) {
             return {
               ...node,
-              holdingCount: holderData.portfolioV2.nftBalances.totalCount,
-              nfts: holderData.portfolioV2.nftBalances.nfts,
+              holdingCount: matchingNfts.length,
+              nfts: matchingNfts,
               relationship: relationshipType
             };
           }
