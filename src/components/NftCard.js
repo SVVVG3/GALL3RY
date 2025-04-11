@@ -53,18 +53,33 @@ const NftCard = ({ nft, onClick }) => {
       mediasV2: nft.mediasV2
     }, null, 2));
     
+    // Check for direct image URL
     if (nft.imageUrl) return nft.imageUrl;
+    
+    // Check for image URL in metadata
     if (nft.metadata?.image) return nft.metadata.image;
+    
+    // Check for collection image URL
     if (nft.collection?.imageUrl) return nft.collection.imageUrl;
+    
+    // Check for token image URL
     if (nft.token?.imageUrl) return nft.token.imageUrl;
     
-    // Try to extract from mediasV2 if available
+    // Try to extract from mediasV2 if available (common in newer Zapper API)
     if (nft.mediasV2 && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
         if (!media) continue;
         if (media.original) return media.original;
         if (media.originalUri) return media.originalUri;
         if (media.url) return media.url;
+      }
+    }
+    
+    // Check for media array in older Zapper formats
+    if (Array.isArray(nft.media)) {
+      for (const media of nft.media) {
+        if (media.url) return media.url;
+        if (media.originalUrl) return media.originalUrl;
       }
     }
     
@@ -89,6 +104,14 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
+    if (nft.collection?.floorPriceEth !== undefined) {
+      return {
+        value: nft.collection.floorPriceEth,
+        symbol: 'ETH',
+        isFloorPrice: true
+      };
+    }
+    
     if (typeof nft.value !== 'undefined') {
       return {
         value: nft.value,
@@ -106,6 +129,7 @@ const NftCard = ({ nft, onClick }) => {
       // Zapper format: 'ethereum:0x1234...'
       return nft.collection.id.split(':')[1];
     }
+    if (nft.collection?.address) return nft.collection.address;
     return null;
   };
 
@@ -121,11 +145,11 @@ const NftCard = ({ nft, onClick }) => {
         className="nft-card bg-[#1c1c1c] rounded-xl overflow-hidden cursor-pointer transform transition-transform hover:scale-[1.02]"
         onClick={handleClick}
       >
-        <div className="relative aspect-square">
+        <div className="relative aspect-square w-full">
           <NFTImage
             src={imageUrl}
             alt={name}
-            className="w-full h-full object-cover"
+            className="w-full h-full"
           />
         </div>
         <div className="p-4">

@@ -44,25 +44,22 @@ const NFTImage = ({
       if (url.includes('cors-anywhere') || url.includes('corsproxy') || url.includes('proxy-image')) {
         return url;
       }
-      
-      // If we're in development mode, use a CORS proxy 
-      if (process.env.NODE_ENV === 'development') {
-        return `https://corsproxy.io/?${encodeURIComponent(url)}`;
-      }
     }
 
     return url || fallbackSrc;
   };
 
   useEffect(() => {
+    // Reset loading state and retry count when src changes
     setLoading(true);
+    setRetryCount(0);
     setImgSrc(processImageUrl(src));
-  }, [src, fallbackSrc]);
+  }, [src]);
 
   const handleImageError = () => {
     if (retryCount < MAX_RETRIES) {
       // Try with a CORS proxy on error
-      setRetryCount(retryCount + 1);
+      setRetryCount(prevCount => prevCount + 1);
       setImgSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
     } else {
       // After max retries, use placeholder
@@ -78,8 +75,10 @@ const NFTImage = ({
   // Show loading spinner while image is loading
   if (loading) {
     return (
-      <div className={`flex justify-center items-center bg-gray-100 ${className}`} style={{ minHeight: '100px' }}>
-        <Spinner size="medium" color="#6f42c1" />
+      <div className="nft-image-container">
+        <div className="absolute inset-0 flex justify-center items-center">
+          <Spinner size="md" color="purple-500" />
+        </div>
       </div>
     );
   }
@@ -87,21 +86,23 @@ const NFTImage = ({
   // Show error icon if image failed to load
   if (imgSrc === fallbackSrc) {
     return (
-      <div className={`flex flex-col justify-center items-center bg-gray-100 ${className}`} style={{ minHeight: '100px' }}>
-        <FaExclamationTriangle className="text-red-500 text-2xl mb-2" />
-        <p className="text-xs text-gray-500">Image unavailable</p>
+      <div className="nft-image-container">
+        <div className="absolute inset-0 flex flex-col justify-center items-center bg-gray-100">
+          <FaExclamationTriangle className="text-red-500 text-2xl mb-2" />
+          <p className="text-xs text-gray-500">Image unavailable</p>
+        </div>
       </div>
     );
   }
 
   // Show the image
   return (
-    <div className={`nft-image-container ${className || ''}`}>
+    <div className={`nft-image-container ${className}`}>
       {imgSrc && (
         <img
           src={imgSrc}
-          alt={alt || 'NFT'}
-          className={`nft-image ${loading ? 'loading' : 'loaded'}`}
+          alt={alt}
+          className="nft-image"
           onError={handleImageError}
           onLoad={handleImageLoad}
         />
