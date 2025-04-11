@@ -1,0 +1,75 @@
+.test-farcaster-container {
+  background-color: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  padding: 24px;
+  margin-bottom: 24px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto 20px;
+}
+
+.test-farcaster-container h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: var(--color-primary);
+  font-size: 20px;
+}
+
+.auth-info {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.profile-info, .token-info {
+  background-color: var(--color-gray-100);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.profile-info h4, .token-info h4 {
+  margin-top: 0;
+  margin-bottom: 12px;
+  color: var(--color-gray-800);
+}
+
+.token-content {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-gray-200);
+}
+
+.token-content button {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 8px;
+}
+
+.token-content button:hover {
+  background-color: var(--color-primary-dark);
+}
+
+pre {
+  background-color: white;
+  padding: 12px;
+  border-radius: 6px;
+  overflow: auto;
+  font-size: 12px;
+  border: 1px solid var(--color-gray-200);
+}
+
+@media (max-width: 768px) {
+  .auth-info {
+    flex-direction: column;
+  }
+  
+  .test-farcaster-container {
+    padding: 16px;
+  }
+} 
