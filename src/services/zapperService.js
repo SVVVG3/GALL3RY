@@ -36,14 +36,32 @@ const zapperService = {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API error (${response.status}): ${errorText}`);
-        throw new Error(`API request failed with status ${response.status}`);
+        
+        // Try to parse error message to provide better feedback
+        let parsedError;
+        try {
+          parsedError = JSON.parse(errorText);
+        } catch (e) {
+          // If parsing fails, use the original error text
+        }
+        
+        if (parsedError?.helpfulMessage) {
+          throw new Error(`API Error: ${parsedError.helpfulMessage}`);
+        } else if (parsedError?.error) {
+          throw new Error(`API Error (${response.status}): ${parsedError.error} - ${parsedError.message || 'Unknown error'}`);
+        } else {
+          throw new Error(`API request failed with status ${response.status}`);
+        }
       }
 
       const responseData = await response.json();
 
       if (responseData.errors) {
         console.error('GraphQL response contains errors:', responseData.errors);
-        throw new Error(`GraphQL Errors: ${JSON.stringify(responseData.errors)}`);
+        
+        // Extract error messages for better user feedback
+        const errorMessages = responseData.errors.map(err => err.message).join('; ');
+        throw new Error(`GraphQL Errors: ${errorMessages}`);
       }
 
       return responseData.data;
@@ -284,7 +302,7 @@ const zapperService = {
       
       console.log(`Fetching NFTs for ${addresses.length} addresses:`, addresses);
       
-      // Use a simpler, more reliable query structure
+      // Current Zapper API schema as of October 2023
       const zapperQuery = `
         query NFTs($addresses: [String!]!, $limit: Int) {
           nfts(
@@ -292,29 +310,9 @@ const zapperService = {
             limit: $limit
           ) {
             items {
-              token {
-                id
-                tokenId
-                name
-                symbol
-                contractAddress
-                networkId
-                collection {
-                  id
-                  name
-                  floorPrice {
-                    value
-                    symbol
-                  }
-                  imageUrl
-                }
-              }
-              estimatedValue {
-                value
-                token {
-                  symbol
-                }
-              }
+              id
+              tokenId
+              name
               collection {
                 id
                 name
@@ -324,14 +322,25 @@ const zapperService = {
                 }
                 imageUrl
               }
+              token {
+                id
+                tokenId
+                name
+                symbol
+                contractAddress
+                networkId
+              }
+              estimatedValue {
+                value
+                token {
+                  symbol
+                }
+              }
               imageUrl
-              tokenId
-              name
               metadata {
                 name
                 description
                 image
-                tokenId
               }
             }
           }
@@ -350,6 +359,7 @@ const zapperService = {
       
       while (retries < maxRetries) {
         try {
+          console.log(`Attempt ${retries + 1} to fetch NFTs`);
           const data = await this.makeGraphQLRequest(zapperQuery, variables);
           
           if (!data || !data.nfts || !data.nfts.items) {
@@ -364,10 +374,9 @@ const zapperService = {
             // Create a normalized NFT object that combines data from all possible sources
             const normalizedNft = {
               ...nft,
-              id: nft.token?.id || nft.id,
+              id: nft.id || nft.token?.id,
               tokenId: nft.tokenId || nft.token?.tokenId,
               name: nft.name || nft.token?.name || nft.metadata?.name || `#${nft.tokenId || nft.token?.tokenId}`,
-              collection: nft.collection || nft.token?.collection,
               imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl
             };
             
@@ -392,12 +401,12 @@ const zapperService = {
           
           console.log(`Successfully fetched ${nfts.length} NFTs`);
           
-          // Filter out NFTs with no images for better display
-          const nftsWithImages = nfts.filter(nft => nft.imageUrl);
-          console.log(`${nftsWithImages.length} NFTs have images`);
+          // Filter out NFTs with missing data
+          const validNfts = nfts.filter(nft => nft.id);
+          console.log(`${validNfts.length} NFTs have valid IDs`);
           
           // Sort by name for consistent display
-          nftsWithImages.sort((a, b) => {
+          validNfts.sort((a, b) => {
             // Sort by collection name first
             const collectionA = a.collection?.name || '';
             const collectionB = b.collection?.name || '';
@@ -407,15 +416,18 @@ const zapperService = {
             }
             
             // Then by token name/id
-            return a.name.localeCompare(b.name);
+            return (a.name || '').localeCompare(b.name || '');
           });
           
-          return { nfts: nftsWithImages };
+          return { nfts: validNfts };
         } catch (error) {
           console.error(`Attempt ${retries + 1} failed:`, error.message);
           lastError = error;
           retries++;
-          await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          
+          if (retries < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+          }
         }
       }
       
