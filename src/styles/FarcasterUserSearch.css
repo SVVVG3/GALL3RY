@@ -4,6 +4,7 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
 }
 
 /* Search form */
@@ -23,6 +24,7 @@
   font-size: 16px;
   outline: none;
   transition: border-color 0.2s;
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
 }
 
 .search-input:focus {
@@ -39,6 +41,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s;
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
 }
 
 .search-button:hover {
@@ -282,8 +285,38 @@
   background-color: var(--color-primary-dark);
 }
 
+/* NFT Grid specific styles */
+.nft-section .nft-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .nft-section .nft-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .nft-section .nft-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
+  /* Ensure all text is Comic Sans */
+  .farcaster-user-search * {
+    font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+  }
+  
+  /* Make sure NFT grid is 2 columns on mobile */
+  .nft-section .nft-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  
   .wallet-item {
     flex-direction: column;
     align-items: flex-start;

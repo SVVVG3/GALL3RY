@@ -3,7 +3,7 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
 }
 
 :root {
@@ -193,7 +193,13 @@ h1, h2, h3, h4, h5, h6 {
 @media (min-width: 1024px) {
   .nft-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .nft-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 
@@ -213,6 +219,20 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-4px);
   border-color: var(--color-primary-light);
   box-shadow: var(--shadow-md);
+}
+
+@media (max-width: 640px) {
+  .nft-grid-item {
+    min-height: 200px;
+  }
+  
+  .nft-title {
+    font-size: 0.9rem;
+  }
+  
+  .nft-collection {
+    font-size: 0.8rem;
+  }
 }
 
 /* NFT image container styles */
