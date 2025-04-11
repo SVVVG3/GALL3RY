@@ -268,10 +268,9 @@ const FarcasterUserSearch = () => {
     console.log(`NFT state updated: ${userNfts.length} NFTs available`);
   }, [userNfts]);
 
+  // Render component
   return (
     <div className="farcaster-user-search">
-      <h2>Search Farcaster Users</h2>
-      
       {/* Search Form */}
       <form onSubmit={handleSearch} className="search-form">
         <input
@@ -279,21 +278,22 @@ const FarcasterUserSearch = () => {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Enter Farcaster username or FID"
-          disabled={isSearching}
           className="search-input"
+          disabled={isSearching}
         />
-        <button type="submit" disabled={isSearching || !searchQuery.trim()} className="search-button">
-          {isSearching ? 'Searching...' : 'Search'}
+        <button 
+          type="submit" 
+          className="search-button"
+          disabled={isSearching || !searchQuery.trim()}
+        >
+          Search
         </button>
       </form>
       
-      {/* Search Error Message */}
-      {searchError && (
-        <div className="error-message">
-          <p>{searchError}</p>
-        </div>
-      )}
-
+      {/* Loading or Error Messages */}
+      {isSearching && <div className="loading-message">Searching...</div>}
+      {searchError && <div className="error-message">{searchError}</div>}
+      
       {/* User Profile */}
       {userProfile && (
         <div className="user-profile">

@@ -878,4 +878,43 @@ a:hover {
     width: 95%;
     padding: 15px;
   }
+}
+
+/* Add styles for the farcaster auth button */
+.farcaster-auth-button {
+  margin-bottom: 24px;
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  color: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-block;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-primary-dark);
+}
+
+.login-container {
+  max-width: 500px;
+  margin: 40px auto;
+  padding: 30px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.login-options {
+  margin-top: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 } 

@@ -19,7 +19,7 @@
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.30.0",
     "react-scripts": "5.0.1",
-    "viem": "^1.10.9",
+    "viem": "^1.21.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {

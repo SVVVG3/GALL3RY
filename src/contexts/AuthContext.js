@@ -1,92 +1,54 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useProfile } from '@farcaster/auth-kit';
 
 // Create the auth context
 const AuthContext = createContext();
 
 // Custom hook to use the auth context
 export const useAuth = () => {
-  return useContext(AuthContext);
+  const context = useContext(AuthContext);
+  const farcasterAuth = useProfile();
+  
+  // Merge our context with Farcaster Auth Kit data for backward compatibility
+  return {
+    ...context,
+    isAuthenticated: farcasterAuth.isAuthenticated,
+    profile: farcasterAuth.isAuthenticated ? {
+      fid: farcasterAuth.profile?.fid,
+      username: farcasterAuth.profile?.username,
+      displayName: farcasterAuth.profile?.displayName,
+      // Using the avatar from Farcaster or a placeholder
+      avatarUrl: farcasterAuth.profile?.pfp || 'https://i.pravatar.cc/150?u=demo_user',
+      connectedAddresses: [], // We'll get these from user profile data later
+    } : null,
+    loading: farcasterAuth.loading,
+  };
 };
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [profile, setProfile] = useState(null);
   const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Check for existing auth on component mount
-  useEffect(() => {
-    const storedToken = localStorage.getItem('auth_token');
-    const storedProfile = localStorage.getItem('auth_profile');
-    
-    if (storedToken && storedProfile) {
-      setToken(storedToken);
-      setProfile(JSON.parse(storedProfile));
-      setIsAuthenticated(true);
-    }
-    
-    setLoading(false);
-  }, []);
-
-  // Login function - in a real app, this would authenticate with a server
-  const login = async (farcasterCredentials) => {
-    try {
-      // This is a mock login for demo purposes
-      // In a real app, you would validate credentials with a server
-      
-      // For demo, we'll create a mock profile
-      const mockProfile = {
-        fid: '123456',
-        username: 'demo_user',
-        displayName: 'Demo User',
-        avatarUrl: 'https://i.pravatar.cc/150?u=demo_user',
-        connectedAddresses: ['0x1234...5678'],
-      };
-      
-      // Generate a mock token
-      const mockToken = 'mock_token_' + Math.random().toString(36).substring(2);
-      
-      // Save to state
-      setProfile(mockProfile);
-      setToken(mockToken);
-      setIsAuthenticated(true);
-      
-      // Save to localStorage for persistence
-      localStorage.setItem('auth_token', mockToken);
-      localStorage.setItem('auth_profile', JSON.stringify(mockProfile));
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Login error:', error);
-      return { success: false, error };
-    }
-  };
-
-  // Logout function
-  const logout = () => {
-    setProfile(null);
-    setToken(null);
-    setIsAuthenticated(false);
-    
-    // Remove from localStorage
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('auth_profile');
-  };
-
-  // Values to share in context
+  
+  // Values to share in context (these will be merged with Farcaster Auth Kit in useAuth)
   const value = {
-    isAuthenticated,
-    profile,
     token,
-    loading,
-    login,
-    logout
+    // These methods will use Farcaster Auth Kit under the hood
+    login: async () => {
+      // No need to implement actual login logic here as it's handled by Farcaster Auth Kit
+      return { success: true };
+    },
+    logout: () => {
+      // No need to implement actual logout logic here as it's handled by Farcaster Auth Kit
+      // The local token might still be useful for API calls
+      setToken(null);
+      localStorage.removeItem('auth_token');
+      localStorage.removeItem('auth_profile');
+    }
   };
 
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }; 

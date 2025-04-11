@@ -3,6 +3,9 @@ import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-do
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
+// Import Farcaster Auth Kit
+import '@farcaster/auth-kit/styles.css';
+import { AuthKitProvider } from '@farcaster/auth-kit';
 import NftGrid from './components/NFTGrid';
 import SearchBar from './components/SearchBar';
 import SignInButton from './components/SignInButton';
@@ -16,48 +19,57 @@ import { AuthProvider } from './contexts/AuthContext';
 import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
 
+// Configure Farcaster Auth Kit
+const farcasterConfig = {
+  rpcUrl: process.env.REACT_APP_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
+  domain: process.env.REACT_APP_FARCASTER_DOMAIN || 'gall3ry.vercel.app',
+  siweUri: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
+};
+
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="app">
-          <header className="app-header">
-            <div className="container">
-              <div className="logo">
-                <h1>GALL3RY</h1>
+    <AuthKitProvider config={farcasterConfig}>
+      <AuthProvider>
+        <Router>
+          <div className="app">
+            <header className="app-header">
+              <div className="container">
+                <div className="logo">
+                  <h1>GALL3RY</h1>
+                </div>
+                
+                <nav className="main-nav">
+                  <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>
+                    Home
+                  </NavLink>
+                  <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
+                    My Collections
+                  </NavLink>
+                </nav>
+                
+                <div className="auth-actions">
+                  <AuthButtons />
+                </div>
               </div>
-              
-              <nav className="main-nav">
-                <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>
-                  Home
-                </NavLink>
-                <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
-                  My Collections
-                </NavLink>
-              </nav>
-              
-              <div className="auth-actions">
-                <AuthButtons />
+            </header>
+            
+            <main className="app-content">
+              <Routes>
+                <Route path="/" element={<HomePage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/dashboard" element={<UserDashboard />} />
+              </Routes>
+            </main>
+            
+            <footer className="app-footer">
+              <div className="container">
+                <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
               </div>
-            </div>
-          </header>
-          
-          <main className="app-content">
-            <Routes>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/dashboard" element={<UserDashboard />} />
-            </Routes>
-          </main>
-          
-          <footer className="app-footer">
-            <div className="container">
-              <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
-            </div>
-          </footer>
-        </div>
-      </Router>
-    </AuthProvider>
+            </footer>
+          </div>
+        </Router>
+      </AuthProvider>
+    </AuthKitProvider>
   );
 }
 
