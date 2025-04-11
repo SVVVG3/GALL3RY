@@ -1,6 +1,6 @@
 import React from 'react';
 
-export const Spinner = ({ size = 'md', color = 'purple-500' }) => {
+const Spinner = ({ size = 'md', color = 'purple-500' }) => {
   const sizeClasses = {
     sm: 'h-4 w-4 border-2',
     md: 'h-8 w-8 border-2',
@@ -12,4 +12,6 @@ export const Spinner = ({ size = 'md', color = 'purple-500' }) => {
   return (
     <div className={`animate-spin rounded-full ${spinnerSize} border-t-${color} border-b-${color} border-l-transparent border-r-transparent`}></div>
   );
-}; 
+};
+
+export default Spinner; 
