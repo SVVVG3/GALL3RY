@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback } from 'react';
 import { fetchZapperData } from '../services/zapper';
 
 const NFTContext = createContext();
+const PAGE_SIZE = 32;
 
 export const NFTProvider = ({ children }) => {
   const [nfts, setNfts] = useState([]);
@@ -20,9 +21,13 @@ export const NFTProvider = ({ children }) => {
     setError(null);
     try {
       const query = `
-        query GetNFTs($addresses: [Address!]!) {
+        query GetNFTs($addresses: [Address!]!, $first: Int!) {
           portfolioV2(addresses: $addresses) {
-            nftBalances {
+            nftBalances(first: $first) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
               nfts {
                 id
                 name
@@ -53,24 +58,105 @@ export const NFTProvider = ({ children }) => {
       `;
 
       const variables = {
-        addresses
+        addresses,
+        first: PAGE_SIZE
       };
 
+      console.log('Fetching NFTs with query:', { query, variables });
+
       const data = await fetchZapperData(query, variables);
+      console.log('Received NFT data:', data);
+
+      if (!data?.portfolioV2?.nftBalances?.nfts) {
+        console.error('Invalid NFT data structure:', data);
+        throw new Error('Invalid NFT data received');
+      }
+
       const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => ({
         ...nft,
-        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl
+        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
+        name: nft.name || nft.metadata?.name || `#${nft.tokenId}`,
+        description: nft.metadata?.description || ''
       }));
       
       setNfts(nftsWithImages);
-      setHasMore(nftsWithImages.length === 20);
+      setHasMore(data.portfolioV2.nftBalances.pageInfo.hasNextPage);
       setPage(1);
     } catch (err) {
-      setError('Failed to fetch NFTs');
-      console.error(err);
+      console.error('Error fetching NFTs:', err);
+      setError(err.message || 'Failed to fetch NFTs');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
+
+  const loadMoreNFTs = useCallback(async () => {
+    if (!hasMore || loading) return;
+
+    setLoading(true);
+    try {
+      const query = `
+        query GetMoreNFTs($addresses: [Address!]!, $first: Int!, $after: String) {
+          portfolioV2(addresses: $addresses) {
+            nftBalances(first: $first, after: $after) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nfts {
+                id
+                name
+                imageUrl
+                tokenId
+                collection {
+                  name
+                  address
+                  imageUrl
+                  floorPrice
+                  network
+                }
+                estimatedValue {
+                  value
+                  token {
+                    symbol
+                  }
+                }
+                metadata {
+                  name
+                  description
+                  image
+                }
+              }
+            }
+          }
+        }
+      `;
+
+      const variables = {
+        addresses: selectedWallets,
+        first: PAGE_SIZE,
+        after: nfts[nfts.length - 1]?.id
+      };
+
+      const data = await fetchZapperData(query, variables);
+      
+      const newNfts = data.portfolioV2.nftBalances.nfts.map(nft => ({
+        ...nft,
+        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
+        name: nft.name || nft.metadata?.name || `#${nft.tokenId}`,
+        description: nft.metadata?.description || ''
+      }));
+
+      setNfts(prev => [...prev, ...newNfts]);
+      setHasMore(data.portfolioV2.nftBalances.pageInfo.hasNextPage);
+      setPage(p => p + 1);
+    } catch (err) {
+      console.error('Error loading more NFTs:', err);
+      setError(err.message || 'Failed to load more NFTs');
+    } finally {
+      setLoading(false);
+    }
+  }, [hasMore, loading, nfts, selectedWallets]);
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, userFid) => {
     setLoading(true);
@@ -168,7 +254,8 @@ export const NFTProvider = ({ children }) => {
       setSelectedWallets([]);
       setSearchQuery('');
       setSortBy('collection');
-    }
+    },
+    loadMoreNFTs
   };
 
   return <NFTContext.Provider value={value}>{children}</NFTContext.Provider>;

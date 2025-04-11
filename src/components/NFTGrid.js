@@ -27,10 +27,10 @@ const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NF
   }
 
   return (
-    <div className="nft-grid">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
       {nfts.map((nft, index) => (
         <NftCard 
-          key={`${nft.contract_address}-${nft.token_id}-${index}`}
+          key={`${nft.collection?.address}-${nft.tokenId}-${index}`}
           nft={nft}
           onClick={() => onNftClick && onNftClick(nft)}
         />
