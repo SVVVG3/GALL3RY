@@ -287,6 +287,8 @@ const handler = async (req, res) => {
                                  node.collection.id.includes('base') ? 8453 : 1) : 1
                   },
                   imageUrl: imageUrl,
+                  // Include raw mediasV2 data to let frontend handle all possible formats
+                  mediasV2: node.mediasV2,
                   metadata: {
                     name: node.name,
                     description: node.description,

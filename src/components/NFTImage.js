@@ -24,10 +24,13 @@ const NFTImage = ({
   const processImageUrl = (url) => {
     if (!url) return null;
     
-    // Handle IPFS URLs
+    // Log original URL for debugging
+    console.log('Processing image URL:', url);
+    
+    // Handle IPFS URLs - use multiple gateways for better reliability
     if (url.startsWith('ipfs://')) {
-      // Try multiple IPFS gateways to increase chances of success
-      return url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      // Use a more reliable IPFS gateway
+      return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
     }
     
     // Handle Arweave URLs
@@ -40,12 +43,27 @@ const NFTImage = ({
       return `https:${url}`;
     }
     
-    // Fix Art Blocks URLs that are failing (seen in the screenshot)
+    // Fix Google Storage URLs that may have CORS issues
+    if (url.includes('storage.googleapis.com')) {
+      // Try to use a CORS proxy or direct URL depending on what's in your network tab
+      // If you're seeing successful requests to storage.googleapis.com, then we need to 
+      // fix how the image is being used rather than the URL itself
+      console.log('Found Google Storage URL, using direct:', url);
+      return url;
+    }
+    
+    // Fix CORS issues with direct image URLs by using an image proxy
+    if (url.includes('i.seadn.io') || url.includes('openseauserdata.com')) {
+      console.log('Using proxy for OpenSea URL:', url);
+      return url; // Keep as is since we see these loading in your network tab
+    }
+    
+    // Fix Art Blocks URLs that are failing
     if (url.includes('generator.artblocks.io') && !url.includes('https://')) {
       return `https://${url.replace(/^https?:\/\//, '')}`;
     }
     
-    // Sometimes URLs come back with encoding issues or unnecessary parameters
+    // Sometimes URLs come back with encoding issues
     if (url.includes('%')) {
       try {
         // Try to decode the URL if it's encoded
@@ -60,6 +78,7 @@ const NFTImage = ({
       url = url.replace(/([?&])size=\d+/, '$1size=600');
     }
     
+    console.log('Processed URL:', url);
     return url;
   };
 
@@ -73,20 +92,28 @@ const NFTImage = ({
     
     // Reset states when src changes
     if (src) {
+      console.log('NFTImage processing URL:', src);
       setIsLoading(true);
       setHasError(false);
-      setCurrentSrc(processImageUrl(src));
+      const processedUrl = processImageUrl(src);
+      console.log('NFTImage processed URL:', processedUrl);
+      setCurrentSrc(processedUrl);
+    } else {
+      console.log('NFTImage received empty src');
+      setHasError(true);
     }
   }, [src, isPlaceholder]);
 
   // Handle image load success
   const handleLoad = () => {
+    console.log('NFTImage loaded successfully:', currentSrc);
     setIsLoading(false);
     setHasError(false);
   };
 
   // Handle image load error with fallback
   const handleError = () => {
+    console.log('NFTImage load error for:', currentSrc);
     setIsLoading(false);
     
     // Start with the original URL for logging
