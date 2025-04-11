@@ -5,10 +5,12 @@ import '../styles/FarcasterUserSearch.css';
 
 /**
  * Component for searching Farcaster users and displaying their NFTs
+ * @param {Object} props - Component props
+ * @param {string} props.initialUsername - Optional initial username to search for
  */
-const FarcasterUserSearch = () => {
+const FarcasterUserSearch = ({ initialUsername }) => {
   // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(initialUsername || '');
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingNfts, setIsLoadingNfts] = useState(false);
   const [searchError, setSearchError] = useState(null);
@@ -24,10 +26,16 @@ const FarcasterUserSearch = () => {
   const [imageError, setImageError] = useState(false);
   const [walletsExpanded, setWalletsExpanded] = useState(false);
 
-  // Handle search for Farcaster user
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
+  // Effect for initial search if username is provided
+  useEffect(() => {
+    if (initialUsername) {
+      performSearch(initialUsername);
+    }
+  }, [initialUsername]);
+
+  // Shared search logic extracted to a function
+  const performSearch = async (query) => {
+    if (!query.trim()) return;
 
     setIsSearching(true);
     setSearchError(null);
@@ -37,8 +45,8 @@ const FarcasterUserSearch = () => {
     setWalletsExpanded(false);
 
     try {
-      console.log(`Searching for Farcaster user: ${searchQuery}`);
-      const profile = await zapperService.getFarcasterProfile(searchQuery);
+      console.log(`Searching for Farcaster user: ${query}`);
+      const profile = await zapperService.getFarcasterProfile(query);
       setUserProfile(profile);
       console.log('Profile found:', profile);
       
@@ -62,6 +70,12 @@ const FarcasterUserSearch = () => {
     } finally {
       setIsSearching(false);
     }
+  };
+
+  // Handle search form submission
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    await performSearch(searchQuery);
   };
 
   // Fetch NFTs for the user

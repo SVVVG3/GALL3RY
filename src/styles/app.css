@@ -1,3 +1,21 @@
+/* CSS Variables */
+:root {
+  --color-primary: #8b5cf6;
+  --color-primary-light: #a78bfa;
+  --color-primary-dark: #7c3aed;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-gray-800: #1f2937;
+  --color-gray-900: #111827;
+  --color-error: #dc2626;
+}
+
 /* Base Styles */
 * {
   box-sizing: border-box;
@@ -923,4 +941,56 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Style the GALL3RY logo link */
+.logo a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* Style the user profile link in the header */
+.user-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  color: var(--color-gray-800);
+  transition: color 0.2s;
+}
+
+.user-profile-link:hover {
+  color: var(--color-primary);
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--color-primary-light);
+}
+
+.user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Style the Farcaster Auth Kit button in the header */
+.auth-actions .fc-btn {
+  height: 40px;
+  font-size: 14px;
+}
+
+/* Add styles for the user profile page */
+.user-profile-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
 } 

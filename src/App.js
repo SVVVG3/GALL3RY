@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
@@ -34,7 +34,9 @@ function App() {
             <header className="app-header">
               <div className="container">
                 <div className="logo">
-                  <h1>GALL3RY</h1>
+                  <Link to="/">
+                    <h1>GALL3RY</h1>
+                  </Link>
                 </div>
                 
                 <nav className="main-nav">
@@ -56,6 +58,7 @@ function App() {
               <Routes>
                 <Route path="/" element={<HomePage />} />
                 <Route path="/dashboard" element={<UserDashboard />} />
+                <Route path="/user/:username" element={<UserProfilePage />} />
               </Routes>
             </main>
             
@@ -70,6 +73,28 @@ function App() {
     </AuthKitProvider>
   );
 }
+
+// User Profile Page component that uses FarcasterUserSearch
+const UserProfilePage = () => {
+  const { profile } = useAuth();
+  const [username, setUsername] = useState('');
+  
+  useEffect(() => {
+    // Get username from URL
+    const pathParts = window.location.pathname.split('/');
+    if (pathParts.length >= 3) {
+      setUsername(pathParts[2]);
+    }
+  }, []);
+  
+  // Use the existing FarcasterUserSearch component
+  // We'll initialize it with the username from the URL
+  return (
+    <div className="user-profile-page">
+      <FarcasterUserSearch initialUsername={username} />
+    </div>
+  );
+};
 
 // Combined HomePage component with Discover functionality
 const HomePage = () => {
@@ -121,7 +146,18 @@ const AuthButtons = () => {
   if (isAuthenticated && profile) {
     return (
       <>
-        <span className="user-greeting">Hi, {profile.username || 'User'}</span>
+        <Link to={`/user/${profile.username}`} className="user-profile-link">
+          <div className="user-avatar">
+            <img 
+              src={profile.avatarUrl} 
+              alt={profile.username}
+              onError={(e) => {
+                e.target.src = 'https://via.placeholder.com/40?text=User';
+              }}
+            />
+          </div>
+          <span className="username">{profile.username || 'User'}</span>
+        </Link>
         <button onClick={logout} className="btn btn-outline">Sign Out</button>
       </>
     );
