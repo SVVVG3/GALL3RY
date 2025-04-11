@@ -542,23 +542,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       {userProfile && (
         <div className="nft-section">
           <div className="nft-section-header">
-            <h3>NFT Collection</h3>
+            <h3 style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}>NFT Collection</h3>
             <div className="sort-options">
               <button 
                 className={`sort-option ${sortMethod === 'nameAsc' ? 'active' : ''}`}
                 onClick={() => handleSortChange('nameAsc')}
+                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
               >
                 A-Z
               </button>
               <button 
                 className={`sort-option ${sortMethod === 'collection' ? 'active' : ''}`}
                 onClick={() => handleSortChange('collection')}
+                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
               >
                 Collection
               </button>
               <button 
                 className={`sort-option ${sortMethod === 'value' ? 'active' : ''}`}
                 onClick={() => handleSortChange('value')}
+                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
               >
                 Value
               </button>

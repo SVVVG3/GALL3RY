@@ -7,6 +7,17 @@
   font-style: normal !important;
 }
 
+/* Explicit styling for all headings to prevent browser defaults */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+  font-style: normal !important;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--color-gray-900);
+  text-transform: none !important;
+  letter-spacing: normal !important;
+}
+
 :root {
   --color-primary: #8b5cf6;
   --color-primary-dark: #7c3aed;
@@ -65,12 +76,6 @@ body {
 }
 
 /* Typography */
-h1, h2, h3, h4, h5, h6 {
-  color: var(--color-gray-900);
-  font-weight: 700;
-  line-height: 1.2;
-}
-
 .heading-logo {
   font-size: 4rem;
   font-weight: 800;
@@ -1135,4 +1140,28 @@ img {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 1px;
+}
+
+/* Mobile specific overrides to ensure proper font rendering */
+@media (max-width: 768px) {
+  body, 
+  body * {
+    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-style: normal !important;
+  }
+  
+  h1, h2, h3, h4, h5, h6, 
+  .heading-logo, 
+  .subheading, 
+  p, 
+  button, 
+  input, 
+  a, 
+  span, 
+  div {
+    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+  }
 }

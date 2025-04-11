@@ -24,6 +24,14 @@
         font-display: swap;
       }
       
+      /* Additional override to prevent cursive rendering on mobile */
+      @font-face {
+        font-family: 'Comic Sans MS';
+        src: local('Comic Sans MS'), local('Comic Sans');
+        font-style: normal !important;
+        font-display: swap;
+      }
+      
       /* Force all text to use Comic Sans throughout the entire application */
       html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, 
       blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, 
@@ -34,6 +42,21 @@
       section, summary, time, mark, audio, video, input, textarea, button, select {
         font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
         font-style: normal !important;
+      }
+      
+      /* Mobile-specific overrides */
+      @media (max-width: 768px) {
+        body * {
+          font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+          font-style: normal !important;
+          text-transform: none !important;
+          letter-spacing: normal !important;
+        }
+        
+        h1, h2, h3, h4, h5, h6, p, div, span, button, input, a {
+          font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+          font-style: normal !important;
+        }
       }
     </style>
     <title>GALL3RY</title>

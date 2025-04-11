@@ -367,9 +367,34 @@
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  /* Ensure all text is Comic Sans */
-  .farcaster-user-search * {
-    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  /* Ensure all text is Comic Sans with NO cursive styling */
+  .farcaster-user-search,
+  .farcaster-user-search *,
+  .farcaster-user-search h1,
+  .farcaster-user-search h2,
+  .farcaster-user-search h3,
+  .farcaster-user-search h4,
+  .farcaster-user-search h5,
+  .farcaster-user-search h6,
+  .farcaster-user-search p,
+  .farcaster-user-search button,
+  .farcaster-user-search input,
+  .farcaster-user-search a,
+  .nft-section-header h3,
+  .sort-option,
+  .nft-section h3,
+  .sort-options button {
+    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-style: normal !important;
+    text-transform: none !important;
+    letter-spacing: normal !important;
+  }
+  
+  /* Override any potential italic or cursive styles */
+  .nft-section-header h3 {
+    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-style: normal !important;
+    font-weight: 600 !important;
   }
   
   /* Make sure NFT grid is 2 columns on mobile */
