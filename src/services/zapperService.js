@@ -550,6 +550,10 @@ const zapperService = {
               }
             }
           }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
         }
       }
     `;
@@ -562,6 +566,11 @@ const zapperService = {
 
     try {
       const data = await this.makeGraphQLRequest(query, variables);
+      
+      if (!data || !data.nftUsersTokens || !data.nftUsersTokens.edges) {
+        console.warn('Unexpected response format from Zapper API for getNFTsForUser:', data);
+        return [];
+      }
       
       // Transform the response to match our NftCard component expectations
       return data.nftUsersTokens.edges.map(edge => ({

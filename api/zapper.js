@@ -98,7 +98,6 @@ const handler = async (req, res) => {
               hasNextPage
               endCursor
             }
-            totalCount
           }
         }
       `;
@@ -159,7 +158,6 @@ const handler = async (req, res) => {
               hasNextPage
               endCursor
             }
-            totalCount
           }
         }
       `;

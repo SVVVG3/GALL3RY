@@ -184,7 +184,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               hasNextPage
               endCursor
             }
-            totalCount
           }
         }
       `;
@@ -223,18 +222,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         let nftData = null;
         let edges = [];
         let pageInfo = {};
-        let totalCount = 0;
         
         // First check for nftUsersTokens format
         if (responseData.data?.nftUsersTokens) {
           nftData = responseData.data.nftUsersTokens;
           edges = nftData.edges || [];
           pageInfo = nftData.pageInfo || {};
-          totalCount = nftData.totalCount || 0;
           
           console.log(`Found ${edges.length} NFTs via nftUsersTokens format`);
           console.log(`Page info: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
-          console.log(`Total count from API: ${totalCount}`);
           
           // Process edges to create NFTs
           const processedNfts = edges.map(edge => {
@@ -298,9 +294,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           setHasMoreNfts(pageInfo.hasNextPage);
           setEndCursor(pageInfo.endCursor);
           
-          // Update total count
-          setTotalNftCount(totalCount || processedNfts.length);
-          setHasEstimatedCount(totalCount > 0);
+          // Update total count - estimate based on edges length and hasNextPage
+          const estimatedCount = processedNfts.length + (pageInfo.hasNextPage ? 100 : 0);
+          setTotalNftCount(estimatedCount);
+          setHasEstimatedCount(true);
           
           // Update the NFT state
           if (loadMore) {
