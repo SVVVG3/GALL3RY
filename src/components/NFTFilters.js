@@ -7,9 +7,11 @@ const NFTFilters = ({ wallets = [] }) => {
     selectedChains,
     selectedWallets,
     searchQuery,
+    sortBy,
     setSelectedChains,
     setSelectedWallets,
     setSearchQuery,
+    setSortBy,
     resetFilters
   } = useNFT();
 
@@ -36,8 +38,36 @@ const NFTFilters = ({ wallets = [] }) => {
     });
   };
 
+  const handleSortChange = (sort) => {
+    setSortBy(sort);
+  };
+
   return (
     <div className="nft-filters">
+      <div className="filter-section">
+        <h3>Sort By</h3>
+        <div className="sort-filters">
+          <button
+            className={`sort-filter ${sortBy === 'collection' ? 'active' : ''}`}
+            onClick={() => handleSortChange('collection')}
+          >
+            Collection
+          </button>
+          <button
+            className={`sort-filter ${sortBy === 'value' ? 'active' : ''}`}
+            onClick={() => handleSortChange('value')}
+          >
+            Value
+          </button>
+          <button
+            className={`sort-filter ${sortBy === 'recent' ? 'active' : ''}`}
+            onClick={() => handleSortChange('recent')}
+          >
+            Recent
+          </button>
+        </div>
+      </div>
+
       <div className="filter-section">
         <h3>Chains</h3>
         <div className="chain-filters">
