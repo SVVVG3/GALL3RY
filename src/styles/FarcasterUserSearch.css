@@ -4,7 +4,7 @@
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+  font-family: 'Comic Sans';
 }
 
 /* Search form */
@@ -24,7 +24,7 @@
   font-size: 16px;
   outline: none;
   transition: border-color 0.2s;
-  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+  font-family: 'Comic Sans';
 }
 
 .search-input:focus {
@@ -41,7 +41,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s;
-  font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+  font-family: 'Comic Sans';
 }
 
 .search-button:hover {
@@ -308,7 +308,7 @@
 @media (max-width: 768px) {
   /* Ensure all text is Comic Sans */
   .farcaster-user-search * {
-    font-family: 'Comic Sans MS', 'Comic Sans', cursive;
+    font-family: 'Comic Sans';
   }
   
   /* Make sure NFT grid is 2 columns on mobile */
