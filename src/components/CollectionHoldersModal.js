@@ -88,7 +88,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           <div className="space-y-4">
             {holders.map(holder => (
               <Link
-                to={`/profile/${holder.username}`}
+                to={`/user/${holder.username}`}
                 key={holder.fid}
                 className="flex items-center gap-4 p-4 holder-item"
               >

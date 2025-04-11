@@ -250,13 +250,24 @@ export const NFTProvider = ({ children }) => {
         followersCount: followers.length 
       });
 
-      // If collectionAddress is numeric (extracted from base64 ID), 
-      // we'll need to use a different query approach
-      // Let's use a numeric ID query for the Zapper API
+      // Log some sample addresses to verify we have them
+      if (following.length > 0) {
+        const sampleFollowing = following.slice(0, 3);
+        console.log("Sample following addresses:", sampleFollowing.map(f => ({
+          username: f.node.username,
+          custodyAddress: f.node.custodyAddress,
+          connectedAddresses: f.node.connectedAddresses
+        })));
+      }
+
+      // Try using both collection ID and collection address approaches
       const holdersQuery = `
-        query CheckNFTHolding($addresses: [Address!]!, $collectionIds: [Int!]) {
+        query CheckNFTHolding($addresses: [Address!]!, $collectionIds: [Int!], $collectionAddress: Address) {
           portfolioV2(addresses: $addresses) {
-            nftBalances(filter: { collectionIds: $collectionIds }) {
+            nftBalances(filter: { 
+              collectionIds: $collectionIds, 
+              collectionAddress: $collectionAddress 
+            }) {
               totalCount
               nfts {
                 id
@@ -268,70 +279,92 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
-      // Convert collectionAddress to collectionIds parameter if it's numeric
-      const variables = {
-        addresses: [],
-        collectionIds: [parseInt(collectionAddress, 10)]
+      // Parse collection address/ID
+      const collectionId = parseInt(collectionAddress, 10);
+      const isNumericCollection = !isNaN(collectionId);
+      
+      console.log("Collection identification:", {
+        original: collectionAddress,
+        parsedId: collectionId,
+        isNumeric: isNumericCollection
+      });
+
+      // Try both approaches: numeric ID and string address
+      const createHolderVariables = (addresses) => {
+        // Base variables
+        const vars = { addresses };
+        
+        // Add the appropriate collection identifier
+        if (isNumericCollection) {
+          vars.collectionIds = [collectionId];
+        } else {
+          vars.collectionAddress = collectionAddress;
+        }
+        
+        return vars;
       };
 
-      if (isNaN(variables.collectionIds[0])) {
-        // If it's not a valid number, fall back to using address
-        console.log("Using address instead of collection ID:", collectionAddress);
-        delete variables.collectionIds;
-        variables.collectionAddress = collectionAddress;
-      } else {
-        console.log("Using collection ID:", variables.collectionIds[0]);
-      }
+      // Monitor successful queries
+      let successfulChecks = 0;
+      let failedChecks = 0;
 
-      // Process following list
-      const followingHolders = await Promise.all(
-        following.map(async ({ node }) => {
-          const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
-          if (!addresses.length) return null;
-
-          // Clone the variables and add the addresses
-          const holderVariables = {...variables, addresses};
-          
+      // Helper function to check one user's addresses
+      const checkUserHoldings = async (node, relationshipType) => {
+        const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
+        
+        if (!addresses.length) {
+          console.log(`No addresses for ${node.username}`);
+          return null;
+        }
+        
+        // Log which addresses we're checking
+        console.log(`Checking ${relationshipType} ${node.username} with addresses:`, addresses);
+        
+        try {
+          const holderVariables = createHolderVariables(addresses);
           const holderData = await fetchZapperData(holdersQuery, holderVariables);
+          
+          console.log(`Holdings result for ${node.username}:`, 
+            holderData.portfolioV2.nftBalances.totalCount);
+          
+          successfulChecks++;
           
           if (holderData.portfolioV2.nftBalances.totalCount > 0) {
             return {
               ...node,
               holdingCount: holderData.portfolioV2.nftBalances.totalCount,
               nfts: holderData.portfolioV2.nftBalances.nfts,
-              relationship: 'following'
+              relationship: relationshipType
             };
           }
-          return null;
-        })
+        } catch (error) {
+          console.error(`Error checking holdings for ${node.username}:`, error);
+          failedChecks++;
+        }
+        
+        return null;
+      };
+
+      // Process following list (with better error handling)
+      const followingHolders = await Promise.all(
+        following.map(({ node }) => checkUserHoldings(node, 'following'))
       );
 
       // Process followers list
       const followerHolders = await Promise.all(
-        followers.map(async ({ node }) => {
-          const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
-          if (!addresses.length) return null;
-
-          // Clone the variables and add the addresses
-          const holderVariables = {...variables, addresses};
-          
-          const holderData = await fetchZapperData(holdersQuery, holderVariables);
-          
-          if (holderData.portfolioV2.nftBalances.totalCount > 0) {
-            return {
-              ...node,
-              holdingCount: holderData.portfolioV2.nftBalances.totalCount,
-              nfts: holderData.portfolioV2.nftBalances.nfts,
-              relationship: 'follower'
-            };
-          }
-          return null;
-        })
+        followers.map(({ node }) => checkUserHoldings(node, 'follower'))
       );
+      
+      console.log(`Holdings check stats: ${successfulChecks} successful, ${failedChecks} failed`);
 
       // Combine and filter out null values, sort by followers count
       const filteredFollowingHolders = followingHolders.filter(Boolean);
       const filteredFollowerHolders = followerHolders.filter(Boolean);
+      
+      console.log("Filtered holder counts:", {
+        following: filteredFollowingHolders.length,
+        followers: filteredFollowerHolders.length
+      });
       
       // Identify mutual connections (both following and followers)
       const mutualHolderIds = new Set();
@@ -356,6 +389,8 @@ export const NFTProvider = ({ children }) => {
         ...filteredFollowerHolders.filter(follower => !mutualHolderIds.has(follower.fid))
       ].sort((a, b) => b.followersCount - a.followersCount);
 
+      console.log("Final holders list:", allHolders);
+      
       setCollectionHolders({ [collectionAddress]: allHolders });
       return allHolders;
     } catch (err) {
