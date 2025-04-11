@@ -178,6 +178,18 @@ export const NFTProvider = ({ children }) => {
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, userFid) => {
     console.log("fetchCollectionHolders called with:", { collectionAddress, userFid });
+    
+    // Validate collection address and user FID
+    if (!collectionAddress) {
+      console.error("Missing collection address");
+      throw new Error("Collection address is required");
+    }
+    
+    if (!userFid) {
+      console.error("Missing user FID");
+      throw new Error("User FID is required");
+    }
+    
     setLoading(true);
     try {
       // First get user's following list
@@ -238,11 +250,13 @@ export const NFTProvider = ({ children }) => {
         followersCount: followers.length 
       });
 
-      // Then check each user for collection ownership
+      // If collectionAddress is numeric (extracted from base64 ID), 
+      // we'll need to use a different query approach
+      // Let's use a numeric ID query for the Zapper API
       const holdersQuery = `
-        query CheckNFTHolding($addresses: [Address!]!, $collectionAddress: Address!) {
+        query CheckNFTHolding($addresses: [Address!]!, $collectionIds: [Int!]) {
           portfolioV2(addresses: $addresses) {
-            nftBalances(filter: { collectionAddress: $collectionAddress }) {
+            nftBalances(filter: { collectionIds: $collectionIds }) {
               totalCount
               nfts {
                 id
@@ -254,16 +268,31 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
+      // Convert collectionAddress to collectionIds parameter if it's numeric
+      const variables = {
+        addresses: [],
+        collectionIds: [parseInt(collectionAddress, 10)]
+      };
+
+      if (isNaN(variables.collectionIds[0])) {
+        // If it's not a valid number, fall back to using address
+        console.log("Using address instead of collection ID:", collectionAddress);
+        delete variables.collectionIds;
+        variables.collectionAddress = collectionAddress;
+      } else {
+        console.log("Using collection ID:", variables.collectionIds[0]);
+      }
+
       // Process following list
       const followingHolders = await Promise.all(
         following.map(async ({ node }) => {
           const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
           if (!addresses.length) return null;
 
-          const holderData = await fetchZapperData(holdersQuery, {
-            addresses,
-            collectionAddress
-          });
+          // Clone the variables and add the addresses
+          const holderVariables = {...variables, addresses};
+          
+          const holderData = await fetchZapperData(holdersQuery, holderVariables);
           
           if (holderData.portfolioV2.nftBalances.totalCount > 0) {
             return {
@@ -283,10 +312,10 @@ export const NFTProvider = ({ children }) => {
           const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
           if (!addresses.length) return null;
 
-          const holderData = await fetchZapperData(holdersQuery, {
-            addresses,
-            collectionAddress
-          });
+          // Clone the variables and add the addresses
+          const holderVariables = {...variables, addresses};
+          
+          const holderData = await fetchZapperData(holdersQuery, holderVariables);
           
           if (holderData.portfolioV2.nftBalances.totalCount > 0) {
             return {

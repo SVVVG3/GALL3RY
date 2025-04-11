@@ -125,14 +125,43 @@ const NftCard = ({ nft, onClick }) => {
   const valueData = getValue();
   const tokenId = getTokenId();
   
-  // Extract contract address with more robust fallbacks
-  const contractAddress = (
-    (nft.collection?.address) || 
-    (nft.collection?.id?.split(':')[1]) || 
-    (nft.contractAddress) || 
-    (nft.contract?.address) ||
-    (nft.token?.collection?.address)
-  );
+  // Extract contract address from collection ID
+  let contractAddress = null;
+  
+  // First try direct access to address property
+  if (nft.collection?.address) {
+    contractAddress = nft.collection.address;
+  } 
+  // Then try to extract from collection ID (which is base64 encoded)
+  else if (nft.collection?.id) {
+    // Format appears to be "NftCollection-XXXXXXXX" where X is the collection ID
+    // Try to extract the ID and use it as the address
+    try {
+      const decoded = atob(nft.collection.id);
+      console.log("Decoded collection ID:", decoded);
+      
+      // If the decoded ID contains an address, extract it
+      if (decoded.includes('-')) {
+        const parts = decoded.split('-');
+        if (parts.length > 1) {
+          const collectionId = parts[1];
+          // Use the collection ID as the address
+          contractAddress = collectionId;
+        }
+      }
+    } catch (e) {
+      console.error("Error decoding collection ID:", e);
+    }
+  }
+  
+  // Fallback to other potential sources
+  if (!contractAddress) {
+    contractAddress = (
+      nft.contractAddress || 
+      nft.contract?.address ||
+      nft.token?.collection?.address
+    );
+  }
   
   // Debug contract address
   console.log("NFT Contract Address:", {
