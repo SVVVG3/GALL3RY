@@ -17,6 +17,7 @@ import UserDashboard from './pages/UserDashboard';
 import { AuthProvider } from './contexts/AuthContext';
 import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
+import TestFarcasterAuth from './components/TestFarcasterAuth';
 
 // Configure Farcaster Auth Kit
 const farcasterConfig = {
@@ -46,6 +47,9 @@ function App() {
                   <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
                     My Collections
                   </NavLink>
+                  <NavLink to="/auth-test" className={({ isActive }) => isActive ? 'active' : ''}>
+                    Auth Test
+                  </NavLink>
                 </nav>
                 
                 <div className="auth-actions">
@@ -59,6 +63,7 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/dashboard" element={<UserDashboard />} />
                 <Route path="/user/:username" element={<UserProfilePage />} />
+                <Route path="/auth-test" element={<TestFarcasterAuth />} />
               </Routes>
             </main>
             
@@ -125,7 +130,12 @@ const HomePage = () => {
       );
     }
     
-    return <FarcasterUserSearch />;
+    return (
+      <>
+        {isAuthenticated && <TestFarcasterAuth />}
+        <FarcasterUserSearch />
+      </>
+    );
   };
   
   return (
@@ -148,13 +158,20 @@ const AuthButtons = () => {
       <>
         <Link to={`/user/${profile.username}`} className="user-profile-link">
           <div className="user-avatar">
-            <img 
-              src={profile.avatarUrl} 
-              alt={profile.username}
-              onError={(e) => {
-                e.target.src = 'https://via.placeholder.com/40?text=User';
-              }}
-            />
+            {profile.avatarUrl ? (
+              <img 
+                src={profile.avatarUrl} 
+                alt={profile.username || 'User'}
+                onError={(e) => {
+                  console.log('Header avatar failed to load, using fallback');
+                  e.target.src = 'https://via.placeholder.com/40?text=User';
+                }}
+              />
+            ) : (
+              <div className="avatar-placeholder">
+                {profile.username ? profile.username.charAt(0).toUpperCase() : 'U'}
+              </div>
+            )}
           </div>
           <span className="username">{profile.username || 'User'}</span>
         </Link>

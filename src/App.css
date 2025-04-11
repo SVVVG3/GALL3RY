@@ -1008,3 +1008,87 @@ h1, h2, h3, h4, h5, h6 {
   font-size: calc(10px + 2vmin);
   color: white;
 }
+
+/* Avatar placeholder style */
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-primary-light);
+  color: white;
+  font-weight: bold;
+  font-size: 16px;
+  border-radius: 50%;
+}
+
+/* User profile link improvements */
+.user-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 20px;
+  transition: background-color 0.2s;
+}
+
+.user-profile-link:hover {
+  background-color: var(--color-gray-100);
+}
+
+.user-profile-link .user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--color-primary);
+}
+
+.user-profile-link .user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-profile-link .username {
+  color: var(--color-gray-800);
+  font-weight: 500;
+}
+
+/* Improved mobile responsiveness */
+@media (max-width: 768px) {
+  .app-header .container {
+    flex-direction: column;
+    padding: 12px 16px;
+  }
+  
+  .app-header .logo {
+    margin-bottom: 8px;
+  }
+  
+  .main-nav {
+    margin: 12px 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .auth-actions {
+    display: flex;
+    justify-content: center;
+    margin-top: 8px;
+  }
+  
+  .user-profile-link {
+    padding: 4px 8px;
+  }
+}
+
+/* Make sure images don't overflow their containers */
+img {
+  max-width: 100%;
+  height: auto;
+}

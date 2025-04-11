@@ -9,6 +9,29 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   const farcasterAuth = useProfile();
   
+  // Log Farcaster Auth profile data for debugging
+  if (farcasterAuth.isAuthenticated && farcasterAuth.profile) {
+    console.log('Farcaster Auth Profile:', farcasterAuth.profile);
+    console.log('Profile picture data:', {
+      pfp: farcasterAuth.profile?.pfp,
+      pfpUrl: farcasterAuth.profile?.pfp?.url
+    });
+  }
+  
+  // Get the correct avatar URL with consistent handling
+  const getAvatarUrl = () => {
+    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) return 'https://i.pravatar.cc/150?u=demo_user';
+    
+    // First try pfp.url which is typically provided by Farcaster
+    if (farcasterAuth.profile.pfp?.url) return farcasterAuth.profile.pfp.url;
+    
+    // Next try the pfp itself which might be a string URL
+    if (typeof farcasterAuth.profile.pfp === 'string') return farcasterAuth.profile.pfp;
+    
+    // Finally fall back to the avatar placeholder
+    return 'https://i.pravatar.cc/150?u=demo_user';
+  };
+  
   // Merge our context with Farcaster Auth Kit data for backward compatibility
   return {
     ...context,
@@ -17,8 +40,8 @@ export const useAuth = () => {
       fid: farcasterAuth.profile?.fid,
       username: farcasterAuth.profile?.username,
       displayName: farcasterAuth.profile?.displayName,
-      // Using the avatar from Farcaster with proper fallback
-      avatarUrl: farcasterAuth.profile?.pfp?.url || farcasterAuth.profile?.pfp || 'https://i.pravatar.cc/150?u=demo_user',
+      // Using consistent avatar URL handling
+      avatarUrl: getAvatarUrl(),
       connectedAddresses: [], // We'll get these from user profile data later
     } : null,
     loading: farcasterAuth.loading,
