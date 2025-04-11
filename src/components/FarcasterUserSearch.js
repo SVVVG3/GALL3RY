@@ -37,7 +37,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   
   // Sorting state
-  const [sortMethod, setSortMethod] = useState('nameAsc'); // Default sort by name A-Z
+  const [sortMethod, setSortMethod] = useState('recent'); // Default sort by most recent
   
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');
@@ -177,6 +177,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   floorPriceEth
                   cardImageUrl
                 }
+                transfers {
+                  edges {
+                    node {
+                      timestamp
+                      from
+                      to
+                    }
+                  }
+                }
               }
               cursor
             }
@@ -260,19 +269,19 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               }
             }
             
-            // Collection images as fallback
-            if (!imageUrl && nft.collection && nft.collection.cardImageUrl) {
-              imageUrl = nft.collection.cardImageUrl;
+            // Process the transfer timestamp data
+            let latestTransferTimestamp = null;
+            if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
+              latestTransferTimestamp = Math.max(...nft.transfers.edges.map(edge => edge.node.timestamp || 0));
             }
             
-            // Process potential IPFS URLs
-            if (imageUrl && imageUrl.startsWith('ipfs://')) {
-              imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
-            }
-            
-            // Process potential Arweave URLs
-            if (imageUrl && imageUrl.startsWith('ar://')) {
-              imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+            // Default fallback image (important for mobile UX)
+            if (!imageUrl) {
+              if (nft.collection?.cardImageUrl) {
+                imageUrl = nft.collection.cardImageUrl;
+              } else {
+                imageUrl = 'https://via.placeholder.com/500?text=No+Image';
+              }
             }
             
             // Extract contract address from collection ID if available
@@ -322,7 +331,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 name: nft.name,
                 description: nft.description,
                 image: imageUrl
-              }
+              },
+              latestTransferTimestamp
             };
           }).filter(Boolean);
           
@@ -541,6 +551,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           const valueA = a.estimatedValueEth || a.collection?.floorPriceEth || 0;
           const valueB = b.estimatedValueEth || b.collection?.floorPriceEth || 0;
           return valueB - valueA; // Sort descending (highest first)
+        });
+        
+      case 'recent': // By most recent transfer (latest first)
+        return sortedNfts.sort((a, b) => {
+          // Use transfer timestamp if available
+          const timestampA = a.latestTransferTimestamp || a.timestamp || 0;
+          const timestampB = b.latestTransferTimestamp || b.timestamp || 0;
+          return timestampB - timestampA; // Sort descending (newest first)
         });
         
       default:
@@ -798,6 +816,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               )}
             </div>
             <div className="sort-options">
+              <button 
+                className={`sort-option ${sortMethod === 'recent' ? 'active' : ''}`}
+                onClick={() => handleSortChange('recent')}
+                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
+              >
+                Recent
+              </button>
               <button 
                 className={`sort-option ${sortMethod === 'nameAsc' ? 'active' : ''}`}
                 onClick={() => handleSortChange('nameAsc')}
