@@ -384,6 +384,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           placeholder="Enter Farcaster username or FID"
           className="search-input"
           disabled={isSearching}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck="false"
         />
         <button 
           type="submit" 

@@ -104,9 +104,28 @@ const AuthButtons = () => {
   const { isAuthenticated, profile, logout } = useAuth();
   
   if (isAuthenticated && profile) {
+    // Check if we're already on someone's profile page
+    const isOnProfilePage = window.location.pathname.startsWith('/user/');
+    const currentUsername = isOnProfilePage ? window.location.pathname.split('/')[2] : '';
+    const isOnOwnProfile = currentUsername === profile.username;
+    
     return (
       <>
-        <Link to={`/user/${profile.username}`} className="user-profile-link">
+        <Link 
+          to={`/user/${profile.username}`} 
+          className={`user-profile-link ${isOnOwnProfile ? 'current-profile' : ''}`}
+          onClick={(e) => {
+            if (isOnOwnProfile) {
+              e.preventDefault();
+              window.scrollTo(0, 0);
+            } else if (isOnProfilePage && currentUsername !== profile.username) {
+              // Force page to reload when switching from one profile to another
+              // This ensures the FarcasterUserSearch component reinitializes with the new username
+              e.preventDefault();
+              window.location.href = `/user/${profile.username}`;
+            }
+          }}
+        >
           <span className="username">@{profile.username || 'User'}</span>
         </Link>
         <button onClick={logout} className="btn btn-outline">Sign Out</button>

@@ -1063,6 +1063,12 @@ h1, h2, h3, h4, h5, h6 {
   transform: translateY(-2px);
 }
 
+.user-profile-link.current-profile {
+  background-color: rgba(var(--color-primary-rgb), 0.25);
+  border: 2px solid var(--color-primary);
+  transform: translateY(-1px);
+}
+
 .user-profile-link .username {
   color: var(--color-primary);
   font-weight: 500;
