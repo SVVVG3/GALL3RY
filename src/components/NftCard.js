@@ -5,8 +5,6 @@ import NFTImage from './NFTImage';
 
 /**
  * NftCard component for displaying a single NFT
- * @param {Object} nft - The NFT object to display
- * @param {Function} onClick - Function to call when the card is clicked
  */
 const NftCard = ({ nft, onClick }) => {
   const [showHolders, setShowHolders] = useState(false);
@@ -22,9 +20,8 @@ const NftCard = ({ nft, onClick }) => {
 
   if (!nft) return null;
 
-  // Enhanced data extraction with better fallbacks for different API responses
+  // Data extraction with fallbacks for different API responses
   const getName = () => {
-    // Try all possible name locations in order of preference
     if (nft.name) return nft.name;
     if (nft.metadata?.name) return nft.metadata.name;
     if (nft.token?.name) return nft.token.name;
@@ -34,7 +31,6 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   const getCollection = () => {
-    // Try all possible collection name locations
     if (nft.collection?.name) return nft.collection.name;
     if (nft.token?.collection?.name) return nft.token.collection.name;
     if (nft.contractName) return nft.contractName;
@@ -44,28 +40,10 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   const getImageUrl = () => {
-    // Try all possible image URL locations
-    console.log('Extracting image URL from NFT data:', JSON.stringify({
-      imageUrl: nft.imageUrl,
-      metadataImage: nft.metadata?.image,
-      collectionImageUrl: nft.collection?.imageUrl,
-      tokenImageUrl: nft.token?.imageUrl,
-      mediasV2: nft.mediasV2
-    }, null, 2));
-    
     // Check for direct image URL
     if (nft.imageUrl) return nft.imageUrl;
     
-    // Check for image URL in metadata
-    if (nft.metadata?.image) return nft.metadata.image;
-    
-    // Check for collection image URL
-    if (nft.collection?.imageUrl) return nft.collection.imageUrl;
-    
-    // Check for token image URL
-    if (nft.token?.imageUrl) return nft.token.imageUrl;
-    
-    // Try to extract from mediasV2 if available (common in newer Zapper API)
+    // Check for mediasV2 (common in Zapper API)
     if (nft.mediasV2 && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
         if (!media) continue;
@@ -75,7 +53,17 @@ const NftCard = ({ nft, onClick }) => {
       }
     }
     
-    // Check for media array in older Zapper formats
+    // Check for image URL in metadata
+    if (nft.metadata?.image) return nft.metadata.image;
+    
+    // Check for collection image
+    if (nft.collection?.imageUrl) return nft.collection.imageUrl;
+    if (nft.collection?.cardImageUrl) return nft.collection.cardImageUrl;
+    
+    // Check for token image
+    if (nft.token?.imageUrl) return nft.token.imageUrl;
+    
+    // Check for legacy media array
     if (Array.isArray(nft.media)) {
       for (const media of nft.media) {
         if (media.url) return media.url;
@@ -83,12 +71,11 @@ const NftCard = ({ nft, onClick }) => {
       }
     }
     
-    console.log('No image URL found for NFT:', nft.id || nft.tokenId);
     return null;
   };
 
   const getValue = () => {
-    // Try different value formats in the current Zapper API response
+    // Try different value formats in API responses
     if (nft.estimatedValue?.value !== undefined) {
       return {
         value: nft.estimatedValue.value,
@@ -99,16 +86,14 @@ const NftCard = ({ nft, onClick }) => {
     if (nft.collection?.floorPrice?.value !== undefined) {
       return {
         value: nft.collection.floorPrice.value,
-        symbol: nft.collection.floorPrice.symbol || 'ETH',
-        isFloorPrice: true
+        symbol: nft.collection.floorPrice.symbol || 'ETH'
       };
     }
     
     if (nft.collection?.floorPriceEth !== undefined) {
       return {
         value: nft.collection.floorPriceEth,
-        symbol: 'ETH',
-        isFloorPrice: true
+        symbol: 'ETH'
       };
     }
     
@@ -122,14 +107,9 @@ const NftCard = ({ nft, onClick }) => {
     return null;
   };
 
-  const getContractAddress = () => {
-    if (nft.token?.contractAddress) return nft.token.contractAddress;
-    if (nft.contractAddress) return nft.contractAddress;
-    if (nft.collection?.id?.includes(':')) {
-      // Zapper format: 'ethereum:0x1234...'
-      return nft.collection.id.split(':')[1];
-    }
-    if (nft.collection?.address) return nft.collection.address;
+  const getTokenId = () => {
+    if (nft.tokenId) return nft.tokenId;
+    if (nft.token?.tokenId) return nft.token.tokenId;
     return null;
   };
 
@@ -137,34 +117,35 @@ const NftCard = ({ nft, onClick }) => {
   const collection = getCollection();
   const imageUrl = getImageUrl();
   const valueData = getValue();
-  const contractAddress = getContractAddress();
+  const tokenId = getTokenId();
+  const contractAddress = nft.collection?.id?.split(':')[1] || nft.contractAddress || nft.collection?.address;
 
   return (
     <>
-      <div
-        className="nft-card bg-[#1c1c1c] rounded-xl overflow-hidden cursor-pointer transform transition-transform hover:scale-[1.02]"
+      <div 
+        className="nft-card overflow-hidden rounded-xl bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
         onClick={handleClick}
       >
-        <div className="relative aspect-square w-full">
-          <NFTImage
-            src={imageUrl}
-            alt={name}
-            className="w-full h-full"
-          />
-        </div>
-        <div className="p-4">
-          <h3 className="text-lg font-semibold text-white truncate">
-            {name}
-          </h3>
-          <p className="text-sm text-gray-400 truncate">
-            {collection}
-          </p>
+        <NFTImage 
+          src={imageUrl} 
+          alt={name}
+        />
+        
+        <div className="p-3">
+          <h3 className="font-semibold text-lg truncate">{name}</h3>
+          
+          <div className="flex flex-col mt-1">
+            <p className="text-sm text-gray-500 truncate">{collection}</p>
+            {tokenId && (
+              <p className="text-xs text-gray-400">#{tokenId}</p>
+            )}
+          </div>
+          
           {valueData && (
-            <p className="text-sm text-gray-400 mt-1">
-              {valueData.isFloorPrice && 'Floor: '}
-              {typeof valueData.value === 'number' 
-                ? valueData.value.toLocaleString(undefined, { maximumFractionDigits: 4 }) 
-                : valueData.value} {valueData.symbol}
+            <p className="text-sm font-medium mt-2">
+              {valueData.value !== undefined && typeof valueData.value === 'number' 
+                ? `${valueData.value.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${valueData.symbol}`
+                : `${valueData.value} ${valueData.symbol}`}
             </p>
           )}
         </div>
