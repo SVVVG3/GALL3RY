@@ -144,24 +144,35 @@ const NftCard = ({ nft, onClick }) => {
   } 
   // Then try to extract from collection ID (which is base64 encoded)
   else if (nft.collection?.id) {
-    // Format appears to be "NftCollection-XXXXXXXX" where X is the collection ID
-    // Try to extract the ID and use it as the address
     try {
-      const decoded = atob(nft.collection.id);
-      console.log("Decoded collection ID:", decoded);
+      const collectionId = nft.collection.id;
+      console.log("Collection ID:", collectionId);
       
-      // If the decoded ID contains an address, extract it
-      if (decoded.includes('-')) {
-        const parts = decoded.split('-');
-        if (parts.length > 1) {
-          const collectionId = parts[1];
-          // Use the collection ID as the address
-          contractAddress = collectionId;
-          console.log("Successfully extracted collection ID:", collectionId);
+      // If it's a base64 encoded string, decode it
+      if (collectionId.match(/^[A-Za-z0-9+/=]+$/)) {
+        try {
+          const decoded = atob(collectionId);
+          console.log("Decoded collection ID:", decoded);
+          
+          // If the decoded ID contains a hyphen, extract the second part as the collection ID
+          if (decoded.includes('-')) {
+            const parts = decoded.split('-');
+            if (parts.length > 1) {
+              contractAddress = parts[1];
+              console.log("Successfully extracted collection ID:", contractAddress);
+            }
+          }
+        } catch (e) {
+          console.error("Error decoding collection ID:", e);
         }
+      } 
+      // If it's already in the format of a collection ID, use it directly
+      else {
+        contractAddress = collectionId;
+        console.log("Using collection ID directly:", contractAddress);
       }
     } catch (e) {
-      console.error("Error decoding collection ID:", e);
+      console.error("Error processing collection ID:", e);
     }
   }
   

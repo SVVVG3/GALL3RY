@@ -260,27 +260,6 @@ export const NFTProvider = ({ children }) => {
         })));
       }
 
-      // Try using both collection ID and collection address approaches
-      const holdersQuery = `
-        query CheckNFTHolding($addresses: [Address!]!) {
-          portfolioV2(addresses: $addresses) {
-            nftBalances {
-              totalCount
-              nfts {
-                id
-                name
-                imageUrl
-                collection {
-                  id
-                  name
-                  address
-                }
-              }
-            }
-          }
-        }
-      `;
-
       // Parse collection address/ID
       const collectionId = parseInt(collectionAddress, 10);
       const isNumericCollection = !isNaN(collectionId);
@@ -291,11 +270,35 @@ export const NFTProvider = ({ children }) => {
         isNumeric: isNumericCollection
       });
 
-      // Since the API doesn't support direct filtering by collection ID,
-      // we'll fetch all NFTs and filter client-side
-      const createHolderVariables = (addresses) => {
-        return { addresses };
-      };
+      // According to the Zapper API schema, we should use nftUsersTokens query with collectionIds
+      const holdersQuery = `
+        query CheckNFTHolding($owners: [Address!]!, $collectionIds: [ID!]) {
+          nftUsersTokens(
+            owners: $owners,
+            collectionIds: $collectionIds,
+            first: 100
+          ) {
+            edges {
+              node {
+                id
+                name
+                tokenId
+                imageUrl
+                collection {
+                  id
+                  name
+                  imageUrl
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
 
       // Monitor successful queries
       let successfulChecks = 0;
@@ -314,48 +317,35 @@ export const NFTProvider = ({ children }) => {
         console.log(`Checking ${relationshipType} ${node.username} with addresses:`, addresses);
         
         try {
-          const holderVariables = createHolderVariables(addresses);
+          // Create proper query variables based on the schema
+          const holderVariables = {
+            owners: addresses,
+            collectionIds: [isNumericCollection ? String(collectionId) : collectionAddress]
+          };
+          
+          console.log("Query variables:", holderVariables);
+          
           const holderData = await fetchZapperData(holdersQuery, holderVariables);
           
-          // Extract all NFTs and filter by collection ID/address client-side
-          const nfts = holderData.portfolioV2.nftBalances.nfts || [];
+          // Check for edges in the response
+          const edges = holderData.nftUsersTokens?.edges || [];
+          const totalCount = edges.length;
           
-          // Find NFTs that match our collection
-          const matchingNfts = nfts.filter(nft => {
-            if (isNumericCollection) {
-              // Try to extract numeric ID from collection.id (which is a base64 string)
-              try {
-                const collectionIdStr = nft.collection?.id;
-                if (collectionIdStr) {
-                  const decoded = atob(collectionIdStr);
-                  const parts = decoded.split('-');
-                  if (parts.length > 1) {
-                    const nftCollectionId = parseInt(parts[1], 10);
-                    return nftCollectionId === collectionId;
-                  }
-                }
-              } catch (e) {
-                console.error("Error parsing collection ID:", e);
-              }
-              return false;
-            } else {
-              // Match by address
-              return nft.collection?.address === collectionAddress;
-            }
-          });
-          
-          console.log(`Holdings result for ${node.username}:`, {
-            totalNfts: nfts.length,
-            matchingCollection: matchingNfts.length
+          console.log(`Holdings result for ${node.username}:`, { 
+            totalCount, 
+            hasData: !!holderData.nftUsersTokens 
           });
           
           successfulChecks++;
           
-          if (matchingNfts.length > 0) {
+          if (totalCount > 0) {
+            // Extract all NFTs from the edges
+            const nfts = edges.map(edge => edge.node).filter(Boolean);
+            
             return {
               ...node,
-              holdingCount: matchingNfts.length,
-              nfts: matchingNfts,
+              holdingCount: totalCount,
+              nfts,
               relationship: relationshipType
             };
           }

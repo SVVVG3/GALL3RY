@@ -46,8 +46,8 @@ const handler = async (req, res) => {
     // Log query type for debugging
     const queryType = query.includes('farcasterProfile') ? 'PROFILE' 
       : query.includes('portfolioV2') ? 'PORTFOLIO'
+      : query.includes('nftUsersTokens') ? 'NFT_USERS_TOKENS'
       : query.includes('nfts(') ? 'NFTS_QUERY_NEW' 
-      : query.includes('nftUsersTokens') ? 'NFTS_QUERY_OLD' 
       : 'OTHER';
     
     // Enhanced logging for debugging
@@ -55,12 +55,40 @@ const handler = async (req, res) => {
       queryPreview: query.substring(0, 100) + '...',
       variablesKeys: Object.keys(variables || {}),
       addresses: variables?.addresses ? `${variables.addresses.length} addresses` : 'none',
-      collectionId: variables?.collectionIds ? variables.collectionIds : 'none',
+      owners: variables?.owners ? `${variables.owners.length} owners` : 'none',
+      collectionIds: variables?.collectionIds || 'none',
       collectionAddress: variables?.collectionAddress || 'none'
     });
 
     // Transform deprecated or invalid queries to match current schema
-    if (queryType === 'NFTS_QUERY_OLD') {
+    if (queryType === 'NFT_USERS_TOKENS') {
+      // This query is already in the correct format according to the schema
+      // Just make sure the parameters are correctly formatted
+      console.log('[ZAPPER] Validating nftUsersTokens query');
+      
+      // Ensure we have owners array
+      if (!variables.owners || !Array.isArray(variables.owners)) {
+        return res.status(400).json({
+          error: 'Invalid parameters',
+          message: 'owners parameter must be an array of addresses'
+        });
+      }
+      
+      // Ensure collectionIds is correctly formatted if present
+      if (variables.collectionIds && !Array.isArray(variables.collectionIds)) {
+        variables.collectionIds = [variables.collectionIds];
+      }
+      
+      // Add default first parameter if missing
+      if (!variables.first) {
+        variables.first = 100;
+      }
+      
+      // Add default withOverrides parameter
+      variables.withOverrides = true;
+      
+      console.log('[ZAPPER] Query validated and parameters normalized');
+    } else if (queryType === 'NFTS_QUERY_OLD') {
       console.log('[ZAPPER] Transforming deprecated nftUsersTokens query to use current schema');
       
       const ownerAddresses = variables.owners || [];
