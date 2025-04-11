@@ -51,6 +51,15 @@ export const NFTProvider = ({ children }) => {
                   description
                   image
                 }
+                transfers {
+                  edges {
+                    node {
+                      timestamp
+                      from
+                      to
+                    }
+                  }
+                }
               }
             }
           }
@@ -72,12 +81,21 @@ export const NFTProvider = ({ children }) => {
         throw new Error('Invalid NFT data received');
       }
 
-      const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => ({
-        ...nft,
-        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
-        name: nft.name || nft.metadata?.name || `#${nft.tokenId}`,
-        description: nft.metadata?.description || ''
-      }));
+      const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => {
+        // Extract the most recent transfer timestamp
+        let latestTransferTimestamp = null;
+        if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
+          latestTransferTimestamp = Math.max(...nft.transfers.edges.map(edge => edge.node.timestamp));
+        }
+
+        return {
+          ...nft,
+          imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
+          name: nft.name || nft.metadata?.name || `#${nft.tokenId}`,
+          description: nft.metadata?.description || '',
+          latestTransferTimestamp
+        };
+      });
       
       setNfts(nftsWithImages);
       setHasMore(data.portfolioV2.nftBalances.pageInfo.hasNextPage);
@@ -233,8 +251,81 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
 
+  // Function to get sorted NFTs based on current sort setting
+  const getSortedNFTs = useCallback(() => {
+    if (!nfts || nfts.length === 0) return [];
+
+    // Apply search filter if provided
+    let filteredNFTs = nfts;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filteredNFTs = nfts.filter(nft => 
+        (nft.name && nft.name.toLowerCase().includes(query)) ||
+        (nft.collection?.name && nft.collection.name.toLowerCase().includes(query))
+      );
+    }
+    
+    // Apply chain filter if not 'all'
+    if (selectedChains.length > 0 && !selectedChains.includes('all')) {
+      filteredNFTs = filteredNFTs.filter(nft => {
+        const network = nft.collection?.network?.toLowerCase();
+        if (!network) return false;
+        
+        // Match chain to network (eth, base, etc)
+        return selectedChains.some(chain => network.includes(chain.toLowerCase()));
+      });
+    }
+
+    // Apply sorting
+    let sortedNFTs = [...filteredNFTs];
+    
+    switch (sortBy) {
+      case 'a-z':
+        // Sort alphabetically by name
+        sortedNFTs.sort((a, b) => {
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        break;
+        
+      case 'collection':
+        // Sort by collection name
+        sortedNFTs.sort((a, b) => {
+          const nameA = (a.collection?.name || '').toLowerCase();
+          const nameB = (b.collection?.name || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        break;
+        
+      case 'value':
+        // Sort by estimated value (high to low)
+        sortedNFTs.sort((a, b) => {
+          const valueA = a.estimatedValue?.value || 0;
+          const valueB = b.estimatedValue?.value || 0;
+          return valueB - valueA;
+        });
+        break;
+        
+      case 'recent':
+        // Sort by most recent transfer (latest first)
+        sortedNFTs.sort((a, b) => {
+          const timestampA = a.latestTransferTimestamp || 0;
+          const timestampB = b.latestTransferTimestamp || 0;
+          return timestampB - timestampA;
+        });
+        break;
+        
+      default:
+        // Default sorting
+        break;
+    }
+    
+    return sortedNFTs;
+  }, [nfts, searchQuery, selectedChains, sortBy]);
+
   const value = {
-    nfts,
+    nfts: getSortedNFTs(),
     loading,
     error,
     hasMore,
