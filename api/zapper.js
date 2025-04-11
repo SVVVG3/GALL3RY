@@ -34,7 +34,7 @@ const handler = async (req, res) => {
 
     // Parse request body
     const requestBody = req.body || {};
-    const { query, variables } = requestBody;
+    let { query, variables } = requestBody;
 
     if (!query) {
       return res.status(400).json({ 
@@ -45,10 +45,134 @@ const handler = async (req, res) => {
 
     // Log query type for debugging
     const queryType = query.includes('farcasterProfile') ? 'PROFILE' 
-      : query.includes('nfts(') ? 'NFTS' 
+      : query.includes('nfts(') ? 'NFTS_QUERY_NEW' 
+      : query.includes('nftUsersTokens') ? 'NFTS_QUERY_OLD' 
       : 'OTHER';
     
     console.log(`[ZAPPER] Processing ${queryType} query`);
+
+    // Transform deprecated queries to match current schema
+    if (queryType === 'NFTS_QUERY_OLD') {
+      console.log('[ZAPPER] Transforming deprecated nftUsersTokens query to use current schema');
+      
+      const ownerAddresses = variables.owners || [];
+      const limit = variables.first || 50;
+      
+      // Use the correct schema from agents.txt
+      query = `
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
+          nftUsersTokens(
+            owners: $owners
+            first: $first
+            after: $after
+            withOverrides: $withOverrides
+          ) {
+            edges {
+              node {
+                id
+                name
+                tokenId
+                description
+                mediasV2 {
+                  ... on Image {
+                    url
+                    originalUri
+                    original
+                  }
+                  ... on Animation {
+                    url
+                    originalUri
+                    original
+                  }
+                }
+                collection {
+                  id
+                  name
+                  floorPriceEth
+                  cardImageUrl
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            totalCount
+          }
+        }
+      `;
+      
+      // Keep original variables but ensure they match required format
+      variables = {
+        owners: ownerAddresses,
+        first: limit,
+        after: variables.after || null,
+        withOverrides: true
+      };
+      
+      console.log('[ZAPPER] Query transformed using current schema');
+    } else if (queryType === 'NFTS_QUERY_NEW') {
+      // We're using the new 'nfts' query which isn't in the schema
+      // So transform it to use nftUsersTokens instead
+      console.log('[ZAPPER] Converting nfts query to use nftUsersTokens schema');
+      
+      const addresses = variables.addresses || [];
+      const limit = variables.limit || 50;
+      
+      // Use the correct schema from agents.txt
+      query = `
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
+          nftUsersTokens(
+            owners: $owners
+            first: $first
+            withOverrides: $withOverrides
+          ) {
+            edges {
+              node {
+                id
+                name
+                tokenId
+                description
+                mediasV2 {
+                  ... on Image {
+                    url
+                    originalUri
+                    original
+                  }
+                  ... on Animation {
+                    url
+                    originalUri
+                    original
+                  }
+                }
+                collection {
+                  id
+                  name
+                  floorPriceEth
+                  cardImageUrl
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            totalCount
+          }
+        }
+      `;
+      
+      // Convert variables to match the required format
+      variables = {
+        owners: addresses,
+        first: limit,
+        withOverrides: true
+      };
+      
+      console.log('[ZAPPER] Query converted to use nftUsersTokens schema');
+    }
 
     // Simple cache check
     const cacheKey = `zapper_${Buffer.from(JSON.stringify({ query, variables })).toString('base64')}`;
@@ -59,7 +183,7 @@ const handler = async (req, res) => {
       return res.status(200).json(cachedData);
     }
 
-    console.log(`[ZAPPER] Making request to Zapper API`);
+    console.log(`[ZAPPER] Making request to Zapper API: ${variables.owners ? variables.owners.length : 0} addresses`);
     
     // Make the request to Zapper API
     try {
@@ -69,10 +193,11 @@ const handler = async (req, res) => {
         headers: {
           'Content-Type': 'application/json',
           'x-zapper-api-key': apiKey,
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'User-Agent': 'gall3ry/2.1'
         },
         data: { query, variables },
-        timeout: 10000
+        timeout: 15000
       });
 
       // Handle successful response
@@ -90,11 +215,76 @@ const handler = async (req, res) => {
         });
       }
       
-      // Cache the response
-      const ttl = 300; // 5 minutes
+      // Cache the response with a shorter TTL for large responses
+      const responseSize = JSON.stringify(zapperResponse.data).length;
+      const ttl = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
       cache.set(cacheKey, zapperResponse.data, ttl);
       
-      // Return the data
+      // If we used nftUsersTokens but the client expected nfts format, transform the response
+      if (queryType === 'NFTS_QUERY_NEW' && zapperResponse.data.data?.nftUsersTokens) {
+        // Client expected nfts query but we used nftUsersTokens
+        // We need to transform the response to match what the client expects
+        console.log('[ZAPPER] Transforming nftUsersTokens response to nfts format');
+        
+        const nftUsersTokens = zapperResponse.data.data.nftUsersTokens;
+        const edges = nftUsersTokens.edges || [];
+        
+        // Create a compatible response
+        const nftsResponse = {
+          data: {
+            nfts: {
+              items: edges.map(edge => {
+                const node = edge.node;
+                if (!node) return null;
+                
+                // Try to find a media URL
+                let imageUrl = null;
+                if (node.mediasV2 && node.mediasV2.length > 0) {
+                  for (const media of node.mediasV2) {
+                    if (!media) continue;
+                    if (media.original) { imageUrl = media.original; break; }
+                    if (media.originalUri) { imageUrl = media.originalUri; break; }
+                    if (media.url) { imageUrl = media.url; break; }
+                  }
+                }
+                
+                // Collection image as fallback
+                if (!imageUrl && node.collection?.cardImageUrl) {
+                  imageUrl = node.collection.cardImageUrl;
+                }
+                
+                // Build a compatible object structure
+                return {
+                  id: node.id,
+                  tokenId: node.tokenId,
+                  name: node.name,
+                  collection: {
+                    id: node.collection?.id,
+                    name: node.collection?.name,
+                    floorPrice: {
+                      value: node.collection?.floorPriceEth,
+                      symbol: 'ETH'
+                    },
+                    imageUrl: node.collection?.cardImageUrl
+                  },
+                  imageUrl: imageUrl,
+                  metadata: {
+                    name: node.name,
+                    description: node.description,
+                    image: imageUrl
+                  }
+                };
+              }).filter(Boolean)
+            }
+          }
+        };
+        
+        // Cache and return the transformed response
+        cache.set(`transformed_${cacheKey}`, nftsResponse, ttl);
+        return res.status(200).json(nftsResponse);
+      }
+      
+      // Return the original response
       return res.status(200).json(zapperResponse.data);
       
     } catch (apiError) {

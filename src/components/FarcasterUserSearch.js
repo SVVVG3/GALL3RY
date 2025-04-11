@@ -122,12 +122,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
 
-  // Handle search form submission
-  const handleSearch = async (e) => {
-    e.preventDefault();
-    await performSearch(searchQuery);
-  };
-
   // Fetch NFTs for the user
   const fetchUserNfts = async (addresses, cursor = null, loadMore = false) => {
     if (loadMore) {
@@ -144,47 +138,47 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.log(`Fetching NFTs for ${addresses.length} wallet addresses:`, addresses);
       console.log(loadMore ? 'Loading more NFTs from cursor: ' + cursor : 'Initial NFT load');
       
-      // Use the new Zapper API schema - nfts instead of nftUsersTokens
+      // First try using the old schema which we know works with the Zapper API
       const query = `
-        query NFTs($addresses: [String!]!, $limit: Int) {
-          nfts(
-            ownerAddresses: $addresses,
-            limit: $limit
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
+          nftUsersTokens(
+            owners: $owners
+            first: $first
+            after: $after
+            withOverrides: $withOverrides
           ) {
-            items {
-              id
-              tokenId
-              name
-              collection {
+            edges {
+              node {
                 id
                 name
-                floorPrice {
-                  value
-                  symbol
-                }
-                imageUrl
-              }
-              token {
-                id
                 tokenId
-                name
-                symbol
-                contractAddress
-                networkId
-              }
-              estimatedValue {
-                value
-                token {
-                  symbol
+                description
+                mediasV2 {
+                  ... on Image {
+                    url
+                    originalUri
+                    original
+                  }
+                  ... on Animation {
+                    url
+                    originalUri
+                    original
+                  }
+                }
+                collection {
+                  id
+                  name
+                  floorPriceEth
+                  cardImageUrl
                 }
               }
-              imageUrl
-              metadata {
-                name
-                description
-                image
-              }
+              cursor
             }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            totalCount
           }
         }
       `;
@@ -199,8 +193,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           body: JSON.stringify({
             query,
             variables: { 
-              addresses: addresses,
-              limit: 100 // Increased batch size for better performance
+              owners: addresses,
+              first: 100, // Increased batch size for better performance
+              after: cursor,
+              withOverrides: true
             }
           })
         });
@@ -217,60 +213,143 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           throw new Error(`GraphQL errors: ${JSON.stringify(responseData.errors)}`);
         }
         
-        if (!responseData.data || !responseData.data.nfts) {
-          console.error('Invalid response format:', responseData);
-          throw new Error('Invalid response format: missing nfts data');
-        }
+        // Check for both possible response formats
+        let nftData = null;
+        let edges = [];
+        let pageInfo = {};
+        let totalCount = 0;
         
-        // Using the new API format which has items array instead of edges
-        const items = responseData.data.nfts.items || [];
-        
-        console.log(`Found ${items.length} NFTs via direct API call`);
-        
-        // Process and normalize the NFT data to make it compatible with our components
-        const processedNfts = items.map(nft => {
-          return {
-            id: nft.id || nft.token?.id,
-            name: nft.name || nft.token?.name || nft.metadata?.name || `#${nft.tokenId || nft.token?.tokenId}`,
-            tokenId: nft.tokenId || nft.token?.tokenId,
-            description: nft.metadata?.description || '',
-            imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
-            collection: {
-              id: nft.collection?.id,
-              name: nft.collection?.name || nft.token?.symbol || 'Unknown Collection',
-              floorPriceEth: nft.collection?.floorPrice?.value,
-              cardImageUrl: nft.collection?.imageUrl
-            },
-            estimatedValue: nft.estimatedValue,
-            contractAddress: nft.token?.contractAddress,
-            network: getNetworkFromId(nft.token?.networkId)
-          };
-        });
-        
-        // Filter out NFTs with missing critical data
-        const validNfts = processedNfts.filter(nft => nft.id && nft.imageUrl);
-        console.log(`${validNfts.length} NFTs have valid data and images`);
-        
-        // For now, we'll say there are no more NFTs with the new API
-        // since we don't have pagination info in the same format
-        const hasNext = false;
-        setHasMoreNfts(hasNext);
-        setEndCursor(null);
-        
-        // Update total count
-        const totalCount = validNfts.length;
-        setTotalNftCount(totalCount);
-        setHasEstimatedCount(true);
-        
-        // Update the NFT state based on whether we're loading more or initial load
-        if (loadMore) {
-          setUserNfts(prevNfts => [...prevNfts, ...validNfts]);
+        // First check for nftUsersTokens format
+        if (responseData.data?.nftUsersTokens) {
+          nftData = responseData.data.nftUsersTokens;
+          edges = nftData.edges || [];
+          pageInfo = nftData.pageInfo || {};
+          totalCount = nftData.totalCount || 0;
+          
+          console.log(`Found ${edges.length} NFTs via nftUsersTokens format`);
+          console.log(`Page info: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
+          console.log(`Total count from API: ${totalCount}`);
+          
+          // Process edges to create NFTs
+          const processedNfts = edges.map(edge => {
+            const nft = edge.node;
+            if (!nft) return null;
+            
+            // Get image URL
+            let imageUrl = null;
+            
+            // Try media URLs in order of preference
+            if (nft.mediasV2 && nft.mediasV2.length > 0) {
+              // Look for image URL in mediasV2
+              for (const media of nft.mediasV2) {
+                if (!media) continue;
+                
+                // Try each possible field in order of preference
+                if (media.original && typeof media.original === 'string' && media.original.startsWith('http')) {
+                  imageUrl = media.original;
+                  break;
+                } else if (media.originalUri && typeof media.originalUri === 'string' && media.originalUri.startsWith('http')) {
+                  imageUrl = media.originalUri;
+                  break;
+                } else if (media.url && typeof media.url === 'string' && media.url.startsWith('http')) {
+                  imageUrl = media.url;
+                  break;
+                }
+              }
+            }
+            
+            // Collection images as fallback
+            if (!imageUrl && nft.collection && nft.collection.cardImageUrl) {
+              imageUrl = nft.collection.cardImageUrl;
+            }
+            
+            // Process potential IPFS URLs
+            if (imageUrl && imageUrl.startsWith('ipfs://')) {
+              imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+            }
+            
+            // Process potential Arweave URLs
+            if (imageUrl && imageUrl.startsWith('ar://')) {
+              imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+            }
+            
+            return {
+              id: nft.id,
+              name: nft.name || 'Unnamed NFT',
+              tokenId: nft.tokenId,
+              description: nft.description,
+              imageUrl,
+              collection: nft.collection ? {
+                id: nft.collection.id,
+                name: nft.collection.name || 'Unknown Collection',
+                floorPriceEth: nft.collection.floorPriceEth,
+                cardImageUrl: nft.collection.cardImageUrl
+              } : null
+            };
+          }).filter(Boolean);
+          
+          // Update pagination state
+          setHasMoreNfts(pageInfo.hasNextPage);
+          setEndCursor(pageInfo.endCursor);
+          
+          // Update total count
+          setTotalNftCount(totalCount || processedNfts.length);
+          setHasEstimatedCount(totalCount > 0);
+          
+          // Update the NFT state
+          if (loadMore) {
+            setUserNfts(prevNfts => [...prevNfts, ...processedNfts]);
+          } else {
+            setUserNfts(processedNfts);
+          }
+          
+          return; // Early return if successful
+        } 
+        // Check for nfts format
+        else if (responseData.data?.nfts?.items) {
+          const items = responseData.data.nfts.items || [];
+          console.log(`Found ${items.length} NFTs via nfts format`);
+          
+          // Process items
+          const processedNfts = items.map(nft => {
+            return {
+              id: nft.id || nft.token?.id,
+              name: nft.name || nft.token?.name || nft.metadata?.name || `#${nft.tokenId || nft.token?.tokenId}`,
+              tokenId: nft.tokenId || nft.token?.tokenId,
+              description: nft.metadata?.description || '',
+              imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
+              collection: {
+                id: nft.collection?.id,
+                name: nft.collection?.name || nft.token?.symbol || 'Unknown Collection',
+                floorPriceEth: nft.collection?.floorPrice?.value,
+                cardImageUrl: nft.collection?.imageUrl
+              },
+              estimatedValue: nft.estimatedValue
+            };
+          }).filter(item => item.id && item.imageUrl);
+          
+          console.log(`Processed ${processedNfts.length} valid NFTs`);
+          
+          // For now, we'll assume no more NFTs with this format
+          setHasMoreNfts(false);
+          setEndCursor(null);
+          
+          // Update total count
+          setTotalNftCount(processedNfts.length);
+          setHasEstimatedCount(true);
+          
+          // Update the NFT state
+          if (loadMore) {
+            setUserNfts(prevNfts => [...prevNfts, ...processedNfts]);
+          } else {
+            setUserNfts(processedNfts);
+          }
+          
+          return; // Early return if successful
         } else {
-          setUserNfts(validNfts);
+          console.error('Invalid response format:', responseData);
+          throw new Error('Invalid response format: missing NFT data');
         }
-        
-        return; // Early return if direct call succeeds
-        
       } catch (directError) {
         console.error('Direct API call failed:', directError.message);
       }
