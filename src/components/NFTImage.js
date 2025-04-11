@@ -26,8 +26,8 @@ const NFTImage = ({
     
     // Handle IPFS URLs
     if (url.startsWith('ipfs://')) {
-      // Use multiple IPFS gateways with a preference order
-      return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      // Try multiple IPFS gateways to increase chances of success
+      return url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
     }
     
     // Handle Arweave URLs
@@ -40,21 +40,23 @@ const NFTImage = ({
       return `https:${url}`;
     }
     
+    // Fix Art Blocks URLs that are failing (seen in the screenshot)
+    if (url.includes('generator.artblocks.io') && !url.includes('https://')) {
+      return `https://${url.replace(/^https?:\/\//, '')}`;
+    }
+    
     // Sometimes URLs come back with encoding issues or unnecessary parameters
-    // Clean up URLs with problematic characters
     if (url.includes('%')) {
       try {
         // Try to decode the URL if it's encoded
         url = decodeURIComponent(url);
       } catch (e) {
-        // If decoding fails, use the original URL
         console.warn('Failed to decode URL:', url);
       }
     }
     
     // Fix common image CDN issues by removing size parameters
     if (url.includes('warpcast.com') && url.includes('size=')) {
-      // Remove size parameter to get full-size image
       url = url.replace(/([?&])size=\d+/, '$1size=600');
     }
     
@@ -87,24 +89,46 @@ const NFTImage = ({
   const handleError = () => {
     setIsLoading(false);
     
+    // Start with the original URL for logging
+    const originalSrc = src || '';
+    
     // Try different fallback strategies
     if (currentSrc !== fallbackSrc) {
-      // First attempt: Try using the fallback URL
       console.log(`Image load failed for: ${currentSrc}. Trying fallback.`);
+      
+      // Special handling for Art Blocks URLs that might be failing
+      if (originalSrc.includes('artblocks.io') || originalSrc.includes('generator.artblocks')) {
+        // Try an alternative Art Blocks URL format
+        const artBlocksId = originalSrc.split('/').pop();
+        if (artBlocksId) {
+          const altArtBlocksUrl = `https://artblocks-mainnet.s3.amazonaws.com/${artBlocksId.replace(/\.\w+$/, '')}.png`;
+          console.log(`Trying alternative Art Blocks URL: ${altArtBlocksUrl}`);
+          setCurrentSrc(altArtBlocksUrl);
+          return;
+        }
+      }
+      
+      // Try using the fallback URL
       setCurrentSrc(fallbackSrc);
-    } else if (src && src.startsWith('ipfs://')) {
-      // Second attempt: If the original was IPFS, try a different gateway
-      console.log(`Fallback failed. Trying alternate IPFS gateway for: ${src}`);
-      const altIpfsGateway = src.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+    } else if (originalSrc && originalSrc.startsWith('ipfs://')) {
+      // If the original was IPFS, try a different gateway
+      console.log(`Fallback failed. Trying alternate IPFS gateway for: ${originalSrc}`);
+      const altIpfsGateway = originalSrc.replace('ipfs://', 'https://ipfs.io/ipfs/');
       setCurrentSrc(altIpfsGateway);
-    } else if (src && src.includes('ipfs.io')) {
-      // Third attempt: If already using ipfs.io, try a different gateway
+    } else if (originalSrc && originalSrc.includes('ipfs.io')) {
+      // If already using ipfs.io, try a different gateway
       console.log(`IPFS gateway failed. Trying Cloudflare IPFS gateway.`);
-      const altIpfsGateway = src.replace('https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/');
+      const altIpfsGateway = originalSrc.replace('https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/');
       setCurrentSrc(altIpfsGateway);
+    } else if (originalSrc && !originalSrc.includes('placehold.co')) {
+      // Last attempt: Try to fix URL by using an image proxy service
+      console.log(`Trying image proxy for: ${originalSrc}`);
+      // Use imgproxy.net or a similar service (you may need to set up your own)
+      const encodedUrl = encodeURIComponent(originalSrc);
+      setCurrentSrc(`https://images.weserv.nl/?url=${encodedUrl}&default=fallback`);
     } else {
       // Finally give up and show the error state
-      console.log(`All image loading attempts failed for: ${src}`);
+      console.log(`All image loading attempts failed for: ${originalSrc}`);
       setHasError(true);
     }
   };
