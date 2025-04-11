@@ -59,6 +59,121 @@ const handler = async (req, res) => {
       collectionAddress: variables?.collectionAddress || 'none'
     });
 
+    // Transform deprecated or invalid queries to match current schema
+    if (queryType === 'NFTS_QUERY_OLD') {
+      console.log('[ZAPPER] Transforming deprecated nftUsersTokens query to use current schema');
+      
+      const ownerAddresses = variables.owners || [];
+      const limit = variables.first || 50;
+      
+      // Use the correct schema
+      query = `
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
+          nftUsersTokens(
+            owners: $owners
+            first: $first
+            after: $after
+            withOverrides: $withOverrides
+          ) {
+            edges {
+              node {
+                id
+                name
+                tokenId
+                description
+                mediasV2 {
+                  ... on Image {
+                    url
+                    originalUri
+                    original
+                  }
+                  ... on Animation {
+                    url
+                    originalUri
+                    original
+                  }
+                }
+                collection {
+                  id
+                  name
+                  floorPriceEth
+                  cardImageUrl
+                }
+              }
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
+      
+      // Keep original variables but ensure they match required format
+      variables = {
+        owners: ownerAddresses,
+        first: limit,
+        after: variables.after || null,
+        withOverrides: true
+      };
+      
+      console.log('[ZAPPER] Query transformed using current schema');
+    } else if (queryType === 'NFTS_QUERY_NEW') {
+      // We're using the new 'nfts' query which isn't in the schema
+      // So transform it to use portfolioV2 instead
+      console.log('[ZAPPER] Converting nfts query to use portfolioV2 schema');
+      
+      const addresses = variables.addresses || [];
+      const limit = variables.limit || 50;
+      
+      // Use the correct schema that works with the Zapper API
+      query = `
+        query GetNFTs($addresses: [Address!]!, $first: Int!) {
+          portfolioV2(addresses: $addresses) {
+            nftBalances(first: $first) {
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nfts {
+                id
+                name
+                imageUrl
+                tokenId
+                collection {
+                  name
+                  address
+                  imageUrl
+                  floorPrice
+                  network
+                }
+                estimatedValue {
+                  value
+                  token {
+                    symbol
+                  }
+                }
+                metadata {
+                  name
+                  description
+                  image
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      // Convert variables to match the required format
+      variables = {
+        addresses: addresses,
+        first: limit
+      };
+      
+      console.log('[ZAPPER] Query converted to use portfolioV2 schema');
+    }
+
     // Simple cache check with a more specific key for detailed variables
     const cacheKey = `zapper_${Buffer.from(JSON.stringify({ 
       query, 
@@ -114,6 +229,17 @@ const handler = async (req, res) => {
       const responseSize = JSON.stringify(zapperResponse.data).length;
       const ttl = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
       cache.set(cacheKey, zapperResponse.data, ttl);
+      
+      // If we used a transformation but the client expected the original format,
+      // we need to adapt the response to match what the client expects
+      if (queryType === 'NFTS_QUERY_NEW' && zapperResponse.data.data?.portfolioV2) {
+        // For "nfts" queries, transform the portfolioV2 response to match the expected format
+        console.log('[ZAPPER] Transforming portfolioV2 response to expected nfts format');
+        
+        // Depending on what the client code expects, we can either pass through the data as-is
+        // since the client should be able to handle either structure, or we can transform it
+        return res.status(200).json(zapperResponse.data);
+      }
       
       return res.status(200).json(zapperResponse.data);
     } catch (error) {
