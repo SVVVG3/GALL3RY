@@ -31,6 +31,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [walletsExpanded, setWalletsExpanded] = useState(false);
+  
+  // Sorting state
+  const [sortMethod, setSortMethod] = useState('nameAsc'); // Default sort by name A-Z
 
   // Effect for initial search if username is provided
   useEffect(() => {
@@ -367,6 +370,44 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     return count;
   };
 
+  // Sort NFTs based on current sort method
+  const getSortedNfts = () => {
+    if (!userNfts || userNfts.length === 0) return [];
+    
+    const sortedNfts = [...userNfts];
+    
+    switch (sortMethod) {
+      case 'nameAsc': // A-Z by NFT name
+        return sortedNfts.sort((a, b) => {
+          const nameA = (a.name || a.metadata?.name || a.token_id || '').toLowerCase();
+          const nameB = (b.name || b.metadata?.name || b.token_id || '').toLowerCase();
+          return nameA.localeCompare(nameB);
+        });
+        
+      case 'collection': // By collection name
+        return sortedNfts.sort((a, b) => {
+          const collectionA = (a.collection?.name || a.contract_name || '').toLowerCase();
+          const collectionB = (b.collection?.name || b.contract_name || '').toLowerCase();
+          return collectionA.localeCompare(collectionB);
+        });
+        
+      case 'value': // By value (highest first)
+        return sortedNfts.sort((a, b) => {
+          const valueA = a.estimatedValueEth || a.collection?.floorPriceEth || 0;
+          const valueB = b.estimatedValueEth || b.collection?.floorPriceEth || 0;
+          return valueB - valueA; // Sort descending (highest first)
+        });
+        
+      default:
+        return sortedNfts;
+    }
+  };
+
+  // Handle sort method change
+  const handleSortChange = (method) => {
+    setSortMethod(method);
+  };
+
   // Log when NFT data changes
   useEffect(() => {
     console.log(`NFT state updated: ${userNfts.length} NFTs available, has more: ${hasMoreNfts}`);
@@ -500,9 +541,31 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       {/* NFT Grid */}
       {userProfile && (
         <div className="nft-section">
-          <h3>NFT Collection</h3>
+          <div className="nft-section-header">
+            <h3>NFT Collection</h3>
+            <div className="sort-options">
+              <button 
+                className={`sort-option ${sortMethod === 'nameAsc' ? 'active' : ''}`}
+                onClick={() => handleSortChange('nameAsc')}
+              >
+                A-Z
+              </button>
+              <button 
+                className={`sort-option ${sortMethod === 'collection' ? 'active' : ''}`}
+                onClick={() => handleSortChange('collection')}
+              >
+                Collection
+              </button>
+              <button 
+                className={`sort-option ${sortMethod === 'value' ? 'active' : ''}`}
+                onClick={() => handleSortChange('value')}
+              >
+                Value
+              </button>
+            </div>
+          </div>
           <NftGrid 
-            nfts={userNfts} 
+            nfts={getSortedNfts()} 
             onNftClick={handleNftClick} 
             loading={isLoadingNfts} 
             emptyMessage={
