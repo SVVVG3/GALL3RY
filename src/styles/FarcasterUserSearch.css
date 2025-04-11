@@ -137,6 +137,17 @@
   margin-bottom: 0.3rem;
 }
 
+.warpcast-link {
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.warpcast-link:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
+}
+
 /* NFT Count Display */
 .nft-count {
   display: flex;
@@ -153,10 +164,28 @@
   font-style: italic !important;
 }
 
+.nft-count-emoji {
+  margin-right: 0.4rem;
+  font-size: 1.1rem;
+}
+
 .nft-count-number {
   font-weight: 600;
   color: var(--color-primary);
   margin-right: 0.25rem;
+}
+
+.nft-count-more {
+  color: var(--color-primary);
+  font-weight: 600;
+  margin-left: 0.25rem;
+}
+
+.nft-count-estimate {
+  font-size: 0.8rem;
+  color: var(--color-gray-500);
+  font-style: italic;
+  margin-left: 0.4rem;
 }
 
 /* Connected Wallets Dropdown */

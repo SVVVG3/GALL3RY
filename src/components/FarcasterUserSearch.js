@@ -21,6 +21,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [userNfts, setUserNfts] = useState([]);
   const [fetchNftsError, setFetchNftsError] = useState(null);
   
+  // NFT Count state
+  const [totalNftCount, setTotalNftCount] = useState(0);
+  const [hasEstimatedCount, setHasEstimatedCount] = useState(false);
+  
   // Pagination state
   const [hasMoreNfts, setHasMoreNfts] = useState(false);
   const [endCursor, setEndCursor] = useState(null);
@@ -58,6 +62,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setHasMoreNfts(false);
     setEndCursor(null);
     setWalletAddresses([]);
+    setTotalNftCount(0);
+    setHasEstimatedCount(false);
 
     try {
       console.log(`Searching for Farcaster user: ${query}`);
@@ -128,6 +134,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       setIsLoadingMoreNfts(true);
     } else {
       setIsLoadingNfts(true);
+      setTotalNftCount(0);
+      setHasEstimatedCount(false);
     }
     
     setFetchNftsError(null);
@@ -176,6 +184,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               hasNextPage
               endCursor
             }
+            totalCount
           }
         }
       `;
@@ -214,13 +223,29 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         
         const edges = responseData.data.nftUsersTokens.edges || [];
         const pageInfo = responseData.data.nftUsersTokens.pageInfo || {};
+        const totalCount = responseData.data.nftUsersTokens.totalCount || 0;
         
         console.log(`Found ${edges.length} NFTs via direct API call`);
         console.log(`Page info: hasNextPage = ${pageInfo.hasNextPage}, endCursor = ${pageInfo.endCursor}`);
+        console.log(`Total count from API: ${totalCount}`);
         
         // Update pagination state
         setHasMoreNfts(pageInfo.hasNextPage);
         setEndCursor(pageInfo.endCursor);
+        
+        // Update total count if available
+        if (totalCount > 0) {
+          setTotalNftCount(totalCount);
+          setHasEstimatedCount(true);
+        } else if (!loadMore && edges.length > 0) {
+          // If no totalCount but we have results, make a conservative estimate
+          const initialEstimate = edges.length * (pageInfo.hasNextPage ? 2 : 1);
+          setTotalNftCount(initialEstimate);
+          setHasEstimatedCount(true);
+        } else if (loadMore && edges.length > 0) {
+          // Update our estimate when loading more
+          setTotalNftCount(prev => prev + edges.length);
+        }
         
         if (edges.length === 0 && !loadMore) {
           setUserNfts([]);
@@ -341,6 +366,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
     
     await fetchUserNfts(walletAddresses, endCursor, true);
+    
+    // Update our estimate as we load more
+    if (!hasEstimatedCount) {
+      const newEstimate = estimateTotalNftCount();
+      setTotalNftCount(newEstimate);
+      setHasEstimatedCount(true);
+    }
   };
 
   // Handle NFT click to open modal
@@ -443,6 +475,31 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     console.log(`NFT state updated: ${userNfts.length} NFTs available, has more: ${hasMoreNfts}`);
   }, [userNfts, hasMoreNfts]);
 
+  // Try to make a better estimate of total NFT count
+  const estimateTotalNftCount = () => {
+    if (hasEstimatedCount && totalNftCount > 0) {
+      // We already have an estimate from the API
+      return totalNftCount;
+    }
+    
+    if (userNfts.length === 0) {
+      return 0; // No NFTs loaded yet
+    }
+    
+    // If we have loaded NFTs but no totalCount from API
+    const walletCount = getWalletCount();
+    
+    if (walletCount <= 1) {
+      // Just one wallet, return what we have plus a bit more if hasMore is true
+      return userNfts.length * (hasMoreNfts ? 1.5 : 1);
+    } else {
+      // Multiple wallets, make a more aggressive estimate
+      // On average, users have more NFTs than what fits in first page
+      const estimatedNftsPerWallet = userNfts.length / walletCount * 2;
+      return Math.round(estimatedNftsPerWallet * walletCount);
+    }
+  };
+
   // Render component
   return (
     <div className="farcaster-user-search">
@@ -489,12 +546,27 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             )}
             <div className="profile-info">
               <h3 className="display-name">{userProfile.displayName || userProfile.username}</h3>
-              <p className="username">@{userProfile.username} · FID: {userProfile.fid}</p>
+              <p className="username">
+                <a 
+                  href={`https://warpcast.com/${userProfile.username}`} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="warpcast-link"
+                >
+                  @{userProfile.username}
+                </a> · FID: {userProfile.fid}
+              </p>
               
               {/* NFT Count Display */}
               {!isLoadingNfts && userNfts.length > 0 && (
                 <p className="nft-count">
-                  <span className="nft-count-number">{userNfts.length}</span> NFTs in collection
+                  <span role="img" aria-label="framed picture" className="nft-count-emoji">🖼️</span>
+                  <span className="nft-count-number">
+                    {hasEstimatedCount ? totalNftCount : (hasMoreNfts ? estimateTotalNftCount() : userNfts.length)}
+                  </span> 
+                  NFTs in collection
+                  {(hasMoreNfts || totalNftCount > userNfts.length) && 
+                    <span className="nft-count-estimate">{hasEstimatedCount ? "(estimated)" : "(showing " + userNfts.length + ")"}</span>}
                 </p>
               )}
               {isLoadingNfts && (

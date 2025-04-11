@@ -90,10 +90,7 @@ const UserProfilePage = () => {
 const HomePage = () => {
   return (
     <div className="home-container">
-      <div className="hero-section">
-        <p className="subheading">Search Farcaster users to explore their NFT collections</p>
-      </div>
-      
+      <p className="welcome-text">Search Farcaster users to explore their NFT collections</p>
       <FarcasterUserSearch />
     </div>
   );
