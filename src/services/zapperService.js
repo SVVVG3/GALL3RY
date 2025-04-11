@@ -36,16 +36,6 @@ const zapperService = {
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`API error (${response.status}): ${errorText}`);
-        
-        // Check for specific error cases
-        if (errorText.includes('Username search must be at least 2 characters')) {
-          throw new Error('Please enter at least 2 characters for username search');
-        }
-        
-        if (errorText.includes('Cannot search for ENS names as Farcaster usernames')) {
-          throw new Error('Please enter a valid Farcaster username (without .eth)');
-        }
-        
         throw new Error(`API request failed with status ${response.status}`);
       }
 
@@ -53,23 +43,7 @@ const zapperService = {
 
       if (responseData.errors) {
         console.error('GraphQL response contains errors:', responseData.errors);
-        
-        // Check for common error types and provide friendly messages
-        const errorMsg = responseData.errors[0]?.message || '';
-        
-        if (errorMsg.includes('at least 2 characters')) {
-          throw new Error('Please enter at least 2 characters for username search');
-        } else if (errorMsg.includes('Cannot search for ENS names')) {
-          throw new Error('Please enter a valid Farcaster username (without .eth)');
-        } else if (errorMsg.includes('rate limit') || errorMsg.includes('429')) {
-          throw new Error('Search rate limit reached. Please try again in a moment.');
-        } else if (errorMsg.includes('not found') || errorMsg.includes('404')) {
-          throw new Error('Farcaster user not found. Please check the username and try again.');
-        } else if (errorMsg.toLowerCase().includes('invalid username')) {
-          throw new Error('Invalid Farcaster username format. Please try a different username.');
-        } else {
-          throw new Error(`Error: ${errorMsg || 'Unknown error occurred'}`);
-        }
+        throw new Error(`GraphQL Errors: ${JSON.stringify(responseData.errors)}`);
       }
 
       return responseData.data;
@@ -83,15 +57,6 @@ const zapperService = {
       
       if (error.message.includes('timeout') || error.message.includes('Timeout')) {
         throw new Error('Request timed out. The server might be busy, please try again.');
-      }
-      
-      // Just pass through our friendly error messages
-      if (error.message.includes('Please enter at least 2 characters') ||
-          error.message.includes('Search rate limit reached') ||
-          error.message.includes('Farcaster user not found') ||
-          error.message.includes('Please enter a valid Farcaster username') ||
-          error.message.includes('Invalid Farcaster username format')) {
-        throw error;
       }
       
       // Rethrow with clearer message
@@ -233,11 +198,10 @@ const zapperService = {
       
       console.log(`Fetching Farcaster profile for ${cleanUsername}`);
       
-      // In the search bar, we should ONLY be searching by Farcaster username
-      // The following query is based on the official Zapper API schema documentation
+      // Use the official Zapper GraphQL API
       const zapperQuery = `
-        query FarcasterProfile($username: String) {
-          farcasterProfile(username: $username) {
+        query FarcasterProfile($username: String, $fid: Int) {
+          farcasterProfile(username: $username, fid: $fid) {
             username
             fid
             metadata {
@@ -252,10 +216,12 @@ const zapperService = {
         }
       `;
       
-      // For search bar, we only search by username
-      const variables = { username: cleanUsername };
+      const isUsername = isNaN(parseInt(cleanUsername));
+      const variables = isUsername 
+        ? { username: cleanUsername }
+        : { fid: parseInt(cleanUsername) };
       
-      console.log(`Sending Farcaster query for username: ${cleanUsername}`);
+      console.log(`Sending query with variables:`, JSON.stringify(variables));
       
       // Use our abstracted method which has better error handling
       const data = await this.makeGraphQLRequest(zapperQuery, variables);

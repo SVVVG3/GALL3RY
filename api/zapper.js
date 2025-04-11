@@ -33,36 +33,6 @@ const handler = async (req, res) => {
     if (!query) {
       return res.status(400).json({ error: 'Missing GraphQL query' });
     }
-    
-    // Validate Farcaster profile searches based on Zapper API schema
-    if (query.includes('farcasterProfile')) {
-      console.log('Processing Farcaster profile search:', variables);
-      
-      // For the search bar, we only handle username searches
-      if (variables.username) {
-        // Reject empty or very short usernames (minimum 2 characters)
-        if (!variables.username || variables.username.length < 2) {
-          console.log(`Rejected short Farcaster username search: "${variables.username}"`);
-          return res.status(400).json({ 
-            errors: [{ 
-              message: 'Username search must be at least 2 characters long',
-              extensions: { code: 'BAD_USER_INPUT' } 
-            }]
-          });
-        }
-        
-        // Reject ENS-like inputs in username search
-        if (variables.username.includes('.eth')) {
-          console.log(`Rejected ENS-like username: "${variables.username}"`);
-          return res.status(400).json({ 
-            errors: [{ 
-              message: 'Cannot search for ENS names as Farcaster usernames. Use only Farcaster usernames in search.',
-              extensions: { code: 'BAD_USER_INPUT' } 
-            }]
-          });
-        }
-      }
-    }
 
     // Generate cache key
     const cacheKey = `zapper_${Buffer.from(JSON.stringify({ query, variables })).toString('base64')}`;
@@ -72,8 +42,6 @@ const handler = async (req, res) => {
       console.log('Cache hit for Zapper query');
       return res.status(200).json(cachedData);
     }
-
-    console.log(`Forwarding request to Zapper API with query: ${query.substring(0, 100)}...`);
 
     // Forward to Zapper API
     const zapperResponse = await axios({
@@ -88,7 +56,7 @@ const handler = async (req, res) => {
     });
 
     if (zapperResponse.data.errors) {
-      console.error('GraphQL errors from Zapper API:', zapperResponse.data.errors);
+      console.error('GraphQL errors:', zapperResponse.data.errors);
       return res.status(400).json(zapperResponse.data);
     }
 
