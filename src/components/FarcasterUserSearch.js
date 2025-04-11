@@ -600,9 +600,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               {/* NFT Count Display */}
               {!isLoadingNfts && userNfts.length > 0 && (
                 <p className="nft-count">
-                  <span role="img" aria-label="framed picture" className="nft-count-emoji">🖼️</span>
                   <span className="nft-count-number">
                     {hasEstimatedCount ? totalNftCount : (hasMoreNfts ? estimateTotalNftCount() : userNfts.length)}
+                    {(hasMoreNfts || totalNftCount > userNfts.length) && <span className="nft-count-plus">+</span>}
                   </span> 
                   <span className="nft-count-label">NFTs</span>
                   {(hasMoreNfts || totalNftCount > userNfts.length) && 

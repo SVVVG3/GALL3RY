@@ -159,6 +159,7 @@
   font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
   font-style: normal !important;
   width: 100%;
+  text-align: center;
 }
 
 .nft-count.loading {
@@ -168,15 +169,15 @@
   justify-content: center;
 }
 
-.nft-count-emoji {
-  margin-right: 0.4rem;
-  font-size: 1.1rem;
-}
-
 .nft-count-number {
   font-weight: 600;
   color: var(--color-primary);
   margin-right: 0.25rem;
+}
+
+.nft-count-plus {
+  font-weight: 600;
+  color: var(--color-primary);
 }
 
 .nft-count-label {
@@ -631,11 +632,6 @@
   .nft-filter-input {
     font-size: 14px;
     padding: 12px 36px 12px 14px;
-  }
-  
-  .nft-count-emoji {
-    font-size: 1rem;
-    margin-right: 0.3rem;
   }
   
   .nft-count-estimate {
