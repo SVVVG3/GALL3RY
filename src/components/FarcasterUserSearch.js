@@ -490,6 +490,18 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             <div className="profile-info">
               <h3 className="display-name">{userProfile.displayName || userProfile.username}</h3>
               <p className="username">@{userProfile.username} · FID: {userProfile.fid}</p>
+              
+              {/* NFT Count Display */}
+              {!isLoadingNfts && userNfts.length > 0 && (
+                <p className="nft-count">
+                  <span className="nft-count-number">{userNfts.length}</span> NFTs in collection
+                </p>
+              )}
+              {isLoadingNfts && (
+                <p className="nft-count loading">
+                  Loading NFTs...
+                </p>
+              )}
             </div>
           </div>
           
@@ -571,10 +583,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       {/* NFT Grid */}
       {userProfile && (
         <div className="nft-section">
-          <div className="nft-section-header">
-            <h3 style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}>NFT Collection</h3>
-          </div>
-          
           {/* NFT Filter Search Bar */}
           <div className="nft-filter-container">
             <div className="nft-search-bar">

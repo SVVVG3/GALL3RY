@@ -169,12 +169,12 @@ a:hover {
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 1rem 1rem;
 }
 
 .hero-section {
   text-align: center;
-  padding: 1.5rem 1rem;
+  padding: 0.5rem 1rem;
   max-width: 800px;
   margin: 0 auto;
 }
@@ -183,13 +183,13 @@ a:hover {
   font-size: 2.5rem;
   font-weight: 700;
   color: #1f2937;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .hero-section p {
   font-size: 1.125rem;
   color: #6b7280;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 .hero-actions {
