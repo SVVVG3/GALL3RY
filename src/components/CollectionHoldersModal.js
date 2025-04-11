@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { Link } from 'react-router-dom';
 import LoadingSpinner from './LoadingSpinner';
+import './CollectionHoldersModal.css';
 
 const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   const { loading, collectionHolders, fetchCollectionHolders } = useNFT();
@@ -12,11 +13,37 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
 
   const holders = collectionHolders[collectionAddress] || [];
 
+  // Get relationship badge styles and text
+  const getRelationshipBadge = (relationship) => {
+    switch(relationship) {
+      case 'following':
+        return (
+          <span className="holder-badge badge-following">
+            Following
+          </span>
+        );
+      case 'follower':
+        return (
+          <span className="holder-badge badge-follower">
+            Follower
+          </span>
+        );
+      case 'mutual':
+        return (
+          <span className="holder-badge badge-mutual">
+            Mutual
+          </span>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 collection-holders-modal">
       <div className="bg-[#1c1c1c] rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Collection Holders You Follow</h2>
+          <h2 className="text-2xl font-bold text-white">Collection Holders</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -35,7 +62,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
               <Link
                 to={`/profile/${holder.username}`}
                 key={holder.fid}
-                className="flex items-center gap-4 p-4 rounded-lg hover:bg-[#2c2c2c] transition-colors"
+                className="flex items-center gap-4 p-4 holder-item"
               >
                 <img
                   src={holder.imageUrl}
@@ -43,7 +70,10 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
                   className="w-12 h-12 rounded-full"
                 />
                 <div className="flex-1">
-                  <div className="font-medium text-white">{holder.username}</div>
+                  <div className="font-medium text-white flex items-center">
+                    {holder.username}
+                    {getRelationshipBadge(holder.relationship)}
+                  </div>
                   {holder.displayName && (
                     <div className="text-sm text-gray-400">{holder.displayName}</div>
                   )}
@@ -61,7 +91,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
-            None of the people you follow hold NFTs from this collection
+            None of your connections hold NFTs from this collection
           </div>
         )}
       </div>

@@ -196,14 +196,28 @@ export const NFTProvider = ({ children }) => {
                 }
               }
             }
+            followers {
+              edges {
+                node {
+                  fid
+                  username
+                  displayName
+                  imageUrl
+                  followersCount
+                  custodyAddress
+                  connectedAddresses
+                }
+              }
+            }
           }
         }
       `;
 
-      const followingData = await fetchZapperData(followingQuery, { fid: userFid });
-      const following = followingData.farcasterProfile.following.edges;
+      const profileData = await fetchZapperData(followingQuery, { fid: userFid });
+      const following = profileData.farcasterProfile.following.edges;
+      const followers = profileData.farcasterProfile.followers.edges;
 
-      // Then check each follower for collection ownership
+      // Then check each user for collection ownership
       const holdersQuery = `
         query CheckNFTHolding($addresses: [Address!]!, $collectionAddress: Address!) {
           portfolioV2(addresses: $addresses) {
@@ -219,7 +233,8 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
-      const holders = await Promise.all(
+      // Process following list
+      const followingHolders = await Promise.all(
         following.map(async ({ node }) => {
           const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
           if (!addresses.length) return null;
@@ -233,16 +248,66 @@ export const NFTProvider = ({ children }) => {
             return {
               ...node,
               holdingCount: holderData.portfolioV2.nftBalances.totalCount,
-              nfts: holderData.portfolioV2.nftBalances.nfts
+              nfts: holderData.portfolioV2.nftBalances.nfts,
+              relationship: 'following'
             };
           }
           return null;
         })
       );
 
-      const filteredHolders = holders.filter(Boolean).sort((a, b) => b.followersCount - a.followersCount);
-      setCollectionHolders({ [collectionAddress]: filteredHolders });
-      return filteredHolders;
+      // Process followers list
+      const followerHolders = await Promise.all(
+        followers.map(async ({ node }) => {
+          const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
+          if (!addresses.length) return null;
+
+          const holderData = await fetchZapperData(holdersQuery, {
+            addresses,
+            collectionAddress
+          });
+          
+          if (holderData.portfolioV2.nftBalances.totalCount > 0) {
+            return {
+              ...node,
+              holdingCount: holderData.portfolioV2.nftBalances.totalCount,
+              nfts: holderData.portfolioV2.nftBalances.nfts,
+              relationship: 'follower'
+            };
+          }
+          return null;
+        })
+      );
+
+      // Combine and filter out null values, sort by followers count
+      const filteredFollowingHolders = followingHolders.filter(Boolean);
+      const filteredFollowerHolders = followerHolders.filter(Boolean);
+      
+      // Identify mutual connections (both following and followers)
+      const mutualHolderIds = new Set();
+      
+      filteredFollowingHolders.forEach(following => {
+        const isAlsoFollower = filteredFollowerHolders.some(follower => follower.fid === following.fid);
+        if (isAlsoFollower) {
+          mutualHolderIds.add(following.fid);
+          following.relationship = 'mutual';
+        }
+      });
+      
+      filteredFollowerHolders.forEach(follower => {
+        if (mutualHolderIds.has(follower.fid)) {
+          follower.relationship = 'mutual';
+        }
+      });
+      
+      // Remove duplicates (when someone is both a follower and following)
+      const allHolders = [
+        ...filteredFollowingHolders,
+        ...filteredFollowerHolders.filter(follower => !mutualHolderIds.has(follower.fid))
+      ].sort((a, b) => b.followersCount - a.followersCount);
+
+      setCollectionHolders({ [collectionAddress]: allHolders });
+      return allHolders;
     } catch (err) {
       console.error('Failed to fetch collection holders:', err);
       return [];
