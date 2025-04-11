@@ -20,48 +20,31 @@ export const NFTProvider = ({ children }) => {
     setError(null);
     try {
       const query = `
-        query getNFTsForUser($addresses: [Address!]!, $first: Int!) {
-          nftUsersTokens(
-            owners: $addresses
-            first: $first
-            input: {
-              owners: $addresses
-              first: $first
-              withOverrides: true
-            }
-          ) {
-            edges {
-              node {
-                token {
-                  id
-                  tokenId
+        query GetNFTs($addresses: [Address!]!) {
+          portfolioV2(addresses: $addresses) {
+            nftBalances {
+              nfts {
+                id
+                name
+                imageUrl
+                tokenId
+                collection {
+                  name
+                  address
+                  imageUrl
+                  floorPrice
+                  network
+                }
+                estimatedValue {
+                  value
+                  token {
+                    symbol
+                  }
+                }
+                metadata {
                   name
                   description
-                  estimatedValue {
-                    value
-                    currency
-                  }
-                  collection {
-                    name
-                    address
-                    imageUrl
-                    floorPrice
-                    network
-                  }
-                  media {
-                    url
-                    type
-                    format
-                  }
-                  metadata {
-                    name
-                    description
-                    image
-                    attributes {
-                      trait_type
-                      value
-                    }
-                  }
+                  image
                 }
               }
             }
@@ -70,26 +53,17 @@ export const NFTProvider = ({ children }) => {
       `;
 
       const variables = {
-        addresses,
-        first: 100
+        addresses
       };
 
       const data = await fetchZapperData(query, variables);
-      
-      // Transform the response to match our component expectations
-      const transformedNfts = data.nftUsersTokens.edges.map(edge => ({
-        id: edge.node.token.id,
-        name: edge.node.token.name || edge.node.token.metadata?.name,
-        description: edge.node.token.description || edge.node.token.metadata?.description,
-        imageUrl: edge.node.token.media?.[0]?.url || edge.node.token.metadata?.image || edge.node.token.collection?.imageUrl,
-        tokenId: edge.node.token.tokenId,
-        collection: edge.node.token.collection,
-        estimatedValue: edge.node.token.estimatedValue,
-        metadata: edge.node.token.metadata
+      const nftsWithImages = data.portfolioV2.nftBalances.nfts.map(nft => ({
+        ...nft,
+        imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl
       }));
-
-      setNfts(transformedNfts);
-      setHasMore(transformedNfts.length === 100);
+      
+      setNfts(nftsWithImages);
+      setHasMore(nftsWithImages.length === 20);
       setPage(1);
     } catch (err) {
       setError('Failed to fetch NFTs');

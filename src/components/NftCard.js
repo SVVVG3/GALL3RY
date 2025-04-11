@@ -23,11 +23,11 @@ const NftCard = ({ nft, onClick }) => {
   if (!nft) return null;
 
   // Handle different NFT data structures
-  const name = nft.name || nft.metadata?.name || nft.token_id || 'Unnamed NFT';
-  const collection = nft.collection?.name || nft.contract_name || 'Unknown Collection';
-  
-  // Look for image in multiple possible locations with fallbacks
-  const imageUrl = nft.imageUrl || nft.image || nft.metadata?.image || null;
+  const name = nft.name || nft.metadata?.name || `#${nft.tokenId}`;
+  const collection = nft.collection?.name || 'Unknown Collection';
+  const imageUrl = nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl;
+  const value = nft.estimatedValue?.value;
+  const symbol = nft.estimatedValue?.token?.symbol || 'ETH';
 
   return (
     <>
@@ -49,9 +49,9 @@ const NftCard = ({ nft, onClick }) => {
           <p className="text-sm text-gray-400 truncate">
             {collection}
           </p>
-          {nft.estimatedValue?.value && (
+          {value && (
             <p className="text-sm text-gray-400 mt-1">
-              {nft.estimatedValue.value.toLocaleString()} ETH
+              {value.toLocaleString()} {symbol}
             </p>
           )}
         </div>
