@@ -272,7 +272,24 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             // Process the transfer timestamp data
             let latestTransferTimestamp = null;
             if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
-              latestTransferTimestamp = Math.max(...nft.transfers.edges.map(edge => edge.node.timestamp || 0));
+              // Try to extract timestamps from transfers
+              const timestamps = nft.transfers.edges
+                .filter(edge => edge.node && typeof edge.node.timestamp === 'number')
+                .map(edge => edge.node.timestamp);
+              
+              if (timestamps.length > 0) {
+                latestTransferTimestamp = Math.max(...timestamps);
+                console.log(`NFT ${nft.id} (${nft.name}) has transfer timestamp: ${new Date(latestTransferTimestamp * 1000).toISOString()}`);
+              }
+            } else {
+              // If no transfer data, use a heuristic based on tokenId
+              // Newer NFTs in a collection often have higher tokenIds
+              const tokenIdNum = parseInt(nft.tokenId, 10);
+              if (!isNaN(tokenIdNum)) {
+                // Create a pseudo-timestamp from tokenId (just for relative sorting)
+                latestTransferTimestamp = tokenIdNum;
+                console.log(`NFT ${nft.id} (${nft.name}) using tokenId for sort: ${tokenIdNum}`);
+              }
             }
             
             // Default fallback image (important for mobile UX)
@@ -555,10 +572,38 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         
       case 'recent': // By most recent transfer (latest first)
         return sortedNfts.sort((a, b) => {
-          // Use transfer timestamp if available
-          const timestampA = a.latestTransferTimestamp || a.timestamp || 0;
-          const timestampB = b.latestTransferTimestamp || b.timestamp || 0;
-          return timestampB - timestampA; // Sort descending (newest first)
+          // First check for actual timestamp data
+          const hasTimestampA = typeof a.latestTransferTimestamp === 'number' && a.latestTransferTimestamp > 0;
+          const hasTimestampB = typeof b.latestTransferTimestamp === 'number' && b.latestTransferTimestamp > 0;
+          
+          // If both have timestamps, compare them
+          if (hasTimestampA && hasTimestampB) {
+            return b.latestTransferTimestamp - a.latestTransferTimestamp;
+          }
+          
+          // If only one has a timestamp, prioritize it
+          if (hasTimestampA) return -1;
+          if (hasTimestampB) return 1;
+          
+          // If neither has a timestamp, try to compare by tokenId (newer NFTs often have higher tokenIds)
+          const tokenIdA = parseInt(a.tokenId || '0', 10);
+          const tokenIdB = parseInt(b.tokenId || '0', 10);
+          
+          if (!isNaN(tokenIdA) && !isNaN(tokenIdB)) {
+            return tokenIdB - tokenIdA; // Higher tokenId is likely more recent
+          }
+          
+          // If all else fails, sort by collection name and then token name
+          const collectionA = (a.collection?.name || '').toLowerCase();
+          const collectionB = (b.collection?.name || '').toLowerCase();
+          
+          if (collectionA !== collectionB) {
+            return collectionA.localeCompare(collectionB);
+          }
+          
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          return nameA.localeCompare(nameB);
         });
         
       default:
