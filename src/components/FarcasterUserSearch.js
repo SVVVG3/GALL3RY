@@ -34,6 +34,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // Sorting state
   const [sortMethod, setSortMethod] = useState('nameAsc'); // Default sort by name A-Z
+  
+  // NFT filter state
+  const [nftFilterText, setNftFilterText] = useState('');
 
   // Effect for initial search if username is provided
   useEffect(() => {
@@ -402,10 +405,37 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return sortedNfts;
     }
   };
+  
+  // Filter NFTs based on the filter text
+  const getFilteredNfts = () => {
+    const sortedNfts = getSortedNfts();
+    
+    if (!nftFilterText.trim()) {
+      return sortedNfts; // Return all sorted NFTs if no filter text
+    }
+    
+    const filterTextLower = nftFilterText.toLowerCase().trim();
+    
+    return sortedNfts.filter(nft => {
+      // Get token name, defaulting to empty string if undefined
+      const tokenName = (nft.name || nft.metadata?.name || '').toLowerCase();
+      
+      // Get collection name, defaulting to empty string if undefined
+      const collectionName = (nft.collection?.name || nft.contract_name || '').toLowerCase();
+      
+      // Return true if either token name or collection name contains the filter text
+      return tokenName.includes(filterTextLower) || collectionName.includes(filterTextLower);
+    });
+  };
 
   // Handle sort method change
   const handleSortChange = (method) => {
     setSortMethod(method);
+  };
+  
+  // Clear filter text
+  const clearFilter = () => {
+    setNftFilterText('');
   };
 
   // Log when NFT data changes
@@ -543,6 +573,29 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         <div className="nft-section">
           <div className="nft-section-header">
             <h3 style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}>NFT Collection</h3>
+          </div>
+          
+          {/* NFT Filter Search Bar */}
+          <div className="nft-filter-container">
+            <div className="nft-search-bar">
+              <input
+                type="text"
+                value={nftFilterText}
+                onChange={(e) => setNftFilterText(e.target.value)}
+                placeholder="Search by NFT or collection name"
+                className="nft-filter-input"
+                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
+              />
+              {nftFilterText && (
+                <button 
+                  onClick={clearFilter}
+                  className="nft-filter-clear"
+                  style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
+                >
+                  ×
+                </button>
+              )}
+            </div>
             <div className="sort-options">
               <button 
                 className={`sort-option ${sortMethod === 'nameAsc' ? 'active' : ''}`}
@@ -567,8 +620,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               </button>
             </div>
           </div>
+          
+          {/* Filtered Results Count */}
+          {nftFilterText && userNfts.length > 0 && (
+            <div className="filter-results-count">
+              Found {getFilteredNfts().length} of {userNfts.length} NFTs
+            </div>
+          )}
+          
           <NftGrid 
-            nfts={getSortedNfts()} 
+            nfts={getFilteredNfts()} 
             onNftClick={handleNftClick} 
             loading={isLoadingNfts} 
             emptyMessage={
@@ -576,12 +637,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 ? "This user has no connected wallets to display NFTs from." 
                 : isLoadingNfts 
                   ? "Loading NFTs..." 
-                  : "No NFTs found for this user's wallets."
+                  : nftFilterText && getFilteredNfts().length === 0
+                    ? `No NFTs found matching "${nftFilterText}"`
+                    : "No NFTs found for this user's wallets."
             }
           />
           
           {/* Load More Button */}
-          {hasMoreNfts && userNfts.length > 0 && (
+          {hasMoreNfts && userNfts.length > 0 && !nftFilterText && (
             <div className="load-more-container">
               <button 
                 className="load-more-button"

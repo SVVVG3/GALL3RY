@@ -186,6 +186,78 @@
   color: var(--color-gray-900);
 }
 
+/* NFT Filter Search Bar */
+.nft-filter-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nft-search-bar {
+  position: relative;
+  flex: 1;
+  max-width: 100%;
+}
+
+.nft-filter-input {
+  width: 100%;
+  padding: 10px 36px 10px 16px;
+  border: 2px solid var(--color-gray-200);
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: white;
+  color: var(--color-gray-700);
+  transition: all 0.2s ease;
+  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  font-style: normal !important;
+}
+
+.nft-filter-input:focus {
+  outline: none;
+  border-color: var(--color-primary-light);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.nft-filter-input::placeholder {
+  color: var(--color-gray-400);
+}
+
+.nft-filter-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--color-gray-500);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 0.5;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.nft-filter-clear:hover {
+  background-color: var(--color-gray-200);
+  color: var(--color-gray-700);
+}
+
+.filter-results-count {
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: var(--color-gray-600);
+  text-align: left;
+  padding-left: 4px;
+}
+
 .sort-options {
   display: flex;
   gap: 8px;
@@ -223,6 +295,16 @@
     gap: 10px;
   }
   
+  .nft-filter-container {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .nft-search-bar {
+    margin-bottom: 8px;
+    width: 100%;
+  }
+  
   .sort-options {
     width: 100%;
     justify-content: space-between;
@@ -232,6 +314,10 @@
     flex: 1;
     text-align: center;
     padding: 6px 0;
+  }
+  
+  .filter-results-count {
+    text-align: center;
   }
 }
 
@@ -383,7 +469,10 @@
   .nft-section-header h3,
   .sort-option,
   .nft-section h3,
-  .sort-options button {
+  .sort-options button,
+  .nft-filter-input,
+  .nft-filter-clear,
+  .filter-results-count {
     font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
     font-style: normal !important;
     text-transform: none !important;
@@ -430,6 +519,16 @@
   .search-button {
     width: 100%;
     border-radius: 8px;
+  }
+  
+  /* NFT Filter mobile styling */
+  .nft-filter-container {
+    margin: 10px 0 15px;
+  }
+  
+  .nft-filter-input {
+    font-size: 14px;
+    padding: 12px 36px 12px 14px;
   }
 }
 
