@@ -6,228 +6,129 @@ const { corsHeaders, cache } = require('./_utils');
  * This helps solve CORS issues and protect API keys
  */
 const handler = async (req, res) => {
-  // Set CORS headers
+  // Set CORS headers for all responses
   Object.entries(corsHeaders).forEach(([key, value]) => {
     res.setHeader(key, value);
   });
 
+  // Handle OPTIONS requests (preflight)
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
 
-  try {
-    if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
+  // Only allow POST requests
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
-    // Get the Zapper API key
+  try {
+    // Get API key from environment variables
     const apiKey = process.env.ZAPPER_API_KEY;
     if (!apiKey) {
-      console.error('Zapper API key is missing');
-      return res.status(500).json({ error: 'Server configuration error' });
+      console.error('[ZAPPER] Missing API key');
+      return res.status(500).json({ 
+        error: 'Configuration error',
+        message: 'Zapper API key is missing'
+      });
     }
 
+    // Parse request body
     const requestBody = req.body || {};
-    let { query, variables } = requestBody;
+    const { query, variables } = requestBody;
 
     if (!query) {
-      return res.status(400).json({ error: 'Missing GraphQL query' });
+      return res.status(400).json({ 
+        error: 'Invalid request',
+        message: 'GraphQL query is required' 
+      });
     }
 
-    // Debug log for query analysis
-    const originalQuery = query;
-    const queryType = 
-      query.includes('farcasterProfile') ? 'FARCASTER_PROFILE' :
-      query.includes('nfts(') ? 'NFTS_QUERY_NEW' :
-      query.includes('nftUsersTokens') ? 'NFTS_QUERY_OLD' : 
-      'UNKNOWN_QUERY';
+    // Log query type for debugging
+    const queryType = query.includes('farcasterProfile') ? 'PROFILE' 
+      : query.includes('nfts(') ? 'NFTS' 
+      : 'OTHER';
+    
+    console.log(`[ZAPPER] Processing ${queryType} query`);
 
-    console.log(`[ZAPPER PROXY] Request type: ${queryType}`);
-    console.log(`[ZAPPER PROXY] Variables: ${JSON.stringify(variables, (key, value) => {
-      // Mask sensitive data like addresses
-      if (key === 'addresses' || key === 'owners' || key === 'ownerAddresses') {
-        if (Array.isArray(value)) {
-          return value.map(addr => typeof addr === 'string' ? 
-            addr.substring(0, 6) + '...' + addr.substring(addr.length - 4) : 
-            'invalid-address');
-        }
-      }
-      return value;
-    })}`);
-
-    // Fix for outdated queries - update to latest schema
-    if (queryType === 'NFTS_QUERY_OLD') {
-      // The old nftUsersTokens query is no longer supported
-      // Transform it to use the new nfts query format
-      console.log('[ZAPPER PROXY] Transforming deprecated nftUsersTokens query to new nfts query format');
-      
-      // Extract owner addresses from variables
-      const ownerAddresses = variables.owners || [];
-      const limit = variables.first || 50;
-      
-      // Create new query compatible with current schema
-      query = `
-        query NFTs($addresses: [String!]!, $limit: Int) {
-          nfts(
-            ownerAddresses: $addresses,
-            limit: $limit
-          ) {
-            items {
-              id
-              tokenId
-              name
-              collection {
-                id
-                name
-                floorPrice {
-                  value
-                  symbol
-                }
-                imageUrl
-              }
-              token {
-                id
-                tokenId
-                name
-                symbol
-                contractAddress
-                networkId
-              }
-              estimatedValue {
-                value
-                token {
-                  symbol
-                }
-              }
-              imageUrl
-              metadata {
-                name
-                description
-                image
-              }
-            }
-          }
-        }
-      `;
-      
-      // Update variables to match new query
-      variables = {
-        addresses: ownerAddresses,
-        limit: limit
-      };
-      
-      console.log('[ZAPPER PROXY] Query transformed');
-    }
-
-    // Generate cache key based on the final query and variables
+    // Simple cache check
     const cacheKey = `zapper_${Buffer.from(JSON.stringify({ query, variables })).toString('base64')}`;
     const cachedData = cache.get(cacheKey);
     
     if (cachedData) {
-      console.log('[ZAPPER PROXY] Cache hit');
+      console.log('[ZAPPER] Cache hit');
       return res.status(200).json(cachedData);
     }
 
-    // Forward to Zapper API with retry mechanism
-    let attempts = 0;
-    const maxAttempts = 3;
-    let lastError = null;
+    console.log(`[ZAPPER] Making request to Zapper API`);
     
-    while (attempts < maxAttempts) {
-      try {
-        console.log(`[ZAPPER PROXY] Attempt ${attempts + 1} to call Zapper API`);
+    // Make the request to Zapper API
+    try {
+      const zapperResponse = await axios({
+        url: 'https://public.zapper.xyz/graphql',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-zapper-api-key': apiKey,
+          'Accept': 'application/json'
+        },
+        data: { query, variables },
+        timeout: 10000
+      });
+
+      // Handle successful response
+      console.log(`[ZAPPER] Request successful`);
+      
+      // Check for GraphQL errors
+      if (zapperResponse.data.errors) {
+        const errorMessages = zapperResponse.data.errors.map(e => e.message).join('; ');
+        console.error(`[ZAPPER] GraphQL errors: ${errorMessages}`);
         
-        // Set up request
-        const zapperResponse = await axios({
-          url: 'https://public.zapper.xyz/graphql',
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-zapper-api-key': apiKey,
-            'User-Agent': 'gall3ry/2.0',
-            'Accept': 'application/json'
-          },
-          data: { query, variables },
-          timeout: 15000 // Increased timeout
+        return res.status(400).json({
+          error: 'GraphQL errors',
+          message: errorMessages,
+          details: zapperResponse.data.errors
         });
-
-        // If there are GraphQL errors, log them and return
-        if (zapperResponse.data.errors) {
-          console.error('[ZAPPER PROXY] GraphQL errors:', JSON.stringify(zapperResponse.data.errors));
-          
-          // Try to provide more helpful error messages
-          const errorMessages = zapperResponse.data.errors.map(err => {
-            if (err.message.includes('nftUsersTokens')) {
-              return "The nftUsersTokens query is deprecated. Please update to use the nfts query.";
-            }
-            return err.message;
-          });
-          
-          return res.status(400).json({
-            error: 'GraphQL errors',
-            errors: zapperResponse.data.errors,
-            helpfulMessage: errorMessages.join(' '),
-            originalQuery: queryType
-          });
-        }
-
-        // Check if the response data has expected structure
-        if (queryType === 'NFTS_QUERY_NEW' && !zapperResponse.data.data?.nfts?.items) {
-          console.warn('[ZAPPER PROXY] Unexpected response structure:', JSON.stringify(zapperResponse.data).substring(0, 200) + '...');
-        }
-        
-        if (queryType === 'FARCASTER_PROFILE' && !zapperResponse.data.data?.farcasterProfile) {
-          console.warn('[ZAPPER PROXY] Farcaster profile response missing expected data');
-        }
-
-        // Cache successful response (with shorter TTL for large responses)
-        const responseSize = JSON.stringify(zapperResponse.data).length;
-        const cacheTTL = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
-        cache.set(cacheKey, zapperResponse.data, cacheTTL);
-        
-        console.log(`[ZAPPER PROXY] API request successful, response size: ${(responseSize / 1024).toFixed(2)} KB`);
-        return res.status(200).json(zapperResponse.data);
-      } catch (error) {
-        attempts++;
-        lastError = error;
-        
-        console.error(`[ZAPPER PROXY] Attempt ${attempts} failed:`, error.message);
-        
-        if (attempts < maxAttempts) {
-          // Exponential backoff
-          const backoffTime = 1000 * Math.pow(2, attempts - 1);
-          console.log(`[ZAPPER PROXY] Retrying in ${backoffTime}ms...`);
-          await new Promise(resolve => setTimeout(resolve, backoffTime));
-        }
       }
-    }
-    
-    // If we get here, all attempts failed
-    console.error('[ZAPPER PROXY] All API attempts failed:', lastError?.message || 'Unknown error');
-    console.error('[ZAPPER PROXY] Original query type:', queryType);
-    
-    // Special handling for common error scenarios
-    if (lastError?.response?.status === 429) {
-      return res.status(429).json({
-        error: 'Rate limit exceeded',
-        message: 'The Zapper API rate limit has been reached. Please try again later.'
+      
+      // Cache the response
+      const ttl = 300; // 5 minutes
+      cache.set(cacheKey, zapperResponse.data, ttl);
+      
+      // Return the data
+      return res.status(200).json(zapperResponse.data);
+      
+    } catch (apiError) {
+      console.error(`[ZAPPER] API request failed: ${apiError.message}`);
+      
+      // Enhanced error handling with response inspection
+      if (apiError.response) {
+        const statusCode = apiError.response.status;
+        const responseData = apiError.response.data;
+        
+        console.error(`[ZAPPER] Status: ${statusCode}, Data:`, responseData);
+        
+        return res.status(statusCode).json({
+          error: 'Zapper API error',
+          status: statusCode,
+          message: apiError.message,
+          details: responseData
+        });
+      }
+      
+      if (apiError.code === 'ECONNABORTED') {
+        return res.status(504).json({
+          error: 'Timeout',
+          message: 'Zapper API request timed out'
+        });
+      }
+      
+      return res.status(502).json({
+        error: 'API error',
+        message: apiError.message
       });
     }
-    
-    if (lastError?.code === 'ECONNABORTED') {
-      return res.status(504).json({
-        error: 'Gateway timeout',
-        message: 'The request timed out. The service might be experiencing high load.'
-      });
-    }
-    
-    return res.status(502).json({
-      error: 'API error',
-      message: lastError?.message || 'Unknown error occurred when calling Zapper API',
-      originalQueryType: queryType
-    });
   } catch (error) {
-    console.error('[ZAPPER PROXY] Server error:', error.message);
+    console.error(`[ZAPPER] Server error: ${error.message}`);
     return res.status(500).json({
       error: 'Server error',
       message: error.message

@@ -144,47 +144,47 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.log(`Fetching NFTs for ${addresses.length} wallet addresses:`, addresses);
       console.log(loadMore ? 'Loading more NFTs from cursor: ' + cursor : 'Initial NFT load');
       
-      // Make direct request to the API using raw query for better control
+      // Use the new Zapper API schema - nfts instead of nftUsersTokens
       const query = `
-        query GetNFTs($owners: [Address!]!, $first: Int, $after: String) {
-          nftUsersTokens(
-            owners: $owners
-            first: $first
-            after: $after
-            withOverrides: true
+        query NFTs($addresses: [String!]!, $limit: Int) {
+          nfts(
+            ownerAddresses: $addresses,
+            limit: $limit
           ) {
-            edges {
-              node {
+            items {
+              id
+              tokenId
+              name
+              collection {
                 id
                 name
-                tokenId
-                description
-                mediasV2 {
-                  ... on Image {
-                    url
-                    originalUri
-                    original
-                  }
-                  ... on Animation {
-                    url
-                    originalUri
-                    original
-                  }
+                floorPrice {
+                  value
+                  symbol
                 }
-                collection {
-                  id
-                  name
-                  floorPriceEth
-                  cardImageUrl
+                imageUrl
+              }
+              token {
+                id
+                tokenId
+                name
+                symbol
+                contractAddress
+                networkId
+              }
+              estimatedValue {
+                value
+                token {
+                  symbol
                 }
               }
-              cursor
+              imageUrl
+              metadata {
+                name
+                description
+                image
+              }
             }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-            totalCount
           }
         }
       `;
@@ -199,187 +199,121 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           body: JSON.stringify({
             query,
             variables: { 
-              owners: addresses,
-              first: 100, // Increased batch size for better performance
-              after: cursor
+              addresses: addresses,
+              limit: 100 // Increased batch size for better performance
             }
           })
         });
         
         if (!response.ok) {
+          console.error('Direct API call failed:', response.status);
           throw new Error(`API call failed with status: ${response.status}`);
         }
         
         const responseData = await response.json();
-        console.log('API response:', responseData);
         
         if (responseData.errors) {
+          console.error('GraphQL errors:', responseData.errors);
           throw new Error(`GraphQL errors: ${JSON.stringify(responseData.errors)}`);
         }
         
-        if (!responseData.data || !responseData.data.nftUsersTokens) {
-          throw new Error('Invalid response format: missing nftUsersTokens data');
+        if (!responseData.data || !responseData.data.nfts) {
+          console.error('Invalid response format:', responseData);
+          throw new Error('Invalid response format: missing nfts data');
         }
         
-        const edges = responseData.data.nftUsersTokens.edges || [];
-        const pageInfo = responseData.data.nftUsersTokens.pageInfo || {};
-        const totalCount = responseData.data.nftUsersTokens.totalCount || 0;
+        // Using the new API format which has items array instead of edges
+        const items = responseData.data.nfts.items || [];
         
-        console.log(`Found ${edges.length} NFTs via direct API call`);
-        console.log(`Page info: hasNextPage = ${pageInfo.hasNextPage}, endCursor = ${pageInfo.endCursor}`);
-        console.log(`Total count from API: ${totalCount}`);
+        console.log(`Found ${items.length} NFTs via direct API call`);
         
-        // Update pagination state
-        // If we have a hard-coded limit of 100 but have exactly 100 NFTs, it's likely there are more
-        // Some APIs return a fixed limit of 100 for totalCount
-        const forceHasMore = totalCount === 100 && edges.length === 100;
-        setHasMoreNfts(pageInfo.hasNextPage || forceHasMore);
-        setEndCursor(pageInfo.endCursor);
-        
-        // If we get exact totalCount of 100 (suspiciously round number), 
-        // it might be API's hard limit rather than actual count
-        const isPossiblyHardLimit = totalCount === 100 || totalCount === 99;
-        
-        // Update total count if available, but handle potential API limits
-        if (totalCount > 0 && !isPossiblyHardLimit) {
-          // Trust the API's count if it's not exactly 100
-          setTotalNftCount(totalCount);
-          setHasEstimatedCount(true);
-        } else if (totalCount > 0 && isPossiblyHardLimit) {
-          // For suspicious values like exactly 100, make a more aggressive estimate
-          const estimatedCount = Math.max(totalCount, getWalletCount() * 50);
-          setTotalNftCount(estimatedCount);
-          setHasEstimatedCount(true);
-        } else if (!loadMore && edges.length > 0) {
-          // If no totalCount but we have results, make a more aggressive estimate
-          // Account for multiple wallets
-          const walletCount = getWalletCount();
-          const initialEstimate = edges.length * (pageInfo.hasNextPage ? 3 : 1.5) * Math.max(1, walletCount);
-          setTotalNftCount(Math.round(initialEstimate));
-          setHasEstimatedCount(true);
-        } else if (loadMore && edges.length > 0) {
-          // Update our estimate when loading more
-          setTotalNftCount(prev => Math.max(prev, userNfts.length + edges.length + (pageInfo.hasNextPage ? edges.length : 0)));
-        }
-        
-        if (edges.length === 0 && !loadMore) {
-          setUserNfts([]);
-          return;
-        }
-        
-        // Process the NFTs
-        const processedNfts = edges.map(edge => {
-          const nft = edge.node;
-          if (!nft) return null;
-          
-          // Get image URL
-          let imageUrl = null;
-          
-          // Try media URLs in order of preference
-          if (nft.mediasV2 && nft.mediasV2.length > 0) {
-            // Look for image URL in mediasV2
-            for (const media of nft.mediasV2) {
-              if (!media) continue;
-              
-              // Try each possible field in order of preference
-              if (media.original && typeof media.original === 'string' && media.original.startsWith('http')) {
-                imageUrl = media.original;
-                break;
-              } else if (media.originalUri && typeof media.originalUri === 'string' && media.originalUri.startsWith('http')) {
-                imageUrl = media.originalUri;
-                break;
-              } else if (media.url && typeof media.url === 'string' && media.url.startsWith('http')) {
-                imageUrl = media.url;
-                break;
-              }
-            }
-          }
-          
-          // Collection images as fallback
-          if (!imageUrl && nft.collection && nft.collection.cardImageUrl) {
-            imageUrl = nft.collection.cardImageUrl;
-          }
-          
-          // Process potential IPFS URLs
-          if (imageUrl && imageUrl.startsWith('ipfs://')) {
-            imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
-          }
-          
-          // Process potential Arweave URLs
-          if (imageUrl && imageUrl.startsWith('ar://')) {
-            imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
-          }
-          
-          // Default placeholder
-          if (!imageUrl) {
-            imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
-          }
-          
-          // For debugging
-          console.log(`NFT ${nft.name || nft.id}: Using image URL: ${imageUrl}`);
-          
+        // Process and normalize the NFT data to make it compatible with our components
+        const processedNfts = items.map(nft => {
           return {
-            id: nft.id,
-            name: nft.name || 'Unnamed NFT',
-            tokenId: nft.tokenId,
-            description: nft.description,
-            imageUrl: imageUrl,
-            collection: nft.collection ? {
-              id: nft.collection.id,
-              name: nft.collection.name || 'Unknown Collection',
-              floorPriceEth: nft.collection.floorPriceEth,
-              imageUrl: nft.collection.cardImageUrl
-            } : null,
-            token_id: nft.tokenId
+            id: nft.id || nft.token?.id,
+            name: nft.name || nft.token?.name || nft.metadata?.name || `#${nft.tokenId || nft.token?.tokenId}`,
+            tokenId: nft.tokenId || nft.token?.tokenId,
+            description: nft.metadata?.description || '',
+            imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
+            collection: {
+              id: nft.collection?.id,
+              name: nft.collection?.name || nft.token?.symbol || 'Unknown Collection',
+              floorPriceEth: nft.collection?.floorPrice?.value,
+              cardImageUrl: nft.collection?.imageUrl
+            },
+            estimatedValue: nft.estimatedValue,
+            contractAddress: nft.token?.contractAddress,
+            network: getNetworkFromId(nft.token?.networkId)
           };
-        }).filter(Boolean);
+        });
         
-        console.log('Processed NFTs:', processedNfts);
+        // Filter out NFTs with missing critical data
+        const validNfts = processedNfts.filter(nft => nft.id && nft.imageUrl);
+        console.log(`${validNfts.length} NFTs have valid data and images`);
         
-        // Either append to existing NFTs or replace them
+        // For now, we'll say there are no more NFTs with the new API
+        // since we don't have pagination info in the same format
+        const hasNext = false;
+        setHasMoreNfts(hasNext);
+        setEndCursor(null);
+        
+        // Update total count
+        const totalCount = validNfts.length;
+        setTotalNftCount(totalCount);
+        setHasEstimatedCount(true);
+        
+        // Update the NFT state based on whether we're loading more or initial load
         if (loadMore) {
-          setUserNfts(prevNfts => [...prevNfts, ...processedNfts]);
+          setUserNfts(prevNfts => [...prevNfts, ...validNfts]);
         } else {
-          setUserNfts(processedNfts);
+          setUserNfts(validNfts);
         }
         
-      } catch (directApiError) {
-        console.error('Direct API call failed:', directApiError);
+        return; // Early return if direct call succeeds
         
-        // Fallback to the service method
-        console.log('Falling back to zapperService method...');
-        try {
-          const result = await zapperService.getNftsForAddresses(addresses, {
-            first: 100, // Increased batch size
-            after: cursor
-          });
-          
-          if (result && Array.isArray(result.nfts)) {
-            console.log(`Found ${result.nfts.length} NFTs via service fallback`);
-            
-            // Update pagination state with same logic as above
-            const forceHasMore = result.totalCount === 100 && result.nfts.length === 100;
-            setHasMoreNfts(result.pageInfo?.hasNextPage || forceHasMore);
-            setEndCursor(result.pageInfo?.endCursor || null);
-            
-            // Either append to existing NFTs or replace them
-            if (loadMore) {
-              setUserNfts(prevNfts => [...prevNfts, ...result.nfts]);
-            } else {
-              setUserNfts(result.nfts);
-            }
-          } else {
-            console.error('Invalid response from NFT service:', result);
-            setFetchNftsError('Failed to fetch NFTs. Please try again.');
-          }
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError);
-          setFetchNftsError('Failed to fetch NFTs. Please try again.');
-        }
+      } catch (directError) {
+        console.error('Direct API call failed:', directError.message);
       }
+      
+      // Fall back to zapperService method if direct call fails
+      console.log('Falling back to zapperService method...');
+      const result = await zapperService.getNftsForAddresses(addresses);
+      
+      if (!result || !result.nfts) {
+        throw new Error('Failed to fetch NFTs: empty response');
+      }
+      
+      const nfts = result.nfts;
+      console.log(`Fetched ${nfts.length} NFTs via fallback method`);
+      
+      // Update the NFT state
+      if (loadMore) {
+        setUserNfts(prevNfts => [...prevNfts, ...nfts]);
+      } else {
+        setUserNfts(nfts);
+      }
+      
+      // For now, we'll assume no more NFTs with basic implementation
+      setHasMoreNfts(false);
+      setEndCursor(null);
+      
+      // Update total count
+      setTotalNftCount(nfts.length);
+      setHasEstimatedCount(true);
+      
     } catch (error) {
-      console.error('Error fetching NFTs:', error);
-      setFetchNftsError(error.message || 'Failed to fetch NFTs. Please try again.');
+      console.error(loadMore ? 'Error loading more NFTs:' : 'Error fetching NFTs:', error);
+      
+      if (loadMore) {
+        setFetchNftsError('Failed to load more NFTs. Please try again.');
+      } else {
+        setFetchNftsError(
+          error.message.includes('API call failed') 
+            ? 'Error connecting to NFT data service. Please try again later.'
+            : error.message || 'Failed to fetch NFTs. Please try again.'
+        );
+      }
+      
     } finally {
       if (loadMore) {
         setIsLoadingMoreNfts(false);
@@ -389,6 +323,21 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
   
+  // Helper to map network IDs to network names
+  const getNetworkFromId = (networkId) => {
+    if (!networkId) return 'ethereum';
+    
+    const networkMap = {
+      1: 'ethereum',
+      10: 'optimism',
+      137: 'polygon',
+      42161: 'arbitrum',
+      8453: 'base'
+    };
+    
+    return networkMap[networkId] || 'ethereum';
+  };
+
   // Handle loading more NFTs
   const handleLoadMore = async () => {
     if (isLoadingMoreNfts || !hasMoreNfts || !endCursor || walletAddresses.length === 0) {
