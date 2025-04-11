@@ -19,53 +19,48 @@ const zapperService = {
   async makeGraphQLRequest(query, variables) {
     try {
       console.log(`Sending GraphQL request to ${SERVER_URL}/api/zapper`);
-      const response = await axios({
-        url: `${SERVER_URL}/api/zapper`,
-        method: 'post',
-        data: {
+      
+      // Use fetch API instead of axios for better compatibility with mobile browsers
+      const response = await fetch(`${SERVER_URL}/api/zapper`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           query,
           variables,
-        },
-        timeout: 10000, // 10 second timeout to prevent hanging
+        }),
+        // No explicit timeout - rely on browser's default
       });
 
-      if (response.data.errors) {
-        console.error('GraphQL response contains errors:', response.data.errors);
-        throw new Error(`GraphQL Errors: ${JSON.stringify(response.data.errors)}`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API error (${response.status}): ${errorText}`);
+        throw new Error(`API request failed with status ${response.status}`);
       }
 
-      return response.data.data;
+      const responseData = await response.json();
+
+      if (responseData.errors) {
+        console.error('GraphQL response contains errors:', responseData.errors);
+        throw new Error(`GraphQL Errors: ${JSON.stringify(responseData.errors)}`);
+      }
+
+      return responseData.data;
     } catch (error) {
       console.error('Error making Zapper GraphQL request:', error.message);
       
-      // Enhance error handling for common connection issues
-      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
-        throw new Error(`Cannot connect to API server: ${SERVER_URL}. The server might be down or not running.`);
+      // Simplified error handling for better error messages on mobile
+      if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed')) {
+        throw new Error('Network error. Please check your internet connection and try again.');
       }
       
-      if (error.code === 'ETIMEDOUT' || error.code === 'ESOCKETTIMEDOUT') {
-        throw new Error(`Connection to API server timed out. Please check if the server is running.`);
-      }
-      
-      if (error.response) {
-        console.error('Response error data:', error.response.data);
-        console.error('Response error status:', error.response.status);
-        
-        if (error.response.status === 404) {
-          throw new Error(`API endpoint not found (404). Please check if the server is running correctly.`);
-        }
-        
-        if (error.response.status === 500) {
-          throw new Error(`Server error (500). The API server encountered an internal error.`);
-        }
-      } else if (error.request) {
-        // Request was made but no response received
-        console.error('No response received:', error.request);
-        throw new Error('No response from API server. Please check your connection or if the server is running.');
+      if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+        throw new Error('Request timed out. The server might be busy, please try again.');
       }
       
       // Rethrow with clearer message
-      throw error;
+      throw new Error(`Failed to load data: ${error.message}`);
     }
   },
 
@@ -198,7 +193,10 @@ const zapperService = {
         throw new Error('Username or FID is required');
       }
       
-      console.log(`Fetching Farcaster profile for ${usernameOrFid}`);
+      // Clean up username input
+      const cleanUsername = usernameOrFid.trim().replace('@', '');
+      
+      console.log(`Fetching Farcaster profile for ${cleanUsername}`);
       
       // Use the official Zapper GraphQL API
       const zapperQuery = `
@@ -218,15 +216,19 @@ const zapperService = {
         }
       `;
       
-      const isUsername = isNaN(parseInt(usernameOrFid));
+      const isUsername = isNaN(parseInt(cleanUsername));
       const variables = isUsername 
-        ? { username: usernameOrFid }
-        : { fid: parseInt(usernameOrFid) };
-        
+        ? { username: cleanUsername }
+        : { fid: parseInt(cleanUsername) };
+      
+      console.log(`Sending query with variables:`, JSON.stringify(variables));
+      
+      // Use our abstracted method which has better error handling
       const data = await this.makeGraphQLRequest(zapperQuery, variables);
       
       if (!data?.farcasterProfile) {
-        throw new Error(`Could not find Farcaster profile for ${usernameOrFid}`);
+        console.warn(`No Farcaster profile found for ${cleanUsername}`);
+        throw new Error(`Could not find Farcaster profile for ${cleanUsername}`);
       }
       
       console.log(`Found Farcaster user: ${data.farcasterProfile.username} (FID: ${data.farcasterProfile.fid})`);
@@ -235,28 +237,30 @@ const zapperService = {
       // Get the best avatar URL
       let avatarUrl = data.farcasterProfile.metadata?.imageUrl || '';
       
+      // Log the original avatar URL for debugging
+      console.log(`Original avatar URL: ${avatarUrl}`);
+      
       // If it's a Warpcast URL, make sure it doesn't have a small size parameter
       if (avatarUrl && avatarUrl.includes('warpcast.com') && avatarUrl.includes('size=')) {
         // Remove size parameter to get full-size image
         avatarUrl = avatarUrl.replace(/([?&])size=\d+/, '$1size=600');
+        console.log(`Updated avatar URL: ${avatarUrl}`);
       }
-      
-      console.log(`Avatar URL from API: ${avatarUrl}`);
       
       // Return profile with normalized field names
       return {
         fid: data.farcasterProfile.fid,
         username: data.farcasterProfile.username,
         displayName: data.farcasterProfile.metadata?.displayName || '',
-        bio: data.farcasterProfile.metadata?.description || '',
+        description: data.farcasterProfile.metadata?.description || '',
         avatarUrl: avatarUrl,
-        warpcast: data.farcasterProfile.metadata?.warpcast || null,
-        connectedAddresses: data.farcasterProfile.connectedAddresses || [],
-        custodyAddress: data.farcasterProfile.custodyAddress || null
+        warpcastUrl: data.farcasterProfile.metadata?.warpcast?.url || '',
+        custodyAddress: data.farcasterProfile.custodyAddress,
+        connectedAddresses: data.farcasterProfile.connectedAddresses || []
       };
     } catch (error) {
       console.error('Error fetching Farcaster profile:', error);
-      throw error;
+      throw new Error(`Failed to find Farcaster profile: ${error.message}`);
     }
   },
 

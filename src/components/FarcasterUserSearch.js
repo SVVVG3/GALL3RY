@@ -55,11 +55,24 @@ const FarcasterUserSearch = ({ initialUsername }) => {
 
     try {
       console.log(`Searching for Farcaster user: ${query}`);
-      const profile = await zapperService.getFarcasterProfile(query);
-      // Add detailed logging of the profile structure
-      console.log('Profile from Zapper API:', profile);
-      console.log('Avatar URL path:', profile.avatarUrl);
       
+      // Clean username input by removing @ symbol if present and trim whitespace
+      const cleanQuery = query.trim().replace(/^@/, '');
+      
+      // Add a slight delay to prevent rapid clicking issues on mobile
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Show mobile-friendly error for empty searches
+      if (!cleanQuery) {
+        setSearchError('Please enter a Farcaster username');
+        setIsSearching(false);
+        return;
+      }
+      
+      // Fetch the profile
+      const profile = await zapperService.getFarcasterProfile(cleanQuery);
+      
+      // Set profile data in state immediately when received
       setUserProfile(profile);
       console.log('Profile found:', profile);
       
@@ -71,9 +84,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           ...(profile.custodyAddress ? [profile.custodyAddress] : [])
         ].filter(Boolean);
         
-        setWalletAddresses(addresses);
-        
+        // Prevent concurrent fetches - important for mobile
         if (addresses.length > 0) {
+          setWalletAddresses(addresses);
           await fetchUserNfts(addresses);
         } else {
           console.log('No addresses found for this user to fetch NFTs');
@@ -81,7 +94,17 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       }
     } catch (error) {
       console.error('Error searching for user:', error);
-      setSearchError(error.message || 'Failed to find Farcaster user. Please try again.');
+      
+      // Provide more specific error messages to help users
+      if (error.message.includes('Could not find Farcaster profile')) {
+        setSearchError(`Could not find a Farcaster profile for "${query}". Please check the username and try again.`);
+      } else if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed') || error.message.includes('Network error')) {
+        setSearchError('Network error. Please check your internet connection and try again.');
+      } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+        setSearchError('Request timed out. The server might be busy, please try again later.');
+      } else {
+        setSearchError(error.message || 'Failed to find Farcaster user. Please try again.');
+      }
     } finally {
       setIsSearching(false);
     }
