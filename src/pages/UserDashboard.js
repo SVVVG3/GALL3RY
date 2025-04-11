@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import folderService from '../services/folderService';
 import FolderGrid from '../components/FolderGrid';
 import FolderDetail from '../components/FolderDetail';
+import SignInButton from '../components/SignInButton';
 import config from '../config';
 import '../styles/folder.css';
 
 const UserDashboard = () => {
+  const navigate = useNavigate();
   const { isAuthenticated, profile, token } = useAuth();
   const [userFolders, setUserFolders] = useState([]);
   const [publicFolders, setPublicFolders] = useState([]);
@@ -19,6 +22,14 @@ const UserDashboard = () => {
     description: '',
     isPublic: false
   });
+
+  // Check authentication and redirect if needed
+  useEffect(() => {
+    if (!isAuthenticated) {
+      // Redirect to home page if not authenticated
+      navigate('/');
+    }
+  }, [isAuthenticated, navigate]);
 
   // Fetch the user's folders
   useEffect(() => {
@@ -187,7 +198,7 @@ const UserDashboard = () => {
         <div className="auth-needed">
           <h2>Sign In Required</h2>
           <p>Please sign in to view and manage your folders</p>
-          <button className="auth-button">Sign In with Farcaster</button>
+          <SignInButton />
         </div>
       </div>
     );

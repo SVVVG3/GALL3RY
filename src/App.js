@@ -14,7 +14,6 @@ import PublicFolderManager from './components/PublicFolderManager';
 import { useAuth } from './contexts/AuthContext';
 import zapperService from './services/zapperService';
 import UserDashboard from './pages/UserDashboard';
-import LoginPage from './pages/LoginPage';
 import { AuthProvider } from './contexts/AuthContext';
 import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
@@ -56,7 +55,6 @@ function App() {
             <main className="app-content">
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/login" element={<LoginPage />} />
                 <Route path="/dashboard" element={<UserDashboard />} />
               </Routes>
             </main>
@@ -118,7 +116,7 @@ const HomePage = () => {
 
 // Authentication buttons component
 const AuthButtons = () => {
-  const { isAuthenticated, profile, login, logout } = useAuth();
+  const { isAuthenticated, profile, logout } = useAuth();
   
   if (isAuthenticated && profile) {
     return (
@@ -129,9 +127,7 @@ const AuthButtons = () => {
     );
   }
   
-  return (
-    <NavLink to="/login" className="btn btn-primary">Sign In</NavLink>
-  );
+  return <SignInButton />;
 };
 
 export default App;

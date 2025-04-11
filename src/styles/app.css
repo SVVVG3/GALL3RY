@@ -885,6 +885,12 @@ a:hover {
   margin-bottom: 24px;
 }
 
+/* Style the Farcaster Auth Kit button in the header */
+.auth-actions .fc-btn {
+  height: 40px;
+  font-size: 14px;
+}
+
 .btn-primary {
   background-color: var(--color-primary);
   color: white;

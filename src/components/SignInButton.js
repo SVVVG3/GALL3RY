@@ -4,7 +4,7 @@ import { SignInButton as FarcasterSignInButton, useSignIn } from '@farcaster/aut
 
 /**
  * SignInButton Component
- * Provides a button to sign in/out with Farcaster
+ * Provides a button to sign in/out with Farcaster directly in the header
  */
 const SignInButton = ({ onSuccess }) => {
   const { isAuthenticated, logout } = useAuth();
@@ -15,6 +15,11 @@ const SignInButton = ({ onSuccess }) => {
     try {
       await signOut();
       logout(); // Call our local logout for compatibility
+      
+      // Call success callback if provided
+      if (onSuccess && typeof onSuccess === 'function') {
+        onSuccess();
+      }
     } catch (error) {
       console.error('Error signing out:', error);
     }
@@ -46,7 +51,7 @@ const SignInButton = ({ onSuccess }) => {
   
   // If not authenticated, use the Farcaster SignInButton
   return (
-    <FarcasterSignInButton />
+    <FarcasterSignInButton onSuccess={onSuccess} />
   );
 };
 
