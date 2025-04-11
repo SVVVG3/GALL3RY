@@ -49,6 +49,12 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   }, [initialUsername]);
 
+  // Handle form submission
+  const handleSearch = (e) => {
+    e.preventDefault();
+    performSearch(searchQuery);
+  };
+
   // Shared search logic extracted to a function
   const performSearch = async (query) => {
     if (!query.trim()) return;
