@@ -20,16 +20,25 @@ export const useAuth = () => {
   
   // Get the correct avatar URL with consistent handling
   const getAvatarUrl = () => {
-    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) return 'https://i.pravatar.cc/150?u=demo_user';
+    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) return 'https://via.placeholder.com/150?text=User';
     
-    // First try pfp.url which is typically provided by Farcaster
-    if (farcasterAuth.profile.pfp?.url) return farcasterAuth.profile.pfp.url;
+    // Check metadata.imageUrl which comes directly from Farcaster API
+    if (farcasterAuth.profile.metadata?.imageUrl) {
+      return farcasterAuth.profile.metadata.imageUrl;
+    }
     
-    // Next try the pfp itself which might be a string URL
-    if (typeof farcasterAuth.profile.pfp === 'string') return farcasterAuth.profile.pfp;
+    // Try pfp.url which is sometimes provided by Farcaster Auth Kit
+    if (farcasterAuth.profile.pfp?.url) {
+      return farcasterAuth.profile.pfp.url;
+    }
+    
+    // Try the pfp itself which might be a string URL
+    if (typeof farcasterAuth.profile.pfp === 'string') {
+      return farcasterAuth.profile.pfp;
+    }
     
     // Finally fall back to the avatar placeholder
-    return 'https://i.pravatar.cc/150?u=demo_user';
+    return 'https://via.placeholder.com/150?text=User';
   };
   
   // Merge our context with Farcaster Auth Kit data for backward compatibility

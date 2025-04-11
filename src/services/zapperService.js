@@ -190,12 +190,17 @@ const zapperService = {
   },
 
   /**
-   * Get Farcaster user profile using Zapper API
+   * Get Farcaster user profile by username or FID
    */
   async getFarcasterProfile(usernameOrFid) {
     try {
-      console.log(`Fetching Farcaster profile for: ${usernameOrFid} via Zapper API`);
+      if (!usernameOrFid) {
+        throw new Error('Username or FID is required');
+      }
       
+      console.log(`Fetching Farcaster profile for ${usernameOrFid}`);
+      
+      // Use the official Zapper GraphQL API
       const zapperQuery = `
         query FarcasterProfile($username: String, $fid: Int) {
           farcasterProfile(username: $username, fid: $fid) {
@@ -205,6 +210,7 @@ const zapperService = {
               displayName
               description
               imageUrl
+              warpcast
             }
             custodyAddress
             connectedAddresses
@@ -226,13 +232,25 @@ const zapperService = {
       console.log(`Found Farcaster user: ${data.farcasterProfile.username} (FID: ${data.farcasterProfile.fid})`);
       console.log(`Found ${data.farcasterProfile.connectedAddresses?.length || 0} connected addresses`);
       
+      // Get the best avatar URL
+      let avatarUrl = data.farcasterProfile.metadata?.imageUrl || '';
+      
+      // If it's a Warpcast URL, make sure it doesn't have a small size parameter
+      if (avatarUrl && avatarUrl.includes('warpcast.com') && avatarUrl.includes('size=')) {
+        // Remove size parameter to get full-size image
+        avatarUrl = avatarUrl.replace(/([?&])size=\d+/, '$1size=600');
+      }
+      
+      console.log(`Avatar URL from API: ${avatarUrl}`);
+      
       // Return profile with normalized field names
       return {
         fid: data.farcasterProfile.fid,
         username: data.farcasterProfile.username,
         displayName: data.farcasterProfile.metadata?.displayName || '',
         bio: data.farcasterProfile.metadata?.description || '',
-        avatarUrl: data.farcasterProfile.metadata?.imageUrl || '',
+        avatarUrl: avatarUrl,
+        warpcast: data.farcasterProfile.metadata?.warpcast || null,
         connectedAddresses: data.farcasterProfile.connectedAddresses || [],
         custodyAddress: data.farcasterProfile.custodyAddress || null
       };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, NavLink, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
@@ -17,7 +17,6 @@ import UserDashboard from './pages/UserDashboard';
 import { AuthProvider } from './contexts/AuthContext';
 import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
-import TestFarcasterAuth from './components/TestFarcasterAuth';
 
 // Configure Farcaster Auth Kit
 const farcasterConfig = {
@@ -40,18 +39,6 @@ function App() {
                   </Link>
                 </div>
                 
-                <nav className="main-nav">
-                  <NavLink to="/" end className={({ isActive }) => isActive ? 'active' : ''}>
-                    Home
-                  </NavLink>
-                  <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
-                    My Collections
-                  </NavLink>
-                  <NavLink to="/auth-test" className={({ isActive }) => isActive ? 'active' : ''}>
-                    Auth Test
-                  </NavLink>
-                </nav>
-                
                 <div className="auth-actions">
                   <AuthButtons />
                 </div>
@@ -61,9 +48,7 @@ function App() {
             <main className="app-content">
               <Routes>
                 <Route path="/" element={<HomePage />} />
-                <Route path="/dashboard" element={<UserDashboard />} />
                 <Route path="/user/:username" element={<UserProfilePage />} />
-                <Route path="/auth-test" element={<TestFarcasterAuth />} />
               </Routes>
             </main>
             
@@ -101,50 +86,15 @@ const UserProfilePage = () => {
   );
 };
 
-// Combined HomePage component with Discover functionality
+// HomePage component simplified to just show FarcasterUserSearch
 const HomePage = () => {
-  const [selectedFolderId, setSelectedFolderId] = useState(null);
-  const { isAuthenticated, profile, token } = useAuth();
-  
-  const handleFolderSelect = (folderId) => {
-    setSelectedFolderId(folderId);
-  };
-  
-  // Render the main content based on selected tab
-  const renderContent = () => {
-    if (selectedFolderId) {
-      return (
-        <div className="selected-folder-view">
-          <button 
-            className="back-button" 
-            onClick={() => setSelectedFolderId(null)}
-          >
-            &larr; Back to Gallery
-          </button>
-          
-          <FolderDetail 
-            folderId={selectedFolderId} 
-            isReadOnly={true}
-          />
-        </div>
-      );
-    }
-    
-    return (
-      <>
-        {isAuthenticated && <TestFarcasterAuth />}
-        <FarcasterUserSearch />
-      </>
-    );
-  };
-  
   return (
     <div className="home-container">
       <div className="hero-section">
         <p>Search Farcaster users to explore their NFT collections</p>
       </div>
       
-      {renderContent()}
+      <FarcasterUserSearch />
     </div>
   );
 };

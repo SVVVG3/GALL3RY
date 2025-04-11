@@ -56,6 +56,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     try {
       console.log(`Searching for Farcaster user: ${query}`);
       const profile = await zapperService.getFarcasterProfile(query);
+      // Add detailed logging of the profile structure
+      console.log('Profile from Zapper API:', profile);
+      console.log('Avatar URL path:', profile.avatarUrl);
+      
       setUserProfile(profile);
       console.log('Profile found:', profile);
       
@@ -379,7 +383,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               <img 
                 src={userProfile.avatarUrl} 
                 alt={`${userProfile.displayName || userProfile.username} avatar`}
-                onError={(e) => { e.target.src = 'https://via.placeholder.com/150?text=No+Image'; }}
+                onError={(e) => { 
+                  console.error('Profile avatar failed to load:', userProfile.avatarUrl);
+                  e.target.src = 'https://via.placeholder.com/150?text=No+Image'; 
+                }}
                 className="profile-avatar"
               />
             )}
