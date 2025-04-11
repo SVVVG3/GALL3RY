@@ -26,12 +26,36 @@ const NFTImage = ({
     
     // Handle IPFS URLs
     if (url.startsWith('ipfs://')) {
+      // Use multiple IPFS gateways with a preference order
       return url.replace('ipfs://', 'https://ipfs.io/ipfs/');
     }
     
     // Handle Arweave URLs
     if (url.startsWith('ar://')) {
       return url.replace('ar://', 'https://arweave.net/');
+    }
+    
+    // Handle relative URLs that might be missing the protocol
+    if (url.startsWith('//')) {
+      return `https:${url}`;
+    }
+    
+    // Sometimes URLs come back with encoding issues or unnecessary parameters
+    // Clean up URLs with problematic characters
+    if (url.includes('%')) {
+      try {
+        // Try to decode the URL if it's encoded
+        url = decodeURIComponent(url);
+      } catch (e) {
+        // If decoding fails, use the original URL
+        console.warn('Failed to decode URL:', url);
+      }
+    }
+    
+    // Fix common image CDN issues by removing size parameters
+    if (url.includes('warpcast.com') && url.includes('size=')) {
+      // Remove size parameter to get full-size image
+      url = url.replace(/([?&])size=\d+/, '$1size=600');
     }
     
     return url;
@@ -63,9 +87,24 @@ const NFTImage = ({
   const handleError = () => {
     setIsLoading(false);
     
+    // Try different fallback strategies
     if (currentSrc !== fallbackSrc) {
+      // First attempt: Try using the fallback URL
+      console.log(`Image load failed for: ${currentSrc}. Trying fallback.`);
       setCurrentSrc(fallbackSrc);
+    } else if (src && src.startsWith('ipfs://')) {
+      // Second attempt: If the original was IPFS, try a different gateway
+      console.log(`Fallback failed. Trying alternate IPFS gateway for: ${src}`);
+      const altIpfsGateway = src.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      setCurrentSrc(altIpfsGateway);
+    } else if (src && src.includes('ipfs.io')) {
+      // Third attempt: If already using ipfs.io, try a different gateway
+      console.log(`IPFS gateway failed. Trying Cloudflare IPFS gateway.`);
+      const altIpfsGateway = src.replace('https://ipfs.io/ipfs/', 'https://cloudflare-ipfs.com/ipfs/');
+      setCurrentSrc(altIpfsGateway);
     } else {
+      // Finally give up and show the error state
+      console.log(`All image loading attempts failed for: ${src}`);
       setHasError(true);
     }
   };

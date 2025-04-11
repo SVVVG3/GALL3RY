@@ -281,13 +281,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             for (const media of nft.mediasV2) {
               if (!media) continue;
               
-              if (media.original) {
+              // Try each possible field in order of preference
+              if (media.original && typeof media.original === 'string' && media.original.startsWith('http')) {
                 imageUrl = media.original;
                 break;
-              } else if (media.originalUri) {
+              } else if (media.originalUri && typeof media.originalUri === 'string' && media.originalUri.startsWith('http')) {
                 imageUrl = media.originalUri;
                 break;
-              } else if (media.url) {
+              } else if (media.url && typeof media.url === 'string' && media.url.startsWith('http')) {
                 imageUrl = media.url;
                 break;
               }
@@ -295,14 +296,27 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           }
           
           // Collection images as fallback
-          if (!imageUrl && nft.collection) {
+          if (!imageUrl && nft.collection && nft.collection.cardImageUrl) {
             imageUrl = nft.collection.cardImageUrl;
+          }
+          
+          // Process potential IPFS URLs
+          if (imageUrl && imageUrl.startsWith('ipfs://')) {
+            imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+          }
+          
+          // Process potential Arweave URLs
+          if (imageUrl && imageUrl.startsWith('ar://')) {
+            imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
           }
           
           // Default placeholder
           if (!imageUrl) {
             imageUrl = 'https://via.placeholder.com/400x400?text=No+Image';
           }
+          
+          // For debugging
+          console.log(`NFT ${nft.name || nft.id}: Using image URL: ${imageUrl}`);
           
           return {
             id: nft.id,
