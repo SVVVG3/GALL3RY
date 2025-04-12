@@ -393,3 +393,9 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     hasMore: hasMoreResults,
   };
 };
+
+// Default export for backward compatibility
+export default {
+  getFarcasterProfile,
+  getNftsForAddresses
+};
