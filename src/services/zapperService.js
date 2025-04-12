@@ -497,29 +497,49 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       
       // Updated query structure according to the Zapper API schema
       const portfolioV2Query = `
-        query getPortfolioNfts($addresses: [Address!]!, $first: Int!, $after: String) {
-          portfolioV2(addresses: $addresses) {
-            nftBalances {
-              totalBalanceUSD
-              byCollection(first: $first, after: $after) {
-                edges {
-                  node {
-                    collection {
-                      id
-                      name
-                      address
-                      network
-                      imageUrl
+        query getNftUsersTokens($addresses: [Address!]!, $first: Int!, $after: String) {
+          nftUsersTokens(owners: $addresses, first: $first, after: $after) {
+            edges {
+              node {
+                id
+                tokenId
+                name
+                description
+                collection {
+                  id
+                  name
+                  address
+                  network
+                  imageUrl
+                  floorPrice {
+                    valueUsd
+                  }
+                  medias {
+                    logo {
+                      thumbnail
                     }
-                    balanceUSD
                   }
                 }
-                pageInfo {
-                  endCursor
-                  hasNextPage
+                mediasV3 {
+                  images(first: 1) {
+                    edges {
+                      node {
+                        original
+                        thumbnail
+                      }
+                    }
+                  }
                 }
-                totalCount
+                estimatedValue {
+                  valueUsd
+                }
               }
+              balance
+              balanceUSD
+            }
+            pageInfo {
+              endCursor
+              hasNextPage
             }
           }
         }
@@ -535,48 +555,67 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       
       const response = await makeGraphQLRequest(portfolioV2Query, variables, endpoints, maxRetries);
       
-      if (response.data && response.data.portfolioV2 && response.data.portfolioV2.nftBalances) {
-        const nftData = response.data.portfolioV2.nftBalances;
-        const edges = nftData.byCollection?.edges || [];
+      if (response.data && response.data.nftUsersTokens) {
+        const nftData = response.data.nftUsersTokens;
+        const edges = nftData.edges || [];
         
         console.log(`Found ${edges.length} NFT collections in portfolioV2 response`);
         
         const processedNfts = edges.map(edge => {
           const item = edge.node;
+          
+          // Extract the best image URL from mediasV3
+          let imageUrl = item.collection?.imageUrl || '';
+          let thumbnailUrl = '';
+          
+          // Try to get image from mediasV3 if available
+          if (item.mediasV3?.images?.edges?.length > 0) {
+            const imageNode = item.mediasV3.images.edges[0].node;
+            if (imageNode) {
+              imageUrl = imageNode.original || imageUrl;
+              thumbnailUrl = imageNode.thumbnail || imageUrl;
+            }
+          }
+          
+          // Fallback to collection logo
+          if (!thumbnailUrl && item.collection?.medias?.logo?.thumbnail) {
+            thumbnailUrl = item.collection.medias.logo.thumbnail;
+          }
+          
           return {
-            id: item.collection?.id || '',
-            tokenId: 'collection',
+            id: item.id || '',
+            tokenId: item.tokenId || '',
             contractAddress: item.collection?.address || '',
-            name: item.collection?.name || 'Unknown Collection',
-            description: '',
-            imageUrl: item.collection?.imageUrl || '',
-            imageUrlThumbnail: item.collection?.imageUrl || '',
+            name: item.name || 'Unknown Collection',
+            description: item.description || '',
+            imageUrl: imageUrl,
+            imageUrlThumbnail: thumbnailUrl || imageUrl,
             collection: {
               id: item.collection?.id || '',
               name: item.collection?.name || 'Unknown Collection',
               address: item.collection?.address || '',
               network: item.collection?.network || 'ethereum',
               imageUrl: item.collection?.imageUrl || '',
-              floorPrice: 0,
+              floorPrice: item.collection?.floorPrice?.valueUsd || 0,
               nftsCount: 0,
             },
             estimatedValue: {
-              amount: item.balanceUSD || 0,
+              amount: item.estimatedValue?.valueUsd || 0,
               currency: 'USD',
             },
             network: item.collection?.network || 'ethereum',
-            balanceUSD: item.balanceUSD || 0,
-            isCollection: true // Flag to indicate this is a collection-level item
+            balanceUSD: edge.balanceUSD || 0,
+            isNft: true // Flag to indicate this is an individual NFT
           };
         });
         
-        const pageInfo = nftData.byCollection?.pageInfo || {};
+        const pageInfo = nftData.pageInfo || {};
         
         return {
           nfts: processedNfts,
           cursor: pageInfo.endCursor || null,
           hasMore: pageInfo.hasNextPage || false,
-          totalCount: nftData.byCollection?.totalCount || 0
+          totalCount: nftData.edges?.length || 0
         };
       } else {
         console.warn('No NFT data found in portfolioV2 response:', response);
