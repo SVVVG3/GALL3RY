@@ -317,4 +317,79 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
             cursor: currentCursor,
           };
           
-          console.log(`
+          console.log(`Fetching NFTs for address: ${address}, limit: ${nftsVariables.limit}, cursor: ${currentCursor || 'initial'}`);
+          
+          const response = await makeGraphQLRequest(nftsQuery, nftsVariables);
+          
+          if (response.data && response.data.nfts) {
+            const nfts = response.data.nfts.items.map(item => ({
+              id: item.id,
+              tokenId: item.tokenId,
+              contractAddress: item.contractAddress,
+              name: item.name,
+              description: item.description,
+              imageUrl: item.imageUrl,
+              imageUrlThumbnail: item.imageUrlThumbnail,
+              collection: {
+                id: item.collection.id,
+                name: item.collection.name,
+                address: item.collection.address,
+                network: item.collection.network,
+                imageUrl: item.collection.imageUrl,
+                floorPrice: item.collection.floorPrice,
+                nftsCount: item.collection.nftsCount,
+              },
+              estimatedValue: {
+                amount: item.estimatedValue.amount,
+                currency: item.estimatedValue.currency,
+              },
+              lastSalePrice: {
+                amount: item.lastSalePrice.amount,
+                currency: item.lastSalePrice.currency,
+              },
+              network: item.network,
+              attributes: item.attributes.map(attr => ({
+                trait_type: attr.trait_type,
+                value: attr.value,
+              })),
+              marketplaceUrls: item.marketplaceUrls.map(url => ({
+                name: url.name,
+                url: url.url,
+              })),
+            }));
+            
+            allNfts.push(...nfts);
+            
+            if (response.data.nfts.pageInfo.hasNextPage) {
+              currentCursor = response.data.nfts.pageInfo.endCursor;
+            } else {
+              hasNextPage = false;
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching NFTs from Zapper API:', error);
+          throw error;
+        }
+      } catch (error) {
+        console.error('Error fetching NFTs:', error);
+        throw error;
+      }
+    }
+    
+    if (fetchedCount < maxToFetch) {
+      hasNextPage = false;
+    }
+    
+    if (currentCursor) {
+      lastCursor = currentCursor;
+    }
+  }
+  
+  hasMoreResults = lastCursor !== null;
+  
+  return {
+    nfts: allNfts,
+    cursor: lastCursor,
+    hasMore: hasMoreResults,
+  };
+};
