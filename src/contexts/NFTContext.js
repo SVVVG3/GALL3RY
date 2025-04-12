@@ -2,8 +2,8 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { fetchZapperData } from '../services/zapper';
 import axios from 'axios';
 import { ZAPPER_PROXY_URL } from '../config';
-import { AuthContext } from './AuthContext';
-import { WalletContext } from './WalletContext';
+import { useAuth } from './AuthContext';
+import { useWallet } from './WalletContext';
 import zapperService from '../services/zapperService';
 
 const NFTContext = createContext();
@@ -34,8 +34,8 @@ export const NFTProvider = ({ children }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cachingStatus, setCachingStatus] = useState({ status: 'idle', progress: 0 });
 
-  const { user } = useContext(AuthContext);
-  const { connectedWallets, ensNames } = useContext(WalletContext);
+  const { profile } = useAuth();
+  const { connectedWallets, ensNames } = useWallet();
 
   const [collections, setCollections] = useState([]);
   const [chains, setChains] = useState([]);

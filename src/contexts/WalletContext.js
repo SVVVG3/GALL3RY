@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
-import { AuthContext } from './AuthContext';
+import { useAuth } from './AuthContext';
 
 export const WalletContext = createContext();
 
@@ -11,7 +11,7 @@ export const WalletProvider = ({ children }) => {
   const [ensNames, setEnsNames] = useState({});
   const [provider, setProvider] = useState(null);
   
-  const { user } = useContext(AuthContext);
+  const { profile } = useAuth();
   
   // Initialize provider
   useEffect(() => {
@@ -23,7 +23,7 @@ export const WalletProvider = ({ children }) => {
   
   // Load saved wallets from localStorage
   useEffect(() => {
-    if (user) {
+    if (profile) {
       try {
         const savedWallets = localStorage.getItem('connected_wallets');
         if (savedWallets) {
@@ -38,7 +38,7 @@ export const WalletProvider = ({ children }) => {
         console.error('Error loading saved wallets:', error);
       }
     }
-  }, [user]);
+  }, [profile]);
   
   // Save wallets to localStorage when they change
   useEffect(() => {
