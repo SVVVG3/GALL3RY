@@ -4,7 +4,6 @@ import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
 import styled from 'styled-components';
 import { FaEthereum } from 'react-icons/fa';
-import { formatDistanceToNow } from 'date-fns';
 
 /**
  * NftCard component for displaying a single NFT
@@ -135,9 +134,7 @@ const NftCard = ({ nft, onClick }) => {
       estimatedValue: nft.estimatedValue,
     });
     
-    // Priority order for value sources (most accurate first)
-    
-    // 1. Direct valueEth (usually from collection floor price)
+    // Prioritize valueEth directly
     if (nft.valueEth !== undefined && nft.valueEth !== null) {
       return {
         value: nft.valueEth,
@@ -145,16 +142,7 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 2. New estimatedValue format from updated zapperService
-    if (nft.estimatedValue?.amount !== undefined && 
-        nft.estimatedValue.amount !== null) {
-      return {
-        value: nft.estimatedValue.amount,
-        symbol: nft.estimatedValue.currency || 'ETH'
-      };
-    }
-    
-    // 3. Estimated value from the API (older versions)
+    // Then check for estimatedValue with valueWithDenomination
     if (nft.estimatedValue?.valueWithDenomination !== undefined && 
         nft.estimatedValue.valueWithDenomination !== null) {
       return {
@@ -163,94 +151,20 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 4. Legacy estimated value format
-    if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
+    // Then check for consistent format we added
+    if (nft.valueEth !== undefined && nft.valueEth !== null) {
       return {
-        value: nft.estimatedValue.value,
-        symbol: nft.estimatedValue.token?.symbol || 'ETH'
-      };
-    }
-    
-    // 5. Direct estimatedValue as a number
-    if (typeof nft.estimatedValue === 'number' && !isNaN(nft.estimatedValue)) {
-      return {
-        value: nft.estimatedValue,
+        value: nft.valueEth,
         symbol: 'ETH'
       };
     }
     
-    // 6. Collection floor price in ETH
-    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined && 
-        nft.collection.floorPrice.valueWithDenomination !== null) {
-      return {
-        value: nft.collection.floorPrice.valueWithDenomination,
-        symbol: nft.collection.floorPrice.denomination?.symbol || 'ETH'
-      };
-    }
-    
-    // 7. New collection floor price format
-    if (nft.collection?.floorPrice !== undefined && 
-        typeof nft.collection.floorPrice === 'number') {
-      return {
-        value: nft.collection.floorPrice,
-        symbol: 'ETH'
-      };
-    }
-    
-    // 8. Legacy collection floor price
+    // Fallback to collection floor price
     if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
       return {
         value: nft.collection.floorPriceEth,
         symbol: 'ETH'
       };
-    }
-    
-    // 9. Last sale value (only use as fallback)
-    if (nft.lastSalePrice?.amount !== undefined) {
-      return {
-        value: nft.lastSalePrice.amount,
-        symbol: nft.lastSalePrice.currency || 'ETH'
-      };
-    }
-    
-    // 10. Legacy last sale formats
-    if (nft.lastSale?.valueWithDenomination !== undefined && 
-        nft.lastSale.valueWithDenomination !== null) {
-      return {
-        value: nft.lastSale.valueWithDenomination,
-        symbol: nft.lastSale.denomination?.symbol || 'ETH'
-      };
-    }
-    
-    if (nft.lastSale?.valueEth !== undefined && nft.lastSale.valueEth !== null) {
-      return {
-        value: nft.lastSale.valueEth,
-        symbol: 'ETH'
-      };
-    }
-    
-    // 11. Debug value data
-    if (nft._debug_value) {
-      if (nft._debug_value.estimatedValueEth) {
-        return {
-          value: nft._debug_value.estimatedValueEth,
-          symbol: 'ETH'
-        };
-      }
-      
-      if (nft._debug_value.floorPriceEth) {
-        return {
-          value: nft._debug_value.floorPriceEth,
-          symbol: 'ETH'
-        };
-      }
-      
-      if (nft._debug_value.lastSaleValueEth) {
-        return {
-          value: nft._debug_value.lastSaleValueEth,
-          symbol: 'ETH'
-        };
-      }
     }
     
     // Final fallback - return 0 ETH if collection exists
@@ -357,14 +271,6 @@ const NftCard = ({ nft, onClick }) => {
     
     return `${parseFloat(value).toFixed(2)} ETH`;
   };
-  
-  // Format acquisition date
-  const getAcquisitionTime = () => {
-    if (!nft.acquiredAt) return 'Unknown';
-    
-    const date = new Date(nft.acquiredAt);
-    return formatDistanceToNow(date, { addSuffix: true });
-  };
 
   return (
     <CardContainer>
@@ -384,10 +290,6 @@ const NftCard = ({ nft, onClick }) => {
           <FaEthereum />
           <span>{formatEstimatedValue(valueData?.value)}</span>
         </EstimatedValue>
-        
-        <AcquisitionTime>
-          {getAcquisitionTime()}
-        </AcquisitionTime>
       </CardContent>
     </CardContainer>
   );
@@ -466,11 +368,6 @@ const EstimatedValue = styled.div`
   color: #4caf50;
   font-weight: 600;
   font-size: 1rem;
-`;
-
-const AcquisitionTime = styled.div`
-  font-size: 0.75rem;
-  color: #999;
 `;
 
 export default NftCard; 
