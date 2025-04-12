@@ -4,7 +4,6 @@ import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
 
 // Constants
 const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
-const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
 const ZAPPER_API_ENDPOINTS = [
   `${window.location.origin}/api/zapper`, // Use absolute URL with origin to ensure it works in all environments
