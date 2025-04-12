@@ -3,7 +3,8 @@ import './NFTImage.css';
 import Spinner from './Spinner';
 
 /**
- * NFTImage component that displays an NFT image or video with basic loading and error handling
+ * NFTImage component that displays an NFT image or video with basic loading and error handling.
+ * Designed to work within a parent container that handles the aspect ratio.
  */
 const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
   const [mediaSrc, setMediaSrc] = useState('');
@@ -50,50 +51,54 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
     }
   };
 
-  return (
-    <div className={`nft-image-container ${className}`}>
-      {loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <Spinner size="md" />
-        </div>
-      )}
-      
-      {!error && !isVideo && (
-        <img
-          src={mediaSrc}
-          alt={alt}
-          className="nft-image"
-          onLoad={handleMediaLoad}
-          onError={handleMediaError}
-          style={{ display: loading ? 'none' : 'block' }}
-        />
-      )}
+  // If loading, show spinner
+  if (loading) {
+    return (
+      <div className="nft-media-loader">
+        <Spinner size="md" />
+      </div>
+    );
+  }
 
-      {!error && isVideo && (
-        <video
-          src={mediaSrc}
-          className="nft-image"
-          onLoadedData={handleMediaLoad}
-          onError={handleMediaError}
-          style={{ display: loading ? 'none' : 'block' }}
-          autoPlay
-          loop
-          muted
-          playsInline
-          controlsList="nodownload"
+  // If error, show placeholder
+  if (error) {
+    return (
+      <div className="nft-media-error">
+        <img 
+          src="/placeholder.png"
+          alt="NFT Placeholder"
+          className="placeholder-image"
         />
-      )}
-      
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
-          <img 
-            src="/placeholder.png"
-            alt="NFT Placeholder"
-            className="w-12 h-12 opacity-50"
-          />
-        </div>
-      )}
-    </div>
+      </div>
+    );
+  }
+
+  // If video, render video element
+  if (isVideo) {
+    return (
+      <video
+        src={mediaSrc}
+        className={`nft-media ${className}`}
+        onLoadedData={handleMediaLoad}
+        onError={handleMediaError}
+        autoPlay
+        loop
+        muted
+        playsInline
+        controlsList="nodownload"
+      />
+    );
+  }
+
+  // Otherwise render image
+  return (
+    <img
+      src={mediaSrc}
+      alt={alt}
+      className={`nft-media ${className}`}
+      onLoad={handleMediaLoad}
+      onError={handleMediaError}
+    />
   );
 };
 
