@@ -110,7 +110,7 @@ const NftCard = ({ nft, onClick }) => {
     
     // Check for collection image
     if (nft.collection?.imageUrl) return nft.collection.imageUrl;
-    if (nft.collection?.cardImageUrl) return nft.collection.cardImageUrl;
+    if (nft.collection?.cardImage) return nft.collection.cardImage;
     if (nft.collection?.medias?.logo?.thumbnail) return nft.collection.medias.logo.thumbnail;
     
     // Check for token image

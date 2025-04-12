@@ -536,7 +536,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                 network
                 nftStandard
                 type
-                cardImageUrl
+                cardImage
                 floorPrice {
                   valueUsd
                   valueWithDenomination
@@ -583,16 +583,17 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           
           return {
             id: collection.id || '',
-            name: collection.name || 'Unknown Collection',
             address: collection.address || '',
+            name: collection.name || 'Unknown Collection',
             network: collection.network || 'ethereum',
-            imageUrl: collection.cardImageUrl || 
+            nftStandard: collection.nftStandard || '',
+            type: collection.type || 'GENERAL',
+            description: collection.description || '',
+            imageUrl: collection.cardImage || 
                      (collection.medias?.logo?.thumbnail || ''),
             floorPrice: collection.floorPrice?.valueUsd || 0,
             floorPriceEth: collection.floorPrice?.valueWithDenomination || 0,
             totalCount: collection.totalCount || 0,
-            nftStandard: collection.nftStandard || 'ERC_721',
-            type: collection.type || 'GENERAL',
           };
         });
         
@@ -646,7 +647,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                 network
                 nftStandard
                 type
-                cardImageUrl
+                cardImage
                 floorPrice {
                   valueUsd
                   valueWithDenomination
@@ -667,18 +668,18 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                 images(first: 1) {
                   edges {
                     node {
-                      url
-                      previewUrl
-                      largeUrl
+                      original
+                      thumbnail
+                      large
                     }
                   }
                 }
                 animations(first: 1) {
                   edges {
                     node {
-                      url
-                      previewUrl
-                      largeUrl
+                      original
+                      thumbnail
+                      large
                     }
                   }
                 }
@@ -731,25 +732,25 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
         // Try to get image from mediasV3.images first
         if (item.mediasV3?.images?.edges?.length > 0) {
           const imageNode = item.mediasV3.images.edges[0].node;
-          imageUrl = imageNode.url || '';
-          thumbnailUrl = imageNode.previewUrl || imageUrl;
-          largeUrl = imageNode.largeUrl || imageUrl;
+          imageUrl = imageNode.original || '';
+          thumbnailUrl = imageNode.thumbnail || imageUrl;
+          largeUrl = imageNode.large || imageUrl;
         }
         
         // Try to get image from mediasV3.animations if no images
         if (!imageUrl && item.mediasV3?.animations?.edges?.length > 0) {
           const animNode = item.mediasV3.animations.edges[0].node;
-          imageUrl = animNode.url || '';
-          thumbnailUrl = animNode.previewUrl || imageUrl;
-          largeUrl = animNode.largeUrl || imageUrl;
+          imageUrl = animNode.original || '';
+          thumbnailUrl = animNode.thumbnail || imageUrl;
+          largeUrl = animNode.large || imageUrl;
         }
         
         // Fallback to collection media if still no image
         if (!imageUrl) {
-          if (item.collection?.cardImageUrl) {
-            imageUrl = item.collection.cardImageUrl;
-            thumbnailUrl = item.collection.cardImageUrl;
-            largeUrl = item.collection.cardImageUrl;
+          if (item.collection?.cardImage) {
+            imageUrl = item.collection.cardImage;
+            thumbnailUrl = item.collection.cardImage;
+            largeUrl = item.collection.cardImage;
           } else if (item.collection?.medias?.logo?.thumbnail) {
             imageUrl = item.collection.medias.logo.thumbnail;
             thumbnailUrl = item.collection.medias.logo.thumbnail;
@@ -768,11 +769,12 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           name: item.collection?.name || 'Unknown Collection',
           address: item.collection?.address || '',
           network: item.collection?.network || 'ethereum',
-          imageUrl: item.collection?.cardImageUrl || '',
+          imageUrl: item.collection?.cardImage || '',
           floorPrice: item.collection?.floorPrice?.valueUsd || 0,
           floorPriceEth: item.collection?.floorPrice?.valueWithDenomination || 0,
-          nftStandard: item.collection?.nftStandard || 'ERC_721',
+          nftStandard: item.collection?.nftStandard || '',
           type: item.collection?.type || 'GENERAL',
+          description: item.collection?.description || '',
         };
         
         // Debug value info
@@ -824,238 +826,190 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
 };
 
 /**
- * Get NFTs for a specific collection
- * Much more efficient than fetching all NFTs when user only needs to see one collection
- * 
- * @param {string[]} addresses - Wallet addresses to check
+ * Get NFTs for a specific collection with caching
+ * @param {string[]} walletAddresses - Wallet addresses to check
  * @param {string} collectionAddress - The NFT collection contract address
  * @param {object} options - Options for the request
  * @returns {Promise<object>} - NFTs in the collection
  */
 export const getNftsForCollection = async (walletAddresses, collectionAddress, options = {}) => {
-  if (!walletAddresses || walletAddresses.length === 0 || !collectionAddress) {
-    console.warn('Missing required parameters for getNftsForCollection');
-    return { nfts: [], cursor: null, hasMore: false };
+  if (!walletAddresses || walletAddresses.length === 0) {
+    throw new Error('At least one wallet address is required');
   }
   
-  // Normalize addresses to lowercase to ensure consistent caching
-  const normalizedAddresses = walletAddresses.map(addr => addr.toLowerCase());
-  const normalizedCollectionAddress = collectionAddress.toLowerCase();
+  if (!collectionAddress) {
+    throw new Error('Collection address is required');
+  }
   
-  const { 
-    limit = 100, 
+  // Normalize addresses for consistent caching
+  const normalizedAddresses = walletAddresses.map(addr => addr.toLowerCase());
+  const normalizedCollection = collectionAddress.toLowerCase();
+  
+  const {
+    limit = 50,
     cursor = null,
-    bypassCache = false,
-    cacheTTL = NFT_CACHE_TTL,
-    endpoints = ZAPPER_API_ENDPOINTS,
-    maxRetries = 3
+    bypassCache = false
   } = options;
   
-  // Generate a cache key based on addresses, collection and cursor
-  const cacheKey = `collection:${normalizedCollectionAddress}:nfts:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
+  // Generate cache key for this specific collection query
+  const cacheKey = `collection:${normalizedCollection}-owners:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
   
-  // Check cache first if not bypassing
+  // Check cache first
   if (!bypassCache && NFT_CACHE.has(cacheKey)) {
     const cachedData = NFT_CACHE.get(cacheKey);
-    if (cachedData.timestamp > Date.now() - cacheTTL) {
-      console.log(`Using cached NFT data for collection ${normalizedCollectionAddress}`);
+    if (cachedData.timestamp > Date.now() - NFT_CACHE_TTL) {
+      console.log(`Using cached collection NFT data for ${normalizedCollection}`);
       return cachedData.data;
     } else {
-      // Remove expired cache entry
       NFT_CACHE.delete(cacheKey);
     }
   }
   
-  try {
-    console.log(`Fetching NFTs for collection ${normalizedCollectionAddress} from ${normalizedAddresses.length} addresses`);
-    
-    // Use a more targeted GraphQL query that filters by collection address
-    const nftTokensQuery = `
-      query UserNftTokensByCollection(
-        $owners: [Address!]!,
-        $collectionAddresses: [Address!]!,
-        $first: Int = 100,
-        $after: String,
-        $bypassHidden: Boolean = true
+  // GraphQL query for a specific collection
+  const collectionNftsQuery = `
+    query CollectionNfts(
+      $owners: [Address!]!,
+      $addresses: [Address!]!,
+      $networks: [Network!],
+      $first: Int = 50,
+      $after: String
+    ) {
+      nftUsersTokens(
+        owners: $owners, 
+        collections: { addresses: $addresses, networks: $networks },
+        first: $first,
+        after: $after
       ) {
-        nftUsersTokens(
-          owners: $owners,
-          collectionAddresses: $collectionAddresses,
-          first: $first,
-          after: $after,
-          bypassHidden: $bypassHidden
-        ) {
-          edges {
-            node {
-              # Basic token information
+        edges {
+          node {
+            id
+            tokenId
+            name
+            description
+            collection {
               id
-              tokenId
               name
-              description
-              
-              # Collection information
-              collection {
-                id
-                name
-                address
-                network
-                nftStandard
-                type
-                cardImageUrl
-                floorPrice {
-                  valueUsd
-                  valueWithDenomination
-                  denomination {
-                    symbol
-                    network
-                  }
-                }
-                medias {
-                  logo {
-                    thumbnail
-                  }
-                }
-              }
-              
-              # Media assets
-              mediasV3 {
-                images(first: 1) {
-                  edges {
-                    node {
-                      url
-                      previewUrl
-                      largeUrl
-                    }
-                  }
-                }
-                animations(first: 1) {
-                  edges {
-                    node {
-                      url
-                      previewUrl
-                      largeUrl
-                    }
-                  }
-                }
-              }
-              
-              # Value information
-              estimatedValue {
+              address
+              network
+              nftStandard
+              type
+              cardImage
+              floorPrice {
                 valueUsd
-                valueWithDenomination
-                denomination {
-                  symbol
-                  network
+              }
+              medias {
+                logo {
+                  thumbnail
                 }
               }
             }
-            balanceUSD
-            balance
+            mediasV3 {
+              images(first: 1) {
+                edges {
+                  node {
+                    original
+                    thumbnail
+                    large
+                  }
+                }
+              }
+              animations(first: 1) {
+                edges {
+                  node {
+                    original
+                    thumbnail
+                    large
+                  }
+                }
+              }
+            }
+            estimatedValue {
+              valueUsd
+            }
           }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
+          balance
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
         }
       }
-    `;
+    }
+  `;
+  
+  const variables = {
+    owners: normalizedAddresses,
+    addresses: [normalizedCollection],
+    networks: null,  // Auto-detect network
+    first: limit,
+    after: cursor
+  };
+  
+  try {
+    console.log(`Fetching NFTs for collection ${normalizedCollection}`);
     
-    const variables = {
-      owners: normalizedAddresses,
-      collectionAddresses: [normalizedCollectionAddress],
-      first: limit,
-      after: cursor,
-      bypassHidden: true
-    };
-    
-    const response = await makeGraphQLRequest(nftTokensQuery, variables, endpoints, maxRetries);
+    const response = await makeGraphQLRequest(collectionNftsQuery, variables);
     
     if (response.data && response.data.nftUsersTokens) {
       const nftData = response.data.nftUsersTokens;
       const edges = nftData.edges || [];
       
-      console.log(`Found ${edges.length} NFTs in collection ${normalizedCollectionAddress}`);
-      
+      // Process NFTs
       const processedNfts = edges.map(edge => {
         const item = edge.node;
         
-        // Extract the best image URL from mediasV3
+        // Extract image URLs
         let imageUrl = '';
         let thumbnailUrl = '';
         let largeUrl = '';
         
-        // Try to get image from mediasV3.images first
+        // First try images
         if (item.mediasV3?.images?.edges?.length > 0) {
           const imageNode = item.mediasV3.images.edges[0].node;
-          imageUrl = imageNode.url || '';
-          thumbnailUrl = imageNode.previewUrl || imageUrl;
-          largeUrl = imageNode.largeUrl || imageUrl;
+          imageUrl = imageNode.original || '';
+          thumbnailUrl = imageNode.thumbnail || imageUrl;
+          largeUrl = imageNode.large || imageUrl;
         }
         
-        // Try to get image from mediasV3.animations if no images
+        // Then try animations
         if (!imageUrl && item.mediasV3?.animations?.edges?.length > 0) {
           const animNode = item.mediasV3.animations.edges[0].node;
-          imageUrl = animNode.url || '';
-          thumbnailUrl = animNode.previewUrl || imageUrl;
-          largeUrl = animNode.largeUrl || imageUrl;
+          imageUrl = animNode.original || '';
+          thumbnailUrl = animNode.thumbnail || imageUrl;
+          largeUrl = animNode.large || imageUrl;
         }
         
-        // Fallback to collection media if still no image
+        // Fallback to collection images
         if (!imageUrl) {
-          if (item.collection?.cardImageUrl) {
-            imageUrl = item.collection.cardImageUrl;
-            thumbnailUrl = item.collection.cardImageUrl;
-            largeUrl = item.collection.cardImageUrl;
+          if (item.collection?.cardImage) {
+            imageUrl = item.collection.cardImage;
           } else if (item.collection?.medias?.logo?.thumbnail) {
             imageUrl = item.collection.medias.logo.thumbnail;
-            thumbnailUrl = item.collection.medias.logo.thumbnail;
-            largeUrl = item.collection.medias.logo.thumbnail;
           }
         }
         
-        // Get value information
-        const valueUsd = item.estimatedValue?.valueUsd || 0;
-        const valueEth = item.estimatedValue?.valueWithDenomination || 0;
-        const valueCurrency = item.estimatedValue?.denomination?.symbol || 'ETH';
-        
-        // Get collection information
-        const collection = {
-          id: item.collection?.id || '',
-          name: item.collection?.name || 'Unknown Collection',
-          address: item.collection?.address || '',
-          network: item.collection?.network || 'ethereum',
-          imageUrl: item.collection?.cardImageUrl || '',
-          floorPrice: item.collection?.floorPrice?.valueUsd || 0,
-          floorPriceEth: item.collection?.floorPrice?.valueWithDenomination || 0,
-          nftStandard: item.collection?.nftStandard || 'ERC_721',
-          type: item.collection?.type || 'GENERAL',
-        };
-        
         return {
           id: item.id || '',
-          name: item.name || 'Unnamed NFT',
           tokenId: item.tokenId || '',
+          name: item.name || `#${item.tokenId}`,
           description: item.description || '',
-          collection,
+          collectionName: item.collection?.name || 'Unknown Collection',
+          collectionAddress: item.collection?.address || normalizedCollection,
+          network: item.collection?.network || 'ethereum',
           imageUrl,
-          thumbnailUrl,
-          largeUrl,
-          valueUsd,
-          valueEth,
-          valueCurrency,
-          balanceUSD: edge.balanceUSD || 0,
-          balance: edge.balance || 1,
-          isNft: true,
-          _rawData: item // Store raw data for debugging
+          thumbnailUrl: thumbnailUrl || imageUrl,
+          largeImageUrl: largeUrl || imageUrl,
+          estimatedValueUsd: item.estimatedValue?.valueUsd || 0,
+          balance: edge.balance || 1
         };
       });
       
       const result = {
         nfts: processedNfts,
+        collectionName: processedNfts[0]?.collectionName || 'Unknown Collection',
+        collectionAddress: normalizedCollection,
         cursor: nftData.pageInfo?.endCursor || null,
-        hasMore: nftData.pageInfo?.hasNextPage || false,
-        totalNftCount: edges.length,
-        collectionAddress: normalizedCollectionAddress
+        hasMore: nftData.pageInfo?.hasNextPage || false
       };
       
       // Cache the result
@@ -1065,13 +1019,18 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
       });
       
       return result;
-    } else {
-      console.warn('No NFT data found in response for collection:', collectionAddress);
-      return { nfts: [], cursor: null, hasMore: false, collectionAddress: normalizedCollectionAddress };
     }
+    
+    return {
+      nfts: [],
+      collectionName: 'Unknown Collection',
+      collectionAddress: normalizedCollection,
+      cursor: null,
+      hasMore: false
+    };
   } catch (error) {
-    console.error(`Error fetching NFTs for collection ${collectionAddress}:`, error);
-    return { nfts: [], cursor: null, hasMore: false, collectionAddress: normalizedCollectionAddress };
+    console.error(`Error fetching NFTs for collection ${normalizedCollection}:`, error);
+    throw error;
   }
 };
 
@@ -1083,85 +1042,121 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
  */
 export const getFarcasterNftCollections = async (usernameOrFid, options = {}) => {
   try {
-    // First get all addresses associated with the Farcaster profile
+    // First get all addresses for the Farcaster user
     const addresses = await getFarcasterAddresses(usernameOrFid);
     
     if (!addresses || addresses.length === 0) {
       throw new Error(`No addresses found for Farcaster user: ${usernameOrFid}`);
     }
     
-    console.log(`Found ${addresses.length} addresses for Farcaster user ${usernameOrFid}`);
+    // Then get NFT collections using the addresses
+    const {
+      limit = 100,
+      cursor = null,
+      bypassCache = false
+    } = options;
     
-    // Check cache first
-    const cacheKey = `collections:${addresses.join(',')}`;
-    if (nftCache.has(cacheKey)) {
-      const cachedData = nftCache.get(cacheKey);
-      if (Date.now() < cachedData.expiresAt) {
-        console.log(`Using cached collections data for ${usernameOrFid}`);
-        return { ...cachedData.data, addresses };
-      }
-      nftCache.delete(cacheKey); // Clear expired cache
-    }
-    
-    // This query only fetches collections (much lighter than fetching all NFTs)
-    const query = `
-      query NFTCollections($network: Network!, $addresses: [String!]!) {
-        portfolioV2 {
-          nftCollections(
-            network: $network,
-            ownerAddresses: $addresses,
-            limit: ${options.limit || 100}
-          ) {
-            id
-            address
-            name
-            floorPrice {
-              value
-              token {
-                symbol
-              }
-            }
-            totalSupply
-            totalItemsOwned
-            imageUrl
-            ownedItemsPreview {
+    const collectionsQuery = `
+      query UserNftCollections(
+        $owners: [Address!]!,
+        $first: Int = 100,
+        $after: String,
+        $bypassHidden: Boolean = true
+      ) {
+        nftUsersCollections(
+          owners: $owners,
+          first: $first,
+          after: $after,
+          bypassHidden: $bypassHidden
+        ) {
+          edges {
+            node {
+              id
               name
-              imageUrl
-              tokenId
+              address
+              network
+              nftStandard
+              type
+              cardImage
+              floorPrice {
+                valueUsd
+                valueWithDenomination
+                denomination {
+                  symbol
+                  network
+                }
+              }
+              medias {
+                logo {
+                  thumbnail
+                }
+              }
+              totalCount
             }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
           }
         }
       }
     `;
     
     const variables = {
-      network: 'ethereum',
-      addresses: addresses
+      owners: addresses,
+      first: limit,
+      after: cursor,
+      bypassHidden: true
     };
     
-    const response = await fetch(ZAPPER_SERVER_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${ZAPPER_API_KEY}`
-      },
-      body: JSON.stringify({ query, variables })
-    });
+    console.log(`Fetching NFT collections for Farcaster user ${usernameOrFid}`);
     
-    const data = await response.json();
-    const collections = data?.data?.portfolioV2?.nftCollections || [];
+    const response = await makeGraphQLRequest(collectionsQuery, variables);
     
-    // Cache the results
-    const result = { collections };
-    nftCache.set(cacheKey, {
-      data: result,
-      expiresAt: Date.now() + CACHE_TTL
-    });
+    if (response.data && response.data.nftUsersCollections) {
+      const collectionsData = response.data.nftUsersCollections;
+      const edges = collectionsData.edges || [];
+      
+      console.log(`Found ${edges.length} NFT collections for ${usernameOrFid}`);
+      
+      const processedCollections = edges.map(edge => {
+        const collection = edge.node;
+        
+        return {
+          id: collection.id || '',
+          address: collection.address || '',
+          name: collection.name || 'Unknown Collection',
+          network: collection.network || 'ethereum',
+          nftStandard: collection.nftStandard || '',
+          type: collection.type || 'GENERAL',
+          description: collection.description || '',
+          imageUrl: collection.cardImage || 
+                    (collection.medias?.logo?.thumbnail || ''),
+          floorPrice: collection.floorPrice?.valueUsd || 0,
+          floorPriceEth: collection.floorPrice?.valueWithDenomination || 0,
+          totalCount: collection.totalCount || 0,
+        };
+      });
+      
+      return {
+        collections: processedCollections,
+        cursor: collectionsData.pageInfo?.endCursor || null,
+        hasMore: collectionsData.pageInfo?.hasNextPage || false,
+        farcasterUser: usernameOrFid,
+        addresses
+      };
+    }
     
-    return { ...result, addresses };
+    return {
+      collections: [],
+      cursor: null,
+      hasMore: false,
+      farcasterUser: usernameOrFid,
+      addresses
+    };
   } catch (error) {
-    console.error('Error fetching NFT collections:', error);
-    return { collections: [], addresses: [] };
+    console.error('Error fetching Farcaster NFT collections:', error);
+    throw error;
   }
 };
 

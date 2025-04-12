@@ -55,10 +55,13 @@ module.exports = async (req, res) => {
           console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
         }
 
-        // Check if this is an NFT query
+        // Check if this is an NFT query - more comprehensive detection
         if (req.body.query.includes('nftUsersTokens') || 
             req.body.query.includes('UserNftTokens') || 
-            req.body.query.includes('portfolioItems')) {
+            req.body.query.includes('portfolioItems') ||
+            (req.body.query.includes('filter: { excludeSpam: true, types: [NFT] }')) ||
+            (req.body.query.includes('mediasV3') && 
+             (req.body.query.includes('images') || req.body.query.includes('animations')))) {
           isNftQuery = true;
           console.log('NFT query detected');
         }
@@ -270,25 +273,68 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
   }
 }`;
       }
-      // APPROACH 2: If it's using nftUsersTokens but with wrong field names
-      else if (updatedQuery.includes('nftUsersTokens')) {
+      // APPROACH 2: If it's using nftUsersTokens but with wrong field names - more precise replacements
+      else if (updatedQuery.includes('nftUsersTokens') || updatedQuery.includes('UserNftTokens')) {
         console.log('Fixing field names in nftUsersTokens query');
         
-        // Define field mappings for the fix
-        const fieldReplacements = [
-          { from: 'previewUrl', to: 'thumbnail' },
-          { from: 'largeUrl', to: 'large' },
-          { from: 'url', to: 'original' },
-          { from: 'cardImageUrl', to: 'cardImage' }
-        ];
+        // Two-phase approach - first extract any objects containing the old field names
+        const mediasObjectPattern = /(mediasV3\s*{[\s\S]*?})/g;
+        const collectionObjectPattern = /(collection\s*{[\s\S]*?})/g;
         
-        // Apply all replacements
-        fieldReplacements.forEach(({ from, to }) => {
-          if (updatedQuery.includes(from)) {
-            console.log(`Replacing field "${from}" with "${to}"`);
-            updatedQuery = updatedQuery.replace(new RegExp(from, 'g'), to);
+        // Extract and fix mediasV3 object
+        let mediaMatches = updatedQuery.match(mediasObjectPattern);
+        if (mediaMatches) {
+          console.log(`Found ${mediaMatches.length} mediasV3 blocks to process`);
+          
+          // Process each mediasV3 block
+          for (const mediaMatch of mediaMatches) {
+            let updatedMediaBlock = mediaMatch;
+            
+            // Fix fields in images section
+            if (updatedMediaBlock.includes('images(')) {
+              console.log('Fixing image fields');
+              updatedMediaBlock = updatedMediaBlock
+                .replace(/url(\s*):/g, 'original$1:')
+                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
+                .replace(/largeUrl(\s*):/g, 'large$1:');
+            }
+            
+            // Fix fields in animations section
+            if (updatedMediaBlock.includes('animations(')) {
+              console.log('Fixing animation fields');
+              updatedMediaBlock = updatedMediaBlock
+                .replace(/url(\s*):/g, 'original$1:')
+                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
+                .replace(/largeUrl(\s*):/g, 'large$1:');
+            }
+            
+            // Replace the original block with the fixed one
+            updatedQuery = updatedQuery.replace(mediaMatch, updatedMediaBlock);
           }
-        });
+        }
+        
+        // Extract and fix collection object
+        let collectionMatches = updatedQuery.match(collectionObjectPattern);
+        if (collectionMatches) {
+          console.log(`Found ${collectionMatches.length} collection blocks to process`);
+          
+          // Process each collection block
+          for (const collectionMatch of collectionMatches) {
+            let updatedCollectionBlock = collectionMatch;
+            
+            // Fix cardImageUrl field
+            if (updatedCollectionBlock.includes('cardImageUrl')) {
+              console.log('Fixing cardImageUrl field');
+              updatedCollectionBlock = updatedCollectionBlock
+                .replace(/cardImageUrl(\s*):/g, 'cardImage$1:');
+            }
+            
+            // Replace the original block with the fixed one
+            updatedQuery = updatedQuery.replace(collectionMatch, updatedCollectionBlock);
+          }
+        }
+        
+        console.log('Query transformed successfully');
       }
     }
     
@@ -301,6 +347,14 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
         query: updatedQuery,
         variables
       });
+      
+      // For debugging purposes
+      if (isNftQuery) {
+        console.log('Sending transformed query structure');
+        // Log first 100 chars of both original and updated queries for comparison
+        console.log(`Original query preview: ${req.body.query.substring(0, 100)}...`);
+        console.log(`Updated query preview: ${updatedQuery.substring(0, 100)}...`);
+      }
       
       const response = await fetch(ZAPPER_API_URL, {
         method: 'POST',
@@ -355,15 +409,31 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
               err.message.includes('Unknown field')
             ))) {
             console.error('Error: GraphQL field errors detected. Our field mapping fix failed!');
-            console.error('Field errors:', data.errors.map(e => e.message).join(', '));
+            
+            // Extract exact field names that are causing problems
+            const fieldErrors = data.errors
+              .filter(e => e.message && (e.message.includes('Cannot query field') || e.message.includes('Unknown field')))
+              .map(e => {
+                const fieldMatch = e.message.match(/field ["']([^"']+)["']/);
+                return fieldMatch ? fieldMatch[1] : e.message;
+              });
+            
+            console.error('Problematic fields:', fieldErrors.join(', '));
             console.error('Query after fix attempt:', updatedQuery);
+            
+            // Critical debugging - log the final transformed query
+            if (isNftQuery) {
+              console.error('CRITICAL DEBUG - Transformed query structure that failed:');
+              console.error(updatedQuery);
+            }
             
             // Return detailed error to help diagnose
             return res.status(400).json({
               error: 'GraphQL schema error',
               message: 'The GraphQL schema has changed and our mapping could not fix it',
               details: data.errors.map(e => e.message),
-              suggestion: 'Check the console logs for more details and update the field mappings'
+              problematicFields: fieldErrors,
+              suggestion: 'Check the server logs for more details and update the field mappings'
             });
           }
           
