@@ -86,7 +86,7 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
         }
         
         return response.data;
-      } catch (error) {
+    } catch (error) {
         lastError = error;
         
         // If it's a known "not found" error, don't retry
@@ -120,10 +120,10 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
  * @returns {Promise<object>} - Farcaster profile data
  */
 export const getFarcasterProfile = async (usernameOrFid) => {
-  if (!usernameOrFid) {
-    throw new Error('Username or FID is required');
-  }
-
+      if (!usernameOrFid) {
+        throw new Error('Username or FID is required');
+      }
+      
   // Clean up the username - remove @, trim whitespace
   let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
   
@@ -151,21 +151,21 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // GraphQL query - exact match with Zapper API docs
   const query = `
     query GetFarcasterProfile($username: String, $fid: Int) {
-      farcasterProfile(username: $username, fid: $fid) {
-        username
-        fid
-        metadata {
-          displayName
-          description
-          imageUrl
-          warpcast
+          farcasterProfile(username: $username, fid: $fid) {
+            username
+            fid
+            metadata {
+              displayName
+              description
+              imageUrl
+              warpcast
+            }
+            custodyAddress
+            connectedAddresses
+          }
         }
-        custodyAddress
-        connectedAddresses
-      }
-    }
-  `;
-  
+      `;
+      
   try {
     // DEBUG: Log the full API request details
     console.log(`Making Zapper API request with:`, {
@@ -260,7 +260,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     console.log(`Connected addresses: ${profile.connectedAddresses?.length || 0}, custody address: ${profile.custodyAddress || 'none'}`);
     
     // Return data in the expected format
-    return {
+      return {
       fid: profile.fid,
       username: profile.username,
       displayName: profile.metadata?.displayName || profile.username,
@@ -268,8 +268,8 @@ export const getFarcasterProfile = async (usernameOrFid) => {
       bio: profile.metadata?.description,
       custodyAddress: profile.custodyAddress,
       connectedAddresses: profile.connectedAddresses || [],
-    };
-  } catch (error) {
+      };
+    } catch (error) {
     // Enhanced error logging
     console.error('Error fetching Farcaster profile from Zapper API:', error);
     console.error('Error details:', {
@@ -332,7 +332,7 @@ export const getFarcasterPortfolio = async (usernameOrFid, options = {}) => {
   // Step 1: Get all addresses associated with the Farcaster profile
   const addresses = await getFarcasterAddresses(usernameOrFid);
   
-  if (!addresses || addresses.length === 0) {
+      if (!addresses || addresses.length === 0) {
     throw new Error(`No addresses found for Farcaster user: ${usernameOrFid}`);
   }
   
@@ -510,7 +510,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                   name
                   address
                   network
-                  imageUrl
+                  cardImageUrl
                   floorPrice {
                     valueUsd
                   }
@@ -565,7 +565,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           const item = edge.node;
           
           // Extract the best image URL from mediasV3
-          let imageUrl = item.collection?.imageUrl || '';
+          let imageUrl = item.collection?.cardImageUrl || '';
           let thumbnailUrl = '';
           
           // Try to get image from mediasV3 if available
@@ -582,7 +582,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
             thumbnailUrl = item.collection.medias.logo.thumbnail;
           }
           
-          return {
+            return {
             id: item.id || '',
             tokenId: item.tokenId || '',
             contractAddress: item.collection?.address || '',
@@ -590,12 +590,12 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
             description: item.description || '',
             imageUrl: imageUrl,
             imageUrlThumbnail: thumbnailUrl || imageUrl,
-            collection: {
+              collection: {
               id: item.collection?.id || '',
               name: item.collection?.name || 'Unknown Collection',
               address: item.collection?.address || '',
               network: item.collection?.network || 'ethereum',
-              imageUrl: item.collection?.imageUrl || '',
+              imageUrl: item.collection?.cardImageUrl || '',
               floorPrice: item.collection?.floorPrice?.valueUsd || 0,
               nftsCount: 0,
             },
@@ -645,8 +645,8 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           imageUrl
           imageUrlThumbnail
           collection {
-            id
-            name
+              id
+              name
             address
             network
             imageUrl
@@ -674,10 +674,10 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
         pageInfo {
           endCursor
           hasNextPage
+          }
         }
       }
-    }
-  `;
+    `;
 
   const allNfts = [];
   let lastCursor = null;
@@ -770,8 +770,8 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
   }
   
   hasMoreResults = lastCursor !== null;
-  
-  return {
+        
+        return {
     nfts: allNfts,
     cursor: lastCursor,
     hasMore: hasMoreResults,
