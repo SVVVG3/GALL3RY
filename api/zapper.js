@@ -88,6 +88,29 @@ const handler = async (req, res) => {
       variables.withOverrides = true;
       
       console.log('[ZAPPER] Query validated and parameters normalized');
+    } else if (queryType === 'PORTFOLIO') {
+      console.log('[ZAPPER] Processing portfolio query for current schema');
+      
+      // Check if it's an outdated portfolio query
+      if (query.includes('nftBalances(first:') || query.includes('pageInfo') || 
+          (query.includes('nftBalances') && query.includes('nfts '))) {
+        
+        console.log('[ZAPPER] Transforming outdated portfolioV2 query to match current schema');
+        
+        // Use the updated schema
+        query = query
+          .replace('nftBalances(first: $first)', 'nftBalances')
+          .replace('nftBalances(first: $first, after: $after)', 'nftBalances(skip: $skip)')
+          .replace(/pageInfo\s*{\s*hasNextPage\s*endCursor\s*}/g, 'pageCount\ntotalCount')
+          .replace(/nfts\s*{/g, 'items {\nnft {');
+        
+        // Add closing bracket for nft object if needed
+        if (query.includes('items {\nnft {') && !query.includes('}\n}')) {
+          query = query.replace(/}\s*}\s*}\s*}/g, '}\n}\n}\n}\n}');
+        }
+        
+        console.log('[ZAPPER] Transformed query:', query.substring(0, 200) + '...');
+      }
     } else if (queryType === 'NFTS_QUERY_OLD') {
       console.log('[ZAPPER] Transforming deprecated nftUsersTokens query to use current schema');
       
@@ -153,41 +176,40 @@ const handler = async (req, res) => {
       console.log('[ZAPPER] Converting nfts query to use portfolioV2 schema');
       
       const addresses = variables.addresses || [];
-      const limit = variables.limit || 50;
       
-      // Use the correct schema that works with the Zapper API
+      // Use the correct schema that works with the current Zapper API
       query = `
-        query GetNFTs($addresses: [Address!]!, $first: Int!) {
+        query GetNFTs($addresses: [Address!]!) {
           portfolioV2(addresses: $addresses) {
-            nftBalances(first: $first) {
-              pageInfo {
-                hasNextPage
-                endCursor
-              }
-              nfts {
-                id
-                name
-                imageUrl
-                tokenId
-                collection {
+            nftBalances {
+              items {
+                nft {
+                  id
                   name
-                  address
                   imageUrl
-                  floorPrice
-                  network
-                }
-                estimatedValue {
-                  value
-                  token {
-                    symbol
+                  tokenId
+                  collection {
+                    name
+                    address
+                    imageUrl
+                    floorPrice
+                    network
+                  }
+                  estimatedValue {
+                    value
+                    token {
+                      symbol
+                    }
+                  }
+                  metadata {
+                    name
+                    description
+                    image
                   }
                 }
-                metadata {
-                  name
-                  description
-                  image
-                }
               }
+              pageCount
+              totalCount
             }
           }
         }
@@ -195,8 +217,7 @@ const handler = async (req, res) => {
       
       // Convert variables to match the required format
       variables = {
-        addresses: addresses,
-        first: limit
+        addresses: addresses
       };
       
       console.log('[ZAPPER] Query converted to use portfolioV2 schema');
