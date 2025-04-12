@@ -165,6 +165,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   value
                   tokenSymbol
                 }
+                estimatedValueEth
+                estimatedValue {
+                  value
+                  token {
+                    symbol
+                  }
+                }
                 mediasV2 {
                   ... on Image {
                     url
@@ -214,7 +221,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             query,
             variables: { 
               owners: addresses,
-              first: 100, // Increased batch size for better performance
+              first: 500, // Increased batch size for better performance
               after: cursor,
               withOverrides: true
             }
@@ -363,6 +370,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               tokenId: nft.tokenId,
               description: nft.description,
               imageUrl,
+              estimatedValueEth: nft.estimatedValueEth,
+              estimatedValue: nft.estimatedValue ? {
+                value: nft.estimatedValue.value,
+                token: nft.estimatedValue.token
+              } : null,
               collection: nft.collection ? {
                 id: nft.collection.id,
                 name: nft.collection.name || 'Unknown Collection',
@@ -376,16 +388,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 contractAddress,
                 networkId
               },
-              estimatedValue: {
-                value: nft.collection?.floorPriceEth || 0,
-                token: { symbol: 'ETH' }
-              },
               // Additional metadata for compatibility
               metadata: {
                 name: nft.name,
                 description: nft.description,
                 image: imageUrl
               },
+              acquiredAt: nft.acquiredAt,
               acquisitionTimestamp,
               latestTransferTimestamp: acquisitionTimestamp
             };
@@ -523,32 +532,35 @@ const FarcasterUserSearch = ({ initialUsername }) => {
 
   // Handle loading more NFTs
   const handleLoadMore = async () => {
-    if (isLoadingMoreNfts || !hasMoreNfts || !endCursor || walletAddresses.length === 0) {
-      return;
-    }
+    if (!hasMoreNfts || isLoadingMoreNfts || !walletAddresses.length) return;
     
-    await fetchUserNfts(walletAddresses, endCursor, true);
+    console.log(`Loading more NFTs with cursor: ${endCursor}`);
     
-    // Update our estimate as we load more
-    if (!hasEstimatedCount) {
-      const newEstimate = estimateTotalNftCount();
-      setTotalNftCount(newEstimate);
-      setHasEstimatedCount(true);
-    } else {
-      // If we already have an estimate, make sure it's at least as big as what we've loaded
-      // plus a bit more if there are likely more NFTs
-      setTotalNftCount(prev => {
-        const minCount = userNfts.length + (hasMoreNfts ? Math.min(userNfts.length, 100) : 0);
-        return Math.max(prev, minCount);
-      });
-    }
-    
-    // If we've loaded exactly 100 NFTs (API limit), we likely need to be more aggressive with count
-    if (userNfts.length === 100 && totalNftCount === 100) {
-      // This is probably an API limit, not the actual total
-      setTotalNftCount(getWalletCount() >= 3 ? 250 : 150);
+    try {
+      await fetchUserNfts(walletAddresses, endCursor, true);
+    } catch (error) {
+      console.error('Error loading more NFTs:', error);
+      setFetchNftsError(`Failed to load more NFTs: ${error.message}`);
     }
   };
+  
+  // Auto-load NFTs until we reach a threshold or there are no more
+  useEffect(() => {
+    const autoLoadMoreNfts = async () => {
+      // Only auto-load if:
+      // 1. We have NFTs already (initial load complete)
+      // 2. There are more NFTs to load
+      // 3. Not already loading more
+      // 4. We have less than 1000 NFTs loaded (prevent excessive loading)
+      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 1000) {
+        // Add a small delay to avoid overwhelming the API and browser
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await handleLoadMore();
+      }
+    };
+    
+    autoLoadMoreNfts();
+  }, [userNfts, hasMoreNfts, isLoadingMoreNfts]);
 
   // Handle NFT click to open modal
   const handleNftClick = (nft) => {
@@ -603,58 +615,74 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         
       case 'value': // By value (highest first)
         return sortedNfts.sort((a, b) => {
-          const valueA = a.estimatedValueEth || a.collection?.floorPriceEth || 0;
-          const valueB = b.estimatedValueEth || b.collection?.floorPriceEth || 0;
-          return valueB - valueA; // Sort descending (highest first)
+          // Try to extract value from different possible formats
+          const getValueFromNft = (nft) => {
+            if (nft.estimatedValueEth !== undefined) {
+              return parseFloat(nft.estimatedValueEth);
+            }
+            if (nft.estimatedValue?.value !== undefined) {
+              return parseFloat(nft.estimatedValue.value);
+            }
+            if (nft.collection?.floorPriceEth !== undefined) {
+              return parseFloat(nft.collection.floorPriceEth);
+            }
+            if (nft.collection?.floorPrice?.value !== undefined) {
+              return parseFloat(nft.collection.floorPrice.value);
+            }
+            return 0;
+          };
+          
+          const valueA = getValueFromNft(a);
+          const valueB = getValueFromNft(b);
+          
+          // Sort descending (highest first)
+          return valueB - valueA;
         });
         
       case 'recent': // By acquisition date (latest first)
         return sortedNfts.sort((a, b) => {
-          // First check for acquisition timestamp - this is our primary data source
-          const hasAcquisitionA = typeof a.acquisitionTimestamp === 'number';
-          const hasAcquisitionB = typeof b.acquisitionTimestamp === 'number';
-          
-          // If both have acquisition timestamps, compare them
-          if (hasAcquisitionA && hasAcquisitionB) {
-            // For pseudo-timestamps (negative values from tokenIds), we want normal ascending order
-            // For real timestamps, we want descending order (newest first)
-            if (a.acquisitionTimestamp < 0 && b.acquisitionTimestamp < 0) {
-              return a.acquisitionTimestamp - b.acquisitionTimestamp;
-            } else if (a.acquisitionTimestamp < 0) {
-              return 1; // Real timestamps come before pseudo-timestamps
-            } else if (b.acquisitionTimestamp < 0) {
-              return -1; // Real timestamps come before pseudo-timestamps
-            } else {
-              return b.acquisitionTimestamp - a.acquisitionTimestamp;
+          // Get timestamps with fallbacks to various possible sources
+          const getTimestamp = (nft) => {
+            // First check for acquisition timestamp
+            if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
+              return nft.acquisitionTimestamp;
             }
+            
+            // Try acquiredAt from API
+            if (typeof nft.acquiredAt === 'number' && nft.acquiredAt > 0) {
+              return nft.acquiredAt;
+            }
+            
+            // Try lastPrice timestamp
+            if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
+              return nft.lastPrice.timestamp;
+            }
+            
+            // Try latestTransferTimestamp
+            if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
+              return nft.latestTransferTimestamp;
+            }
+            
+            // If nothing found, return a very old timestamp
+            return 0;
+          };
+          
+          const timestampA = getTimestamp(a);
+          const timestampB = getTimestamp(b);
+          
+          // Special case: If both are 0, sort by name as fallback
+          if (timestampA === 0 && timestampB === 0) {
+            const nameA = (a.name || '').toLowerCase();
+            const nameB = (b.name || '').toLowerCase();
+            return nameA.localeCompare(nameB);
           }
           
-          // If only one has acquisition data, prioritize it
-          if (hasAcquisitionA) return -1;
-          if (hasAcquisitionB) return 1;
+          // Special case: If only one has a timestamp, prioritize it
+          if (timestampA === 0) return 1;  // B comes first
+          if (timestampB === 0) return -1; // A comes first
           
-          // Fall back to transfer timestamps if available
-          const hasTransferA = typeof a.latestTransferTimestamp === 'number' && a.latestTransferTimestamp > 0;
-          const hasTransferB = typeof b.latestTransferTimestamp === 'number' && b.latestTransferTimestamp > 0;
-          
-          if (hasTransferA && hasTransferB) {
-            return b.latestTransferTimestamp - a.latestTransferTimestamp;
-          }
-          
-          if (hasTransferA) return -1;
-          if (hasTransferB) return 1;
-          
-          // If all else fails, sort by collection name and then token name
-          const collectionA = (a.collection?.name || '').toLowerCase();
-          const collectionB = (b.collection?.name || '').toLowerCase();
-          
-          if (collectionA !== collectionB) {
-            return collectionA.localeCompare(collectionB);
-          }
-          
-          const nameA = (a.name || '').toLowerCase();
-          const nameB = (b.name || '').toLowerCase();
-          return nameA.localeCompare(nameB);
+          // Otherwise, sort descending (newest first)
+          return timestampB - timestampA;
         });
         
       default:
