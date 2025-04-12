@@ -169,10 +169,94 @@ module.exports = async (req, res) => {
       'x-zapper-api-key': apiKey
     };
     
+    // FIX FOR ZAPPER API SCHEMA CHANGES
+    // Check if we need to modify the query to fix schema incompatibilities
+    let updatedQuery = req.body.query;
+    const { variables } = req.body;
+    
+    // Field name mappings for API schema changes
+    const fieldMappings = {
+      'previewUrl': 'thumbnail',
+      'largeUrl': 'large', 
+      'originalUrl': 'original'
+    };
+    
+    // Check if it's the problematic portfolio query that needs complete replacement
+    if (updatedQuery.includes('portfolioItems') && updatedQuery.includes('filter: { excludeSpam: true, types: [NFT] }')) {
+      console.log('Replacing outdated portfolioItems query with nftUsersTokens');
+      
+      // Complete replacement with new schema structure
+      updatedQuery = `
+query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50) {
+  nftUsersTokens(
+    owners: $owners
+    first: $first
+  ) {
+    edges {
+      node {
+        tokenId
+        name
+        description
+        collection {
+          name
+          address
+          network
+          nftStandard
+          type
+          medias {
+            logo {
+              thumbnail
+            }
+          }
+        }
+        mediasV3 {
+          images(first: 1) {
+            edges {
+              node {
+                original
+                thumbnail
+                large
+              }
+            }
+          }
+        }
+        estimatedValue {
+          valueUsd
+          valueWithDenomination
+          denomination {
+            symbol
+            network
+          }
+        }
+      }
+      balance
+      balanceUSD
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}`;
+    } 
+    // For other queries, just fix field names
+    else if (Object.keys(fieldMappings).some(field => updatedQuery.includes(field))) {
+      console.log('Fixing field names in GraphQL query');
+      
+      // Replace each outdated field name
+      Object.entries(fieldMappings).forEach(([oldField, newField]) => {
+        updatedQuery = updatedQuery.replace(new RegExp(oldField, 'g'), newField);
+      });
+    }
+    
     console.log(`Making request to Zapper API: ${ZAPPER_API_URL}`);
     
     try {
-      const requestBody = JSON.stringify(req.body);
+      // Use the updated query but keep the original variables
+      const requestBody = JSON.stringify({
+        query: updatedQuery,
+        variables
+      });
       
       const response = await fetch(ZAPPER_API_URL, {
         method: 'POST',
