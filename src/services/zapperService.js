@@ -9,15 +9,12 @@ const SERVER_URL = process.env.NODE_ENV === 'development'
 const ALCHEMY_ETH_API_KEY = process.env.REACT_APP_ALCHEMY_ETH_API_KEY;
 const ALCHEMY_BASE_API_KEY = process.env.REACT_APP_ALCHEMY_BASE_API_KEY;
 
-// API endpoints and keys
-const ZAPPER_API_URL = 'https://api.zapper.xyz/v2';
-const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || '';
-const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY || '';
+// API endpoints
+const ZAPPER_API_PROXY = '/api/zapper'; // Use relative API path instead of direct URL
 
 // Base headers for Zapper API requests
 const baseHeaders = {
   'Content-Type': 'application/json',
-  'X-API-KEY': ZAPPER_API_KEY,
 };
 
 // Network configurations for Alchemy API
@@ -42,10 +39,10 @@ const zapperService = {
    */
   async makeGraphQLRequest(query, variables) {
     try {
-      console.log(`Sending GraphQL request to ${SERVER_URL}/api/zapper`);
+      console.log(`Sending GraphQL request to ${ZAPPER_API_PROXY}`);
       
       // Use fetch API instead of axios for better compatibility with mobile browsers
-      const response = await fetch(`${SERVER_URL}/api/zapper`, {
+      const response = await fetch(ZAPPER_API_PROXY, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
