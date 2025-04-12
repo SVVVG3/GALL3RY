@@ -570,7 +570,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       
       // Fall back to zapperService method if direct call fails
       console.log('Falling back to zapperService method...');
-      const result = await zapperService.getNftsForAddresses(addresses);
+      const result = await zapperService.getNftsForAddresses(addresses, { 
+        cursor: cursor // Pass the cursor for proper pagination
+      });
       
       if (!result || !result.nfts) {
         throw new Error('Failed to fetch NFTs: empty response');
@@ -578,6 +580,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       
       const nfts = result.nfts;
       console.log(`Fetched ${nfts.length} NFTs via fallback method`);
+      console.log(`Pagination from fallback: hasMore=${result.hasMore}, nextCursor=${result.cursor || 'none'}`);
       
       // Update the NFT state
       if (loadMore) {
@@ -586,12 +589,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         setUserNfts(nfts);
       }
       
-      // For now, we'll assume no more NFTs with basic implementation
-      setHasMoreNfts(false);
-      setEndCursor(null);
+      // Set pagination data from the result
+      setHasMoreNfts(result.hasMore === true);
+      setEndCursor(result.cursor);
       
-      // Update total count
-      setTotalNftCount(nfts.length);
+      // Update total count - estimate based on result length and hasMore flag
+      const estimatedCount = (loadMore ? userNfts.length : 0) + nfts.length + (result.hasMore ? 100 : 0);
+      setTotalNftCount(Math.max(totalNftCount, estimatedCount));
       setHasEstimatedCount(true);
       
     } catch (error) {
@@ -1020,15 +1024,23 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               {/* NFT Count Display */}
               {!isLoadingNfts && userNfts.length > 0 && (
                 <p className="nft-count">
-                  <span className="nft-count-number">
-                    {userNfts.length}
-                    {hasMoreNfts && <span className="nft-count-plus">+</span>}
+                  <span className="nft-count-number" style={{ fontWeight: 'bold', fontSize: '18px' }}>
+                    {hasMoreNfts ? (
+                      <>
+                        {userNfts.length}
+                        <span className="nft-count-plus" style={{ color: '#7b3fe4', marginLeft: '1px' }}>+</span>
+                      </>
+                    ) : userNfts.length}
                   </span> 
-                  <span className="nft-count-label">NFTs</span>
+                  <span className="nft-count-label" style={{ marginLeft: '4px' }}>NFTs</span>
                   {hasMoreNfts && 
-                    <span className="nft-count-estimate">{hasEstimatedCount ? 
-                      `(est. total: ${Math.max(userNfts.length, totalNftCount)})` : 
-                      `(more available)` }
+                    <span className="nft-count-estimate" style={{ 
+                      fontSize: '14px',
+                      color: '#666',
+                      marginLeft: '6px',
+                      fontStyle: 'italic'
+                    }}>
+                      (loaded {userNfts.length} of {estimateTotalNftCount()})
                     </span>
                   }
                 </p>
@@ -1196,16 +1208,35 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           {/* Load More Button */}
           {hasMoreNfts && userNfts.length > 0 && (
-            <div className="load-more-container">
+            <div className="load-more-container" style={{ 
+              marginTop: '20px', 
+              textAlign: 'center', 
+              padding: '15px', 
+              backgroundColor: '#f9f6ff',
+              borderRadius: '12px'
+            }}>
               <button 
                 className="load-more-button"
                 onClick={handleLoadMore}
                 disabled={isLoadingMoreNfts}
+                style={{
+                  backgroundColor: '#7b3fe4',
+                  color: 'white',
+                  border: 'none',
+                  padding: '12px 30px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  fontSize: '16px',
+                  cursor: 'pointer'
+                }}
               >
                 {isLoadingMoreNfts ? 'Loading...' : `Load More NFTs (${userNfts.length} loaded so far)`}
               </button>
-              <p className="text-sm text-gray-500 mt-2">
-                Note: Zapper API limits each batch to 100 NFTs. Click the button above to load more NFTs in batches.
+              <p className="text-sm text-gray-600 mt-3" style={{ fontSize: '14px' }}>
+                <strong>Note:</strong> Zapper API loads NFTs in batches of 100. Click the button above to load more NFTs.
+              </p>
+              <p className="text-xs text-gray-500 mt-1" style={{ fontSize: '12px' }}>
+                You currently have {userNfts.length} NFTs loaded{hasMoreNfts ? ', but there are more available' : ''}.
               </p>
             </div>
           )}

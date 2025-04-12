@@ -289,7 +289,7 @@ const zapperService = {
     try {
       if (!addresses || addresses.length === 0) {
         console.warn('No addresses provided to getNftsForAddresses');
-        return { nfts: [] };
+        return { nfts: [], hasMore: false, cursor: null };
       }
       
       // Filter out invalid addresses
@@ -297,17 +297,18 @@ const zapperService = {
       
       if (addresses.length === 0) {
         console.warn('No valid addresses remaining after filtering');
-        return { nfts: [] };
+        return { nfts: [], hasMore: false, cursor: null };
       }
       
       console.log(`Fetching NFTs for ${addresses.length} addresses:`, addresses);
       
       // Use the nftUsersTokens query which is still supported in Zapper API
       const zapperQuery = `
-        query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
           nftUsersTokens(
             owners: $owners
             first: $first
+            after: $after
             withOverrides: $withOverrides
           ) {
             edges {
@@ -316,6 +317,21 @@ const zapperService = {
                 name
                 tokenId
                 description
+                acquiredAt
+                lastPrice {
+                  timestamp
+                  value
+                  tokenSymbol
+                }
+                estimatedValueEth
+                estimatedValue {
+                  value
+                  token {
+                    symbol
+                  }
+                }
+                value
+                valueEth
                 mediasV2 {
                   ... on Image {
                     url
@@ -348,6 +364,7 @@ const zapperService = {
       const variables = {
         owners: addresses,
         first: options.limit || 100,
+        after: options.cursor || null,
         withOverrides: true
       };
       
@@ -368,6 +385,13 @@ const zapperService = {
             continue;
           }
           
+          // Extract pagination info
+          const pageInfo = data.nftUsersTokens.pageInfo || {};
+          const hasMore = pageInfo.hasNextPage === true;
+          const nextCursor = pageInfo.endCursor || null;
+
+          console.log(`Pagination info: hasMore=${hasMore}, nextCursor=${nextCursor || 'none'}`);
+          
           // Process and enhance the NFT data
           const nfts = data.nftUsersTokens.edges.map(edge => {
             const node = edge.node;
@@ -379,16 +403,25 @@ const zapperService = {
               tokenId: node.tokenId,
               name: node.name || `#${node.tokenId}`,
               description: node.description,
-              // Handle different image sources
-              imageUrl: node.mediasV2 && node.mediasV2.length > 0 ? 
-                (node.mediasV2[0].url || node.mediasV2[0].original || node.mediasV2[0].originalUri) : 
-                node.collection?.cardImageUrl,
+              // Store value data
+              value: node.value,
+              valueEth: node.valueEth,
+              estimatedValueEth: node.estimatedValueEth,
+              estimatedValue: node.estimatedValue,
+              // Handle images
+              imageUrl: this.getBestImageUrl(node),
+              // Track cursor for pagination
+              cursor: edge.cursor,
+              // Store acquiredAt for sorting
+              acquiredAt: node.acquiredAt,
+              lastPrice: node.lastPrice,
+              // Store collection data
               collection: {
                 id: node.collection?.id,
                 name: node.collection?.name || 'Unknown Collection',
-                address: node.collection?.address,
+                address: this.extractAddressFromCollectionId(node.collection?.id),
                 imageUrl: node.collection?.cardImageUrl,
-                floorPrice: node.collection?.floorPriceEth
+                floorPriceEth: node.collection?.floorPriceEth
               }
             };
           }).filter(Boolean);
@@ -399,21 +432,12 @@ const zapperService = {
           const validNfts = nfts.filter(nft => nft.id);
           console.log(`${validNfts.length} NFTs have valid IDs`);
           
-          // Sort by name for consistent display
-          validNfts.sort((a, b) => {
-            // Sort by collection name first
-            const collectionA = a.collection?.name || '';
-            const collectionB = b.collection?.name || '';
-            
-            if (collectionA !== collectionB) {
-              return collectionA.localeCompare(collectionB);
-            }
-            
-            // Then by token name/id
-            return (a.name || '').localeCompare(b.name || '');
-          });
-          
-          return { nfts: validNfts };
+          // Return the NFTs along with pagination data
+          return { 
+            nfts: validNfts, 
+            hasMore: hasMore,
+            cursor: nextCursor
+          };
         } catch (error) {
           console.error(`Attempt ${retries + 1} failed:`, error.message);
           lastError = error;
@@ -430,13 +454,49 @@ const zapperService = {
         throw lastError;
       }
       
-      return { nfts: [] };
+      return { nfts: [], hasMore: false, cursor: null };
     } catch (error) {
       console.error('Error fetching NFTs from Zapper:', error.message);
       
       // Return a more friendly error message
       throw new Error(`Failed to load NFTs: ${error.message}. Please try again later.`);
     }
+  },
+
+  // Helper to extract the best image URL from an NFT node
+  getBestImageUrl(node) {
+    if (!node) return 'https://via.placeholder.com/500?text=No+Image';
+    
+    // Try media URLs in order of preference
+    if (node.mediasV2 && node.mediasV2.length > 0) {
+      for (const media of node.mediasV2) {
+        if (!media) continue;
+        
+        if (media.original) return media.original;
+        if (media.originalUri) return media.originalUri;
+        if (media.url) return media.url;
+      }
+    }
+    
+    // Fall back to collection image
+    if (node.collection?.cardImageUrl) {
+      return node.collection.cardImageUrl;
+    }
+    
+    return 'https://via.placeholder.com/500?text=No+Image';
+  },
+  
+  // Helper to extract address from collection ID
+  extractAddressFromCollectionId(id) {
+    if (!id) return null;
+    
+    // Collection IDs are often in the format "network-address"
+    const parts = id.split('-');
+    if (parts.length > 1) {
+      return parts[1];
+    }
+    
+    return null;
   },
 
   /**
