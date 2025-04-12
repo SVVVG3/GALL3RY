@@ -134,8 +134,8 @@ const NftCard = ({ nft, onClick }) => {
       estimatedValue: nft.estimatedValue,
     });
     
-    // Use a consistent ETH to USD conversion factor (matches the one in NFTContext.js)
-    const ETH_USD_ESTIMATE = 3500;
+    // Use a consistent ETH to USD conversion factor
+    const ETH_USD_ESTIMATE = 2500;
     
     // Priority order for value sources (prioritizing USD values)
     

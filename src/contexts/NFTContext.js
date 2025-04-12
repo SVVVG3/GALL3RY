@@ -27,7 +27,7 @@ export const NFTProvider = ({ children }) => {
   const [selectedWallets, setSelectedWallets] = useState([]);
   const [selectedCollections, setSelectedCollections] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState('estimatedValue');
+  const [sortBy, setSortBy] = useState('value');
   const [sortOrder, setSortOrder] = useState('desc');
   const [prioritizeSpeed, setPrioritizeSpeed] = useState(true);
   const [page, setPage] = useState(1);
@@ -219,7 +219,7 @@ export const NFTProvider = ({ children }) => {
     
     // If no USD values are found, try to normalize ETH values to USD (approximate)
     // Use a rough average ETH price to make the values comparable
-    const ETH_USD_ESTIMATE = 3500; // Rough estimate for comparison purposes
+    const ETH_USD_ESTIMATE = 2500; // Updated from 3500 to better reflect current market value
     
     // 5. If estimatedValue has amount but currency isn't USD (commonly ETH)
     if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
@@ -640,7 +640,31 @@ export const NFTProvider = ({ children }) => {
   const getSortedNFTs = useCallback((nftsToSort, sortByField, order) => {
     if (!nftsToSort || nftsToSort.length === 0) return [];
     
-    console.log(`Sorting NFTs by: ${sortByField}, order: ${order}`);
+    console.log(`Sorting NFTs by: ${sortByField}, order: ${order}, count: ${nftsToSort.length}`);
+    
+    // Fix sorting issue by ensuring our sortBy value is recognized
+    const effectiveSortField = sortByField === 'value' ? 'estimatedValue' : sortByField;
+    
+    // Pre-calculate all values before sorting to improve performance and debugging
+    const valueLookup = new Map();
+    
+    nftsToSort.forEach(nft => {
+      const value = getEstimatedValue(nft);
+      valueLookup.set(nft.id || `${nft.collection?.address}-${nft.tokenId}`, value);
+    });
+    
+    // Log the top 5 NFTs by value to diagnose sorting issues
+    console.log('Top 5 NFTs by value before sorting:');
+    [...valueLookup.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .forEach(([id, value]) => {
+        const nft = nftsToSort.find(n => (n.id === id) || 
+                                    `${n.collection?.address}-${n.tokenId}` === id);
+        if (nft) {
+          console.log(`${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}): $${value.toFixed(2)}`);
+        }
+      });
     
     // Add debug logging for the first few NFTs
     if (sortByField === 'value' || sortByField === 'estimatedValue') {
@@ -648,7 +672,8 @@ export const NFTProvider = ({ children }) => {
       console.log('Sample NFT values for debugging:');
       sampleNfts.forEach(nft => {
         const value = getEstimatedValue(nft);
-        console.log(`NFT: ${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}), Value: $${value.toFixed(2)}, Raw Data:`, {
+        const nftId = nft.id || `${nft.collection?.address}-${nft.tokenId}`;
+        console.log(`NFT: ${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}), Value: $${value.toFixed(2)}, ID: ${nftId}, Raw Data:`, {
           valueUsd: nft.valueUsd,
           valueEth: nft.valueEth,
           estimatedValueRaw: nft.estimatedValue,
@@ -658,14 +683,17 @@ export const NFTProvider = ({ children }) => {
       });
     }
     
-    return [...nftsToSort].sort((a, b) => {
+    // Sort the NFTs using the pre-calculated values
+    const sortedNfts = [...nftsToSort].sort((a, b) => {
       let valueA, valueB;
+      const idA = a.id || `${a.collection?.address}-${a.tokenId}`;
+      const idB = b.id || `${b.collection?.address}-${b.tokenId}`;
       
-      switch (sortByField) {
+      switch (effectiveSortField) {
         case 'estimatedValue':
         case 'value':
-          valueA = getEstimatedValue(a);
-          valueB = getEstimatedValue(b);
+          valueA = valueLookup.get(idA) || 0;
+          valueB = valueLookup.get(idB) || 0;
           
           // Debug the sort comparison for a few items
           if (Math.random() < 0.01) { // Log only 1% of comparisons to avoid flooding console
@@ -689,12 +717,25 @@ export const NFTProvider = ({ children }) => {
           valueB = b.acquiredAt ? new Date(b.acquiredAt).getTime() : 0;
           break;
         default:
-          valueA = getEstimatedValue(a);
-          valueB = getEstimatedValue(b);
+          valueA = valueLookup.get(idA) || 0;
+          valueB = valueLookup.get(idB) || 0;
       }
       
-      return order === 'asc' ? valueA - valueB : valueB - valueA;
+      // For numeric comparisons
+      const result = order === 'asc' ? valueA - valueB : valueB - valueA;
+      return result;
     });
+    
+    // Log the top 5 NFTs after sorting to verify
+    if (sortByField === 'value' || sortByField === 'estimatedValue') {
+      console.log('Top 5 NFTs by value after sorting:');
+      sortedNfts.slice(0, 5).forEach(nft => {
+        const value = getEstimatedValue(nft);
+        console.log(`${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}): $${value.toFixed(2)}`);
+      });
+    }
+    
+    return sortedNfts;
   }, [getEstimatedValue]);
 
   // New function to fetch Farcaster profile and NFTs using the portfolio approach
@@ -865,7 +906,7 @@ export const NFTProvider = ({ children }) => {
       setSelectedChains(['all']);
       setSelectedWallets([]);
       setSearchQuery('');
-      setSortBy('estimatedValue');
+      setSortBy('value');
       setSortOrder('desc');
       setSelectedCollections([]);
       setMinValue(0);
