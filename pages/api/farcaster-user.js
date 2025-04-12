@@ -128,18 +128,8 @@ async function fetchFromWarpcast(username) {
       return null;
     }
     
-    // Log the structure for debugging
-    console.log(`Warpcast API response structure for ${username}:`, {
-      hasExtras: !!result.extras,
-      hasCustodyAddress: !!result.extras?.custodyAddress,
-      hasEthWallets: Array.isArray(result.extras?.ethWallets),
-      ethWalletsCount: result.extras?.ethWallets?.length || 0,
-      hasSolWallets: Array.isArray(result.extras?.solanaWallets),
-      solWalletsCount: result.extras?.solanaWallets?.length || 0
-    });
-    
-    // Log the raw data to make sure we're getting what we expect
-    console.log('Extras data for debugging:', JSON.stringify(result.extras).substring(0, 500));
+    // Log the raw extras data for debugging
+    console.log('Extras data raw for debugging:', JSON.stringify(result.extras).substring(0, 500));
     
     // Collect connected addresses from multiple sources
     const connectedAddresses = [];
@@ -175,8 +165,18 @@ async function fetchFromWarpcast(username) {
       bio: result.user.profile?.bio?.text,
       followerCount: result.user.followerCount,
       followingCount: result.user.followingCount,
+      
+      // Add the ETH wallets directly to the connectedAddresses array
       connectedAddresses: connectedAddresses,
+      
+      // Add custody address directly
       custodyAddress: custodyAddress,
+      
+      // Flatten important data from extras for easier access
+      ethWallets: result.extras?.ethWallets || [],
+      solanaWallets: result.extras?.solanaWallets || [],
+      
+      // Still include raw data for compatibility
       _rawData: {
         extras: result.extras,
         user: result.user

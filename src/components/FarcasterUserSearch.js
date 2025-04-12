@@ -126,6 +126,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       addresses.push(...ethAddresses);
     }
     
+    // NEW: Check for flattened ethWallets array added by our backend
+    if (Array.isArray(profile.ethWallets) && profile.ethWallets.length > 0) {
+      console.log(`Found ${profile.ethWallets.length} ETH wallets in flattened ethWallets array:`, profile.ethWallets);
+      const ethWallets = profile.ethWallets.filter(addr => 
+        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
+      );
+      addresses.push(...ethWallets);
+    }
+    
     // Check for ethWallets in _rawData.extras (from Warpcast API)
     if (profile._rawData?.extras?.ethWallets && Array.isArray(profile._rawData.extras.ethWallets)) {
       console.log(`Found ${profile._rawData.extras.ethWallets.length} ETH wallets in _rawData.extras:`, profile._rawData.extras.ethWallets);
@@ -149,6 +158,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     if (profile._rawData?.extras?.solanaWallets && Array.isArray(profile._rawData.extras.solanaWallets)) {
       console.log(`Found ${profile._rawData.extras.solanaWallets.length} Solana wallets in _rawData.extras (not processed):`, 
         profile._rawData.extras.solanaWallets);
+      // We don't process Solana wallets at this time, but we log them for future development
+    }
+    
+    // NEW: Check for flattened solanaWallets array (we might want to handle these differently)
+    if (Array.isArray(profile.solanaWallets) && profile.solanaWallets.length > 0) {
+      console.log(`Found ${profile.solanaWallets.length} Solana wallets in flattened solanaWallets array (not processed):`, 
+        profile.solanaWallets);
       // We don't process Solana wallets at this time, but we log them for future development
     }
     
