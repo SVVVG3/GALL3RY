@@ -138,11 +138,15 @@ async function fetchFromWarpcast(username) {
       solWalletsCount: result.extras?.solanaWallets?.length || 0
     });
     
+    // Log the raw data to make sure we're getting what we expect
+    console.log('Extras data for debugging:', JSON.stringify(result.extras).substring(0, 500));
+    
     // Collect connected addresses from multiple sources
     const connectedAddresses = [];
     
     // Add ethereum wallets if available
     if (Array.isArray(result.extras?.ethWallets)) {
+      console.log(`Found ${result.extras.ethWallets.length} ETH wallets in extras:`, result.extras.ethWallets);
       connectedAddresses.push(...result.extras.ethWallets);
     }
     
