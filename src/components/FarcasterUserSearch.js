@@ -396,7 +396,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               },
               acquiredAt: nft.acquiredAt,
               acquisitionTimestamp,
-              latestTransferTimestamp: acquisitionTimestamp
+              latestTransferTimestamp: acquisitionTimestamp,
+              // Debug logging for value data
+              _debug_value: {
+                estimatedValueEth: nft.estimatedValueEth,
+                estimatedValue: nft.estimatedValue,
+                floorPriceEth: nft.collection?.floorPriceEth
+              }
             };
           }).filter(Boolean);
           
@@ -596,6 +602,12 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const getSortedNfts = () => {
     if (!userNfts || userNfts.length === 0) return [];
     
+    console.log(`Sorting ${userNfts.length} NFTs using method: ${sortMethod}`);
+    // Log a sample NFT to understand the data structure
+    if (userNfts.length > 0) {
+      console.log("Sample NFT for sorting:", userNfts[0]);
+    }
+    
     const sortedNfts = [...userNfts];
     
     switch (sortMethod) {
@@ -614,22 +626,40 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         });
         
       case 'value': // By value (highest first)
+        console.log("Sorting by value...");
         return sortedNfts.sort((a, b) => {
           // Try to extract value from different possible formats
           const getValueFromNft = (nft) => {
-            if (nft.estimatedValueEth !== undefined) {
-              return parseFloat(nft.estimatedValueEth);
+            console.log("Getting value from NFT:", nft.id, nft.name);
+            let value = 0;
+            let source = 'none';
+            
+            // Try all possible value fields in order of preference
+            if (nft._debug_value?.estimatedValueEth !== undefined) {
+              value = parseFloat(nft._debug_value.estimatedValueEth);
+              source = 'debug_estimatedValueEth';
+            } else if (nft.estimatedValueEth !== undefined) {
+              value = parseFloat(nft.estimatedValueEth);
+              source = 'estimatedValueEth';
+            } else if (nft._debug_value?.estimatedValue?.value !== undefined) {
+              value = parseFloat(nft._debug_value.estimatedValue.value);
+              source = 'debug_estimatedValue';
+            } else if (nft.estimatedValue?.value !== undefined) {
+              value = parseFloat(nft.estimatedValue.value);
+              source = 'estimatedValue';
+            } else if (nft._debug_value?.floorPriceEth !== undefined) {
+              value = parseFloat(nft._debug_value.floorPriceEth);
+              source = 'debug_floorPriceEth';
+            } else if (nft.collection?.floorPriceEth !== undefined) {
+              value = parseFloat(nft.collection.floorPriceEth);
+              source = 'floorPriceEth';
+            } else if (nft.collection?.floorPrice?.value !== undefined) {
+              value = parseFloat(nft.collection.floorPrice.value);
+              source = 'floorPrice';
             }
-            if (nft.estimatedValue?.value !== undefined) {
-              return parseFloat(nft.estimatedValue.value);
-            }
-            if (nft.collection?.floorPriceEth !== undefined) {
-              return parseFloat(nft.collection.floorPriceEth);
-            }
-            if (nft.collection?.floorPrice?.value !== undefined) {
-              return parseFloat(nft.collection.floorPrice.value);
-            }
-            return 0;
+            
+            console.log(`NFT ${nft.id} (${nft.name}) value = ${value} (source: ${source})`);
+            return value;
           };
           
           const valueA = getValueFromNft(a);
@@ -640,31 +670,30 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         });
         
       case 'recent': // By acquisition date (latest first)
+        console.log("Sorting by recent...");
         return sortedNfts.sort((a, b) => {
           // Get timestamps with fallbacks to various possible sources
           const getTimestamp = (nft) => {
-            // First check for acquisition timestamp
-            if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
-              return nft.acquisitionTimestamp;
-            }
+            let timestamp = 0;
+            let source = 'none';
             
-            // Try acquiredAt from API
+            // Try all possible timestamp fields in order of preference
             if (typeof nft.acquiredAt === 'number' && nft.acquiredAt > 0) {
-              return nft.acquiredAt;
+              timestamp = nft.acquiredAt;
+              source = 'acquiredAt';
+            } else if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
+              timestamp = nft.acquisitionTimestamp;
+              source = 'acquisitionTimestamp';
+            } else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
+              timestamp = nft.lastPrice.timestamp;
+              source = 'lastPrice';
+            } else if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
+              timestamp = nft.latestTransferTimestamp;
+              source = 'latestTransferTimestamp';
             }
             
-            // Try lastPrice timestamp
-            if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
-              return nft.lastPrice.timestamp;
-            }
-            
-            // Try latestTransferTimestamp
-            if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
-              return nft.latestTransferTimestamp;
-            }
-            
-            // If nothing found, return a very old timestamp
-            return 0;
+            console.log(`NFT ${nft.id} (${nft.name}) timestamp = ${timestamp} (source: ${source})`);
+            return timestamp;
           };
           
           const timestampA = getTimestamp(a);
@@ -674,6 +703,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           if (timestampA === 0 && timestampB === 0) {
             const nameA = (a.name || '').toLowerCase();
             const nameB = (b.name || '').toLowerCase();
+            console.log(`Falling back to name sort for ${a.name} vs ${b.name}`);
             return nameA.localeCompare(nameB);
           }
           

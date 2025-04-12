@@ -17,10 +17,17 @@ const NftCard = ({ nft, onClick }) => {
     console.log("NFT Card clicked, auth state:", { isAuthenticated, profile, fid: profile?.fid });
     
     if (isAuthenticated && profile && profile.fid) {
-      console.log("Opening collection holders modal for collection address:", nft.collection?.address);
+      console.log("Opening collection holders modal for collection address:", contractAddress);
       
       // Make sure we have a collection address before trying to show the modal
       if (contractAddress) {
+        // Add more debugging for the collection address
+        console.log("Collection address details:", {
+          address: contractAddress,
+          collection: nft.collection,
+          collectionId: nft.collection?.id
+        });
+        
         setShowHolders(true);
       } else {
         console.error("Cannot open modal: No collection address available for this NFT");
@@ -91,6 +98,17 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   const getValue = () => {
+    // Debug logging for value data
+    console.log("NFT Value Data:", {
+      id: nft.id,
+      name: nft.name,
+      estimatedValue: nft.estimatedValue,
+      estimatedValueEth: nft.estimatedValueEth,
+      collectionFloorPrice: nft.collection?.floorPrice,
+      collectionFloorPriceEth: nft.collection?.floorPriceEth,
+      debugValue: nft._debug_value,
+    });
+    
     // Try different value formats in API responses
     if (nft.estimatedValue?.value !== undefined) {
       return {
@@ -124,6 +142,36 @@ const NftCard = ({ nft, onClick }) => {
       return {
         value: nft.value,
         symbol: nft.symbol || 'ETH'
+      };
+    }
+    
+    // If we have debug value data, try to use that
+    if (nft._debug_value) {
+      if (nft._debug_value.estimatedValueEth) {
+        return {
+          value: nft._debug_value.estimatedValueEth,
+          symbol: 'ETH'
+        };
+      }
+      if (nft._debug_value.estimatedValue?.value) {
+        return {
+          value: nft._debug_value.estimatedValue.value,
+          symbol: nft._debug_value.estimatedValue.token?.symbol || 'ETH'
+        };
+      }
+      if (nft._debug_value.floorPriceEth) {
+        return {
+          value: nft._debug_value.floorPriceEth,
+          symbol: 'ETH'
+        };
+      }
+    }
+    
+    // Final fallback - check if collection exists and make a default
+    if (nft.collection) {
+      return {
+        value: 0,
+        symbol: 'ETH'
       };
     }
     

@@ -79,15 +79,18 @@ const handler = async (req, res) => {
         variables.collectionIds = [variables.collectionIds];
       }
       
-      // Add default first parameter if missing
+      // Add default first parameter if missing, but don't override if provided
       if (!variables.first) {
         variables.first = 100;
+      } else if (typeof variables.first === 'string') {
+        // Convert string to number if needed
+        variables.first = parseInt(variables.first, 10);
       }
       
       // Add default withOverrides parameter
       variables.withOverrides = true;
       
-      console.log('[ZAPPER] Query validated and parameters normalized');
+      console.log('[ZAPPER] Query validated and parameters normalized with batch size:', variables.first);
     } else if (queryType === 'PORTFOLIO') {
       console.log('[ZAPPER] Processing portfolio query for current schema');
       

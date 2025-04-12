@@ -345,14 +345,17 @@ export const NFTProvider = ({ children }) => {
       // Normalize the collection address for comparison
       let collectionIdentifier = collectionAddress.toLowerCase();
       
-      // If it's a complex ID like "ethereum-0x123...", extract just the address part
+      // If it's already a complex ID like "ethereum-0x123...", extract just the address part
       if (collectionIdentifier.includes('-')) {
         collectionIdentifier = collectionIdentifier.split('-')[1].toLowerCase();
       }
       
-      console.log("Using collection identifier:", collectionIdentifier);
+      // Handle special characters in collection address
+      collectionIdentifier = collectionIdentifier.replace(/[^a-z0-9]/g, '');
+      
+      console.log("Using normalized collection identifier:", collectionIdentifier);
 
-      // Simple query to check if a user owns NFTs from this collection
+      // Enhanced query to check if a user owns NFTs from this collection
       const holdersQuery = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -378,6 +381,11 @@ export const NFTProvider = ({ children }) => {
 
       // Helper function to check one user's addresses
       const checkUserHoldings = async (node, relationshipType) => {
+        if (!node.username) {
+          console.log("Skipping user with no username");
+          return null;
+        }
+        
         const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
         
         if (!addresses.length) {
@@ -398,6 +406,7 @@ export const NFTProvider = ({ children }) => {
           
           // Check for edges in the response
           const edges = holderData.nftUsersTokens?.edges || [];
+          console.log(`${node.username} has ${edges.length} total NFTs`);
           
           // Now filter the NFTs to only include those from our target collection
           const matchingNfts = edges
@@ -406,15 +415,21 @@ export const NFTProvider = ({ children }) => {
               if (!nft || !nft.collection) return false;
               
               // Check collection ID, which may contain the address
-              const collectionId = (nft.collection.id || '').toLowerCase();
+              const collectionId = (nft.collection.id || '').toLowerCase().replace(/[^a-z0-9]/g, '');
               // Check direct collection address
-              const collectionAddr = (nft.collection.address || '').toLowerCase();
+              const collectionAddr = (nft.collection.address || '').toLowerCase().replace(/[^a-z0-9]/g, '');
               
-              // Match if either field contains our target collection address
-              return (
+              const isMatch = (
                 collectionId.includes(collectionIdentifier) ||
-                collectionAddr === collectionIdentifier
+                collectionAddr === collectionIdentifier ||
+                collectionIdentifier.includes(collectionAddr)
               );
+              
+              if (isMatch) {
+                console.log(`Match found for ${node.username}: Collection ID ${collectionId} matches ${collectionIdentifier}`);
+              }
+              
+              return isMatch;
             });
           
           const totalCount = matchingNfts.length;

@@ -15,7 +15,14 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
     console.log("CollectionHoldersModal useEffect running with:", { collectionAddress, userFid });
     if (collectionAddress && userFid) {
       try {
-        fetchCollectionHolders(collectionAddress, userFid)
+        // Ensure collection address is a string and clean it
+        const cleanAddress = collectionAddress.toString().toLowerCase().trim();
+        console.log("Fetching holders with cleaned address:", cleanAddress);
+        
+        fetchCollectionHolders(cleanAddress, userFid)
+          .then(result => {
+            console.log("Fetch collection holders result:", result);
+          })
           .catch(err => {
             console.error("Error fetching collection holders:", err);
             setError(err.message || "Failed to fetch collection holders");
