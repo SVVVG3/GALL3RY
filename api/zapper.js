@@ -31,6 +31,7 @@ module.exports = async (req, res) => {
     let queryName = 'unknown';
     let variablesSummary = {};
     let isFarcasterRequest = false;
+    let isNftQuery = false;
     let username = null;
     let fid = null;
     
@@ -53,11 +54,25 @@ module.exports = async (req, res) => {
           
           console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
         }
+
+        // Check if this is an NFT query
+        if (req.body.query.includes('nftUsersTokens') || 
+            req.body.query.includes('UserNftTokens') || 
+            req.body.query.includes('portfolioItems')) {
+          isNftQuery = true;
+          console.log('NFT query detected');
+        }
         
         // Parse important variable keys for logging
         if (req.body.variables) {
           if (req.body.variables.ownerAddress) {
             variablesSummary.ownerAddress = `${req.body.variables.ownerAddress.substring(0, 8)}...`;
+          }
+          if (req.body.variables.owners) {
+            variablesSummary.owners = req.body.variables.owners.length + ' addresses';
+            if (req.body.variables.owners.length > 0) {
+              variablesSummary.firstOwner = `${req.body.variables.owners[0].substring(0, 8)}...`;
+            }
           }
           if (req.body.variables.addresses) {
             variablesSummary.addresses = req.body.variables.addresses.length + ' addresses';
@@ -65,8 +80,14 @@ module.exports = async (req, res) => {
           if (req.body.variables.limit) {
             variablesSummary.limit = req.body.variables.limit;
           }
+          if (req.body.variables.first) {
+            variablesSummary.first = req.body.variables.first;
+          }
           if (req.body.variables.cursor) {
             variablesSummary.cursor = 'present';
+          }
+          if (req.body.variables.after) {
+            variablesSummary.after = req.body.variables.after ? 'present' : 'null';
           }
           if (req.body.variables.username) {
             variablesSummary.username = req.body.variables.username;
@@ -86,6 +107,7 @@ module.exports = async (req, res) => {
       url: ZAPPER_API_URL,
       queryName,
       variables: variablesSummary,
+      isNftQuery,
       bodySize: req.body ? JSON.stringify(req.body).length : 0,
       hasApiKey: !!apiKey
     });
@@ -170,34 +192,34 @@ module.exports = async (req, res) => {
     };
     
     // FIX FOR ZAPPER API SCHEMA CHANGES
-    // Check if we need to modify the query to fix schema incompatibilities
     let updatedQuery = req.body.query;
-    const { variables } = req.body;
-    
-    // Field name mappings for API schema changes
-    const fieldMappings = {
-      'previewUrl': 'thumbnail',
-      'largeUrl': 'large', 
-      'originalUrl': 'original'
-    };
-    
-    // Check if it's the problematic portfolio query that needs complete replacement
-    if (updatedQuery.includes('portfolioItems') && updatedQuery.includes('filter: { excludeSpam: true, types: [NFT] }')) {
-      console.log('Replacing outdated portfolioItems query with nftUsersTokens');
-      
-      // Complete replacement with new schema structure
-      updatedQuery = `
-query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50) {
+    let { variables } = req.body;
+
+    // Check if this is an NFT query that needs fixing
+    if (isNftQuery) {
+      console.log('Processing NFT query for field updates...');
+
+      // APPROACH 1: If it's the old portfolioItems structure, completely replace
+      if (updatedQuery.includes('portfolioItems') && updatedQuery.includes('filter: { excludeSpam: true, types: [NFT] }')) {
+        console.log('Replacing outdated portfolioItems query with nftUsersTokens structure');
+        
+        // Completely replace with new structure
+        updatedQuery = `
+query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String, $bypassHidden: Boolean = true) {
   nftUsersTokens(
-    owners: $owners
-    first: $first
+    owners: $owners,
+    first: $first,
+    after: $after,
+    bypassHidden: $bypassHidden
   ) {
     edges {
       node {
+        id
         tokenId
         name
         description
         collection {
+          id
           name
           address
           network
@@ -211,6 +233,15 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50) {
         }
         mediasV3 {
           images(first: 1) {
+            edges {
+              node {
+                original
+                thumbnail
+                large
+              }
+            }
+          }
+          animations(first: 1) {
             edges {
               node {
                 original
@@ -238,17 +269,30 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50) {
     }
   }
 }`;
-    } 
-    // For other queries, just fix field names
-    else if (Object.keys(fieldMappings).some(field => updatedQuery.includes(field))) {
-      console.log('Fixing field names in GraphQL query');
-      
-      // Replace each outdated field name
-      Object.entries(fieldMappings).forEach(([oldField, newField]) => {
-        updatedQuery = updatedQuery.replace(new RegExp(oldField, 'g'), newField);
-      });
+      }
+      // APPROACH 2: If it's using nftUsersTokens but with wrong field names
+      else if (updatedQuery.includes('nftUsersTokens')) {
+        console.log('Fixing field names in nftUsersTokens query');
+        
+        // Define field mappings for the fix
+        const fieldReplacements = [
+          { from: 'previewUrl', to: 'thumbnail' },
+          { from: 'largeUrl', to: 'large' },
+          { from: 'url', to: 'original' },
+          { from: 'cardImageUrl', to: 'cardImage' }
+        ];
+        
+        // Apply all replacements
+        fieldReplacements.forEach(({ from, to }) => {
+          if (updatedQuery.includes(from)) {
+            console.log(`Replacing field "${from}" with "${to}"`);
+            updatedQuery = updatedQuery.replace(new RegExp(from, 'g'), to);
+          }
+        });
+      }
     }
     
+    // Make the updated request to Zapper API
     console.log(`Making request to Zapper API: ${ZAPPER_API_URL}`);
     
     try {
@@ -304,8 +348,27 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50) {
             });
           }
           
+          // Check if it's a field error - indicate our fix failed
+          if (data.errors.some(err => 
+            err.message && (
+              err.message.includes('Cannot query field') ||
+              err.message.includes('Unknown field')
+            ))) {
+            console.error('Error: GraphQL field errors detected. Our field mapping fix failed!');
+            console.error('Field errors:', data.errors.map(e => e.message).join(', '));
+            console.error('Query after fix attempt:', updatedQuery);
+            
+            // Return detailed error to help diagnose
+            return res.status(400).json({
+              error: 'GraphQL schema error',
+              message: 'The GraphQL schema has changed and our mapping could not fix it',
+              details: data.errors.map(e => e.message),
+              suggestion: 'Check the console logs for more details and update the field mappings'
+            });
+          }
+          
           // Other GraphQL errors
-        return res.status(400).json({
+          return res.status(400).json({
             errors: data.errors,
             message: data.errors[0]?.message || 'GraphQL error'
           });
