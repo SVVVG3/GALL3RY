@@ -317,21 +317,10 @@ const zapperService = {
                 name
                 tokenId
                 description
-                acquiredAt
-                lastPrice {
+                lastSale {
                   timestamp
-                  value
-                  tokenSymbol
+                  valueEth
                 }
-                estimatedValueEth
-                estimatedValue {
-                  value
-                  token {
-                    symbol
-                  }
-                }
-                value
-                valueEth
                 mediasV2 {
                   ... on Image {
                     url
@@ -403,18 +392,14 @@ const zapperService = {
               tokenId: node.tokenId,
               name: node.name || `#${node.tokenId}`,
               description: node.description,
-              // Store value data
-              value: node.value,
-              valueEth: node.valueEth,
-              estimatedValueEth: node.estimatedValueEth,
-              estimatedValue: node.estimatedValue,
+              // Store value data using floorPriceEth as our main value source
+              valueEth: node.collection?.floorPriceEth || 0,
               // Handle images
               imageUrl: this.getBestImageUrl(node),
               // Track cursor for pagination
               cursor: edge.cursor,
-              // Store acquiredAt for sorting
-              acquiredAt: node.acquiredAt,
-              lastPrice: node.lastPrice,
+              // Store lastSale for sorting
+              lastSale: node.lastSale,
               // Store collection data
               collection: {
                 id: node.collection?.id,

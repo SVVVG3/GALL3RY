@@ -212,26 +212,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 name
                 tokenId
                 description
-                acquiredAt
-                lastPrice {
+                lastSale {
                   timestamp
-                  value
-                  tokenSymbol
-                }
-                estimatedValueEth
-                estimatedValue {
-                  value
-                  token {
-                    symbol
-                  }
-                }
-                value
-                valueEth
-                floorPrice {
-                  value
-                  token {
-                    symbol
-                  }
+                  valueEth
                 }
                 mediasV2 {
                   ... on Image {
@@ -249,12 +232,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   id
                   name
                   floorPriceEth
-                  floorPrice {
-                    value
-                    token {
-                      symbol
-                    }
-                  }
                   cardImageUrl
                 }
                 transfers {
@@ -369,15 +346,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             // Process the acquisition timestamp data
             let acquisitionTimestamp = null;
             
-            // First try acquiredAt if available (most accurate)
-            if (nft.acquiredAt && typeof nft.acquiredAt === 'number') {
-              acquisitionTimestamp = nft.acquiredAt;
-              console.log(`NFT ${nft.id} (${nft.name}) has acquisition timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
-            }
-            // Then try lastPrice timestamp
-            else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
-              acquisitionTimestamp = nft.lastPrice.timestamp;
-              console.log(`NFT ${nft.id} (${nft.name}) has lastPrice timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
+            // Try lastSale timestamp if available
+            if (nft.lastSale?.timestamp && typeof nft.lastSale.timestamp === 'number') {
+              acquisitionTimestamp = nft.lastSale.timestamp;
+              console.log(`NFT ${nft.id} (${nft.name}) has lastSale timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
             }
             // Then try transfer data - look for transfers TO the owner's addresses
             else if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
@@ -454,20 +426,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               tokenId: nft.tokenId,
               description: nft.description,
               imageUrl,
-              // Store all value-related fields
-              value: nft.value,
-              valueEth: nft.valueEth,
-              floorPrice: nft.floorPrice,
-              estimatedValueEth: nft.estimatedValueEth,
-              estimatedValue: nft.estimatedValue ? {
-                value: nft.estimatedValue.value,
-                token: nft.estimatedValue.token
-              } : null,
+              // Use floor price as value
+              valueEth: nft.collection?.floorPriceEth || 0,
+              lastSale: nft.lastSale,
               collection: nft.collection ? {
                 id: nft.collection.id,
                 name: nft.collection.name || 'Unknown Collection',
                 floorPriceEth: nft.collection.floorPriceEth || 0,
-                floorPrice: nft.collection.floorPrice,
                 cardImageUrl: nft.collection.cardImageUrl
               } : null,
               token: {
@@ -484,19 +449,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 image: imageUrl
               },
               // Time-related fields for sorting
-              acquiredAt: nft.acquiredAt,
-              lastPrice: nft.lastPrice,
               acquisitionTimestamp,
               latestTransferTimestamp: acquisitionTimestamp,
               transfers: nft.transfers,
               // Debug value data
               _debug_value: {
-                estimatedValueEth: nft.estimatedValueEth,
-                estimatedValue: nft.estimatedValue,
                 floorPriceEth: nft.collection?.floorPriceEth,
-                value: nft.value,
-                valueEth: nft.valueEth,
-                floorPrice: nft.floorPrice
+                lastSaleValueEth: nft.lastSale?.valueEth
               }
             };
           }).filter(Boolean);
@@ -752,37 +711,20 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let value = 0;
             let source = 'none';
             
-            // Try all possible value fields in order of preference (same as getValue function)
-            if (nft.valueEth !== undefined && nft.valueEth !== null) {
-              value = parseFloat(nft.valueEth);
-              source = 'valueEth';
-            } else if (nft.estimatedValueEth !== undefined && nft.estimatedValueEth !== null) {
-              value = parseFloat(nft.estimatedValueEth);
-              source = 'estimatedValueEth';
-            } else if (nft.value !== undefined && nft.value !== null) {
-              value = parseFloat(nft.value);
-              source = 'value';
-            } else if (nft.estimatedValue?.value !== undefined) {
-              value = parseFloat(nft.estimatedValue.value);
-              source = 'estimatedValue.value';
-            } else if (nft.floorPrice?.value !== undefined) {
-              value = parseFloat(nft.floorPrice.value);
-              source = 'floorPrice.value';
-            } else if (nft.collection?.floorPrice?.value !== undefined) {
-              value = parseFloat(nft.collection.floorPrice.value);
-              source = 'collection.floorPrice.value';
-            } else if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
+            // Use collection floor price as primary value source
+            if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
               value = parseFloat(nft.collection.floorPriceEth);
               source = 'collection.floorPriceEth';
-            } else if (nft._debug_value?.estimatedValueEth) {
-              value = parseFloat(nft._debug_value.estimatedValueEth);
-              source = 'debug_estimatedValueEth';
-            } else if (nft._debug_value?.estimatedValue?.value) {
-              value = parseFloat(nft._debug_value.estimatedValue.value);
-              source = 'debug_estimatedValue.value';
-            } else if (nft._debug_value?.floorPriceEth) {
-              value = parseFloat(nft._debug_value.floorPriceEth);
-              source = 'debug_floorPriceEth';
+            } 
+            // Use lastSale value as alternative
+            else if (nft.lastSale?.valueEth !== undefined && nft.lastSale.valueEth !== null) {
+              value = parseFloat(nft.lastSale.valueEth);
+              source = 'lastSale.valueEth';
+            }
+            // Fall back to assigned valueEth if available
+            else if (nft.valueEth !== undefined && nft.valueEth !== null) {
+              value = parseFloat(nft.valueEth);
+              source = 'valueEth';
             }
             
             // Ensure we have a valid number
@@ -814,12 +756,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let source = 'none';
             
             // Try all possible timestamp fields in order of preference
-            if (nft.acquiredAt && typeof nft.acquiredAt === 'number' && nft.acquiredAt > 0) {
-              timestamp = nft.acquiredAt;
-              source = 'acquiredAt';
-            } else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number' && nft.lastPrice.timestamp > 0) {
-              timestamp = nft.lastPrice.timestamp;
-              source = 'lastPrice.timestamp';
+            if (nft.lastSale?.timestamp && typeof nft.lastSale.timestamp === 'number' && nft.lastSale.timestamp > 0) {
+              timestamp = nft.lastSale.timestamp;
+              source = 'lastSale.timestamp';
             } else if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
               timestamp = nft.acquisitionTimestamp;
               source = 'acquisitionTimestamp';
