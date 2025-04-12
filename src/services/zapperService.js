@@ -495,24 +495,44 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     try {
       console.log(`Using portfolioV2 endpoint for ${normalizedAddresses.length} addresses`);
       
-      // Updated query structure according to the Zapper API schema
+      // Updated query structure according to the official documentation
       const portfolioV2Query = `
-        query getNftUsersTokens($addresses: [Address!]!, $first: Int!, $after: String) {
-          nftUsersTokens(owners: $addresses, first: $first, after: $after) {
+        query UserNftTokens(
+          $owners: [Address!]!,
+          $first: Int = 100,
+          $after: String,
+          $bypassHidden: Boolean = true
+        ) {
+          nftUsersTokens(
+            owners: $owners,
+            first: $first,
+            after: $after,
+            bypassHidden: $bypassHidden
+          ) {
             edges {
               node {
+                # Basic token information
                 id
                 tokenId
                 name
                 description
+                
+                # Collection information
                 collection {
                   id
                   name
                   address
                   network
+                  nftStandard
+                  type
                   cardImageUrl
                   floorPrice {
                     valueUsd
+                    valueWithDenomination
+                    denomination {
+                      symbol
+                      network
+                    }
                   }
                   medias {
                     logo {
@@ -520,35 +540,53 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                     }
                   }
                 }
+                
+                # Media assets
                 mediasV3 {
                   images(first: 1) {
                     edges {
                       node {
                         original
                         thumbnail
+                        large
+                      }
+                    }
+                  }
+                  animations(first: 1) {
+                    edges {
+                      node {
+                        original
                       }
                     }
                   }
                 }
+                
+                # Value information
                 estimatedValue {
                   valueUsd
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                    network
+                  }
                 }
               }
               balance
               balanceUSD
             }
             pageInfo {
-              endCursor
               hasNextPage
+              endCursor
             }
           }
         }
       `;
       
       const variables = {
-        addresses: normalizedAddresses,
+        owners: normalizedAddresses,
         first: limit,
-        after: cursor
+        after: cursor,
+        bypassHidden: true // Important: This bypasses Zapper's spam detection
       };
       
       console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses using portfolioV2`);
@@ -565,47 +603,81 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           const item = edge.node;
           
           // Extract the best image URL from mediasV3
-          let imageUrl = item.collection?.cardImageUrl || '';
+          let imageUrl = '';
           let thumbnailUrl = '';
+          let largeUrl = '';
           
-          // Try to get image from mediasV3 if available
+          // Try to get image from mediasV3.images first
           if (item.mediasV3?.images?.edges?.length > 0) {
             const imageNode = item.mediasV3.images.edges[0].node;
             if (imageNode) {
-              imageUrl = imageNode.original || imageUrl;
-              thumbnailUrl = imageNode.thumbnail || imageUrl;
+              imageUrl = imageNode.original || '';
+              thumbnailUrl = imageNode.thumbnail || '';
+              largeUrl = imageNode.large || imageUrl;
             }
           }
           
-          // Fallback to collection logo
-          if (!thumbnailUrl && item.collection?.medias?.logo?.thumbnail) {
-            thumbnailUrl = item.collection.medias.logo.thumbnail;
+          // Try to get image from mediasV3.animations if no images
+          if (!imageUrl && item.mediasV3?.animations?.edges?.length > 0) {
+            const animNode = item.mediasV3.animations.edges[0].node;
+            if (animNode && animNode.original) {
+              imageUrl = animNode.original;
+              thumbnailUrl = imageUrl;
+              largeUrl = imageUrl;
+            }
           }
           
-            return {
+          // Fallback to collection media if still no image
+          if (!imageUrl) {
+            if (item.collection?.cardImageUrl) {
+              imageUrl = item.collection.cardImageUrl;
+              thumbnailUrl = item.collection.cardImageUrl;
+              largeUrl = item.collection.cardImageUrl;
+            } else if (item.collection?.medias?.logo?.thumbnail) {
+              imageUrl = item.collection.medias.logo.thumbnail;
+              thumbnailUrl = item.collection.medias.logo.thumbnail;
+              largeUrl = item.collection.medias.logo.thumbnail;
+            }
+          }
+          
+          // Get value information
+          const valueUsd = item.estimatedValue?.valueUsd || 0;
+          const valueEth = item.estimatedValue?.valueWithDenomination || 0;
+          const valueCurrency = item.estimatedValue?.denomination?.symbol || 'ETH';
+          
+          // Get collection information
+          const collection = {
+            id: item.collection?.id || '',
+            name: item.collection?.name || 'Unknown Collection',
+            address: item.collection?.address || '',
+            network: item.collection?.network || 'ethereum',
+            imageUrl: item.collection?.cardImageUrl || '',
+            floorPrice: item.collection?.floorPrice?.valueUsd || 0,
+            floorPriceEth: item.collection?.floorPrice?.valueWithDenomination || 0,
+            nftStandard: item.collection?.nftStandard || 'ERC_721',
+            type: item.collection?.type || 'GENERAL',
+          };
+          
+          return {
             id: item.id || '',
             tokenId: item.tokenId || '',
             contractAddress: item.collection?.address || '',
-            name: item.name || 'Unknown Collection',
+            name: item.name || `#${item.tokenId}`,
             description: item.description || '',
             imageUrl: imageUrl,
-            imageUrlThumbnail: thumbnailUrl || imageUrl,
-              collection: {
-              id: item.collection?.id || '',
-              name: item.collection?.name || 'Unknown Collection',
-              address: item.collection?.address || '',
-              network: item.collection?.network || 'ethereum',
-              imageUrl: item.collection?.cardImageUrl || '',
-              floorPrice: item.collection?.floorPrice?.valueUsd || 0,
-              nftsCount: 0,
-            },
+            imageUrlThumbnail: thumbnailUrl,
+            imageUrlLarge: largeUrl,
+            collection,
             estimatedValue: {
-              amount: item.estimatedValue?.valueUsd || 0,
-              currency: 'USD',
+              amount: valueUsd,
+              amountEth: valueEth, 
+              currency: valueCurrency,
             },
             network: item.collection?.network || 'ethereum',
             balanceUSD: edge.balanceUSD || 0,
-            isNft: true // Flag to indicate this is an individual NFT
+            balance: edge.balance || 1,
+            isNft: true,
+            _rawData: item // Store raw data for debugging
           };
         });
         
