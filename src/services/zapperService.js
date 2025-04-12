@@ -508,9 +508,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                       id
                       name
                       address
-                      network {
-                        name
-                      }
+                      network
                       imageUrl
                     }
                     balanceUSD
@@ -557,7 +555,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
               id: item.collection?.id || '',
               name: item.collection?.name || 'Unknown Collection',
               address: item.collection?.address || '',
-              network: item.collection?.network?.name || 'ethereum',
+              network: item.collection?.network || 'ethereum',
               imageUrl: item.collection?.imageUrl || '',
               floorPrice: 0,
               nftsCount: 0,
@@ -566,7 +564,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
               amount: item.balanceUSD || 0,
               currency: 'USD',
             },
-            network: item.collection?.network?.name || 'ethereum',
+            network: item.collection?.network || 'ethereum',
             balanceUSD: item.balanceUSD || 0,
             isCollection: true // Flag to indicate this is a collection-level item
           };
