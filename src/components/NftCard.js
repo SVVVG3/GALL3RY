@@ -66,7 +66,33 @@ const NftCard = ({ nft, onClick }) => {
     // Check for direct image URL
     if (nft.imageUrl) return nft.imageUrl;
     
-    // Check for mediasV2 (common in Zapper API)
+    // Check for mediasV3 (new in Zapper API)
+    if (nft.mediasV3) {
+      // Check images first
+      if (nft.mediasV3.images?.edges && nft.mediasV3.images.edges.length > 0) {
+        for (const edge of nft.mediasV3.images.edges) {
+          const image = edge.node;
+          if (!image) continue;
+          
+          // Try various sizes in order of preference
+          if (image.large) return image.large;
+          if (image.original) return image.original;
+          if (image.thumbnail) return image.thumbnail;
+        }
+      }
+      
+      // Check animations if no images
+      if (nft.mediasV3.animations?.edges && nft.mediasV3.animations.edges.length > 0) {
+        for (const edge of nft.mediasV3.animations.edges) {
+          const animation = edge.node;
+          if (!animation) continue;
+          
+          if (animation.original) return animation.original;
+        }
+      }
+    }
+    
+    // Check for mediasV2 (common in older Zapper API)
     if (nft.mediasV2 && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
         if (!media) continue;
@@ -82,6 +108,7 @@ const NftCard = ({ nft, onClick }) => {
     // Check for collection image
     if (nft.collection?.imageUrl) return nft.collection.imageUrl;
     if (nft.collection?.cardImageUrl) return nft.collection.cardImageUrl;
+    if (nft.collection?.medias?.logo?.thumbnail) return nft.collection.medias.logo.thumbnail;
     
     // Check for token image
     if (nft.token?.imageUrl) return nft.token.imageUrl;
@@ -104,8 +131,9 @@ const NftCard = ({ nft, onClick }) => {
       name: nft.name,
       valueEth: nft.valueEth,
       lastSale: nft.lastSale,
-      collectionFloorPriceEth: nft.collection?.floorPriceEth,
-      debugValue: nft._debug_value,
+      collection: nft.collection, 
+      estimatedValue: nft.estimatedValue,
+      _debug_value: nft._debug_value,
     });
     
     // Priority order for value sources (most accurate first)
@@ -119,6 +147,15 @@ const NftCard = ({ nft, onClick }) => {
     }
     
     // 2. Collection floor price in ETH
+    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined && 
+        nft.collection.floorPrice.valueWithDenomination !== null) {
+      return {
+        value: nft.collection.floorPrice.valueWithDenomination,
+        symbol: nft.collection.floorPrice.denomination?.symbol || 'ETH'
+      };
+    }
+    
+    // 2.1 Legacy collection floor price
     if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
       return {
         value: nft.collection.floorPriceEth,
@@ -126,7 +163,25 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 3. Last sale value in ETH
+    // 3. Estimated value
+    if (nft.estimatedValue?.valueWithDenomination !== undefined && 
+        nft.estimatedValue.valueWithDenomination !== null) {
+      return {
+        value: nft.estimatedValue.valueWithDenomination,
+        symbol: nft.estimatedValue.denomination?.symbol || 'ETH'
+      };
+    }
+    
+    // 4. Last sale value
+    if (nft.lastSale?.valueWithDenomination !== undefined && 
+        nft.lastSale.valueWithDenomination !== null) {
+      return {
+        value: nft.lastSale.valueWithDenomination,
+        symbol: nft.lastSale.denomination?.symbol || 'ETH'
+      };
+    }
+    
+    // 4.1 Legacy last sale value in ETH
     if (nft.lastSale?.valueEth !== undefined && nft.lastSale.valueEth !== null) {
       return {
         value: nft.lastSale.valueEth,
@@ -134,19 +189,28 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 4. Debug value data
-    if (nft._debug_value?.floorPriceEth) {
-      return {
-        value: nft._debug_value.floorPriceEth,
-        symbol: 'ETH'
-      };
-    }
-    
-    if (nft._debug_value?.lastSaleValueEth) {
-      return {
-        value: nft._debug_value.lastSaleValueEth,
-        symbol: 'ETH'
-      };
+    // 5. Debug value data
+    if (nft._debug_value) {
+      if (nft._debug_value.floorPriceEth) {
+        return {
+          value: nft._debug_value.floorPriceEth,
+          symbol: 'ETH'
+        };
+      }
+      
+      if (nft._debug_value.lastSaleValueEth) {
+        return {
+          value: nft._debug_value.lastSaleValueEth,
+          symbol: 'ETH'
+        };
+      }
+      
+      if (nft._debug_value.estimatedValueEth) {
+        return {
+          value: nft._debug_value.estimatedValueEth,
+          symbol: 'ETH'
+        };
+      }
     }
     
     // Final fallback - return 0 ETH if collection exists

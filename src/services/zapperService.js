@@ -302,7 +302,7 @@ const zapperService = {
       
       console.log(`Fetching NFTs for ${addresses.length} addresses:`, addresses);
       
-      // Use the nftUsersTokens query which is still supported in Zapper API
+      // Updated query to match the current Zapper API schema
       const zapperQuery = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -314,33 +314,83 @@ const zapperService = {
             edges {
               node {
                 id
-                name
                 tokenId
+                name
                 description
-                lastSale {
-                  timestamp
-                  valueEth
-                }
-                mediasV2 {
-                  ... on Image {
-                    url
-                    originalUri
-                    original
-                  }
-                  ... on Animation {
-                    url
-                    originalUri
-                    original
-                  }
-                }
                 collection {
-                  id
                   name
-                  floorPriceEth
-                  cardImageUrl
+                  address
+                  network
+                  nftStandard
+                  type
+                  supply
+                  holdersCount
+                  floorPrice {
+                    valueUsd
+                    valueWithDenomination
+                    denomination {
+                      symbol
+                      network
+                      address
+                    }
+                  }
+                  medias {
+                    logo {
+                      thumbnail
+                    }
+                  }
+                }
+                mediasV3 {
+                  images(first: 3) {
+                    edges {
+                      node {
+                        original
+                        thumbnail
+                        blurhash
+                        large
+                        width
+                        height
+                        mimeType
+                        fileSize
+                      }
+                    }
+                  }
+                  animations(first: 1) {
+                    edges {
+                      node {
+                        original
+                        mimeType
+                      }
+                    }
+                  }
+                }
+                estimatedValue {
+                  valueUsd
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                    network
+                  }
+                }
+                lastSale {
+                  valueUsd
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                  }
+                  timestamp
+                }
+                traits {
+                  attributeName
+                  attributeValue
+                  supplyPercentage
+                  supply
                 }
               }
               cursor
+              balance
+              balanceUSD
+              ownedAt
             }
             pageInfo {
               hasNextPage
@@ -392,22 +442,27 @@ const zapperService = {
               tokenId: node.tokenId,
               name: node.name || `#${node.tokenId}`,
               description: node.description,
-              // Store value data using floorPriceEth as our main value source
-              valueEth: node.collection?.floorPriceEth || 0,
+              // Store value data - prioritize estimatedValue
+              valueEth: node.estimatedValue?.valueWithDenomination || node.collection?.floorPrice?.valueWithDenomination || 0,
               // Handle images
-              imageUrl: this.getBestImageUrl(node),
+              imageUrl: this.getBestImageUrlV3(node),
               // Track cursor for pagination
               cursor: edge.cursor,
+              balance: edge.balance,
+              balanceUSD: edge.balanceUSD,
               // Store lastSale for sorting
               lastSale: node.lastSale,
               // Store collection data
               collection: {
                 id: node.collection?.id,
                 name: node.collection?.name || 'Unknown Collection',
-                address: this.extractAddressFromCollectionId(node.collection?.id),
-                imageUrl: node.collection?.cardImageUrl,
-                floorPriceEth: node.collection?.floorPriceEth
-              }
+                address: node.collection?.address,
+                network: node.collection?.network,
+                imageUrl: node.collection?.medias?.logo?.thumbnail,
+                floorPriceEth: node.collection?.floorPrice?.valueWithDenomination
+              },
+              // Store traits for display
+              traits: node.traits || []
             };
           }).filter(Boolean);
           
@@ -447,41 +502,40 @@ const zapperService = {
       throw new Error(`Failed to load NFTs: ${error.message}. Please try again later.`);
     }
   },
-
-  // Helper to extract the best image URL from an NFT node
-  getBestImageUrl(node) {
+  
+  // Helper to extract the best image URL from an NFT node using mediasV3
+  getBestImageUrlV3(node) {
     if (!node) return 'https://via.placeholder.com/500?text=No+Image';
     
-    // Try media URLs in order of preference
-    if (node.mediasV2 && node.mediasV2.length > 0) {
-      for (const media of node.mediasV2) {
-        if (!media) continue;
+    // Try mediasV3 images first
+    if (node.mediasV3?.images?.edges && node.mediasV3.images.edges.length > 0) {
+      for (const edge of node.mediasV3.images.edges) {
+        const image = edge.node;
+        if (!image) continue;
         
-        if (media.original) return media.original;
-        if (media.originalUri) return media.originalUri;
-        if (media.url) return media.url;
+        // Try various image sizes in order of preference
+        if (image.large) return image.large;
+        if (image.original) return image.original;
+        if (image.thumbnail) return image.thumbnail;
+      }
+    }
+    
+    // Try mediasV3 animations if no images found
+    if (node.mediasV3?.animations?.edges && node.mediasV3.animations.edges.length > 0) {
+      for (const edge of node.mediasV3.animations.edges) {
+        const animation = edge.node;
+        if (!animation) continue;
+        
+        if (animation.original) return animation.original;
       }
     }
     
     // Fall back to collection image
-    if (node.collection?.cardImageUrl) {
-      return node.collection.cardImageUrl;
+    if (node.collection?.medias?.logo?.thumbnail) {
+      return node.collection.medias.logo.thumbnail;
     }
     
     return 'https://via.placeholder.com/500?text=No+Image';
-  },
-  
-  // Helper to extract address from collection ID
-  extractAddressFromCollectionId(id) {
-    if (!id) return null;
-    
-    // Collection IDs are often in the format "network-address"
-    const parts = id.split('-');
-    if (parts.length > 1) {
-      return parts[1];
-    }
-    
-    return null;
   },
 
   /**

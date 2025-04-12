@@ -197,7 +197,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.log(`Fetching NFTs for ${addresses.length} wallet addresses:`, addresses);
       console.log(loadMore ? 'Loading more NFTs from cursor: ' + cursor : 'Initial NFT load');
       
-      // First try using the old schema which we know works with the Zapper API
+      // Updated query to match the current Zapper API schema
       const query = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -209,30 +209,72 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             edges {
               node {
                 id
-                name
                 tokenId
+                name
                 description
-                lastSale {
-                  timestamp
-                  valueEth
-                }
-                mediasV2 {
-                  ... on Image {
-                    url
-                    originalUri
-                    original
-                  }
-                  ... on Animation {
-                    url
-                    originalUri
-                    original
-                  }
-                }
                 collection {
                   id
                   name
-                  floorPriceEth
-                  cardImageUrl
+                  address
+                  network
+                  nftStandard
+                  type
+                  supply
+                  holdersCount
+                  floorPrice {
+                    valueUsd
+                    valueWithDenomination
+                    denomination {
+                      symbol
+                      network
+                      address
+                    }
+                  }
+                  medias {
+                    logo {
+                      thumbnail
+                    }
+                  }
+                }
+                mediasV3 {
+                  images(first: 3) {
+                    edges {
+                      node {
+                        original
+                        thumbnail
+                        blurhash
+                        large
+                        width
+                        height
+                        mimeType
+                        fileSize
+                      }
+                    }
+                  }
+                  animations(first: 1) {
+                    edges {
+                      node {
+                        original
+                        mimeType
+                      }
+                    }
+                  }
+                }
+                estimatedValue {
+                  valueUsd
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                    network
+                  }
+                }
+                lastSale {
+                  valueUsd
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                  }
+                  timestamp
                 }
                 transfers {
                   edges {
@@ -243,8 +285,17 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                     }
                   }
                 }
+                traits {
+                  attributeName
+                  attributeValue
+                  supplyPercentage
+                  supply
+                }
               }
               cursor
+              balance
+              balanceUSD
+              ownedAt
             }
             pageInfo {
               hasNextPage
@@ -320,24 +371,37 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             const nft = edge.node;
             if (!nft) return null;
             
-            // Get image URL
+            // Get image URL from mediasV3
             let imageUrl = null;
             
-            // Try media URLs in order of preference
-            if (nft.mediasV2 && nft.mediasV2.length > 0) {
-              // Look for image URL in mediasV2
-              for (const media of nft.mediasV2) {
-                if (!media) continue;
+            // Try mediasV3 images first
+            if (nft.mediasV3?.images?.edges && nft.mediasV3.images.edges.length > 0) {
+              for (const imageEdge of nft.mediasV3.images.edges) {
+                const image = imageEdge.node;
+                if (!image) continue;
                 
-                // Try each possible field in order of preference
-                if (media.original && typeof media.original === 'string' && media.original.startsWith('http')) {
-                  imageUrl = media.original;
+                // Try various image sizes in order of preference
+                if (image.large && typeof image.large === 'string' && image.large.startsWith('http')) {
+                  imageUrl = image.large;
                   break;
-                } else if (media.originalUri && typeof media.originalUri === 'string' && media.originalUri.startsWith('http')) {
-                  imageUrl = media.originalUri;
+                } else if (image.original && typeof image.original === 'string' && image.original.startsWith('http')) {
+                  imageUrl = image.original;
                   break;
-                } else if (media.url && typeof media.url === 'string' && media.url.startsWith('http')) {
-                  imageUrl = media.url;
+                } else if (image.thumbnail && typeof image.thumbnail === 'string' && image.thumbnail.startsWith('http')) {
+                  imageUrl = image.thumbnail;
+                  break;
+                }
+              }
+            }
+            
+            // Try mediasV3 animations if no images found
+            if (!imageUrl && nft.mediasV3?.animations?.edges && nft.mediasV3.animations.edges.length > 0) {
+              for (const animationEdge of nft.mediasV3.animations.edges) {
+                const animation = animationEdge.node;
+                if (!animation) continue;
+                
+                if (animation.original && typeof animation.original === 'string' && animation.original.startsWith('http')) {
+                  imageUrl = animation.original;
                   break;
                 }
               }
@@ -394,29 +458,24 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             
             // Default fallback image (important for mobile UX)
             if (!imageUrl) {
-              if (nft.collection?.cardImageUrl) {
-                imageUrl = nft.collection.cardImageUrl;
+              if (nft.collection?.medias?.logo?.thumbnail) {
+                imageUrl = nft.collection.medias.logo.thumbnail;
               } else {
                 imageUrl = 'https://via.placeholder.com/500?text=No+Image';
               }
             }
             
-            // Extract contract address from collection ID if available
-            let contractAddress = null;
-            let networkId = 1; // Default to Ethereum
+            // Extract contract address from collection data
+            const contractAddress = nft.collection?.address;
             
-            if (nft.collection?.id) {
-              const parts = nft.collection.id.split(':');
-              if (parts.length > 1) {
-                contractAddress = parts[1];
-                
-                // Determine network from collection ID
-                const network = parts[0].toLowerCase();
-                if (network.includes('polygon')) networkId = 137;
-                else if (network.includes('optimism')) networkId = 10;
-                else if (network.includes('arbitrum')) networkId = 42161;
-                else if (network.includes('base')) networkId = 8453;
-              }
+            // Determine network from collection data
+            let networkId = 1; // Default to Ethereum
+            if (nft.collection?.network) {
+              const network = nft.collection.network.toLowerCase();
+              if (network.includes('polygon')) networkId = 137;
+              else if (network.includes('optimism')) networkId = 10;
+              else if (network.includes('arbitrum')) networkId = 42161;
+              else if (network.includes('base')) networkId = 8453;
             }
             
             // Create a normalized NFT object with consistent properties
@@ -426,14 +485,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               tokenId: nft.tokenId,
               description: nft.description,
               imageUrl,
-              // Use floor price as value
-              valueEth: nft.collection?.floorPriceEth || 0,
+              // Use various value sources with fallbacks
+              valueEth: nft.collection?.floorPrice?.valueWithDenomination || 
+                      nft.estimatedValue?.valueWithDenomination || 
+                      nft.lastSale?.valueWithDenomination || 0,
               lastSale: nft.lastSale,
               collection: nft.collection ? {
                 id: nft.collection.id,
                 name: nft.collection.name || 'Unknown Collection',
-                floorPriceEth: nft.collection.floorPriceEth || 0,
-                cardImageUrl: nft.collection.cardImageUrl
+                floorPriceEth: nft.collection.floorPrice?.valueWithDenomination || 0,
+                cardImageUrl: nft.collection.medias?.logo?.thumbnail
               } : null,
               token: {
                 id: nft.id,
@@ -454,8 +515,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               transfers: nft.transfers,
               // Debug value data
               _debug_value: {
-                floorPriceEth: nft.collection?.floorPriceEth,
-                lastSaleValueEth: nft.lastSale?.valueEth
+                floorPriceEth: nft.collection?.floorPrice?.valueWithDenomination,
+                lastSaleValueEth: nft.lastSale?.valueWithDenomination,
+                estimatedValueEth: nft.estimatedValue?.valueWithDenomination
               }
             };
           }).filter(Boolean);
@@ -717,14 +779,32 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               source = 'collection.floorPriceEth';
             } 
             // Use lastSale value as alternative
-            else if (nft.lastSale?.valueEth !== undefined && nft.lastSale.valueEth !== null) {
-              value = parseFloat(nft.lastSale.valueEth);
-              source = 'lastSale.valueEth';
+            else if (nft.lastSale?.valueWithDenomination !== undefined && nft.lastSale.valueWithDenomination !== null) {
+              value = parseFloat(nft.lastSale.valueWithDenomination);
+              source = 'lastSale.valueWithDenomination';
+            }
+            // Check for estimatedValue
+            else if (nft.estimatedValue?.valueWithDenomination !== undefined && nft.estimatedValue.valueWithDenomination !== null) {
+              value = parseFloat(nft.estimatedValue.valueWithDenomination);
+              source = 'estimatedValue.valueWithDenomination';
             }
             // Fall back to assigned valueEth if available
             else if (nft.valueEth !== undefined && nft.valueEth !== null) {
               value = parseFloat(nft.valueEth);
               source = 'valueEth';
+            }
+            // Check debug value fields as last resort
+            else if (nft._debug_value) {
+              if (nft._debug_value.floorPriceEth) {
+                value = parseFloat(nft._debug_value.floorPriceEth);
+                source = '_debug_value.floorPriceEth';
+              } else if (nft._debug_value.lastSaleValueEth) {
+                value = parseFloat(nft._debug_value.lastSaleValueEth);
+                source = '_debug_value.lastSaleValueEth';
+              } else if (nft._debug_value.estimatedValueEth) {
+                value = parseFloat(nft._debug_value.estimatedValueEth);
+                source = '_debug_value.estimatedValueEth';
+              }
             }
             
             // Ensure we have a valid number
@@ -775,6 +855,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 timestamp = Math.max(...transfers);
                 source = 'transfers';
               }
+            } else if (nft.ownedAt && typeof nft.ownedAt === 'number' && nft.ownedAt > 0) {
+              timestamp = nft.ownedAt;
+              source = 'ownedAt';
             }
             
             // Only log the first few NFTs to avoid console flooding
