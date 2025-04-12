@@ -110,62 +110,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     // Log the full profile for debugging
     console.log('Raw profile data:', profile);
     
-    // Check for direct custody address
+    // First check custody address - this should be a main address
     if (profile.custodyAddress) {
       console.log('Found custody address:', profile.custodyAddress);
-      addresses.push(profile.custodyAddress);
-    }
-    
-    // Check for direct connected addresses array
-    if (Array.isArray(profile.connectedAddresses) && profile.connectedAddresses.length > 0) {
-      console.log(`Found ${profile.connectedAddresses.length} connected addresses in main field:`, profile.connectedAddresses);
-      // Filter out any non-ethereum addresses (we'll only support eth addresses for now)
-      const ethAddresses = profile.connectedAddresses.filter(addr => 
-        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
-      );
-      addresses.push(...ethAddresses);
-    }
-    
-    // NEW: Check for flattened ethWallets array added by our backend
-    if (Array.isArray(profile.ethWallets) && profile.ethWallets.length > 0) {
-      console.log(`Found ${profile.ethWallets.length} ETH wallets in flattened ethWallets array:`, profile.ethWallets);
-      const ethWallets = profile.ethWallets.filter(addr => 
-        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
-      );
-      addresses.push(...ethWallets);
-    }
-    
-    // Check for ethWallets in _rawData.extras (from Warpcast API)
-    if (profile._rawData?.extras?.ethWallets && Array.isArray(profile._rawData.extras.ethWallets)) {
-      console.log(`Found ${profile._rawData.extras.ethWallets.length} ETH wallets in _rawData.extras:`, profile._rawData.extras.ethWallets);
-      const ethWallets = profile._rawData.extras.ethWallets.filter(addr => 
-        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
-      );
-      addresses.push(...ethWallets);
-    }
-    
-    // Check for custody address in _rawData.extras
-    if (profile._rawData?.extras?.custodyAddress && !addresses.includes(profile._rawData.extras.custodyAddress)) {
-      console.log('Found custody address in _rawData.extras:', profile._rawData.extras.custodyAddress);
-      if (typeof profile._rawData.extras.custodyAddress === 'string' && 
-          profile._rawData.extras.custodyAddress.startsWith('0x') && 
-          profile._rawData.extras.custodyAddress.length === 42) {
-        addresses.push(profile._rawData.extras.custodyAddress);
+      if (typeof profile.custodyAddress === 'string' && 
+          profile.custodyAddress.startsWith('0x') && 
+          profile.custodyAddress.length === 42) {
+        addresses.push(profile.custodyAddress);
       }
     }
     
-    // Check for solanaWallets in _rawData.extras (we may want to handle these differently)
-    if (profile._rawData?.extras?.solanaWallets && Array.isArray(profile._rawData.extras.solanaWallets)) {
-      console.log(`Found ${profile._rawData.extras.solanaWallets.length} Solana wallets in _rawData.extras (not processed):`, 
-        profile._rawData.extras.solanaWallets);
-      // We don't process Solana wallets at this time, but we log them for future development
-    }
-    
-    // NEW: Check for flattened solanaWallets array (we might want to handle these differently)
-    if (Array.isArray(profile.solanaWallets) && profile.solanaWallets.length > 0) {
-      console.log(`Found ${profile.solanaWallets.length} Solana wallets in flattened solanaWallets array (not processed):`, 
-        profile.solanaWallets);
-      // We don't process Solana wallets at this time, but we log them for future development
+    // Then check connected addresses - this is the main array from Zapper API
+    if (Array.isArray(profile.connectedAddresses)) {
+      console.log(`Found ${profile.connectedAddresses.length} connected addresses:`, profile.connectedAddresses);
+      
+      // Filter out any non-ethereum addresses
+      const ethAddresses = profile.connectedAddresses.filter(addr => 
+        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
+      );
+      
+      addresses.push(...ethAddresses);
     }
     
     // Remove duplicates and convert to lowercase

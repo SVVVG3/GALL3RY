@@ -87,7 +87,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // Determine if input is a FID (number) or username (string)
   const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
   
-  // For ENS names, try both with and without .eth suffix
+  // For ENS names, we'll try both with and without .eth suffix as fallbacks
   let isEnsName = false;
   let alternativeUsername = null;
   
@@ -98,14 +98,14 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     console.log(`Input appears to be ENS name: ${cleanInput}, will also try: ${alternativeUsername}`);
   }
   
-  // Construct the query variables based on input type
+  // Construct the query variables based on input type - exactly matching Zapper API docs
   const variables = isFid 
     ? { fid: parseInt(cleanInput, 10) }
     : { username: cleanInput };
   
   console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   
-  // GraphQL query according to Zapper API docs
+  // GraphQL query - exact match with Zapper API docs
   const query = `
     query GetFarcasterProfile($username: String, $fid: Int) {
       farcasterProfile(username: $username, fid: $fid) {
@@ -124,43 +124,22 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   `;
   
   try {
-    // First attempt with original input
-    try {
-      const response = await makeGraphQLRequest(query, variables);
-      
-      // Check if profile was found
-      if (response.data && response.data.farcasterProfile) {
-        const profile = response.data.farcasterProfile;
-        
-        // Ensure we have consistent field names for our application
-        return {
-          fid: profile.fid,
-          username: profile.username,
-          displayName: profile.metadata?.displayName || profile.username,
-          avatarUrl: profile.metadata?.imageUrl,
-          bio: profile.metadata?.description,
-          custodyAddress: profile.custodyAddress,
-          connectedAddresses: profile.connectedAddresses || [],
-          // Include the full profile for debugging
-          _rawProfile: profile
-        };
-      }
-    } catch (firstError) {
-      console.log(`First attempt failed: ${firstError.message}`);
-    }
+    // Make the request to the Zapper API
+    const response = await makeGraphQLRequest(query, variables);
     
-    // If this is an ENS name and the first attempt failed, try the alternative (without .eth)
-    if (isEnsName && alternativeUsername) {
-      console.log(`Trying alternative username: ${alternativeUsername}`);
-      
-      try {
+    // Check if profile was found
+    if (!response.data || !response.data.farcasterProfile) {
+      // If using ENS name and first attempt failed, try the alternative (without .eth)
+      if (isEnsName && alternativeUsername) {
+        console.log(`Trying alternative username: ${alternativeUsername}`);
+        
         const altResponse = await makeGraphQLRequest(query, { username: alternativeUsername });
         
-        // Check if profile was found with alternative username
         if (altResponse.data && altResponse.data.farcasterProfile) {
           console.log(`Found profile using alternative username: ${alternativeUsername}`);
-          const profile = altResponse.data.farcasterProfile;
           
+          // Transform response to match our application's expected format
+          const profile = altResponse.data.farcasterProfile;
           return {
             fid: profile.fid,
             username: profile.username,
@@ -169,43 +148,32 @@ export const getFarcasterProfile = async (usernameOrFid) => {
             bio: profile.metadata?.description,
             custodyAddress: profile.custodyAddress,
             connectedAddresses: profile.connectedAddresses || [],
-            _rawProfile: profile
           };
         }
-      } catch (secondError) {
-        console.log(`Alternative username attempt failed: ${secondError.message}`);
-      }
-    }
-    
-    // If we reach this point, try the direct Warpcast API as a fallback
-    try {
-      console.log(`Trying Warpcast API fallback for: ${cleanInput}`);
-      const warpcastResponse = await fetch(`/api/farcaster-user?username=${encodeURIComponent(cleanInput)}`);
-      const warpcastData = await warpcastResponse.json();
-      
-      if (warpcastResponse.ok && warpcastData.profile) {
-        console.log('Found profile via Warpcast API fallback');
-        return warpcastData.profile;
       }
       
-      // If ENS name, try alternative with Warpcast API too
-      if (isEnsName && alternativeUsername) {
-        const altWarpcastResponse = await fetch(`/api/farcaster-user?username=${encodeURIComponent(alternativeUsername)}`);
-        const altWarpcastData = await altWarpcastResponse.json();
-        
-        if (altWarpcastResponse.ok && altWarpcastData.profile) {
-          console.log(`Found profile via Warpcast API with alternative username: ${alternativeUsername}`);
-          return altWarpcastData.profile;
-        }
-      }
-    } catch (warpcastError) {
-      console.log(`Warpcast API fallback failed: ${warpcastError.message}`);
+      throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
     }
     
-    // If we reach here, all attempts failed
-    throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
+    // Transform response to match our application's expected format
+    const profile = response.data.farcasterProfile;
+    
+    // Log what we found
+    console.log(`Profile found via Zapper API: ${profile.username}, FID: ${profile.fid}`);
+    console.log(`Connected addresses: ${profile.connectedAddresses?.length || 0}, custody address: ${profile.custodyAddress || 'none'}`);
+    
+    // Return data in the expected format
+    return {
+      fid: profile.fid,
+      username: profile.username,
+      displayName: profile.metadata?.displayName || profile.username,
+      avatarUrl: profile.metadata?.imageUrl,
+      bio: profile.metadata?.description,
+      custodyAddress: profile.custodyAddress,
+      connectedAddresses: profile.connectedAddresses || [],
+    };
   } catch (error) {
-    console.error('Error fetching Farcaster profile:', error);
+    console.error('Error fetching Farcaster profile from Zapper API:', error);
     throw error;
   }
 };
@@ -349,142 +317,4 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
             cursor: currentCursor,
           };
           
-          console.log(`Fetching NFTs for ${address}, page cursor: ${currentCursor || 'initial'}`);
-          const response = await makeGraphQLRequest(nftsQuery, nftsVariables, endpoints, maxRetries);
-          
-          if (response.data?.nfts?.items) {
-            const nftsData = response.data.nfts.items;
-            fetchedCount += nftsData.length;
-            
-            const processedNfts = nftsData.map(nft => ({
-              id: nft.id,
-              tokenId: nft.tokenId,
-              contractAddress: nft.contractAddress,
-              name: nft.name || 'Unnamed NFT',
-              description: nft.description || '',
-              imageUrl: nft.imageUrl || nft.imageUrlThumbnail || '',
-              thumbnailUrl: nft.imageUrlThumbnail || nft.imageUrl || '',
-              collection: nft.collection ? {
-                id: nft.collection.id,
-                name: nft.collection.name || 'Unknown Collection',
-                address: nft.collection.address,
-                network: nft.collection.network,
-                imageUrl: nft.collection.imageUrl || '',
-                floorPrice: nft.collection.floorPrice || 0,
-                nftsCount: nft.collection.nftsCount || 0
-              } : null,
-              estimatedValue: nft.estimatedValue ? {
-                amount: nft.estimatedValue.amount || 0,
-                currency: nft.estimatedValue.currency || 'ETH',
-              } : null,
-              lastSalePrice: nft.lastSalePrice ? {
-                amount: nft.lastSalePrice.amount || 0,
-                currency: nft.lastSalePrice.currency || 'ETH',
-              } : null,
-              network: nft.network || 'ethereum',
-              attributes: nft.attributes || [],
-              marketplaceUrls: nft.marketplaceUrls || [],
-              ownerAddress: address,
-            }));
-            
-            allNfts.push(...processedNfts);
-            
-            const pageInfo = response.data.nfts.pageInfo;
-            hasNextPage = pageInfo.hasNextPage;
-            currentCursor = pageInfo.endCursor;
-            lastCursor = currentCursor;
-            
-            // If we have hasNextPage=true when we stop fetching, set hasMoreResults to true
-            if (hasNextPage && fetchedCount >= maxToFetch) {
-              hasMoreResults = true;
-            }
-            
-            continue; // Successfully processed with nfts query
-          }
-        } catch (nftsError) {
-          console.warn(`NFTs query failed for ${address}, trying portfolioV2:`, nftsError.message);
-        }
-        
-        // If nfts query fails, try portfolioV2
-        try {
-          const portfolioVariables = {
-            addresses: [address],
-            limit: Math.min(100, maxToFetch - fetchedCount),
-            cursor: currentCursor,
-          };
-          
-          console.log(`Trying portfolioV2 query for ${address}`);
-          const portfolioResponse = await makeGraphQLRequest(portfolioV2Query, portfolioVariables, endpoints, maxRetries);
-          
-          if (portfolioResponse.data?.portfolioV2?.nftBalances?.nfts?.edges) {
-            const edges = portfolioResponse.data.portfolioV2.nftBalances.nfts.edges;
-            fetchedCount += edges.length;
-            
-            const processedNfts = edges.map(edge => {
-              const nft = edge.node;
-              return {
-                id: nft.id,
-                tokenId: nft.tokenId,
-                contractAddress: nft.contractAddress,
-                name: nft.name || 'Unnamed NFT',
-                description: nft.description || '',
-                imageUrl: nft.imageUrl || '',
-                thumbnailUrl: nft.imageUrl || '',
-                collection: nft.collection ? {
-                  id: nft.collection.id,
-                  name: nft.collection.name || 'Unknown Collection',
-                  address: nft.collection.address,
-                  network: nft.collection.network,
-                  imageUrl: nft.collection.imageUrl || '',
-                  floorPrice: nft.collection.floorPrice || 0
-                } : null,
-                estimatedValue: nft.estimatedValue ? {
-                  amount: nft.estimatedValue.amount || 0,
-                  currency: nft.estimatedValue.currency || 'ETH',
-                } : null,
-                network: nft.network || 'ethereum',
-                attributes: nft.attributes || [],
-                ownerAddress: address,
-              };
-            });
-            
-            allNfts.push(...processedNfts);
-            
-            const pageInfo = portfolioResponse.data.portfolioV2.nftBalances.nfts.pageInfo;
-            hasNextPage = pageInfo.hasNextPage;
-            currentCursor = pageInfo.endCursor;
-            lastCursor = currentCursor;
-            
-            if (hasNextPage && fetchedCount >= maxToFetch) {
-              hasMoreResults = true;
-            }
-            
-            continue; // Successfully processed with portfolioV2 query
-          } else {
-            throw new Error('No NFT data found in portfolioV2 response');
-          }
-        } catch (portfolioError) {
-          console.warn(`PortfolioV2 query failed for ${address}:`, portfolioError.message);
-          console.warn('No NFTs found or API error for address', address);
-          break; // Move to next address
-        }
-      } catch (error) {
-        console.error(`Error fetching NFTs for address ${address}:`, error);
-        break; // Move to next address
-      }
-    }
-  }
-  
-  console.log(`Finished fetching NFTs: Found ${allNfts.length} NFTs across ${addressesToProcess.length} addresses`);
-  
-  return {
-    nfts: allNfts,
-    cursor: lastCursor,
-    hasMore: hasMoreResults,
-  };
-};
-
-export default {
-  getNftsForAddresses,
-  getFarcasterProfile
-}; 
+          console.log(`

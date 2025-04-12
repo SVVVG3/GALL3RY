@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Zapper API endpoint
+  // Zapper API endpoint - make sure we're using the correct URL
   const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
   
   try {
@@ -70,15 +70,20 @@ export default async function handler(req, res) {
       console.warn('⚠️ ZAPPER_API_KEY not set in environment variables');
     }
 
-    // Prepare headers
+    // Prepare headers - IMPORTANT: The Zapper API uses a specific authorization format
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
     
-    // Add API key if available - note that Zapper API uses Basic auth
+    // Add API key if available - note that Zapper API uses API key in the header
     if (apiKey) {
+      // According to Zapper docs, their API key header format is:
       headers['Authorization'] = `Basic ${apiKey}`;
+      
+      // Some APIs also use x-api-key or x-zapper-api-key - include both for robustness
+      headers['x-api-key'] = apiKey;
+      headers['x-zapper-api-key'] = apiKey;
     }
     
     // Make request to Zapper API using native fetch
@@ -93,7 +98,7 @@ export default async function handler(req, res) {
     // Get response as text first to avoid JSON parsing errors
     const responseText = await response.text();
     
-    // Log response status for debugging
+    // Log response status and length for debugging
     console.log(`Zapper API (${queryName}) responded with status: ${response.status}, length: ${responseText.length}`);
     
     // Parse response text to JSON if possible
@@ -120,7 +125,11 @@ export default async function handler(req, res) {
             } else if (key === 'portfolioV2' && responseData.data[key].nftBalances?.nfts?.edges) {
               dataSummary.portfolioV2 = `${responseData.data[key].nftBalances.nfts.edges.length} NFTs`;
             } else if (key === 'farcasterProfile') {
-              dataSummary.farcasterProfile = `username: ${responseData.data[key].username}, fid: ${responseData.data[key].fid}`;
+              const profile = responseData.data[key];
+              dataSummary.farcasterProfile = 
+                `username: ${profile.username}, ` +
+                `custodyAddress: ${profile.custodyAddress || 'none'}, ` +
+                `connectedAddresses: ${profile.connectedAddresses?.length || 0}`;
             } else {
               dataSummary[key] = 'present';
             }
