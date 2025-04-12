@@ -135,12 +135,52 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return;
       }
       
-      // Fetch the profile
+      // Try direct API first - easier and more reliable
+      try {
+        const response = await fetch(`/api/farcaster-user?username=${encodeURIComponent(cleanQuery)}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          console.error('Error from direct Farcaster API:', data);
+          throw new Error(data.error || 'Failed to find user');
+        }
+        
+        if (data.profile) {
+          console.log('Found profile via direct API:', data.profile);
+          setUserProfile(data.profile);
+          
+          // If profile found, fetch their NFTs
+          const addresses = [
+            ...(data.profile.connectedAddresses || []),
+            ...(data.profile.custodyAddress ? [data.profile.custodyAddress] : [])
+          ].filter(Boolean);
+          
+          if (addresses.length > 0) {
+            setWalletAddresses(addresses);
+            await fetchUserNfts(addresses);
+            
+            // After initial fetch, start the aggressive loader to get all NFTs
+            setTimeout(() => {
+              loadAllNfts(addresses);
+            }, 1000); // Slight delay to let UI update first
+          } else {
+            console.log('No addresses found for this user to fetch NFTs');
+          }
+          
+          return; // Exit early if direct API worked
+        }
+      } catch (directError) {
+        // Just log it and try fallback - don't stop here
+        console.error("Direct API error:", directError);
+      }
+      
+      // Fallback to using Zapper API
+      console.log("Falling back to zapperService for profile lookup");
       const profile = await zapperService.getFarcasterProfile(cleanQuery);
       
       // Set profile data in state immediately when received
       setUserProfile(profile);
-      console.log('Profile found:', profile);
+      console.log('Profile found via fallback:', profile);
       
       // If profile found, fetch their NFTs
       if (profile) {
@@ -167,7 +207,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.error('Error searching for user:', error);
       
       // Provide more specific error messages to help users
-      if (error.message.includes('Could not find Farcaster profile')) {
+      if (error.message.includes('Could not find Farcaster profile') || error.message.includes('User not found')) {
         setSearchError(`Could not find a Farcaster profile for "${query}". Please check the username and try again.`);
       } else if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed') || error.message.includes('Network error')) {
         setSearchError('Network error. Please check your internet connection and try again.');
