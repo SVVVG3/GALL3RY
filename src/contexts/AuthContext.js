@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useProfile } from '@farcaster/auth-kit';
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
 // Create the auth context
 const AuthContext = createContext();
 
@@ -73,8 +76,10 @@ export const AuthProvider = ({ children }) => {
       // No need to implement actual logout logic here as it's handled by Farcaster Auth Kit
       // The local token might still be useful for API calls
       setToken(null);
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('auth_profile');
+      if (isBrowser) {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('auth_profile');
+      }
     }
   };
 

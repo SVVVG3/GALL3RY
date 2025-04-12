@@ -2,6 +2,9 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { ethers } from 'ethers';
 import { useAuth } from './AuthContext';
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
 export const WalletContext = createContext();
 
 export const WalletProvider = ({ children }) => {
@@ -15,7 +18,7 @@ export const WalletProvider = ({ children }) => {
   
   // Initialize provider
   useEffect(() => {
-    if (window.ethereum) {
+    if (isBrowser && window.ethereum) {
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       setProvider(provider);
     }
@@ -23,7 +26,7 @@ export const WalletProvider = ({ children }) => {
   
   // Load saved wallets from localStorage
   useEffect(() => {
-    if (profile) {
+    if (profile && isBrowser) {
       try {
         const savedWallets = localStorage.getItem('connected_wallets');
         if (savedWallets) {
@@ -42,13 +45,15 @@ export const WalletProvider = ({ children }) => {
   
   // Save wallets to localStorage when they change
   useEffect(() => {
-    if (connectedWallets.length > 0) {
+    if (connectedWallets.length > 0 && isBrowser) {
       localStorage.setItem('connected_wallets', JSON.stringify(connectedWallets));
     }
   }, [connectedWallets]);
   
   // Connect wallet using Metamask or WalletConnect
   const connectWallet = useCallback(async (connectionType = 'metamask') => {
+    if (!isBrowser) return;
+    
     if (!window.ethereum && connectionType === 'metamask') {
       setConnectionError('Metamask not installed');
       return;
@@ -91,9 +96,11 @@ export const WalletProvider = ({ children }) => {
     setConnectedWallets(prev => prev.filter(wallet => wallet.address !== address));
     
     // Remove from localStorage
-    const savedWallets = JSON.parse(localStorage.getItem('connected_wallets') || '[]');
-    const updatedWallets = savedWallets.filter(wallet => wallet.address !== address);
-    localStorage.setItem('connected_wallets', JSON.stringify(updatedWallets));
+    if (isBrowser) {
+      const savedWallets = JSON.parse(localStorage.getItem('connected_wallets') || '[]');
+      const updatedWallets = savedWallets.filter(wallet => wallet.address !== address);
+      localStorage.setItem('connected_wallets', JSON.stringify(updatedWallets));
+    }
   }, []);
   
   // Fetch ENS name for an address

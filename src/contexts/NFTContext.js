@@ -6,6 +6,9 @@ import { useWallet } from './WalletContext';
 import zapperService from '../services/zapperService';
 import { ZAPPER_PROXY_URL, CACHE_EXPIRATION_TIME, NFT_PAGE_SIZE } from '../constants';
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
 const NFTContext = createContext();
 const PAGE_SIZE = NFT_PAGE_SIZE;
 
@@ -77,6 +80,7 @@ export const NFTProvider = ({ children }) => {
   // Enhanced cache management functions
   const getCachedNFTs = useCallback((forceRefresh = false) => {
     if (forceRefresh) return null;
+    if (!isBrowser) return null;
     
     try {
       setCachingStatus({ status: 'reading', progress: 0 });
@@ -120,6 +124,8 @@ export const NFTProvider = ({ children }) => {
   }, [wallets]);
   
   const updateCache = useCallback((data) => {
+    if (!isBrowser) return;
+    
     try {
       setCachingStatus({ status: 'writing', progress: 50 });
       

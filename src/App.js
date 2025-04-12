@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
@@ -19,6 +19,9 @@ import FarcasterUserSearch from './components/FarcasterUserSearch';
 import FolderDetail from './components/FolderDetail';
 import { NFTProvider } from './contexts/NFTContext';
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined';
+
 // Configure Farcaster Auth Kit
 const farcasterConfig = {
   rpcUrl: process.env.REACT_APP_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
@@ -26,42 +29,70 @@ const farcasterConfig = {
   siweUri: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
 };
 
+// Loading component for suspense fallback
+const LoadingScreen = () => (
+  <div className="loading-container">
+    <div className="loading-spinner"></div>
+    <p>Loading app...</p>
+  </div>
+);
+
 function App() {
+  // Only render NFTProvider on client-side to avoid SSR issues
+  const [isClient, setIsClient] = useState(false);
+  
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+  
+  // Main app content
+  const AppContent = () => (
+    <div className="app">
+      <header className="app-header">
+        <div className="container">
+          <div className="logo">
+            <Link to="/">
+              <h1>GALL3RY</h1>
+            </Link>
+          </div>
+          
+          <div className="auth-actions">
+            <AuthButtons />
+          </div>
+        </div>
+      </header>
+      
+      <main className="app-content">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/user/:username" element={<UserProfilePage />} />
+        </Routes>
+      </main>
+      
+      <footer className="app-footer">
+        <div className="container">
+          <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
+        </div>
+      </footer>
+    </div>
+  );
+  
   return (
     <AuthKitProvider config={farcasterConfig}>
       <AuthProvider>
-        <NFTProvider>
-          <Router>
-            <div className="app">
-              <header className="app-header">
-                <div className="container">
-                  <div className="logo">
-                    <Link to="/">
-                      <h1>GALL3RY</h1>
-                    </Link>
-                  </div>
-                  
-                  <div className="auth-actions">
-                    <AuthButtons />
-                  </div>
-                </div>
-              </header>
-              
-              <main className="app-content">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/user/:username" element={<UserProfilePage />} />
-                </Routes>
-              </main>
-              
-              <footer className="app-footer">
-                <div className="container">
-                  <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
-                </div>
-              </footer>
-            </div>
-          </Router>
-        </NFTProvider>
+        <Suspense fallback={<LoadingScreen />}>
+          {isClient ? (
+            <NFTProvider>
+              <Router>
+                <AppContent />
+              </Router>
+            </NFTProvider>
+          ) : (
+            <Router>
+              <AppContent />
+            </Router>
+          )}
+        </Suspense>
       </AuthProvider>
     </AuthKitProvider>
   );
