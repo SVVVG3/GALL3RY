@@ -38,10 +38,12 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
   }, [src]);
 
   const handleMediaLoad = () => {
+    console.log(`Media loaded: ${mediaSrc}`);
     setLoading(false);
   };
 
   const handleMediaError = () => {
+    console.error(`Error loading media: ${mediaSrc}`);
     // Try with CORS proxy if not already
     if (!mediaSrc.includes('corsproxy.io') && !error) {
       setMediaSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
@@ -51,54 +53,53 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
     }
   };
 
-  // If loading, show spinner
-  if (loading) {
-    return (
-      <div className="nft-media-loader">
-        <Spinner size="md" />
-      </div>
-    );
-  }
-
-  // If error, show placeholder
-  if (error) {
-    return (
-      <div className="nft-media-error">
-        <img 
-          src="/placeholder.png"
-          alt="NFT Placeholder"
-          className="placeholder-image"
-        />
-      </div>
-    );
-  }
-
-  // If video, render video element
-  if (isVideo) {
-    return (
-      <video
-        src={mediaSrc}
-        className={`nft-media ${className}`}
-        onLoadedData={handleMediaLoad}
-        onError={handleMediaError}
-        autoPlay
-        loop
-        muted
-        playsInline
-        controlsList="nodownload"
-      />
-    );
-  }
-
-  // Otherwise render image
   return (
-    <img
-      src={mediaSrc}
-      alt={alt}
-      className={`nft-media ${className}`}
-      onLoad={handleMediaLoad}
-      onError={handleMediaError}
-    />
+    <div className="nft-media-container">
+      {/* Always render the media elements (hidden while loading) so they can trigger onLoad */}
+      {!error && !isVideo && (
+        <img
+          src={mediaSrc}
+          alt={alt}
+          className={`nft-media ${className}`}
+          onLoad={handleMediaLoad}
+          onError={handleMediaError}
+          style={{ visibility: loading ? 'hidden' : 'visible' }}
+        />
+      )}
+
+      {!error && isVideo && (
+        <video
+          src={mediaSrc}
+          className={`nft-media ${className}`}
+          onLoadedData={handleMediaLoad}
+          onError={handleMediaError}
+          style={{ visibility: loading ? 'hidden' : 'visible' }}
+          autoPlay
+          loop
+          muted
+          playsInline
+          controlsList="nodownload"
+        />
+      )}
+
+      {/* Show loading spinner while loading */}
+      {loading && (
+        <div className="nft-media-loader">
+          <Spinner size="md" />
+        </div>
+      )}
+
+      {/* Show placeholder if error */}
+      {error && (
+        <div className="nft-media-error">
+          <img 
+            src="/placeholder.png"
+            alt="NFT Placeholder"
+            className="placeholder-image"
+          />
+        </div>
+      )}
+    </div>
   );
 };
 
