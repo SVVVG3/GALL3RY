@@ -134,19 +134,12 @@ const NftCard = ({ nft, onClick }) => {
       estimatedValue: nft.estimatedValue,
     });
     
+    // Use a consistent ETH to USD conversion factor (matches the one in NFTContext.js)
+    const ETH_USD_ESTIMATE = 3500;
+    
     // Priority order for value sources (prioritizing USD values)
     
-    // 1. New estimatedValue format from updated zapperService (USD first)
-    if (nft.estimatedValue?.amount !== undefined && 
-        nft.estimatedValue.amount !== null) {
-      return {
-        value: nft.estimatedValue.amount,
-        symbol: nft.estimatedValue.currency || 'USD',
-        isUsd: nft.estimatedValue.currency === 'USD'
-      };
-    }
-    
-    // 2. First try to get USD value
+    // 1. valueUsd - direct USD value
     if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
       return {
         value: nft.valueUsd,
@@ -155,7 +148,7 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 3. Try direct estimatedValue USD from the API
+    // 2. Try estimatedValue.valueUsd
     if (nft.estimatedValue?.valueUsd !== undefined && 
         nft.estimatedValue.valueUsd !== null) {
       return {
@@ -165,44 +158,39 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 4. Direct valueEth (usually from collection floor price)
-    if (nft.valueEth !== undefined && nft.valueEth !== null) {
-      return {
-        value: nft.valueEth,
-        symbol: 'ETH',
-        isUsd: false
-      };
+    // 3. New format: { estimatedValue: { amount: number, currency: string } }
+    // If currency is USD, use that value
+    if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
+        nft.estimatedValue.amount !== undefined) {
+      // If it's in USD, use directly
+      if (nft.estimatedValue.currency === 'USD') {
+        return {
+          value: nft.estimatedValue.amount,
+          symbol: 'USD',
+          isUsd: true
+        };
+      }
+      // If it's in ETH, convert to USD for display
+      else if (nft.estimatedValue.currency === 'ETH' || !nft.estimatedValue.currency) {
+        return {
+          value: nft.estimatedValue.amount * ETH_USD_ESTIMATE,
+          symbol: 'USD',
+          isUsd: true,
+          originalValue: nft.estimatedValue.amount,
+          originalSymbol: 'ETH'
+        };
+      }
+      // For other currencies, use as is
+      else {
+        return {
+          value: nft.estimatedValue.amount,
+          symbol: nft.estimatedValue.currency,
+          isUsd: nft.estimatedValue.currency === 'USD'
+        };
+      }
     }
     
-    // 5. Estimated value with denomination
-    if (nft.estimatedValue?.valueWithDenomination !== undefined && 
-        nft.estimatedValue.valueWithDenomination !== null) {
-      return {
-        value: nft.estimatedValue.valueWithDenomination,
-        symbol: nft.estimatedValue.denomination?.symbol || 'ETH',
-        isUsd: nft.estimatedValue.denomination?.symbol === 'USD'
-      };
-    }
-    
-    // 6. Legacy estimated value format
-    if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
-      return {
-        value: nft.estimatedValue.value,
-        symbol: nft.estimatedValue.token?.symbol || 'ETH',
-        isUsd: nft.estimatedValue.token?.symbol === 'USD'
-      };
-    }
-    
-    // 7. Direct estimatedValue as a number
-    if (typeof nft.estimatedValue === 'number' && !isNaN(nft.estimatedValue)) {
-      return {
-        value: nft.estimatedValue,
-        symbol: 'ETH',
-        isUsd: false
-      };
-    }
-    
-    // 8. Collection floor price in USD
+    // 4. Check collection floor price in USD
     if (nft.collection?.floorPrice?.valueUsd !== undefined && 
         nft.collection.floorPrice.valueUsd !== null) {
       return {
@@ -212,32 +200,107 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 9. Collection floor price in ETH
-    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined && 
-        nft.collection.floorPrice.valueWithDenomination !== null) {
+    // 5. valueEth (converted to USD)
+    if (nft.valueEth !== undefined && nft.valueEth !== null) {
       return {
-        value: nft.collection.floorPrice.valueWithDenomination,
-        symbol: nft.collection.floorPrice.denomination?.symbol || 'ETH',
-        isUsd: nft.collection.floorPrice.denomination?.symbol === 'USD'
+        value: nft.valueEth * ETH_USD_ESTIMATE,
+        symbol: 'USD', 
+        isUsd: true,
+        originalValue: nft.valueEth,
+        originalSymbol: 'ETH'
       };
     }
     
-    // 10. New collection floor price format
-    if (nft.collection?.floorPrice !== undefined && 
-        typeof nft.collection.floorPrice === 'number') {
+    // 6. Estimated value with denomination
+    if (nft.estimatedValue?.valueWithDenomination !== undefined && 
+        nft.estimatedValue.valueWithDenomination !== null) {
+      const denomination = nft.estimatedValue.denomination?.symbol || 'ETH';
+      if (denomination === 'ETH') {
+        return {
+          value: nft.estimatedValue.valueWithDenomination * ETH_USD_ESTIMATE,
+          symbol: 'USD',
+          isUsd: true,
+          originalValue: nft.estimatedValue.valueWithDenomination,
+          originalSymbol: 'ETH'
+        };
+      } else {
+        return {
+          value: nft.estimatedValue.valueWithDenomination,
+          symbol: denomination,
+          isUsd: denomination === 'USD'
+        };
+      }
+    }
+    
+    // 7. Legacy estimated value format
+    if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
+      const symbol = nft.estimatedValue.token?.symbol || 'ETH';
+      if (symbol === 'ETH') {
+        return {
+          value: nft.estimatedValue.value * ETH_USD_ESTIMATE,
+          symbol: 'USD',
+          isUsd: true,
+          originalValue: nft.estimatedValue.value,
+          originalSymbol: 'ETH'
+        };
+      } else {
+        return {
+          value: nft.estimatedValue.value,
+          symbol: symbol,
+          isUsd: symbol === 'USD'
+        };
+      }
+    }
+    
+    // 8. Direct estimatedValue as a number (assume ETH)
+    if (typeof nft.estimatedValue === 'number' && !isNaN(nft.estimatedValue)) {
       return {
-        value: nft.collection.floorPrice,
-        symbol: 'ETH',
-        isUsd: false
+        value: nft.estimatedValue * ETH_USD_ESTIMATE,
+        symbol: 'USD',
+        isUsd: true,
+        originalValue: nft.estimatedValue,
+        originalSymbol: 'ETH'
       };
     }
     
-    // 11. Legacy collection floor price
+    // 9. Collection floor price 
+    if (nft.collection?.floorPrice !== undefined) {
+      if (typeof nft.collection.floorPrice === 'number') {
+        return {
+          value: nft.collection.floorPrice * ETH_USD_ESTIMATE,
+          symbol: 'USD',
+          isUsd: true,
+          originalValue: nft.collection.floorPrice,
+          originalSymbol: 'ETH'
+        };
+      } else if (nft.collection.floorPrice?.valueWithDenomination) {
+        const symbol = nft.collection.floorPrice.denomination?.symbol || 'ETH';
+        if (symbol === 'ETH') {
+          return {
+            value: nft.collection.floorPrice.valueWithDenomination * ETH_USD_ESTIMATE,
+            symbol: 'USD',
+            isUsd: true,
+            originalValue: nft.collection.floorPrice.valueWithDenomination,
+            originalSymbol: 'ETH'
+          };
+        } else {
+          return {
+            value: nft.collection.floorPrice.valueWithDenomination,
+            symbol: symbol,
+            isUsd: symbol === 'USD'
+          };
+        }
+      }
+    }
+    
+    // 10. Legacy collection floor price
     if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
       return {
-        value: nft.collection.floorPriceEth,
-        symbol: 'ETH',
-        isUsd: false
+        value: nft.collection.floorPriceEth * ETH_USD_ESTIMATE,
+        symbol: 'USD',
+        isUsd: true,
+        originalValue: nft.collection.floorPriceEth,
+        originalSymbol: 'ETH'
       };
     }
     
@@ -336,17 +399,36 @@ const NftCard = ({ nft, onClick }) => {
   const formatEstimatedValue = (valueData) => {
     if (!valueData || valueData.value === undefined || valueData.value === null) return 'N/A';
     
-    const { value, symbol, isUsd } = valueData;
+    const { value, symbol, isUsd, originalValue, originalSymbol } = valueData;
     
-    // Handle near-zero values
-    if (value < 0.01) {
-      return isUsd ? '< $0.01' : `< 0.01 ${symbol}`;
-    }
-    
-    // Format based on currency
+    // Always display in USD format for consistency
     if (isUsd || symbol === 'USD') {
+      // Handle near-zero values
+      if (value < 0.01) {
+        return '< $0.01';
+      }
+      
+      // Format USD value
       return `$${parseFloat(value).toFixed(2)}`;
-    } else {
+    }
+    // If there's an original ETH value, show it in parentheses
+    else if (originalValue !== undefined && originalSymbol) {
+      // Handle near-zero values
+      if (value < 0.01) {
+        return `< 0.01 ${symbol}`;
+      }
+      
+      // Format with original value
+      return `${parseFloat(value).toFixed(2)} ${symbol} (${parseFloat(originalValue).toFixed(2)} ${originalSymbol})`;
+    }
+    // For other currencies
+    else {
+      // Handle near-zero values
+      if (value < 0.01) {
+        return `< 0.01 ${symbol}`;
+      }
+      
+      // Format with currency symbol
       return `${parseFloat(value).toFixed(2)} ${symbol}`;
     }
   };

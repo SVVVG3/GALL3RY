@@ -163,74 +163,137 @@ export const NFTProvider = ({ children }) => {
     }
   }, [wallets]);
 
-  // Utility to safely extract estimated value from NFT objects
+  // Enhanced utility to safely extract estimated value from NFT objects
   const getEstimatedValue = useCallback((nft) => {
     if (!nft) return 0;
+    
+    // For debugging - build an object to track which value source was used
+    const valueTrace = {
+      usedSource: null,
+      foundValues: {},
+    };
+    
+    // Helper to normalize value and track source
+    const trackValue = (value, source) => {
+      if (value !== undefined && value !== null) {
+        valueTrace.foundValues[source] = value;
+        // Only set the source if it hasn't been set yet (preserve first match)
+        if (!valueTrace.usedSource) {
+          valueTrace.usedSource = source;
+          
+          // Convert strings to numbers and handle potential non-numeric values
+          if (typeof value === 'string') {
+            const numValue = parseFloat(value);
+            if (!isNaN(numValue)) {
+              return numValue;
+            }
+            return 0;
+          }
+          return Number(value) || 0;
+        }
+      }
+      return null;
+    };
     
     // First try to get USD values (preferred for consistent sorting)
     
     // 1. Try valueUsd
-    if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
-      return Number(nft.valueUsd) || 0;
-    }
+    let result = trackValue(nft.valueUsd, 'valueUsd');
+    if (result !== null) return result;
     
     // 2. Try estimatedValue.valueUsd
-    if (nft.estimatedValue?.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
-      return Number(nft.estimatedValue.valueUsd) || 0;
-    }
+    result = trackValue(nft.estimatedValue?.valueUsd, 'estimatedValue.valueUsd');
+    if (result !== null) return result;
     
     // 3. New format: { estimatedValue: { amount: number, currency: string } }
-    // If currency is USD, use that value
     if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
         nft.estimatedValue.amount !== undefined && 
         nft.estimatedValue.currency === 'USD') {
-      return Number(nft.estimatedValue.amount) || 0;
+      result = trackValue(nft.estimatedValue.amount, 'estimatedValue.amount (USD)');
+      if (result !== null) return result;
     }
     
     // 4. Check collection floor price in USD
-    if (nft.collection?.floorPrice?.valueUsd !== undefined && 
-        nft.collection.floorPrice.valueUsd !== null) {
-      return Number(nft.collection.floorPrice.valueUsd) || 0;
-    }
+    result = trackValue(nft.collection?.floorPrice?.valueUsd, 'collection.floorPrice.valueUsd');
+    if (result !== null) return result;
     
-    // If no USD values are found, fall back to ETH values
+    // If no USD values are found, try to normalize ETH values to USD (approximate)
+    // Use a rough average ETH price to make the values comparable
+    const ETH_USD_ESTIMATE = 3500; // Rough estimate for comparison purposes
     
-    // 5. If estimatedValue has amount but currency isn't USD
+    // 5. If estimatedValue has amount but currency isn't USD (commonly ETH)
     if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
         nft.estimatedValue.amount !== undefined) {
-      return Number(nft.estimatedValue.amount) || 0;
+      const value = nft.estimatedValue.amount;
+      const currency = nft.estimatedValue.currency || 'ETH';
+      
+      if (currency !== 'USD') {
+        if (currency === 'ETH') {
+          result = trackValue(value * ETH_USD_ESTIMATE, `estimatedValue.amount (${currency} converted to USD)`);
+          if (result !== null) return result;
+        } else {
+          result = trackValue(value, `estimatedValue.amount (${currency})`);
+          if (result !== null) return result;
+        }
+      }
     }
     
-    // 6. Try valueEth
+    // 6. Try valueEth (converted to USD equivalent)
     if (nft.valueEth !== undefined && nft.valueEth !== null) {
-      return Number(nft.valueEth) || 0;
+      result = trackValue(nft.valueEth * ETH_USD_ESTIMATE, 'valueEth (converted to USD)');
+      if (result !== null) return result;
     }
     
-    // 7. Try other estimatedValue formats
+    // 7. Try other estimatedValue formats (assuming ETH)
     if (nft.estimatedValue?.valueWithDenomination !== undefined && 
         nft.estimatedValue.valueWithDenomination !== null) {
-      return Number(nft.estimatedValue.valueWithDenomination) || 0;
+      const denomination = nft.estimatedValue.denomination?.symbol || 'ETH';
+      if (denomination === 'ETH') {
+        result = trackValue(nft.estimatedValue.valueWithDenomination * ETH_USD_ESTIMATE, 'estimatedValue.valueWithDenomination (converted to USD)');
+      } else {
+        result = trackValue(nft.estimatedValue.valueWithDenomination, `estimatedValue.valueWithDenomination (${denomination})`);
+      }
+      if (result !== null) return result;
     }
     
-    // 8. Old format: { estimatedValue: number }
+    // 8. Old format: { estimatedValue: number } (assume ETH)
     if (nft.estimatedValue && typeof nft.estimatedValue === 'number') {
-      return nft.estimatedValue;
+      result = trackValue(nft.estimatedValue * ETH_USD_ESTIMATE, 'estimatedValue (number, converted to USD)');
+      if (result !== null) return result;
     }
     
-    // 9. Collection floor price in ETH
+    // 9. Collection floor price in ETH (converted to USD)
     if (nft.collection?.floorPrice?.valueWithDenomination !== undefined) {
-      return Number(nft.collection.floorPrice.valueWithDenomination) || 0;
+      const denomination = nft.collection?.floorPrice?.denomination?.symbol || 'ETH';
+      if (denomination === 'ETH') {
+        result = trackValue(nft.collection.floorPrice.valueWithDenomination * ETH_USD_ESTIMATE, 'collection.floorPrice.valueWithDenomination (converted to USD)');
+      } else {
+        result = trackValue(nft.collection.floorPrice.valueWithDenomination, `collection.floorPrice.valueWithDenomination (${denomination})`);
+      }
+      if (result !== null) return result;
     }
     
-    // 10. Direct floor price number
+    // 10. Direct floor price number (assume ETH)
     if (nft.collection?.floorPrice !== undefined && 
         typeof nft.collection.floorPrice === 'number') {
-      return nft.collection.floorPrice;
+      result = trackValue(nft.collection.floorPrice * ETH_USD_ESTIMATE, 'collection.floorPrice (number, converted to USD)');
+      if (result !== null) return result;
     }
     
-    // 11. Legacy floor price
+    // 11. Legacy floor price (assume ETH)
     if (nft.collection?.floorPriceEth !== undefined) {
-      return Number(nft.collection.floorPriceEth) || 0;
+      result = trackValue(nft.collection.floorPriceEth * ETH_USD_ESTIMATE, 'collection.floorPriceEth (converted to USD)');
+      if (result !== null) return result;
+    }
+    
+    // If the NFT has a name/collection but no value was found, log it for debugging
+    if ((nft.name || nft.tokenId) && Object.keys(valueTrace.foundValues).length === 0) {
+      console.log(`No value found for NFT: ${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown Collection'})`);
+    }
+    
+    // Cache the value trace for debugging
+    if (!nft._valueTrace) {
+      nft._valueTrace = valueTrace;
     }
     
     return 0;
@@ -577,6 +640,24 @@ export const NFTProvider = ({ children }) => {
   const getSortedNFTs = useCallback((nftsToSort, sortByField, order) => {
     if (!nftsToSort || nftsToSort.length === 0) return [];
     
+    console.log(`Sorting NFTs by: ${sortByField}, order: ${order}`);
+    
+    // Add debug logging for the first few NFTs
+    if (sortByField === 'value' || sortByField === 'estimatedValue') {
+      const sampleNfts = nftsToSort.slice(0, 5);
+      console.log('Sample NFT values for debugging:');
+      sampleNfts.forEach(nft => {
+        const value = getEstimatedValue(nft);
+        console.log(`NFT: ${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}), Value: $${value.toFixed(2)}, Raw Data:`, {
+          valueUsd: nft.valueUsd,
+          valueEth: nft.valueEth,
+          estimatedValueRaw: nft.estimatedValue,
+          collectionFloorUsd: nft.collection?.floorPrice?.valueUsd,
+          collectionFloorEth: nft.collection?.floorPrice?.valueWithDenomination
+        });
+      });
+    }
+    
     return [...nftsToSort].sort((a, b) => {
       let valueA, valueB;
       
@@ -585,6 +666,11 @@ export const NFTProvider = ({ children }) => {
         case 'value':
           valueA = getEstimatedValue(a);
           valueB = getEstimatedValue(b);
+          
+          // Debug the sort comparison for a few items
+          if (Math.random() < 0.01) { // Log only 1% of comparisons to avoid flooding console
+            console.log(`Sort comparison: ${a.name || a.tokenId} ($${valueA.toFixed(2)}) vs ${b.name || b.tokenId} ($${valueB.toFixed(2)}) => ${order === 'asc' ? valueA - valueB : valueB - valueA}`);
+          }
           break;
         case 'name':
           valueA = a.name || '';
