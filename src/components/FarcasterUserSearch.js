@@ -320,10 +320,22 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           console.log(`Found ${edges.length} NFTs via nftUsersTokens format`);
           console.log(`Page info: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
+          console.log(`PAGINATION STATUS: Currently have ${userNfts.length} NFTs loaded, adding ${edges.length} more`);
           
           // Log the first NFT in detail to understand the structure
           if (edges.length > 0) {
             console.log("SAMPLE NFT STRUCTURE:", JSON.stringify(edges[0].node, null, 2));
+          }
+          
+          // Explicit check for the absence of pageInfo or pagination fields
+          if (!pageInfo || (typeof pageInfo.hasNextPage === 'undefined')) {
+            console.warn("PAGINATION WARNING: pageInfo missing or incomplete:", pageInfo);
+            // Assume more data if we got a full batch of NFTs
+            pageInfo = {
+              hasNextPage: edges.length === 100 || edges.length === 500,
+              endCursor: edges.length > 0 ? edges[edges.length - 1].cursor : null
+            };
+            console.log("PAGINATION FALLBACK: Created pageInfo:", pageInfo);
           }
           
           // Process edges to create NFTs
@@ -626,7 +638,23 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     console.log(`Loading more NFTs with cursor: ${endCursor}`);
     
     try {
+      // Track the current count before loading more
+      const prevCount = userNfts.length;
+      
+      // Attempt to load the next batch
       await fetchUserNfts(walletAddresses, endCursor, true);
+      
+      // Check if we actually got more NFTs
+      const newCount = userNfts.length;
+      const loadedCount = newCount - prevCount;
+      
+      console.log(`Load more complete - Added ${loadedCount} NFTs (${prevCount} → ${newCount})`);
+      
+      // If we got no new NFTs but the API says there are more, it might be lying
+      if (loadedCount === 0 && hasMoreNfts) {
+        console.warn("No NFTs loaded but API claims there are more - forcing hasMoreNfts to false");
+        setHasMoreNfts(false);
+      }
     } catch (error) {
       console.error('Error loading more NFTs:', error);
       setFetchNftsError(`Failed to load more NFTs: ${error.message}`);
@@ -864,6 +892,25 @@ const FarcasterUserSearch = ({ initialUsername }) => {
 
   // Handle sort method change
   const handleSortChange = (method) => {
+    console.log(`Changing sort method from ${sortMethod} to ${method}`);
+    
+    // Log a sample of NFTs before sorting to debug value issues
+    if (method === 'value' && userNfts.length > 0) {
+      console.log("SAMPLE VALUES BEFORE SORTING:");
+      for (let i = 0; i < Math.min(5, userNfts.length); i++) {
+        const nft = userNfts[i];
+        console.log(`NFT ${i+1}: ${nft.name} - Values:`, {
+          valueEth: nft.valueEth,
+          estimatedValueEth: nft.estimatedValueEth,
+          value: nft.value,
+          estimatedValue: nft.estimatedValue?.value,
+          floorPrice: nft.floorPrice?.value,
+          collectionFloorPrice: nft.collection?.floorPrice?.value,
+          collectionFloorPriceEth: nft.collection?.floorPriceEth
+        });
+      }
+    }
+    
     setSortMethod(method);
   };
   
@@ -974,12 +1021,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               {!isLoadingNfts && userNfts.length > 0 && (
                 <p className="nft-count">
                   <span className="nft-count-number">
-                    {hasEstimatedCount ? totalNftCount : (hasMoreNfts ? estimateTotalNftCount() : userNfts.length)}
-                    {(hasMoreNfts || totalNftCount > userNfts.length) && <span className="nft-count-plus">+</span>}
+                    {userNfts.length}
+                    {hasMoreNfts && <span className="nft-count-plus">+</span>}
                   </span> 
                   <span className="nft-count-label">NFTs</span>
-                  {(hasMoreNfts || totalNftCount > userNfts.length) && 
-                    <span className="nft-count-estimate">{hasEstimatedCount ? "(est.)" : `(${userNfts.length} loaded)`}</span>}
+                  {hasMoreNfts && 
+                    <span className="nft-count-estimate">{hasEstimatedCount ? 
+                      `(est. total: ${Math.max(userNfts.length, totalNftCount)})` : 
+                      `(more available)` }
+                    </span>
+                  }
                 </p>
               )}
               {isLoadingNfts && (
@@ -1144,15 +1195,18 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           />
           
           {/* Load More Button */}
-          {hasMoreNfts && userNfts.length > 0 && !nftFilterText && (
+          {hasMoreNfts && userNfts.length > 0 && (
             <div className="load-more-container">
               <button 
                 className="load-more-button"
                 onClick={handleLoadMore}
                 disabled={isLoadingMoreNfts}
               >
-                {isLoadingMoreNfts ? 'Loading...' : 'Load More NFTs'}
+                {isLoadingMoreNfts ? 'Loading...' : `Load More NFTs (${userNfts.length} loaded so far)`}
               </button>
+              <p className="text-sm text-gray-500 mt-2">
+                Note: Zapper API limits each batch to 100 NFTs. Click the button above to load more NFTs in batches.
+              </p>
             </div>
           )}
           
