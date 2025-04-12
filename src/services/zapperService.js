@@ -617,43 +617,49 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     // If not just collections, fetch actual NFT tokens
     console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses`);
     
-    // Updated query structure according to the official documentation
+    // Query structure directly from Zapper documentation
     const nftTokensQuery = `
       query UserNftTokens(
         $owners: [Address!]!,
+        $network: Network,
         $first: Int = 100,
         $after: String,
+        $search: String,
+        $minEstimatedValueUsd: Float,
         $bypassHidden: Boolean = true
       ) {
         nftUsersTokens(
           owners: $owners,
+          network: $network,
           first: $first,
           after: $after,
+          search: $search,
+          minEstimatedValueUsd: $minEstimatedValueUsd,
           bypassHidden: $bypassHidden
         ) {
           edges {
             node {
               # Basic token information
-              id
               tokenId
               name
               description
-              
+
               # Collection information
               collection {
-                id
                 name
                 address
                 network
                 nftStandard
                 type
-                cardImage
+                supply
+                holdersCount
                 floorPrice {
                   valueUsd
                   valueWithDenomination
                   denomination {
                     symbol
                     network
+                    address
                   }
                 }
                 medias {
@@ -662,15 +668,20 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                   }
                 }
               }
-              
+
               # Media assets
               mediasV3 {
-                images(first: 1) {
+                images(first: 3) {
                   edges {
                     node {
                       original
                       thumbnail
+                      blurhash
                       large
+                      width
+                      height
+                      mimeType
+                      fileSize
                     }
                   }
                 }
@@ -678,14 +689,13 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                   edges {
                     node {
                       original
-                      thumbnail
-                      large
+                      mimeType
                     }
                   }
                 }
               }
-              
-              # Value information
+
+              # Value and pricing information
               estimatedValue {
                 valueUsd
                 valueWithDenomination
@@ -694,10 +704,42 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                   network
                 }
               }
+              lastSale {
+                valueUsd
+                valueWithDenomination
+                denomination {
+                  symbol
+                }
+              }
+
+              # Traits/attributes
+              traits {
+                attributeName
+                attributeValue
+                supplyPercentage
+                supply
+              }
             }
-            balanceUSD
+
+            # Ownership information
             balance
+            balanceUSD
+            ownedAt
+            balances {
+              balance
+              account {
+                address
+                displayName {
+                  value
+                }
+              }
+            }
+
+            # Valuation strategy information
+            valuationStrategy
           }
+
+          # Pagination information
           pageInfo {
             hasNextPage
             endCursor
@@ -711,6 +753,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       first: limit,
       after: cursor,
       bypassHidden: true
+      // network and minEstimatedValueUsd are optional, so we don't include them by default
     };
     
     const response = await makeGraphQLRequest(nftTokensQuery, variables, endpoints, maxRetries);
@@ -728,6 +771,10 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
         let imageUrl = '';
         let thumbnailUrl = '';
         let largeUrl = '';
+        let blurhash = '';
+        let width = 0;
+        let height = 0;
+        let mimeType = '';
         
         // Try to get image from mediasV3.images first
         if (item.mediasV3?.images?.edges?.length > 0) {
@@ -735,27 +782,23 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           imageUrl = imageNode.original || '';
           thumbnailUrl = imageNode.thumbnail || imageUrl;
           largeUrl = imageNode.large || imageUrl;
+          blurhash = imageNode.blurhash || '';
+          width = imageNode.width || 0;
+          height = imageNode.height || 0;
+          mimeType = imageNode.mimeType || '';
         }
         
         // Try to get image from mediasV3.animations if no images
         if (!imageUrl && item.mediasV3?.animations?.edges?.length > 0) {
           const animNode = item.mediasV3.animations.edges[0].node;
           imageUrl = animNode.original || '';
-          thumbnailUrl = animNode.thumbnail || imageUrl;
-          largeUrl = animNode.large || imageUrl;
+          mimeType = animNode.mimeType || '';
         }
         
-        // Fallback to collection media if still no image
-        if (!imageUrl) {
-          if (item.collection?.cardImage) {
-            imageUrl = item.collection.cardImage;
-            thumbnailUrl = item.collection.cardImage;
-            largeUrl = item.collection.cardImage;
-          } else if (item.collection?.medias?.logo?.thumbnail) {
-            imageUrl = item.collection.medias.logo.thumbnail;
-            thumbnailUrl = item.collection.medias.logo.thumbnail;
-            largeUrl = item.collection.medias.logo.thumbnail;
-          }
+        // Fallback to collection images
+        if (!imageUrl && item.collection?.medias?.logo?.thumbnail) {
+          imageUrl = item.collection.medias.logo.thumbnail;
+          thumbnailUrl = item.collection.medias.logo.thumbnail;
         }
         
         // Get value information
@@ -763,41 +806,59 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
         const valueEth = item.estimatedValue?.valueWithDenomination || 0;
         const valueCurrency = item.estimatedValue?.denomination?.symbol || 'ETH';
         
-        // Get collection information
+        // Get last sale information if available
+        const lastSaleUsd = item.lastSale?.valueUsd || 0;
+        const lastSaleValue = item.lastSale?.valueWithDenomination || 0;
+        const lastSaleCurrency = item.lastSale?.denomination?.symbol || 'ETH';
+        
+        // Get traits/attributes
+        const traits = item.traits || [];
+        
+        // Get collection information with better null handling
         const collection = {
-          id: item.collection?.id || '',
           name: item.collection?.name || 'Unknown Collection',
           address: item.collection?.address || '',
           network: item.collection?.network || 'ethereum',
-          imageUrl: item.collection?.cardImage || '',
-          floorPrice: item.collection?.floorPrice?.valueUsd || 0,
-          floorPriceEth: item.collection?.floorPrice?.valueWithDenomination || 0,
           nftStandard: item.collection?.nftStandard || '',
           type: item.collection?.type || 'GENERAL',
-          description: item.collection?.description || '',
+          supply: item.collection?.supply || '0',
+          holdersCount: item.collection?.holdersCount || '0',
+          floorPrice: item.collection?.floorPrice?.valueUsd || 0,
+          floorPriceEth: item.collection?.floorPrice?.valueWithDenomination || 0,
+          logoUrl: item.collection?.medias?.logo?.thumbnail || ''
         };
         
-        // Debug value info
-        if (valueUsd > 0) {
-          console.log(`NFT Value: ${item.name || 'Unnamed'} (${item.tokenId}) - $${valueUsd.toFixed(2)} (${valueEth} ${valueCurrency})`);
+        // Debug value info for high-value NFTs
+        if (valueUsd > 1000) {
+          console.log(`High value NFT found: ${item.name || 'Unnamed'} (${item.tokenId}) - $${valueUsd.toFixed(2)} (${valueEth} ${valueCurrency})`);
         }
         
         return {
-          id: item.id || '',
-          name: item.name || 'Unnamed NFT',
+          id: item.id || `${collection.address}-${item.tokenId}`,
           tokenId: item.tokenId || '',
+          name: item.name || `#${item.tokenId}`,
           description: item.description || '',
           collection,
           imageUrl,
           thumbnailUrl,
           largeUrl,
+          blurhash,
+          width,
+          height,
+          mimeType,
           valueUsd,
           valueEth,
           valueCurrency,
-          balanceUSD: edge.balanceUSD || 0,
+          lastSaleUsd,
+          lastSaleValue,
+          lastSaleCurrency,
+          traits,
           balance: edge.balance || 1,
-          isNft: true,
-          _rawData: item // Store raw data for debugging
+          balanceUSD: edge.balanceUSD || 0,
+          ownedAt: edge.ownedAt || null,
+          balances: edge.balances || [],
+          valuationStrategy: edge.valuationStrategy || 'ESTIMATED_VALUE',
+          isNft: true
         };
       });
       
@@ -1035,10 +1096,10 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
 };
 
 /**
- * Get Farcaster NFT collections - a more efficient way to browse NFTs
+ * Function to get NFT collections for a Farcaster user
  * @param {string|number} usernameOrFid - Farcaster username or FID
  * @param {object} options - Options for the request
- * @returns {Promise<object>} - Object containing NFT collections
+ * @returns {Promise<object>} - Collection data
  */
 export const getFarcasterNftCollections = async (usernameOrFid, options = {}) => {
   try {
@@ -1131,7 +1192,7 @@ export const getFarcasterNftCollections = async (usernameOrFid, options = {}) =>
           type: collection.type || 'GENERAL',
           description: collection.description || '',
           imageUrl: collection.cardImage || 
-                    (collection.medias?.logo?.thumbnail || ''),
+                   (collection.medias?.logo?.thumbnail || ''),
           floorPrice: collection.floorPrice?.valueUsd || 0,
           floorPriceEth: collection.floorPrice?.valueWithDenomination || 0,
           totalCount: collection.totalCount || 0,
