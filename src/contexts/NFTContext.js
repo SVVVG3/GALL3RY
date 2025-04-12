@@ -49,8 +49,15 @@ export const NFTProvider = ({ children }) => {
                 collection {
                   id
                   name
+                  address
                   floorPriceEth
                   cardImageUrl
+                }
+                estimatedValue {
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                  }
                 }
               }
               cursor
@@ -103,6 +110,20 @@ export const NFTProvider = ({ children }) => {
           imageUrl = node.collection.cardImageUrl;
         }
         
+        // Extract the estimated value - prioritize the new format
+        let estimatedValue = {
+          value: node.collection?.floorPriceEth || 0,
+          symbol: 'ETH'
+        };
+        
+        // Check for the new format from the API
+        if (node.estimatedValue?.valueWithDenomination) {
+          estimatedValue = {
+            value: node.estimatedValue.valueWithDenomination,
+            symbol: node.estimatedValue.denomination?.symbol || 'ETH'
+          };
+        }
+        
         // Create the normalized NFT object
         return {
           id: node.id,
@@ -119,10 +140,7 @@ export const NFTProvider = ({ children }) => {
             floorPriceEth: node.collection?.floorPriceEth
           },
           // Add estimated value for sorting
-          estimatedValue: {
-            value: node.collection?.floorPriceEth || 0,
-            symbol: 'ETH'
-          }
+          estimatedValue: estimatedValue
         };
       }).filter(Boolean);
       
@@ -182,8 +200,15 @@ export const NFTProvider = ({ children }) => {
                 collection {
                   id
                   name
+                  address
                   floorPriceEth
                   cardImageUrl
+                }
+                estimatedValue {
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                  }
                 }
               }
               cursor
@@ -230,6 +255,20 @@ export const NFTProvider = ({ children }) => {
           imageUrl = node.collection.cardImageUrl;
         }
         
+        // Extract the estimated value - prioritize the new format
+        let estimatedValue = {
+          value: node.collection?.floorPriceEth || 0,
+          symbol: 'ETH'
+        };
+        
+        // Check for the new format from the API
+        if (node.estimatedValue?.valueWithDenomination) {
+          estimatedValue = {
+            value: node.estimatedValue.valueWithDenomination,
+            symbol: node.estimatedValue.denomination?.symbol || 'ETH'
+          };
+        }
+        
         return {
           id: node.id,
           tokenId: node.tokenId,
@@ -244,10 +283,7 @@ export const NFTProvider = ({ children }) => {
             imageUrl: node.collection?.cardImageUrl,
             floorPriceEth: node.collection?.floorPriceEth
           },
-          estimatedValue: {
-            value: node.collection?.floorPriceEth || 0,
-            symbol: 'ETH'
-          }
+          estimatedValue: estimatedValue
         };
       }).filter(Boolean);
 

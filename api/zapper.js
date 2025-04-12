@@ -153,6 +153,12 @@ const handler = async (req, res) => {
                   floorPriceEth
                   cardImageUrl
                 }
+                estimatedValue {
+                  valueWithDenomination
+                  denomination {
+                    symbol
+                  }
+                }
               }
               cursor
             }
@@ -199,8 +205,8 @@ const handler = async (req, res) => {
                     network
                   }
                   estimatedValue {
-                    value
-                    token {
+                    valueWithDenomination
+                    denomination {
                       symbol
                     }
                   }
@@ -277,23 +283,24 @@ const handler = async (req, res) => {
         });
       }
       
-      // Cache the response with a shorter TTL for large responses
-      const responseSize = JSON.stringify(zapperResponse.data).length;
-      const ttl = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
-      cache.set(cacheKey, zapperResponse.data, ttl);
+      // Process the response data: deduplicate NFTs and normalize values
+      let processedData = zapperResponse.data;
       
-      // If we used a transformation but the client expected the original format,
-      // we need to adapt the response to match what the client expects
-      if (queryType === 'NFTS_QUERY_NEW' && zapperResponse.data.data?.portfolioV2) {
-        // For "nfts" queries, transform the portfolioV2 response to match the expected format
-        console.log('[ZAPPER] Transforming portfolioV2 response to expected nfts format');
-        
-        // Depending on what the client code expects, we can either pass through the data as-is
-        // since the client should be able to handle either structure, or we can transform it
-        return res.status(200).json(zapperResponse.data);
+      // Deduplicate NFTs based on unique token IDs
+      if (queryType === 'NFT_USERS_TOKENS' && processedData.data?.nftUsersTokens?.edges) {
+        processedData = deduplicateNfts(processedData);
+      } else if (queryType === 'PORTFOLIO' && processedData.data?.portfolioV2?.nftBalances?.items) {
+        processedData = deduplicatePortfolioNfts(processedData);
+      } else if (queryType === 'NFTS_QUERY_NEW' && processedData.data?.portfolioV2?.nftBalances?.items) {
+        processedData = deduplicatePortfolioNfts(processedData);
       }
       
-      return res.status(200).json(zapperResponse.data);
+      // Cache the response with a shorter TTL for large responses
+      const responseSize = JSON.stringify(processedData).length;
+      const ttl = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
+      cache.set(cacheKey, processedData, ttl);
+      
+      return res.status(200).json(processedData);
     } catch (error) {
       // Handle request errors with detailed information
       console.error('[ZAPPER] Zapper API request failed:', {
@@ -319,6 +326,77 @@ const handler = async (req, res) => {
       message: error.message
     });
   }
+};
+
+/**
+ * Deduplicate NFTs based on their unique token identifiers
+ * This prevents the same NFT from appearing multiple times in the results
+ */
+const deduplicateNfts = (data) => {
+  if (!data.data?.nftUsersTokens?.edges) return data;
+  
+  console.log('[ZAPPER] Deduplicating NFTs, original count:', data.data.nftUsersTokens.edges.length);
+  
+  const uniqueNfts = new Map();
+  const dedupedEdges = [];
+  
+  // Process each NFT
+  data.data.nftUsersTokens.edges.forEach(edge => {
+    if (!edge.node) return;
+    
+    // Create a unique key for each NFT based on collection address and token ID
+    const nft = edge.node;
+    const collectionAddr = nft.collection?.address || '';
+    const tokenId = nft.tokenId || '';
+    const uniqueKey = `${collectionAddr.toLowerCase()}-${tokenId}`;
+    
+    // Only add if we haven't seen this NFT before
+    if (!uniqueNfts.has(uniqueKey)) {
+      uniqueNfts.set(uniqueKey, true);
+      dedupedEdges.push(edge);
+    }
+  });
+  
+  console.log('[ZAPPER] After deduplication:', dedupedEdges.length);
+  
+  // Update the response data with deduplicated NFTs
+  data.data.nftUsersTokens.edges = dedupedEdges;
+  return data;
+};
+
+/**
+ * Deduplicate NFTs in portfolio response format
+ */
+const deduplicatePortfolioNfts = (data) => {
+  if (!data.data?.portfolioV2?.nftBalances?.items) return data;
+  
+  console.log('[ZAPPER] Deduplicating portfolio NFTs, original count:', data.data.portfolioV2.nftBalances.items.length);
+  
+  const uniqueNfts = new Map();
+  const dedupedItems = [];
+  
+  // Process each NFT item
+  data.data.portfolioV2.nftBalances.items.forEach(item => {
+    if (!item.nft) return;
+    
+    // Create a unique key for each NFT based on collection address and token ID
+    const nft = item.nft;
+    const collectionAddr = nft.collection?.address || '';
+    const tokenId = nft.tokenId || '';
+    const uniqueKey = `${collectionAddr.toLowerCase()}-${tokenId}`;
+    
+    // Only add if we haven't seen this NFT before
+    if (!uniqueNfts.has(uniqueKey)) {
+      uniqueNfts.set(uniqueKey, true);
+      dedupedItems.push(item);
+    }
+  });
+  
+  console.log('[ZAPPER] After portfolio deduplication:', dedupedItems.length);
+  
+  // Update the response data with deduplicated NFTs
+  data.data.portfolioV2.nftBalances.items = dedupedItems;
+  return data;
 };
 
 module.exports = handler; 
