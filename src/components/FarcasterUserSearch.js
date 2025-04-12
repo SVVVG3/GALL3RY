@@ -49,6 +49,54 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   }, [initialUsername]);
 
+  // Function to forcibly load all NFTs for a user through multiple requests
+  const loadAllNfts = async (addresses) => {
+    if (!addresses || addresses.length === 0) return;
+    
+    console.log("LOADING ALL NFTS: Starting aggressive loading process");
+    let cursor = null;
+    let totalLoaded = 0;
+    let hasMore = true;
+    let loadAttempts = 0;
+    const maxAttempts = 10; // Limit to 10 batches to avoid infinite loops
+    
+    // Don't mark loading as true here, as it's handled by fetchUserNfts
+
+    while (hasMore && loadAttempts < maxAttempts) {
+      try {
+        console.log(`LOADING ALL NFTS: Batch ${loadAttempts+1}, cursor: ${cursor || 'initial'}`);
+        
+        // Use the existing fetch but force loadMore to true for all except first batch
+        await fetchUserNfts(addresses, cursor, loadAttempts > 0);
+        
+        // Check if we got more and update for next iteration
+        if (endCursor && endCursor !== cursor && hasMoreNfts) {
+          cursor = endCursor;
+          hasMore = true;
+          totalLoaded += 500; // Assume batch size of 500
+        } else {
+          hasMore = false;
+        }
+        
+        loadAttempts++;
+        
+        // Add a delay between batches to avoid rate limiting
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      } catch (error) {
+        console.error("Error during aggressive loading:", error);
+        // Don't break on error, try the next batch
+        loadAttempts++;
+        if (hasMore) {
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay after error
+        }
+      }
+    }
+    
+    console.log(`LOADING ALL NFTS: Completed with ${loadAttempts} batches, ${userNfts.length} NFTs loaded`);
+  };
+
   // Handle form submission
   const handleSearch = (e) => {
     e.preventDefault();
@@ -106,6 +154,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         if (addresses.length > 0) {
           setWalletAddresses(addresses);
           await fetchUserNfts(addresses);
+          
+          // After initial fetch, start the aggressive loader to get all NFTs
+          setTimeout(() => {
+            loadAllNfts(addresses);
+          }, 1000); // Slight delay to let UI update first
         } else {
           console.log('No addresses found for this user to fetch NFTs');
         }
@@ -172,6 +225,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                     symbol
                   }
                 }
+                value
+                valueEth
+                floorPrice {
+                  value
+                  token {
+                    symbol
+                  }
+                }
                 mediasV2 {
                   ... on Image {
                     url
@@ -188,6 +249,12 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   id
                   name
                   floorPriceEth
+                  floorPrice {
+                    value
+                    token {
+                      symbol
+                    }
+                  }
                   cardImageUrl
                 }
                 transfers {
@@ -253,6 +320,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           console.log(`Found ${edges.length} NFTs via nftUsersTokens format`);
           console.log(`Page info: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
+          
+          // Log the first NFT in detail to understand the structure
+          if (edges.length > 0) {
+            console.log("SAMPLE NFT STRUCTURE:", JSON.stringify(edges[0].node, null, 2));
+          }
           
           // Process edges to create NFTs
           const processedNfts = edges.map(edge => {
@@ -370,6 +442,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               tokenId: nft.tokenId,
               description: nft.description,
               imageUrl,
+              // Store all value-related fields
+              value: nft.value,
+              valueEth: nft.valueEth,
+              floorPrice: nft.floorPrice,
               estimatedValueEth: nft.estimatedValueEth,
               estimatedValue: nft.estimatedValue ? {
                 value: nft.estimatedValue.value,
@@ -379,6 +455,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 id: nft.collection.id,
                 name: nft.collection.name || 'Unknown Collection',
                 floorPriceEth: nft.collection.floorPriceEth || 0,
+                floorPrice: nft.collection.floorPrice,
                 cardImageUrl: nft.collection.cardImageUrl
               } : null,
               token: {
@@ -394,14 +471,20 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 description: nft.description,
                 image: imageUrl
               },
+              // Time-related fields for sorting
               acquiredAt: nft.acquiredAt,
+              lastPrice: nft.lastPrice,
               acquisitionTimestamp,
               latestTransferTimestamp: acquisitionTimestamp,
-              // Debug logging for value data
+              transfers: nft.transfers,
+              // Debug value data
               _debug_value: {
                 estimatedValueEth: nft.estimatedValueEth,
                 estimatedValue: nft.estimatedValue,
-                floorPriceEth: nft.collection?.floorPriceEth
+                floorPriceEth: nft.collection?.floorPriceEth,
+                value: nft.value,
+                valueEth: nft.valueEth,
+                floorPrice: nft.floorPrice
               }
             };
           }).filter(Boolean);
@@ -557,11 +640,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // 1. We have NFTs already (initial load complete)
       // 2. There are more NFTs to load
       // 3. Not already loading more
-      // 4. We have less than 1000 NFTs loaded (prevent excessive loading)
-      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 1000) {
+      // 4. We have less than 2000 NFTs loaded (higher limit to ensure we get all)
+      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 2000) {
+        console.log(`AUTO-LOADING MORE NFTs - Currently have ${userNfts.length}, hasMore=${hasMoreNfts}`);
         // Add a small delay to avoid overwhelming the API and browser
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
         await handleLoadMore();
+      } else {
+        console.log(`AUTO-LOAD CHECK: userNfts=${userNfts.length}, hasMore=${hasMoreNfts}, isLoading=${isLoadingMoreNfts}`);
       }
     };
     
@@ -630,35 +716,53 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return sortedNfts.sort((a, b) => {
           // Try to extract value from different possible formats
           const getValueFromNft = (nft) => {
-            console.log("Getting value from NFT:", nft.id, nft.name);
+            // Start with 0 as default
             let value = 0;
             let source = 'none';
             
-            // Try all possible value fields in order of preference
-            if (nft._debug_value?.estimatedValueEth !== undefined) {
-              value = parseFloat(nft._debug_value.estimatedValueEth);
-              source = 'debug_estimatedValueEth';
-            } else if (nft.estimatedValueEth !== undefined) {
+            // Try all possible value fields in order of preference (same as getValue function)
+            if (nft.valueEth !== undefined && nft.valueEth !== null) {
+              value = parseFloat(nft.valueEth);
+              source = 'valueEth';
+            } else if (nft.estimatedValueEth !== undefined && nft.estimatedValueEth !== null) {
               value = parseFloat(nft.estimatedValueEth);
               source = 'estimatedValueEth';
-            } else if (nft._debug_value?.estimatedValue?.value !== undefined) {
-              value = parseFloat(nft._debug_value.estimatedValue.value);
-              source = 'debug_estimatedValue';
+            } else if (nft.value !== undefined && nft.value !== null) {
+              value = parseFloat(nft.value);
+              source = 'value';
             } else if (nft.estimatedValue?.value !== undefined) {
               value = parseFloat(nft.estimatedValue.value);
-              source = 'estimatedValue';
-            } else if (nft._debug_value?.floorPriceEth !== undefined) {
-              value = parseFloat(nft._debug_value.floorPriceEth);
-              source = 'debug_floorPriceEth';
-            } else if (nft.collection?.floorPriceEth !== undefined) {
-              value = parseFloat(nft.collection.floorPriceEth);
-              source = 'floorPriceEth';
+              source = 'estimatedValue.value';
+            } else if (nft.floorPrice?.value !== undefined) {
+              value = parseFloat(nft.floorPrice.value);
+              source = 'floorPrice.value';
             } else if (nft.collection?.floorPrice?.value !== undefined) {
               value = parseFloat(nft.collection.floorPrice.value);
-              source = 'floorPrice';
+              source = 'collection.floorPrice.value';
+            } else if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
+              value = parseFloat(nft.collection.floorPriceEth);
+              source = 'collection.floorPriceEth';
+            } else if (nft._debug_value?.estimatedValueEth) {
+              value = parseFloat(nft._debug_value.estimatedValueEth);
+              source = 'debug_estimatedValueEth';
+            } else if (nft._debug_value?.estimatedValue?.value) {
+              value = parseFloat(nft._debug_value.estimatedValue.value);
+              source = 'debug_estimatedValue.value';
+            } else if (nft._debug_value?.floorPriceEth) {
+              value = parseFloat(nft._debug_value.floorPriceEth);
+              source = 'debug_floorPriceEth';
             }
             
-            console.log(`NFT ${nft.id} (${nft.name}) value = ${value} (source: ${source})`);
+            // Ensure we have a valid number
+            if (isNaN(value)) {
+              value = 0;
+            }
+            
+            // Only log the first few NFTs to avoid console flooding
+            if (nft.id && nft.id.endsWith('0')) {
+              console.log(`NFT ${nft.id.substring(0, 10)}... value = ${value} (source: ${source})`);
+            }
+            
             return value;
           };
           
@@ -678,21 +782,38 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let source = 'none';
             
             // Try all possible timestamp fields in order of preference
-            if (typeof nft.acquiredAt === 'number' && nft.acquiredAt > 0) {
+            if (nft.acquiredAt && typeof nft.acquiredAt === 'number' && nft.acquiredAt > 0) {
               timestamp = nft.acquiredAt;
               source = 'acquiredAt';
+            } else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number' && nft.lastPrice.timestamp > 0) {
+              timestamp = nft.lastPrice.timestamp;
+              source = 'lastPrice.timestamp';
             } else if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
               timestamp = nft.acquisitionTimestamp;
               source = 'acquisitionTimestamp';
-            } else if (nft.lastPrice?.timestamp && typeof nft.lastPrice.timestamp === 'number') {
-              timestamp = nft.lastPrice.timestamp;
-              source = 'lastPrice';
             } else if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
               timestamp = nft.latestTransferTimestamp;
               source = 'latestTransferTimestamp';
+            } else if (nft.transfers?.edges?.length > 0) {
+              // Find the most recent transfer
+              const transfers = nft.transfers.edges
+                .filter(edge => edge.node && typeof edge.node.timestamp === 'number')
+                .map(edge => edge.node.timestamp);
+                
+              if (transfers.length > 0) {
+                timestamp = Math.max(...transfers);
+                source = 'transfers';
+              }
             }
             
-            console.log(`NFT ${nft.id} (${nft.name}) timestamp = ${timestamp} (source: ${source})`);
+            // Only log the first few NFTs to avoid console flooding
+            if (nft.id && nft.id.endsWith('0')) {
+              console.log(`NFT ${nft.id.substring(0, 10)}... timestamp = ${timestamp} (source: ${source})`);
+              if (timestamp > 0) {
+                console.log(` - Date: ${new Date(timestamp * 1000).toISOString()}`);
+              }
+            }
+            
             return timestamp;
           };
           
@@ -703,7 +824,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           if (timestampA === 0 && timestampB === 0) {
             const nameA = (a.name || '').toLowerCase();
             const nameB = (b.name || '').toLowerCase();
-            console.log(`Falling back to name sort for ${a.name} vs ${b.name}`);
             return nameA.localeCompare(nameB);
           }
           

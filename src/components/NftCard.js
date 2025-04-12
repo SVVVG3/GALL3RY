@@ -102,14 +102,43 @@ const NftCard = ({ nft, onClick }) => {
     console.log("NFT Value Data:", {
       id: nft.id,
       name: nft.name,
+      directValue: nft.value,
+      valueEth: nft.valueEth,
       estimatedValue: nft.estimatedValue,
       estimatedValueEth: nft.estimatedValueEth,
+      floorPrice: nft.floorPrice,
       collectionFloorPrice: nft.collection?.floorPrice,
       collectionFloorPriceEth: nft.collection?.floorPriceEth,
       debugValue: nft._debug_value,
     });
     
-    // Try different value formats in API responses
+    // Priority order for value sources (most accurate first)
+    
+    // 1. Direct valueEth - this is usually most accurate
+    if (nft.valueEth !== undefined && nft.valueEth !== null) {
+      return {
+        value: nft.valueEth,
+        symbol: 'ETH'
+      };
+    }
+    
+    // 2. estimatedValueEth - next best source
+    if (nft.estimatedValueEth !== undefined && nft.estimatedValueEth !== null) {
+      return {
+        value: nft.estimatedValueEth,
+        symbol: 'ETH'
+      };
+    }
+    
+    // 3. directValue with token symbol
+    if (nft.value !== undefined && nft.value !== null) {
+      return {
+        value: nft.value,
+        symbol: nft.symbol || 'ETH'
+      };
+    }
+    
+    // 4. estimatedValue object
     if (nft.estimatedValue?.value !== undefined) {
       return {
         value: nft.estimatedValue.value,
@@ -117,35 +146,31 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    if (nft.estimatedValueEth !== undefined) {
+    // 5. NFT's own floorPrice
+    if (nft.floorPrice?.value !== undefined) {
       return {
-        value: nft.estimatedValueEth,
-        symbol: 'ETH'
+        value: nft.floorPrice.value,
+        symbol: nft.floorPrice.token?.symbol || 'ETH'
       };
     }
     
+    // 6. Collection floor price
     if (nft.collection?.floorPrice?.value !== undefined) {
       return {
         value: nft.collection.floorPrice.value,
-        symbol: nft.collection.floorPrice.symbol || 'ETH'
+        symbol: nft.collection.floorPrice.token?.symbol || 'ETH'
       };
     }
     
-    if (nft.collection?.floorPriceEth !== undefined) {
+    // 7. Collection ETH floor price
+    if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
       return {
         value: nft.collection.floorPriceEth,
         symbol: 'ETH'
       };
     }
     
-    if (typeof nft.value !== 'undefined') {
-      return {
-        value: nft.value,
-        symbol: nft.symbol || 'ETH'
-      };
-    }
-    
-    // If we have debug value data, try to use that
+    // 8. Debug value data
     if (nft._debug_value) {
       if (nft._debug_value.estimatedValueEth) {
         return {
@@ -167,7 +192,7 @@ const NftCard = ({ nft, onClick }) => {
       }
     }
     
-    // Final fallback - check if collection exists and make a default
+    // Last fallback - return 0 ETH if collection exists
     if (nft.collection) {
       return {
         value: 0,
