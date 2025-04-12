@@ -302,46 +302,53 @@ const zapperService = {
       
       console.log(`Fetching NFTs for ${addresses.length} addresses:`, addresses);
       
-      // Updated Zapper API schema that uses portfolioV2
+      // Use the nftUsersTokens query which is still supported in Zapper API
       const zapperQuery = `
-        query GetNFTs($addresses: [Address!]!) {
-          portfolioV2(addresses: $addresses) {
-            nftBalances {
-              items {
-                nft {
-                  id
-                  name
-                  imageUrl
-                  tokenId
-                  collection {
-                    name
-                    address
-                    imageUrl
-                    floorPrice
-                    network
+        query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
+          nftUsersTokens(
+            owners: $owners
+            first: $first
+            withOverrides: $withOverrides
+          ) {
+            edges {
+              node {
+                id
+                name
+                tokenId
+                description
+                mediasV2 {
+                  ... on Image {
+                    url
+                    originalUri
+                    original
                   }
-                  estimatedValue {
-                    value
-                    token {
-                      symbol
-                    }
-                  }
-                  metadata {
-                    name
-                    description
-                    image
+                  ... on Animation {
+                    url
+                    originalUri
+                    original
                   }
                 }
+                collection {
+                  id
+                  name
+                  floorPriceEth
+                  cardImageUrl
+                }
               }
-              pageCount
-              totalCount
+              cursor
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
             }
           }
         }
       `;
       
       const variables = {
-        addresses
+        owners: addresses,
+        first: options.limit || 100,
+        withOverrides: true
       };
       
       // Add a retry mechanism
@@ -354,7 +361,7 @@ const zapperService = {
           console.log(`Attempt ${retries + 1} to fetch NFTs`);
           const data = await this.makeGraphQLRequest(zapperQuery, variables);
           
-          if (!data || !data.portfolioV2 || !data.portfolioV2.nftBalances || !data.portfolioV2.nftBalances.items) {
+          if (!data || !data.nftUsersTokens || !data.nftUsersTokens.edges) {
             console.warn('Unexpected response format from Zapper API:', data);
             retries++;
             await new Promise(resolve => setTimeout(resolve, 1000 * retries)); // Exponential backoff
@@ -362,21 +369,27 @@ const zapperService = {
           }
           
           // Process and enhance the NFT data
-          const nfts = data.portfolioV2.nftBalances.items.map(item => {
-            const nft = item.nft;
-            if (!nft) return null;
+          const nfts = data.nftUsersTokens.edges.map(edge => {
+            const node = edge.node;
+            if (!node) return null;
             
             // Create a normalized NFT object that combines data from all possible sources
             return {
-              id: nft.id,
-              tokenId: nft.tokenId,
-              name: nft.name || nft.metadata?.name || `#${nft.tokenId}`,
-              imageUrl: nft.imageUrl || nft.metadata?.image || nft.collection?.imageUrl,
-              collection: nft.collection,
-              estimatedValue: nft.estimatedValue,
-              metadata: nft.metadata,
-              networkId: nft.collection?.network?.id || 1,
-              network: nft.collection?.network?.name || 'ethereum'
+              id: node.id,
+              tokenId: node.tokenId,
+              name: node.name || `#${node.tokenId}`,
+              description: node.description,
+              // Handle different image sources
+              imageUrl: node.mediasV2 && node.mediasV2.length > 0 ? 
+                (node.mediasV2[0].url || node.mediasV2[0].original || node.mediasV2[0].originalUri) : 
+                node.collection?.cardImageUrl,
+              collection: {
+                id: node.collection?.id,
+                name: node.collection?.name || 'Unknown Collection',
+                address: node.collection?.address,
+                imageUrl: node.collection?.cardImageUrl,
+                floorPrice: node.collection?.floorPriceEth
+              }
             };
           }).filter(Boolean);
           
@@ -430,53 +443,65 @@ const zapperService = {
    * Get NFT collections for a set of wallet addresses
    */
   async getNftCollectionsForAddresses(addresses, options = {}) {
-    // Updated query to use portfolioV2 schema
+    // Use the nftUsersCollections query which is still supported
     const query = `
-      query GetNFTCollections($addresses: [Address!]!) {
-        portfolioV2(addresses: $addresses) {
-          nftBalances {
-            collections {
+      query NftUsersCollections($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
+        nftUsersCollections(
+          owners: $owners
+          first: $first
+          withOverrides: $withOverrides
+        ) {
+          edges {
+            node {
               id
               name
-              floorPrice
+              floorPriceEth
               tokenCount
-              imageUrl
+              cardImageUrl
             }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
           }
         }
       }
     `;
 
     const variables = {
-      addresses
+      owners: addresses,
+      first: options.first || 50,
+      withOverrides: true
     };
 
     try {
       const data = await this.makeGraphQLRequest(query, variables);
       
-      if (!data || !data.portfolioV2 || !data.portfolioV2.nftBalances || !data.portfolioV2.nftBalances.collections) {
+      if (!data || !data.nftUsersCollections || !data.nftUsersCollections.edges) {
         console.warn('Unexpected response format from Zapper API for NFT collections:', data);
         return { collections: [], pageInfo: { hasNextPage: false, endCursor: null } };
       }
       
       // Map and clean the collection data
-      const collections = data.portfolioV2.nftBalances.collections
-        .map(collection => {
+      const collections = data.nftUsersCollections.edges
+        .map(edge => {
+          const collection = edge.node;
           if (!collection) return null;
           
           return {
             id: collection.id,
             name: collection.name || 'Unknown Collection',
-            floorPriceEth: collection.floorPrice,
+            floorPriceEth: collection.floorPriceEth,
             tokenCount: collection.tokenCount || 0,
-            imageUrl: collection.imageUrl
+            imageUrl: collection.cardImageUrl
           };
         })
         .filter(collection => collection !== null);
       
       return {
         collections,
-        pageInfo: { hasNextPage: false, endCursor: null } // No pagination in new API format
+        pageInfo: data.nftUsersCollections.pageInfo || { hasNextPage: false, endCursor: null }
       };
     } catch (error) {
       console.error('Error fetching NFT collections:', error.message);
@@ -488,69 +513,87 @@ const zapperService = {
    * Get NFTs for a specific address
    */
   async getNFTsForUser(addresses, options = {}) {
-    // Use the updated portfolioV2 query that works with current Zapper API
     const query = `
-      query GetNFTsForUser($addresses: [Address!]!) {
-        portfolioV2(addresses: $addresses) {
-          nftBalances {
-            items {
-              nft {
-                id
-                tokenId
-                name
-                imageUrl
-                collection {
-                  name
-                  address
-                  imageUrl
-                  floorPrice
+      query GetNFTsForUser($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
+        nftUsersTokens(
+          owners: $owners
+          first: $first
+          withOverrides: $withOverrides
+        ) {
+          edges {
+            node {
+              id
+              tokenId
+              name
+              description
+              mediasV2 {
+                ... on Image {
+                  url
+                  originalUri
+                  original
                 }
-                estimatedValue {
-                  value
-                  token {
-                    symbol
-                  }
+                ... on Animation {
+                  url
+                  originalUri
+                  original
                 }
               }
+              collection {
+                id
+                name
+                floorPriceEth
+                cardImageUrl
+              }
             }
+            cursor
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
           }
         }
       }
     `;
 
     const variables = {
-      addresses
+      owners: addresses,
+      first: options.first || 100,
+      withOverrides: true
     };
 
     try {
       const data = await this.makeGraphQLRequest(query, variables);
       
-      if (!data || !data.portfolioV2 || !data.portfolioV2.nftBalances || !data.portfolioV2.nftBalances.items) {
+      if (!data || !data.nftUsersTokens || !data.nftUsersTokens.edges) {
         console.warn('Unexpected response format from Zapper API for getNFTsForUser:', data);
         return [];
       }
       
       // Transform the response to match our NftCard component expectations
-      return data.portfolioV2.nftBalances.items
-        .filter(item => item.nft)
-        .map(item => {
-          const nft = item.nft;
-          return {
-            id: nft.id,
-            name: nft.name || `#${nft.tokenId}`,
-            token_id: nft.tokenId,
-            estimatedValue: {
-              value: nft.estimatedValue?.value,
-              currency: nft.estimatedValue?.token?.symbol
-            },
-            collection: {
-              name: nft.collection?.name || 'Unknown Collection',
-              address: nft.collection?.address,
-              imageUrl: nft.collection?.imageUrl
-            },
-            imageUrl: nft.imageUrl || nft.collection?.imageUrl
-          };
-        });
+      return data.nftUsersTokens.edges.map(edge => {
+        const node = edge.node;
+        if (!node) return null;
+        
+        // Get the best image URL available
+        let imageUrl = null;
+        if (node.mediasV2 && node.mediasV2.length > 0) {
+          imageUrl = node.mediasV2[0].url || node.mediasV2[0].original || node.mediasV2[0].originalUri;
+        }
+        
+        return {
+          id: node.id,
+          name: node.name || `#${node.tokenId}`,
+          token_id: node.tokenId,
+          description: node.description,
+          imageUrl: imageUrl || node.collection?.cardImageUrl,
+          collection: {
+            name: node.collection?.name || 'Unknown Collection',
+            id: node.collection?.id,
+            imageUrl: node.collection?.cardImageUrl,
+            floorPriceEth: node.collection?.floorPriceEth
+          }
+        };
+      }).filter(Boolean);
     } catch (error) {
       console.error('Error fetching NFTs:', error);
       throw error;
