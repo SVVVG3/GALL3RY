@@ -7,7 +7,8 @@ const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
 const ZAPPER_API_ENDPOINTS = [
   `${window.location.origin}/api/zapper`, // Use absolute URL with origin to ensure it works in all environments
-  `${SERVER_URL}/api/zapper`              // Fallback to SERVER_URL based endpoint
+  `${SERVER_URL}/api/zapper`,             // Fallback to SERVER_URL based endpoint
+  'https://public.zapper.xyz/graphql'     // Direct Zapper API endpoint as last resort
 ];
 // Direct endpoint is removed to prevent 404s - all requests should go through our proxy
 
@@ -33,11 +34,9 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
         };
         
         // If using direct Zapper API, add the API key if available
-        if (endpoint.includes('api.zapper.xyz') && ZAPPER_API_KEY) {
-          // Try different authentication formats based on what we have
-          headers['Authorization'] = ZAPPER_API_KEY.startsWith('Basic ') 
-            ? ZAPPER_API_KEY 
-            : `Basic ${ZAPPER_API_KEY}`;
+        if (endpoint.includes('zapper.xyz') && ZAPPER_API_KEY) {
+          // Use the correct authentication header format per docs
+          headers['x-zapper-api-key'] = ZAPPER_API_KEY;
         }
         
         console.log(`Trying endpoint: ${endpoint}, attempt ${retryCount + 1}/${maxRetries}`);

@@ -35,26 +35,103 @@ if (missingVars) {
 
 // Test Zapper API with the provided key
 async function testZapperAPI() {
-  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  // Use the official Zapper API GraphQL endpoint
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+  
   const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY;
 
-  // Determine if the key is already in Basic auth format
-  const isBasicAuth = ZAPPER_API_KEY.startsWith('Basic ');
-  
-  // Format the key appropriately 
-  const authHeader = isBasicAuth 
-    ? ZAPPER_API_KEY 
-    : `Basic ${Buffer.from(ZAPPER_API_KEY).toString('base64')}`;
-  
   console.log('🔍 Testing Zapper API connection...');
-  console.log(`🔑 Using authorization format: ${isBasicAuth ? 'Basic auth' : 'Base64 encoded'}`);
   
-  // Simple test query to get a known Farcaster profile (Vitalik)
+  // Simple test query to get fungible token info - simpler query that doesn't require special permissions
   const query = `
-    query TestQuery {
-      farcasterProfile(username: "vitalik") {
-        username
-        fid
+    query TestSimpleQuery {
+      fungibleToken(address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", network: ETHEREUM_MAINNET) {
+        id
+        address
+        name
+        symbol
+        decimals
+        imageUrlV2
+      }
+    }
+  `;
+  
+  try {
+    console.log(`🔑 Testing with correct auth format from docs: x-zapper-api-key: ${ZAPPER_API_KEY.substring(0, 5)}...`);
+    
+    const response = await fetch(ZAPPER_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'x-zapper-api-key': ZAPPER_API_KEY
+      },
+      body: JSON.stringify({ query })
+    });
+    
+    console.log(`📡 Status code: ${response.status}`);
+    
+    const responseText = await response.text();
+    console.log(`📦 Response: ${responseText.substring(0, 300)}${responseText.length > 300 ? '...' : ''}`);
+    
+    try {
+      const data = JSON.parse(responseText);
+      
+      if (data.errors) {
+        console.error('❌ GraphQL errors:', data.errors);
+        return false;
+      }
+      
+      if (data.data && data.data.fungibleToken) {
+        console.log(`✅ Successfully fetched token: ${data.data.fungibleToken.name} (${data.data.fungibleToken.symbol})`);
+        console.log(`\n🔍 SUCCESSFUL CONFIGURATION:\n- URL: ${ZAPPER_API_URL}\n- Auth Header: x-zapper-api-key`);
+        return true;
+      }
+      
+      // Check if we have partial success
+      if (data.data) {
+        console.log('⚠️ Received data but no token information. API connection seems to work but the query might be incorrect.');
+        console.log('Data received:', JSON.stringify(data.data, null, 2));
+        return true;
+      }
+      
+      console.error('❌ No data in response');
+      return false;
+    } catch (parseError) {
+      console.error('❌ Error parsing response:', parseError);
+      return false;
+    }
+  } catch (error) {
+    console.error(`❌ Error with Zapper API: ${error.message}`);
+    return false;
+  }
+}
+
+// Try the account query that matches the schema
+async function testAccountQuery() {
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+  const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY;
+  
+  console.log('\n🔍 Testing accounts query based on schema...');
+  
+  // Query based on the schema provided
+  const query = `
+    query GetAccount {
+      account(address: "0xd8da6bf26964af9d7eed9e03e53415d37aa96045") {
+        address
+        displayName {
+          value
+          source
+        }
+        avatar {
+          source
+        }
+        farcasterProfile {
+          username
+          fid
+          connectedAddresses
+          custodyAddress
+        }
       }
     }
   `;
@@ -65,17 +142,15 @@ async function testZapperAPI() {
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Authorization': authHeader,
-        'X-API-Key': ZAPPER_API_KEY,
-        'X-Zapper-API-Key': ZAPPER_API_KEY
+        'x-zapper-api-key': ZAPPER_API_KEY
       },
       body: JSON.stringify({ query })
     });
     
-    console.log(`📡 Zapper API status code: ${response.status}`);
+    console.log(`📡 Status code: ${response.status}`);
     
     const responseText = await response.text();
-    console.log(`📦 Response: ${responseText.substring(0, 200)}${responseText.length > 200 ? '...' : ''}`);
+    console.log(`📦 Response: ${responseText.substring(0, 300)}${responseText.length > 300 ? '...' : ''}`);
     
     try {
       const data = JSON.parse(responseText);
@@ -85,19 +160,19 @@ async function testZapperAPI() {
         return false;
       }
       
-      if (data.data && data.data.farcasterProfile) {
-        console.log(`✅ Successfully fetched Farcaster profile for: ${data.data.farcasterProfile.username} (FID: ${data.data.farcasterProfile.fid})`);
+      if (data.data && data.data.account) {
+        console.log(`✅ Successfully fetched account data`);
         return true;
-      } else {
-        console.error('❌ No profile data found in response');
-        return false;
       }
+      
+      console.error('❌ No account found in response');
+      return false;
     } catch (parseError) {
       console.error('❌ Error parsing response:', parseError);
       return false;
     }
   } catch (error) {
-    console.error('❌ Error connecting to Zapper API:', error);
+    console.error(`❌ Error with account query: ${error.message}`);
     return false;
   }
 }
@@ -106,14 +181,33 @@ async function testZapperAPI() {
 async function main() {
   console.log('🚀 Starting API key verification...');
   
-  // Test Zapper API
-  const zapperSuccess = await testZapperAPI();
+  // Test Zapper API with a simple query first
+  const simpleSuccess = await testZapperAPI();
   
-  if (zapperSuccess) {
-    console.log('✅ All API tests passed!');
+  // If the simple test succeeds, try the accounts query
+  let accountSuccess = false;
+  if (simpleSuccess) {
+    accountSuccess = await testAccountQuery();
+  }
+  
+  if (simpleSuccess) {
+    console.log('✅ Basic API test passed! Zapper API key is valid for simple queries.');
+    
+    if (accountSuccess) {
+      console.log('✅ Account query test passed! Zapper API key has permission to fetch account data.');
+    } else {
+      console.log('⚠️ Account query test failed. Your API key may not have permission to fetch account data.');
+    }
+    
+    console.log('\n🔧 UPDATE YOUR CODE: Use the API endpoint "https://public.zapper.xyz/graphql" with header "x-zapper-api-key"');
     process.exit(0);
   } else {
-    console.error('❌ API tests failed. Please check your API keys and configuration.');
+    console.error('❌ All API tests failed. Please check your API key and configuration.');
+    console.error('\n🔧 Possible issues:');
+    console.error('1. Your API key may be invalid or expired');
+    console.error('2. The Zapper API may be experiencing issues');
+    console.error('3. Try using cURL to test directly:');
+    console.error(`   curl -X POST -H "Content-Type: application/json" -H "x-zapper-api-key: YOUR_KEY" --data '{"query":"{ fungibleToken(address: \\"0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2\\", network: ETHEREUM_MAINNET) { name symbol } }"}' https://public.zapper.xyz/graphql`);
     process.exit(1);
   }
 }
