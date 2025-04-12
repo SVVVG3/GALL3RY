@@ -1,5 +1,48 @@
-const axios = require('axios');
-const { corsHeaders, cache } = require('./_utils');
+const fetch = require('node-fetch');
+const NodeCache = require('node-cache');
+
+// Improved caching with TTL and size limits
+const cache = new NodeCache({
+  stdTTL: 600, // 10 minutes default TTL (up from 300)
+  checkperiod: 60, // Check for expired keys every minute
+  maxKeys: 2000, // Increased max keys (up from 1000)
+  useClones: false // Disable cloning for better performance
+});
+
+// Enhanced cache keys with more context
+const CACHE_KEYS = {
+  NFT_USERS_TOKENS: (owners, opts) => {
+    const key = `nft_users_tokens_${owners.sort().join('_')}`;
+    const optsKey = opts ? `_${JSON.stringify(opts)}` : '';
+    return `${key}${optsKey}`;
+  },
+  NFTS_QUERY_NEW: (owners, opts) => {
+    const key = `nfts_query_new_${owners.sort().join('_')}`;
+    const optsKey = opts ? `_${JSON.stringify(opts)}` : '';
+    return `${key}${optsKey}`;
+  },
+  PORTFOLIO: (walletAddress) => `portfolio_${walletAddress}`,
+  PROFILE: (fid) => `profile_${fid}`
+};
+
+// Headers for Zapper API calls
+const ZAPPER_HEADERS = {
+  'Content-Type': 'application/json',
+  'X-API-KEY': process.env.ZAPPER_API_KEY || ''
+};
+
+// CORS Headers
+const CORS_HEADERS = {
+  'Access-Control-Allow-Credentials': 'true',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,OPTIONS,PATCH,DELETE,POST,PUT',
+  'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization, Origin, Cache-Control, Pragma'
+};
+
+// Zapper GraphQL API endpoint
+const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+// Default request timeout
+const API_TIMEOUT = 12000; // 12 seconds
 
 /**
  * Proxy API handler for Zapper API GraphQL requests
@@ -7,7 +50,7 @@ const { corsHeaders, cache } = require('./_utils');
  */
 const handler = async (req, res) => {
   // Set CORS headers for all responses
-  Object.entries(corsHeaders).forEach(([key, value]) => {
+  Object.entries(CORS_HEADERS).forEach(([key, value]) => {
     res.setHeader(key, value);
   });
 
@@ -44,11 +87,7 @@ const handler = async (req, res) => {
     }
 
     // Log query type for debugging
-    const queryType = query.includes('farcasterProfile') ? 'PROFILE' 
-      : query.includes('portfolioV2') ? 'PORTFOLIO'
-      : query.includes('nftUsersTokens') ? 'NFT_USERS_TOKENS'
-      : query.includes('nfts(') ? 'NFTS_QUERY_NEW' 
-      : 'OTHER';
+    const queryType = extractQueryType(query);
     
     // Enhanced logging for debugging
     console.log(`[ZAPPER] Processing ${queryType} query:`, {
@@ -60,264 +99,94 @@ const handler = async (req, res) => {
       collectionAddress: variables?.collectionAddress || 'none'
     });
 
-    // Transform deprecated or invalid queries to match current schema
-    if (queryType === 'NFT_USERS_TOKENS') {
-      // This query is already in the correct format according to the schema
-      // Just make sure the parameters are correctly formatted
-      console.log('[ZAPPER] Validating nftUsersTokens query');
-      
-      // Ensure we have owners array
-      if (!variables.owners || !Array.isArray(variables.owners)) {
-        return res.status(400).json({
-          error: 'Invalid parameters',
-          message: 'owners parameter must be an array of addresses'
-        });
-      }
-      
-      // Ensure collectionIds is correctly formatted if present
-      if (variables.collectionIds && !Array.isArray(variables.collectionIds)) {
-        variables.collectionIds = [variables.collectionIds];
-      }
-      
-      // Add default first parameter if missing, but don't override if provided
-      if (!variables.first) {
-        variables.first = 100;
-      } else if (typeof variables.first === 'string') {
-        // Convert string to number if needed
-        variables.first = parseInt(variables.first, 10);
-      }
-      
-      // Add default withOverrides parameter
-      variables.withOverrides = true;
-      
-      console.log('[ZAPPER] Query validated and parameters normalized with batch size:', variables.first);
-    } else if (queryType === 'PORTFOLIO') {
-      console.log('[ZAPPER] Processing portfolio query for current schema');
-      
-      // Check if it's an outdated portfolio query
-      if (query.includes('nftBalances(first:') || query.includes('pageInfo') || 
-          (query.includes('nftBalances') && query.includes('nfts '))) {
-        
-        console.log('[ZAPPER] Transforming outdated portfolioV2 query to match current schema');
-        
-        // Use the updated schema
-        query = query
-          .replace('nftBalances(first: $first)', 'nftBalances')
-          .replace('nftBalances(first: $first, after: $after)', 'nftBalances(skip: $skip)')
-          .replace(/pageInfo\s*{\s*hasNextPage\s*endCursor\s*}/g, 'pageCount\ntotalCount')
-          .replace(/nfts\s*{/g, 'items {\nnft {');
-        
-        // Add closing bracket for nft object if needed
-        if (query.includes('items {\nnft {') && !query.includes('}\n}')) {
-          query = query.replace(/}\s*}\s*}\s*}/g, '}\n}\n}\n}\n}');
-        }
-        
-        console.log('[ZAPPER] Transformed query:', query.substring(0, 200) + '...');
-      }
-    } else if (queryType === 'NFTS_QUERY_OLD') {
-      console.log('[ZAPPER] Transforming deprecated nftUsersTokens query to use current schema');
-      
-      const ownerAddresses = variables.owners || [];
-      const limit = variables.first || 50;
-      
-      // Use the correct schema
-      query = `
-        query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
-          nftUsersTokens(
-            owners: $owners
-            first: $first
-            after: $after
-            withOverrides: $withOverrides
-          ) {
-            edges {
-              node {
-                id
-                name
-                tokenId
-                description
-                mediasV2 {
-                  ... on Image {
-                    url
-                    originalUri
-                    original
-                  }
-                  ... on Animation {
-                    url
-                    originalUri
-                    original
-                  }
-                }
-                collection {
-                  id
-                  name
-                  floorPriceEth
-                  cardImageUrl
-                }
-                estimatedValue {
-                  valueWithDenomination
-                  denomination {
-                    symbol
-                  }
-                }
-              }
-              cursor
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }
-      `;
-      
-      // Keep original variables but ensure they match required format
-      variables = {
-        owners: ownerAddresses,
-        first: limit,
-        after: variables.after || null,
-        withOverrides: true
-      };
-      
-      console.log('[ZAPPER] Query transformed using current schema');
-    } else if (queryType === 'NFTS_QUERY_NEW') {
-      // We're using the new 'nfts' query which isn't in the schema
-      // So transform it to use portfolioV2 instead
-      console.log('[ZAPPER] Converting nfts query to use portfolioV2 schema');
-      
-      const addresses = variables.addresses || [];
-      
-      // Use the correct schema that works with the current Zapper API
-      query = `
-        query GetNFTs($addresses: [Address!]!) {
-          portfolioV2(addresses: $addresses) {
-            nftBalances {
-              items {
-                nft {
-                  id
-                  name
-                  imageUrl
-                  tokenId
-                  collection {
-                    name
-                    address
-                    imageUrl
-                    floorPrice
-                    network
-                  }
-                  estimatedValue {
-                    valueWithDenomination
-                    denomination {
-                      symbol
-                    }
-                  }
-                  metadata {
-                    name
-                    description
-                    image
-                  }
-                }
-              }
-              pageCount
-              totalCount
-            }
-          }
-        }
-      `;
-      
-      // Convert variables to match the required format
-      variables = {
-        addresses: addresses
-      };
-      
-      console.log('[ZAPPER] Query converted to use portfolioV2 schema');
+    // Extract query type and prioritize flags from variables
+    const options = {
+      prioritizeSpeed: variables?.prioritizeSpeed === true,
+      ...variables
+    };
+
+    // Check for cached response before making network request
+    let cacheKey = null;
+    
+    if (queryType === 'NFT_USERS_TOKENS' && variables?.owners) {
+      cacheKey = CACHE_KEYS.NFT_USERS_TOKENS(variables.owners, {
+        first: variables.first,
+        after: variables.after,
+        prioritizeSpeed: options.prioritizeSpeed
+      });
+    } else if (queryType === 'NFTS_QUERY_NEW' && variables?.owners) {
+      cacheKey = CACHE_KEYS.NFTS_QUERY_NEW(variables.owners, {
+        first: variables.first,
+        after: variables.after,
+        prioritizeSpeed: options.prioritizeSpeed
+      });
+    } else if (queryType === 'PORTFOLIO' && variables?.ownerAddress) {
+      cacheKey = CACHE_KEYS.PORTFOLIO(variables.ownerAddress);
+    } else if (queryType === 'PROFILE' && variables?.fid) {
+      cacheKey = CACHE_KEYS.PROFILE(variables.fid);
     }
 
-    // Simple cache check with a more specific key for detailed variables
-    const cacheKey = `zapper_${Buffer.from(JSON.stringify({ 
-      query, 
-      type: queryType,
-      vars: JSON.stringify(variables).substring(0, 100) 
-    })).toString('base64')}`;
-    
-    const cachedData = cache.get(cacheKey);
-    
-    if (cachedData) {
-      console.log('[ZAPPER] Cache hit');
-      return res.status(200).json(cachedData);
+    // Try to get data from cache
+    if (cacheKey) {
+      const cachedData = cache.get(cacheKey);
+      if (cachedData) {
+        console.log(`[ZAPPER] Cache hit for ${queryType}`);
+        return res.status(200).json(cachedData);
+      }
     }
 
-    // For debugging: log the full request being sent to Zapper
-    console.log('[ZAPPER] Full request to Zapper API:', {
-      query: query.substring(0, 500) + (query.length > 500 ? '...' : ''),
-      variables: JSON.stringify(variables).substring(0, 500) + 
-                (JSON.stringify(variables).length > 500 ? '...' : '')
+    // Transform the query to meet Zapper API expectations
+    const { transformedQuery, transformedVariables } = transformQuery(query, variables, queryType, options);
+
+    // Prepare the request
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+    
+    // Log the full request for debugging
+    console.log(`[ZAPPER] Sending request to Zapper API`, { 
+      queryType,
+      variableKeys: Object.keys(transformedVariables || {}),
+      prioritizeSpeed: options.prioritizeSpeed
     });
-    
-    // Make the request to Zapper API with better error handling
-    try {
-      const zapperResponse = await axios({
-        url: 'https://public.zapper.xyz/graphql',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-zapper-api-key': apiKey,
-          'Accept': 'application/json',
-          'User-Agent': 'gall3ry/2.1'
-        },
-        data: { query, variables },
-        timeout: 15000
-      });
 
-      // Handle successful response
-      console.log(`[ZAPPER] Request successful, status: ${zapperResponse.status}`);
-      
-      // Check for GraphQL errors
-      if (zapperResponse.data.errors) {
-        const errorMessages = zapperResponse.data.errors.map(e => e.message).join('; ');
-        console.error(`[ZAPPER] GraphQL errors: ${errorMessages}`);
-        
-        return res.status(400).json({
-          error: 'GraphQL errors',
-          message: errorMessages,
-          details: zapperResponse.data.errors
-        });
-      }
-      
-      // Process the response data: deduplicate NFTs and normalize values
-      let processedData = zapperResponse.data;
-      
-      // Deduplicate NFTs based on unique token IDs
-      if (queryType === 'NFT_USERS_TOKENS' && processedData.data?.nftUsersTokens?.edges) {
-        processedData = deduplicateNfts(processedData);
-      } else if (queryType === 'PORTFOLIO' && processedData.data?.portfolioV2?.nftBalances?.items) {
-        processedData = deduplicatePortfolioNfts(processedData);
-      } else if (queryType === 'NFTS_QUERY_NEW' && processedData.data?.portfolioV2?.nftBalances?.items) {
-        processedData = deduplicatePortfolioNfts(processedData);
-      }
-      
-      // Cache the response with a shorter TTL for large responses
-      const responseSize = JSON.stringify(processedData).length;
-      const ttl = responseSize > 1000000 ? 60 : 300; // 1 minute for large responses, 5 minutes for smaller ones
-      cache.set(cacheKey, processedData, ttl);
-      
-      return res.status(200).json(processedData);
-    } catch (error) {
-      // Handle request errors with detailed information
-      console.error('[ZAPPER] Zapper API request failed:', {
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        message: error.message
-      });
-      
-      // Return a detailed error response
-      return res.status(error.response?.status || 500).json({
-        error: 'Zapper API error',
-        status: error.response?.status || 500,
-        message: error.message,
-        details: error.response?.data || {}
-      });
+    // Make the request to Zapper API
+    const response = await fetch(ZAPPER_API_URL, {
+      method: 'POST',
+      headers: ZAPPER_HEADERS,
+      body: JSON.stringify({
+        query: transformedQuery,
+        variables: transformedVariables
+      }),
+      signal: controller.signal
+    }).finally(() => clearTimeout(timeoutId));
+
+    const data = await response.json();
+
+    // Handle GraphQL errors
+    if (data.errors) {
+      console.error('GraphQL errors:', data.errors);
+      return res.status(400).json(data);
     }
+
+    // Process and deduplicate the data if necessary
+    let processedData = data;
+    
+    if (queryType === 'NFT_USERS_TOKENS' && data.data?.nftUsersTokens?.edges) {
+      // Apply deduplication to NFT query results
+      processedData = deduplicateNfts(data, options.prioritizeSpeed);
+    } else if (queryType === 'PORTFOLIO' && data.data?.portfolioV2?.nftBalances?.nfts) {
+      // Deduplicate NFTs in portfolio responses
+      processedData = deduplicatePortfolioNfts(data);
+    }
+
+    // Cache the response
+    if (cacheKey) {
+      const cacheTTL = options.prioritizeSpeed ? 900 : 600; // 15 minutes for speed-prioritized queries, 10 minutes for normal
+      cache.set(cacheKey, processedData, cacheTTL);
+    }
+
+    // Return the processed data
+    return res.status(200).json(processedData);
   } catch (error) {
     // Handle overall handler errors
     console.error('[ZAPPER] Handler error:', error);
@@ -332,10 +201,10 @@ const handler = async (req, res) => {
  * Deduplicate NFTs based on their unique token identifiers
  * This prevents the same NFT from appearing multiple times in the results
  */
-const deduplicateNfts = (data) => {
+const deduplicateNfts = (data, prioritizeSpeed = false) => {
   if (!data.data?.nftUsersTokens?.edges) return data;
   
-  console.log('[ZAPPER] Deduplicating NFTs, original count:', data.data.nftUsersTokens.edges.length);
+  console.log(`[ZAPPER] Deduplicating NFTs, original count: ${data.data.nftUsersTokens.edges.length}`);
   
   const uniqueNfts = new Map();
   const dedupedEdges = [];
@@ -357,7 +226,7 @@ const deduplicateNfts = (data) => {
     }
   });
   
-  console.log('[ZAPPER] After deduplication:', dedupedEdges.length);
+  console.log(`[ZAPPER] After deduplication: ${dedupedEdges.length}`);
   
   // Update the response data with deduplicated NFTs
   data.data.nftUsersTokens.edges = dedupedEdges;
@@ -368,35 +237,69 @@ const deduplicateNfts = (data) => {
  * Deduplicate NFTs in portfolio response format
  */
 const deduplicatePortfolioNfts = (data) => {
-  if (!data.data?.portfolioV2?.nftBalances?.items) return data;
+  if (!data.data?.portfolioV2?.nftBalances?.nfts) return data;
   
-  console.log('[ZAPPER] Deduplicating portfolio NFTs, original count:', data.data.portfolioV2.nftBalances.items.length);
+  console.log(`[ZAPPER] Deduplicating portfolio NFTs, original count: ${data.data.portfolioV2.nftBalances.nfts.length}`);
   
   const uniqueNfts = new Map();
-  const dedupedItems = [];
+  const dedupedNfts = [];
   
   // Process each NFT item
-  data.data.portfolioV2.nftBalances.items.forEach(item => {
-    if (!item.nft) return;
+  data.data.portfolioV2.nftBalances.nfts.forEach(nft => {
+    if (!nft || !nft.collection || !nft.tokenId) return;
     
     // Create a unique key for each NFT based on collection address and token ID
-    const nft = item.nft;
-    const collectionAddr = nft.collection?.address || '';
+    const collectionAddr = nft.collection.address || '';
     const tokenId = nft.tokenId || '';
     const uniqueKey = `${collectionAddr.toLowerCase()}-${tokenId}`;
     
     // Only add if we haven't seen this NFT before
     if (!uniqueNfts.has(uniqueKey)) {
       uniqueNfts.set(uniqueKey, true);
-      dedupedItems.push(item);
+      dedupedNfts.push(nft);
     }
   });
   
-  console.log('[ZAPPER] After portfolio deduplication:', dedupedItems.length);
+  console.log(`[ZAPPER] After portfolio deduplication: ${dedupedNfts.length}`);
   
   // Update the response data with deduplicated NFTs
-  data.data.portfolioV2.nftBalances.items = dedupedItems;
+  data.data.portfolioV2.nftBalances.nfts = dedupedNfts;
   return data;
 };
+
+// Function to extract the query type from a GraphQL query
+function extractQueryType(query) {
+  if (query.includes('nftUsersTokens')) {
+    return 'NFT_USERS_TOKENS';
+  } else if (query.includes('farcasterProfile')) {
+    return 'PROFILE';
+  } else if (query.includes('portfolioV2')) {
+    return 'PORTFOLIO';
+  } else if (query.includes('nfts') && query.includes('collection')) {
+    return 'NFTS_QUERY_NEW';
+  } else if (query.includes('nfts') && !query.includes('collection')) {
+    return 'NFTS_QUERY_OLD';
+  }
+  return 'UNKNOWN';
+}
+
+// Transform the query and variables based on the query type
+function transformQuery(query, variables, queryType, options) {
+  let transformedQuery = query;
+  let transformedVariables = { ...variables };
+
+  // For speed-prioritized requests, limit the number of results
+  if (options.prioritizeSpeed) {
+    if (queryType === 'NFT_USERS_TOKENS') {
+      // If prioritizing speed, limit the number of NFTs per request
+      const limitedFirst = Math.min(variables.first || 50, 32);
+      transformedVariables = { ...transformedVariables, first: limitedFirst };
+      console.log(`[ZAPPER] Speed prioritized: Limited first to ${limitedFirst}`);
+    }
+    // Additional speed optimizations for other query types could be added here
+  }
+
+  return { transformedQuery, transformedVariables };
+}
 
 module.exports = handler; 

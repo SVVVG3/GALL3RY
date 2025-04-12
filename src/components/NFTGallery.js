@@ -1,110 +1,448 @@
 import React, { useEffect, useRef, useState } from 'react';
+import NFTCard from './NFTCard';
 import { useNFT } from '../contexts/NFTContext';
-import NFTGrid from './NFTGrid';
-import LoadingSpinner from './LoadingSpinner';
-import SortControls from './SortControls';
+import { useWallet } from '../contexts/WalletContext';
+import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock } from 'react-icons/fa';
+import styled from 'styled-components';
 
 /**
  * NFT Gallery component
  * Displays a grid of NFT images with search, sorting and pagination
  */
-const NFTGallery = ({ addresses, onNFTClick }) => {
-  const { nfts, loading, error, hasMore, fetchNFTs, loadMoreNFTs, setSearchQuery } = useNFT();
-  const [searchText, setSearchText] = useState('');
+const NFTGallery = () => {
+  const {
+    filteredNFTs,
+    isLoading,
+    hasMore,
+    loadingMore,
+    collections,
+    chains,
+    selectedChains,
+    setSelectedChains,
+    selectedCollections,
+    setSelectedCollections,
+    searchQuery,
+    setSearchQuery,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder,
+    prioritizeSpeed,
+    setPrioritizeSpeed,
+    loadMoreNFTs,
+    fetchNFTs
+  } = useNFT();
   
-  // Add debug info to monitor hasMore state
-  console.log("NFTGallery render:", { 
-    nftsCount: nfts.length, 
-    hasMore, 
-    loading, 
-    addresses: addresses?.length || 0
-  });
+  const { connectedWallets } = useWallet();
+  const [showFilters, setShowFilters] = useState(false);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const loaderRef = useRef(null);
+  const [initialLoad, setInitialLoad] = useState(true);
 
+  // Initial load of NFTs when wallets are connected
   useEffect(() => {
-    if (addresses && addresses.length > 0) {
-      fetchNFTs(addresses);
+    if (connectedWallets && connectedWallets.length > 0 && initialLoad) {
+      fetchNFTs();
+      setInitialLoad(false);
     }
-  }, [addresses, fetchNFTs]);
+  }, [connectedWallets, fetchNFTs, initialLoad]);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    setSearchQuery(searchText);
+  // Intersection observer for infinite scrolling
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: '20px',
+      threshold: 0.1
+    };
+
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !isLoading && !loadingMore) {
+        loadMoreNFTs();
+      }
+    }, options);
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => {
+      if (loaderRef.current) {
+        observer.unobserve(loaderRef.current);
+      }
+    };
+  }, [hasMore, isLoading, loadMoreNFTs, loadingMore]);
+
+  // Handle chain filter
+  const handleChainSelect = (chain) => {
+    if (selectedChains.includes(chain)) {
+      setSelectedChains(selectedChains.filter(c => c !== chain));
+    } else {
+      setSelectedChains([...selectedChains, chain]);
+    }
   };
 
-  const handleLoadMore = () => {
-    if (hasMore && !loading) {
-      console.log("Manual load more clicked");
-      loadMoreNFTs();
+  // Handle collection filter
+  const handleCollectionSelect = (collectionId) => {
+    if (selectedCollections.includes(collectionId)) {
+      setSelectedCollections(selectedCollections.filter(c => c !== collectionId));
+    } else {
+      setSelectedCollections([...selectedCollections, collectionId]);
     }
   };
 
-  if (error) {
-    return (
-      <div className="text-center py-8 text-sm text-gray-500">
-        {error}
-      </div>
-    );
-  }
+  // Toggle sort order
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  };
 
-  if (!addresses || addresses.length === 0) {
-    return null;
-  }
-
-  if (!nfts.length && !loading) {
-    return (
-      <div className="text-center py-8 text-sm text-gray-500">
-        No NFTs found for this user
-      </div>
-    );
-  }
+  // Toggle speed mode
+  const toggleSpeedMode = () => {
+    setPrioritizeSpeed(!prioritizeSpeed);
+    // Refresh NFTs to apply the new setting
+    fetchNFTs(true);
+  };
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-6">
-        <form onSubmit={handleSearch} className="w-2/3">
-          <div className="relative">
-            <input
-              type="text"
-              placeholder="Search by NFT or collection name"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-            />
-            <button 
-              type="submit"
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </button>
-          </div>
-        </form>
-        
-        <SortControls />
-      </div>
-      
-      <NFTGrid nfts={nfts} onNFTClick={onNFTClick} />
-      
-      {loading && (
-        <div className="flex justify-center items-center py-8">
-          <LoadingSpinner size="small" />
-        </div>
+    <GalleryContainer>
+      <GalleryHeader>
+        <h2>My NFTs</h2>
+        <ControlsContainer>
+          <SearchBox
+            type="text"
+            placeholder="Search NFTs..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          
+          <FilterButton onClick={() => setShowFilters(!showFilters)}>
+            <FaFilter /> Filters
+          </FilterButton>
+          
+          <SortButton onClick={() => setShowSortMenu(!showSortMenu)}>
+            <FaSort /> Sort
+          </SortButton>
+          
+          <SpeedToggle $active={prioritizeSpeed} onClick={toggleSpeedMode}>
+            {prioritizeSpeed ? <FaBolt /> : <FaClock />}
+            {prioritizeSpeed ? 'Speed' : 'Complete'}
+          </SpeedToggle>
+        </ControlsContainer>
+      </GalleryHeader>
+
+      {showFilters && (
+        <FiltersPanel>
+          <FilterSection>
+            <h3>Chains</h3>
+            <FilterList>
+              {chains.map(chain => (
+                <FilterItem
+                  key={chain.id}
+                  $selected={selectedChains.includes(chain.id)}
+                  onClick={() => handleChainSelect(chain.id)}
+                >
+                  {chain.name} ({chain.count})
+                  {selectedChains.includes(chain.id) && <FaCheck />}
+                </FilterItem>
+              ))}
+            </FilterList>
+          </FilterSection>
+
+          <FilterSection>
+            <h3>Collections</h3>
+            <FilterList>
+              {collections.map(collection => (
+                <FilterItem
+                  key={collection.id}
+                  $selected={selectedCollections.includes(collection.id)}
+                  onClick={() => handleCollectionSelect(collection.id)}
+                >
+                  {collection.name} ({collection.count})
+                  {selectedCollections.includes(collection.id) && <FaCheck />}
+                </FilterItem>
+              ))}
+            </FilterList>
+          </FilterSection>
+        </FiltersPanel>
       )}
-      
-      {/* Explicit "Load More" button that's always visible when hasMore is true */}
-      {hasMore && !loading && (
-        <div className="mt-8 flex justify-center">
-          <button 
-            onClick={handleLoadMore}
-            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200"
+
+      {showSortMenu && (
+        <SortMenu>
+          <SortOption
+            $selected={sortBy === 'estimatedValue'}
+            onClick={() => setSortBy('estimatedValue')}
           >
-            Load More NFTs
-          </button>
-        </div>
+            Estimated Value {sortBy === 'estimatedValue' && <FaCheck />}
+          </SortOption>
+          <SortOption
+            $selected={sortBy === 'name'}
+            onClick={() => setSortBy('name')}
+          >
+            Name (A-Z) {sortBy === 'name' && <FaCheck />}
+          </SortOption>
+          <SortOption
+            $selected={sortBy === 'collection'}
+            onClick={() => setSortBy('collection')}
+          >
+            Collection {sortBy === 'collection' && <FaCheck />}
+          </SortOption>
+          <SortOption
+            $selected={sortBy === 'acquiredAt'}
+            onClick={() => setSortBy('acquiredAt')}
+          >
+            Acquisition Date {sortBy === 'acquiredAt' && <FaCheck />}
+          </SortOption>
+          <SortOrderOption onClick={toggleSortOrder}>
+            Order: {sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+          </SortOrderOption>
+        </SortMenu>
       )}
-    </div>
+
+      {isLoading && !loadingMore ? (
+        <LoadingContainer>
+          <FaSpinner className="spinner" />
+          <p>Loading your NFTs...</p>
+        </LoadingContainer>
+      ) : filteredNFTs.length === 0 ? (
+        <EmptyState>
+          <p>No NFTs found. Connect a wallet or try different filters.</p>
+        </EmptyState>
+      ) : (
+        <NFTGrid>
+          {filteredNFTs.map(nft => (
+            <NFTCard key={nft.id} nft={nft} />
+          ))}
+        </NFTGrid>
+      )}
+
+      {(hasMore || loadingMore) && (
+        <LoaderElement ref={loaderRef}>
+          {loadingMore && <FaSpinner className="spinner" />}
+        </LoaderElement>
+      )}
+    </GalleryContainer>
   );
 };
+
+// Styled components
+const GalleryContainer = styled.div`
+  padding: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+`;
+
+const GalleryHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+  
+  h2 {
+    font-size: 1.8rem;
+    margin: 0;
+  }
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+`;
+
+const ControlsContainer = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  
+  @media (max-width: 768px) {
+    width: 100%;
+    justify-content: space-between;
+  }
+`;
+
+const SearchBox = styled.input`
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  min-width: 200px;
+  
+  @media (max-width: 768px) {
+    flex: 1;
+  }
+`;
+
+const FilterButton = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: #f0f0f0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  &:hover {
+    background-color: #e0e0e0;
+  }
+`;
+
+const SortButton = styled(FilterButton)``;
+
+const SpeedToggle = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: ${props => props.$active ? '#4caf50' : '#f0f0f0'};
+  color: ${props => props.$active ? 'white' : 'black'};
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  &:hover {
+    background-color: ${props => props.$active ? '#3d8b40' : '#e0e0e0'};
+  }
+`;
+
+const FiltersPanel = styled.div`
+  background-color: white;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 2rem;
+  
+  @media (max-width: 768px) {
+    flex-direction: column;
+    gap: 1rem;
+  }
+`;
+
+const FilterSection = styled.div`
+  flex: 1;
+  
+  h3 {
+    margin-top: 0;
+    margin-bottom: 0.5rem;
+    font-size: 1rem;
+  }
+`;
+
+const FilterList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+`;
+
+const FilterItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background-color: ${props => props.$selected ? '#e0f2f1' : '#f5f5f5'};
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  
+  &:hover {
+    background-color: #e0e0e0;
+  }
+`;
+
+const SortMenu = styled.div`
+  position: absolute;
+  right: 1rem;
+  background-color: white;
+  border-radius: 8px;
+  padding: 0.5rem;
+  margin-top: -1rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+  
+  @media (max-width: 768px) {
+    width: calc(100% - 2rem);
+    right: auto;
+  }
+`;
+
+const SortOption = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  background-color: ${props => props.$selected ? '#e0f2f1' : 'transparent'};
+  
+  &:hover {
+    background-color: #f5f5f5;
+  }
+`;
+
+const SortOrderOption = styled(SortOption)`
+  border-top: 1px solid #eee;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+`;
+
+const NFTGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+`;
+
+const LoadingContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  
+  .spinner {
+    animation: spin 1s linear infinite;
+    font-size: 2rem;
+    margin-bottom: 1rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+const LoaderElement = styled.div`
+  display: flex;
+  justify-content: center;
+  padding: 2rem 0;
+  
+  .spinner {
+    animation: spin 1s linear infinite;
+    font-size: 1.5rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+
+const EmptyState = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  
+  p {
+    color: #666;
+  }
+`;
 
 export default NFTGallery; 
