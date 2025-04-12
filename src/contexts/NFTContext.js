@@ -20,7 +20,7 @@ export const NFTProvider = ({ children }) => {
     setLoading(true);
     setError(null);
     try {
-      // Use the nftUsersTokens query which is still supported in Zapper API
+      // Simplified query with proper format for the current Zapper API
       const query = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -63,37 +63,54 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
+      // Simple variables with exactly what the API expects
       const variables = {
         owners: addresses,
         first: PAGE_SIZE,
         withOverrides: true
       };
 
-      console.log('Fetching NFTs with query:', { query, variables });
+      console.log('Fetching NFTs with query:', { 
+        queryType: 'nftUsersTokens',
+        addressCount: addresses.length
+      });
 
       const data = await fetchZapperData(query, variables);
-      console.log('Received NFT data:', data);
+      console.log('Received NFT data:', { 
+        hasData: !!data,
+        hasEdges: !!data?.nftUsersTokens?.edges,
+        edgeCount: data?.nftUsersTokens?.edges?.length
+      });
 
       if (!data?.nftUsersTokens?.edges) {
         console.error('Invalid NFT data structure:', data);
         throw new Error('Invalid NFT data received');
       }
 
+      // Process the response data correctly
       const nftsWithImages = data.nftUsersTokens.edges.map(edge => {
         const node = edge.node;
         if (!node) return null;
         
-        // Create a normalized NFT object that combines data from all possible sources
+        // Get the best available image
+        let imageUrl = null;
+        if (node.mediasV2 && node.mediasV2.length > 0) {
+          const media = node.mediasV2[0];
+          imageUrl = media.url || media.original || media.originalUri;
+        }
+        
+        if (!imageUrl && node.collection?.cardImageUrl) {
+          imageUrl = node.collection.cardImageUrl;
+        }
+        
+        // Create the normalized NFT object
         return {
           id: node.id,
           tokenId: node.tokenId,
           name: node.name || `#${node.tokenId}`,
           description: node.description,
           cursor: edge.cursor,
-          // Handle different image sources
-          imageUrl: node.mediasV2 && node.mediasV2.length > 0 ? 
-            (node.mediasV2[0].url || node.mediasV2[0].original || node.mediasV2[0].originalUri) : 
-            node.collection?.cardImageUrl,
+          imageUrl: imageUrl,
           collection: {
             id: node.collection?.id,
             name: node.collection?.name || 'Unknown Collection',
@@ -110,7 +127,7 @@ export const NFTProvider = ({ children }) => {
       }).filter(Boolean);
       
       setNfts(nftsWithImages);
-      setHasMore(data.nftUsersTokens.pageInfo.hasNextPage);
+      setHasMore(data.nftUsersTokens.pageInfo?.hasNextPage || false);
       setPage(1);
       setSelectedWallets(addresses);
     } catch (err) {
@@ -126,16 +143,16 @@ export const NFTProvider = ({ children }) => {
 
     setLoading(true);
     try {
-      // Get the cursor of the last NFT
-      const lastCursor = nfts.length > 0 ? nfts[nfts.length - 1].cursor : null;
+      // Get the endCursor from the last batch - more reliable than the last item's cursor
+      const endCursor = nfts.length > 0 && nfts[nfts.length - 1].cursor;
       
-      if (!lastCursor) {
+      if (!endCursor) {
         console.warn('No cursor available for pagination');
         setHasMore(false);
         return;
       }
 
-      // Query for the next page
+      // Use endCursor for the after parameter
       const query = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $after: String, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -182,11 +199,14 @@ export const NFTProvider = ({ children }) => {
       const variables = {
         owners: selectedWallets,
         first: PAGE_SIZE,
-        after: lastCursor,
+        after: endCursor,
         withOverrides: true
       };
 
-      console.log('Loading more NFTs:', variables);
+      console.log('Loading more NFTs:', { 
+        endCursor,
+        selectedWallets: selectedWallets.length
+      });
 
       const data = await fetchZapperData(query, variables);
       
@@ -194,9 +214,21 @@ export const NFTProvider = ({ children }) => {
         throw new Error('Invalid response format');
       }
       
+      // Process the new batch of NFTs
       const newNfts = data.nftUsersTokens.edges.map(edge => {
         const node = edge.node;
         if (!node) return null;
+        
+        // Get the best available image
+        let imageUrl = null;
+        if (node.mediasV2 && node.mediasV2.length > 0) {
+          const media = node.mediasV2[0];
+          imageUrl = media.url || media.original || media.originalUri;
+        }
+        
+        if (!imageUrl && node.collection?.cardImageUrl) {
+          imageUrl = node.collection.cardImageUrl;
+        }
         
         return {
           id: node.id,
@@ -204,9 +236,7 @@ export const NFTProvider = ({ children }) => {
           name: node.name || `#${node.tokenId}`,
           description: node.description,
           cursor: edge.cursor,
-          imageUrl: node.mediasV2 && node.mediasV2.length > 0 ? 
-            (node.mediasV2[0].url || node.mediasV2[0].original || node.mediasV2[0].originalUri) : 
-            node.collection?.cardImageUrl,
+          imageUrl: imageUrl,
           collection: {
             id: node.collection?.id,
             name: node.collection?.name || 'Unknown Collection',
@@ -221,8 +251,11 @@ export const NFTProvider = ({ children }) => {
         };
       }).filter(Boolean);
 
+      console.log(`Loaded ${newNfts.length} more NFTs`);
+      
+      // Append the new NFTs to the existing list
       setNfts(prev => [...prev, ...newNfts]);
-      setHasMore(data.nftUsersTokens.pageInfo.hasNextPage);
+      setHasMore(data.nftUsersTokens.pageInfo?.hasNextPage || false);
       setPage(p => p + 1);
     } catch (err) {
       console.error('Error loading more NFTs:', err);
@@ -291,43 +324,35 @@ export const NFTProvider = ({ children }) => {
 
       console.log("Fetching profile data for FID:", parsedFid);
       const profileData = await fetchZapperData(followingQuery, { fid: parsedFid });
-      console.log("Profile data received:", profileData);
+      console.log("Profile data received:", {
+        hasFollowing: !!profileData?.farcasterProfile?.following?.edges,
+        hasFollowers: !!profileData?.farcasterProfile?.followers?.edges,
+      });
       
       if (!profileData || !profileData.farcasterProfile) {
         console.error("Invalid profile data received:", profileData);
         throw new Error("Invalid profile data");
       }
       
-      const following = profileData.farcasterProfile.following.edges || [];
-      const followers = profileData.farcasterProfile.followers.edges || [];
+      const following = profileData.farcasterProfile.following?.edges || [];
+      const followers = profileData.farcasterProfile.followers?.edges || [];
       
       console.log("Relationship counts:", { 
         followingCount: following.length, 
         followersCount: followers.length 
       });
 
-      // Log some sample addresses to verify we have them
-      if (following.length > 0) {
-        const sampleFollowing = following.slice(0, 3);
-        console.log("Sample following addresses:", sampleFollowing.map(f => ({
-          username: f.node.username,
-          custodyAddress: f.node.custodyAddress,
-          connectedAddresses: f.node.connectedAddresses
-        })));
-      }
-
-      // Prepare the collection ID/address properly
-      let collectionIdentifier = collectionAddress;
+      // Normalize the collection address for comparison
+      let collectionIdentifier = collectionAddress.toLowerCase();
       
       // If it's a complex ID like "ethereum-0x123...", extract just the address part
-      if (collectionAddress.includes('-')) {
-        collectionIdentifier = collectionAddress.split('-')[1];
+      if (collectionIdentifier.includes('-')) {
+        collectionIdentifier = collectionIdentifier.split('-')[1].toLowerCase();
       }
       
       console.log("Using collection identifier:", collectionIdentifier);
 
-      // Query for holders of this collection - notice we're not using collectionIds directly
-      // as that was causing issues. Instead, we query against the node.collection.id
+      // Simple query to check if a user owns NFTs from this collection
       const holdersQuery = `
         query NftUsersTokens($owners: [Address!]!, $first: Int, $withOverrides: Boolean) {
           nftUsersTokens(
@@ -351,10 +376,6 @@ export const NFTProvider = ({ children }) => {
         }
       `;
 
-      // Monitor successful queries
-      let successfulChecks = 0;
-      let failedChecks = 0;
-
       // Helper function to check one user's addresses
       const checkUserHoldings = async (node, relationshipType) => {
         const addresses = [node.custodyAddress, ...(node.connectedAddresses || [])].filter(Boolean);
@@ -364,8 +385,7 @@ export const NFTProvider = ({ children }) => {
           return null;
         }
         
-        // Log which addresses we're checking
-        console.log(`Checking ${relationshipType} ${node.username} with addresses:`, addresses);
+        console.log(`Checking ${relationshipType} ${node.username} with ${addresses.length} addresses`);
         
         try {
           const holderVariables = {
@@ -373,8 +393,6 @@ export const NFTProvider = ({ children }) => {
             first: 100,  // Get up to 100 NFTs per user
             withOverrides: true
           };
-          
-          console.log("Query variables:", holderVariables);
           
           const holderData = await fetchZapperData(holdersQuery, holderVariables);
           
@@ -387,75 +405,89 @@ export const NFTProvider = ({ children }) => {
             .filter(nft => {
               if (!nft || !nft.collection) return false;
               
-              // Check if this NFT is from our target collection
-              // Compare both the ID and address to be safe
-              const collectionId = nft.collection.id;
-              const collectionAddr = nft.collection.address;
+              // Check collection ID, which may contain the address
+              const collectionId = (nft.collection.id || '').toLowerCase();
+              // Check direct collection address
+              const collectionAddr = (nft.collection.address || '').toLowerCase();
               
+              // Match if either field contains our target collection address
               return (
-                (collectionId && collectionId.includes(collectionIdentifier)) ||
-                (collectionAddr && collectionAddr.toLowerCase() === collectionIdentifier.toLowerCase())
+                collectionId.includes(collectionIdentifier) ||
+                collectionAddr === collectionIdentifier
               );
             });
           
           const totalCount = matchingNfts.length;
           
-          console.log(`Holdings result for ${node.username}:`, { 
-            totalCount,
-            matchingCollection: collectionIdentifier
-          });
-          
-          successfulChecks++;
-          
           if (totalCount > 0) {
+            console.log(`${node.username} holds ${totalCount} NFTs from collection ${collectionIdentifier}`);
             return {
               ...node,
               holdingCount: totalCount,
               nfts: matchingNfts,
               relationship: relationshipType
             };
+          } else {
+            console.log(`${node.username} holds no NFTs from collection ${collectionIdentifier}`);
           }
         } catch (error) {
           console.error(`Error checking holdings for ${node.username}:`, error);
-          failedChecks++;
         }
         
         return null;
       };
 
-      // Process following list (with better error handling)
-      const followingHolders = await Promise.all(
-        following.map(({ node }) => checkUserHoldings(node, 'following'))
-      );
-
-      // Process followers list
-      const followerHolders = await Promise.all(
-        followers.map(({ node }) => checkUserHoldings(node, 'follower'))
-      );
+      // Process following and followers in smaller chunks to avoid rate limiting
+      console.log("Processing followers and following...");
       
-      console.log(`Holdings check stats: ${successfulChecks} successful, ${failedChecks} failed`);
-
-      // Combine and filter out null values, sort by followers count
-      const filteredFollowingHolders = followingHolders.filter(Boolean);
-      const filteredFollowerHolders = followerHolders.filter(Boolean);
+      const followingHolders = [];
+      const followerHolders = [];
       
-      console.log("Filtered holder counts:", {
-        following: filteredFollowingHolders.length,
-        followers: filteredFollowerHolders.length
+      // Process following in chunks of 5
+      for (let i = 0; i < following.length; i += 5) {
+        const chunk = following.slice(i, i + 5);
+        const results = await Promise.all(
+          chunk.map(({ node }) => checkUserHoldings(node, 'following'))
+        );
+        followingHolders.push(...results.filter(Boolean));
+        
+        // Small delay to avoid rate limiting
+        if (i + 5 < following.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // Process followers in chunks of 5
+      for (let i = 0; i < followers.length; i += 5) {
+        const chunk = followers.slice(i, i + 5);
+        const results = await Promise.all(
+          chunk.map(({ node }) => checkUserHoldings(node, 'follower'))
+        );
+        followerHolders.push(...results.filter(Boolean));
+        
+        // Small delay to avoid rate limiting
+        if (i + 5 < followers.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      console.log("Holder counts:", {
+        following: followingHolders.length,
+        followers: followerHolders.length
       });
       
       // Identify mutual connections (both following and followers)
       const mutualHolderIds = new Set();
       
-      filteredFollowingHolders.forEach(following => {
-        const isAlsoFollower = filteredFollowerHolders.some(follower => follower.fid === following.fid);
+      followingHolders.forEach(following => {
+        const isAlsoFollower = followerHolders.some(follower => follower.fid === following.fid);
         if (isAlsoFollower) {
           mutualHolderIds.add(following.fid);
           following.relationship = 'mutual';
         }
       });
       
-      filteredFollowerHolders.forEach(follower => {
+      followerHolders.forEach(follower => {
         if (mutualHolderIds.has(follower.fid)) {
           follower.relationship = 'mutual';
         }
@@ -463,11 +495,11 @@ export const NFTProvider = ({ children }) => {
       
       // Remove duplicates (when someone is both a follower and following)
       const allHolders = [
-        ...filteredFollowingHolders,
-        ...filteredFollowerHolders.filter(follower => !mutualHolderIds.has(follower.fid))
+        ...followingHolders,
+        ...followerHolders.filter(follower => !mutualHolderIds.has(follower.fid))
       ].sort((a, b) => b.followersCount - a.followersCount);
 
-      console.log("Final holders list:", allHolders);
+      console.log(`Found ${allHolders.length} total collection holders`);
       
       setCollectionHolders({ [collectionAddress]: allHolders });
       return allHolders;
