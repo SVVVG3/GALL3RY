@@ -79,15 +79,29 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     throw new Error('Username or FID is required');
   }
 
+  // Clean up the username - remove @, trim whitespace
+  let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
+  
   // Determine if input is a FID (number) or username (string)
-  const isFid = !isNaN(Number(usernameOrFid));
+  const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
+  
+  // For ENS names, try both with and without .eth suffix
+  let isEnsName = false;
+  let alternativeUsername = null;
+  
+  if (!isFid && cleanInput.toLowerCase().endsWith('.eth')) {
+    isEnsName = true;
+    // Get the username without .eth
+    alternativeUsername = cleanInput.substring(0, cleanInput.length - 4);
+    console.log(`Input appears to be ENS name: ${cleanInput}, will also try: ${alternativeUsername}`);
+  }
   
   // Construct the query variables based on input type
   const variables = isFid 
-    ? { fid: parseInt(usernameOrFid, 10) }
-    : { username: usernameOrFid.toString() };
+    ? { fid: parseInt(cleanInput, 10) }
+    : { username: cleanInput };
   
-  console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${usernameOrFid}`);
+  console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   
   // GraphQL query according to Zapper API docs
   const query = `
@@ -108,27 +122,86 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   `;
   
   try {
-    const response = await makeGraphQLRequest(query, variables);
-    
-    // Check if profile was found
-    if (!response.data || !response.data.farcasterProfile) {
-      throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${usernameOrFid}`);
+    // First attempt with original input
+    try {
+      const response = await makeGraphQLRequest(query, variables);
+      
+      // Check if profile was found
+      if (response.data && response.data.farcasterProfile) {
+        const profile = response.data.farcasterProfile;
+        
+        // Ensure we have consistent field names for our application
+        return {
+          fid: profile.fid,
+          username: profile.username,
+          displayName: profile.metadata?.displayName || profile.username,
+          avatarUrl: profile.metadata?.imageUrl,
+          bio: profile.metadata?.description,
+          custodyAddress: profile.custodyAddress,
+          connectedAddresses: profile.connectedAddresses || [],
+          // Include the full profile for debugging
+          _rawProfile: profile
+        };
+      }
+    } catch (firstError) {
+      console.log(`First attempt failed: ${firstError.message}`);
     }
     
-    const profile = response.data.farcasterProfile;
+    // If this is an ENS name and the first attempt failed, try the alternative (without .eth)
+    if (isEnsName && alternativeUsername) {
+      console.log(`Trying alternative username: ${alternativeUsername}`);
+      
+      try {
+        const altResponse = await makeGraphQLRequest(query, { username: alternativeUsername });
+        
+        // Check if profile was found with alternative username
+        if (altResponse.data && altResponse.data.farcasterProfile) {
+          console.log(`Found profile using alternative username: ${alternativeUsername}`);
+          const profile = altResponse.data.farcasterProfile;
+          
+          return {
+            fid: profile.fid,
+            username: profile.username,
+            displayName: profile.metadata?.displayName || profile.username,
+            avatarUrl: profile.metadata?.imageUrl,
+            bio: profile.metadata?.description,
+            custodyAddress: profile.custodyAddress,
+            connectedAddresses: profile.connectedAddresses || [],
+            _rawProfile: profile
+          };
+        }
+      } catch (secondError) {
+        console.log(`Alternative username attempt failed: ${secondError.message}`);
+      }
+    }
     
-    // Ensure we have consistent field names for our application
-    return {
-      fid: profile.fid,
-      username: profile.username,
-      displayName: profile.metadata?.displayName || profile.username,
-      avatarUrl: profile.metadata?.imageUrl,
-      bio: profile.metadata?.description,
-      custodyAddress: profile.custodyAddress,
-      connectedAddresses: profile.connectedAddresses || [],
-      // Include the full profile for debugging
-      _rawProfile: profile
-    };
+    // If we reach this point, try the direct Warpcast API as a fallback
+    try {
+      console.log(`Trying Warpcast API fallback for: ${cleanInput}`);
+      const warpcastResponse = await fetch(`/api/farcaster-user?username=${encodeURIComponent(cleanInput)}`);
+      const warpcastData = await warpcastResponse.json();
+      
+      if (warpcastResponse.ok && warpcastData.profile) {
+        console.log('Found profile via Warpcast API fallback');
+        return warpcastData.profile;
+      }
+      
+      // If ENS name, try alternative with Warpcast API too
+      if (isEnsName && alternativeUsername) {
+        const altWarpcastResponse = await fetch(`/api/farcaster-user?username=${encodeURIComponent(alternativeUsername)}`);
+        const altWarpcastData = await altWarpcastResponse.json();
+        
+        if (altWarpcastResponse.ok && altWarpcastData.profile) {
+          console.log(`Found profile via Warpcast API with alternative username: ${alternativeUsername}`);
+          return altWarpcastData.profile;
+        }
+      }
+    } catch (warpcastError) {
+      console.log(`Warpcast API fallback failed: ${warpcastError.message}`);
+    }
+    
+    // If we reach here, all attempts failed
+    throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   } catch (error) {
     console.error('Error fetching Farcaster profile:', error);
     throw error;
