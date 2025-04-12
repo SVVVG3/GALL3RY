@@ -12,6 +12,10 @@ const isBrowser = typeof window !== 'undefined';
 const NFTContext = createContext();
 const PAGE_SIZE = NFT_PAGE_SIZE;
 
+// Enhanced cache config
+const CACHE_VERSION = '1.1'; // Update when cache structure changes
+const CACHE_KEY = 'nft_cache_v1_1';
+
 export const NFTProvider = ({ children }) => {
   const [nfts, setNfts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -83,15 +87,23 @@ export const NFTProvider = ({ children }) => {
     if (!isBrowser) return null;
     
     try {
-      setCachingStatus({ status: 'reading', progress: 0 });
-      const cachedData = localStorage.getItem('nft_cache');
+      setCachingStatus({ status: 'reading', progress: 25 });
+      const cachedData = localStorage.getItem(CACHE_KEY);
       
       if (!cachedData) {
         setCachingStatus({ status: 'empty', progress: 0 });
         return null;
       }
       
-      const { data, timestamp, walletAddresses, version } = JSON.parse(cachedData);
+      const parsedCache = JSON.parse(cachedData);
+      const { data, timestamp, walletAddresses, version } = parsedCache;
+      
+      // Version check for cache compatibility
+      if (version !== CACHE_VERSION) {
+        console.log(`Cache version mismatch (${version} vs ${CACHE_VERSION}), invalidating`);
+        setCachingStatus({ status: 'version_mismatch', progress: 0 });
+        return null;
+      }
       
       // Check if cache is expired or if wallets have changed
       const isExpired = Date.now() - timestamp > CACHE_EXPIRATION_TIME;
@@ -124,7 +136,7 @@ export const NFTProvider = ({ children }) => {
   }, [wallets]);
   
   const updateCache = useCallback((data) => {
-    if (!isBrowser) return;
+    if (!isBrowser || !data || data.length === 0) return;
     
     try {
       setCachingStatus({ status: 'writing', progress: 50 });
@@ -133,18 +145,39 @@ export const NFTProvider = ({ children }) => {
         data,
         timestamp: Date.now(),
         walletAddresses: [...wallets],
-        version: '1.0' // Cache version for future compatibility
+        version: CACHE_VERSION
       };
       
-      localStorage.setItem('nft_cache', JSON.stringify(cacheData));
+      localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
       setLastUpdated(new Date());
       setIsCached(true);
       setCachingStatus({ status: 'cached', progress: 100 });
+      
+      // Log cache size for debugging
+      const cacheSize = JSON.stringify(cacheData).length / 1024;
+      console.log(`Cache updated: ${cacheSize.toFixed(2)} KB`);
     } catch (error) {
       console.error('Error updating cache:', error);
       setCachingStatus({ status: 'error', progress: 0 });
     }
   }, [wallets]);
+
+  // Utility to safely extract estimated value from NFT objects
+  const getEstimatedValue = useCallback((nft) => {
+    if (!nft) return 0;
+    
+    // New format: { estimatedValue: { amount: number, currency: string } }
+    if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && nft.estimatedValue.amount !== undefined) {
+      return Number(nft.estimatedValue.amount) || 0;
+    }
+    
+    // Old format: { estimatedValue: number }
+    if (nft.estimatedValue && typeof nft.estimatedValue === 'number') {
+      return nft.estimatedValue;
+    }
+    
+    return 0;
+  }, []);
 
   // Improved fetchNFTs with better error handling and cache management
   const fetchNFTs = useCallback(async (options = {}) => {
@@ -156,10 +189,10 @@ export const NFTProvider = ({ children }) => {
     }
     
     // Check if we're loading more or starting fresh
-    const isLoadingMoreNFTs = options.loadMore === true;
+    const isLoadingMore = options.loadMore === true;
     const forceRefresh = options.forceRefresh === true;
     
-    if (!isLoadingMoreNFTs) {
+    if (!isLoadingMore) {
       setIsLoading(true);
       setError(null);
       
@@ -184,6 +217,7 @@ export const NFTProvider = ({ children }) => {
       
       // Reset state for fresh fetch
       setEndCursor(null);
+      setHasMore(true);
       if (!forceRefresh) {
         setIsCached(false);
       }
@@ -192,53 +226,102 @@ export const NFTProvider = ({ children }) => {
     }
     
     try {
-      // Use speed mode by default, prioritizing loading time over completeness
+      // Update wallet loading statuses to pending
+      const addresses = isLoadingMore 
+        ? wallets 
+        : (selectedWallets.length > 0 ? selectedWallets : wallets);
+      
+      const newLoadingStatus = { ...walletLoadingStatus };
+      addresses.forEach(addr => {
+        newLoadingStatus[addr] = { 
+          status: 'loading', 
+          loaded: false 
+        };
+      });
+      setWalletLoadingStatus(newLoadingStatus);
+      
+      // Configure options for the zapperService call
       const fetchOptions = {
-        limit: options.batchSize || 100,
-        cursor: isLoadingMoreNFTs ? endCursor : null,
-        prioritizeSpeed: prioritizeSpeed
+        limit: options.batchSize || PAGE_SIZE,
+        cursor: isLoadingMore ? endCursor : null,
+        prioritizeSpeed,
+        includeValue: true,
+        includeMetadata: true,
+        endpoints: [
+          `${window.location.origin}/api/zapper`, // Always try local API first
+          'https://api.zapper.xyz/v2/graphql'     // Fallback to direct API
+        ],
+        maxRetries: 3
       };
       
-      // Call Zapper API to get NFTs
-      const result = await zapperService.getNftsForAddresses(
-        isLoadingMoreNFTs ? wallets : selectedWallets.length > 0 ? selectedWallets : wallets, 
-        fetchOptions
-      );
+      console.log(`Fetching NFTs for ${addresses.length} wallets with options:`, {
+        ...fetchOptions,
+        endpoints: fetchOptions.endpoints.map(e => e.includes('/api/zapper') ? '/api/zapper' : e)
+      });
       
-      // Update state with the fetched NFTs and pagination info
-      if (result && result.nfts) {
-        if (isLoadingMoreNFTs) {
-          // Append to existing NFTs
-          setNfts(prev => {
-            const combined = [...prev, ...result.nfts];
-            return deduplicateNftsArray(combined);
-          });
-        } else {
-          // Replace with new NFTs
-          setNfts(result.nfts);
-          
-          // Only update cache if this is a full refresh (not filtered by wallets)
-          if (!forceRefresh || selectedWallets.length === wallets.length) {
-            updateCache(result.nfts);
-          }
-          
-          // Extract data for filters
-          updateFiltersFromNFTs(result.nfts);
+      // Call Zapper API to get NFTs using the improved service
+      const result = await zapperService.getNftsForAddresses(addresses, fetchOptions);
+      
+      // Update wallet loading statuses to success
+      const updatedLoadingStatus = { ...walletLoadingStatus };
+      addresses.forEach(addr => {
+        updatedLoadingStatus[addr] = { 
+          status: 'success', 
+          loaded: true 
+        };
+      });
+      setWalletLoadingStatus(updatedLoadingStatus);
+      
+      // Handle data from the new response format
+      const nftsData = result?.nfts || [];
+      const hasMoreData = result?.hasMore === true;
+      const cursorData = result?.cursor || null;
+      
+      console.log(`Fetched ${nftsData.length} NFTs${hasMoreData ? ' (more available)' : ''}`);
+      
+      if (isLoadingMore) {
+        // Append to existing NFTs
+        setNfts(prev => {
+          const combined = [...prev, ...nftsData];
+          return deduplicateNftsArray(combined);
+        });
+      } else {
+        // Replace with new NFTs
+        setNfts(nftsData);
+        
+        // Only update cache if this is a full refresh (not filtered by wallets)
+        if (!forceRefresh || selectedWallets.length === wallets.length) {
+          updateCache(nftsData);
         }
         
-        // Update pagination state
-        setEndCursor(result.cursor);
-        setHasMore(result.hasMore === true);
+        // Extract data for filters
+        updateFiltersFromNFTs(nftsData);
       }
+      
+      // Update pagination state
+      setEndCursor(cursorData);
+      setHasMore(hasMoreData);
     } catch (err) {
-      setError(err.message || 'Failed to fetch NFTs');
       console.error('Error fetching NFTs:', err);
+      setError(err.message || 'Failed to fetch NFTs');
+      
+      // Update wallet loading statuses to error
+      const errorLoadingStatus = { ...walletLoadingStatus };
+      const addresses = isLoadingMore ? wallets : (selectedWallets.length > 0 ? selectedWallets : wallets);
+      addresses.forEach(addr => {
+        errorLoadingStatus[addr] = { 
+          status: 'error', 
+          loaded: false,
+          error: err.message || 'Failed to fetch NFTs'
+        };
+      });
+      setWalletLoadingStatus(errorLoadingStatus);
     } finally {
       setIsLoading(false);
       setLoadingMore(false);
       setIsRefreshing(false);
     }
-  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, deduplicateNftsArray]);
+  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, deduplicateNftsArray, walletLoadingStatus, PAGE_SIZE]);
 
   // Extract filter data from NFTs
   const updateFiltersFromNFTs = useCallback((nftsData) => {
@@ -266,19 +349,26 @@ export const NFTProvider = ({ children }) => {
     
     setAvailableCollections(Array.from(collectionsMap.values()));
     
-    // Calculate max value for the slider
-    const maxNftValue = Math.max(...nftsData.map(nft => nft.estimatedValue || 0));
+    // Calculate max value for the slider using the helper function
+    const maxNftValue = Math.max(...nftsData.map(nft => getEstimatedValue(nft)));
     // Only update if it's significantly different to avoid UI jumps
     if (maxNftValue > 0 && (maxValue === Infinity || maxNftValue > maxValue * 1.5)) {
       setMaxValue(Math.ceil(maxNftValue * 1.1)); // Add 10% buffer
     }
-  }, [maxValue]);
+  }, [maxValue, getEstimatedValue]);
 
-  const loadMoreNFTs = useCallback(() => {
-    if (!loadingMore && hasMore) {
-      fetchNFTs({ loadMore: true });
+  const loadMoreNFTs = useCallback(async () => {
+    if (!hasMore || isLoading || loadingMore) return;
+    
+    try {
+      await fetchNFTs({
+        loadMore: true,
+        batchSize: PAGE_SIZE
+      });
+    } catch (error) {
+      console.error('Error loading more NFTs:', error);
     }
-  }, [fetchNFTs, loadingMore, hasMore]);
+  }, [fetchNFTs, hasMore, isLoading, loadingMore, PAGE_SIZE]);
 
   const refreshNFTs = useCallback(() => {
     fetchNFTs({ forceRefresh: true });
@@ -360,7 +450,7 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
 
-  // Enhanced filtering with value and date filters
+  // Enhanced filtering with value and more reliable NFT data
   const filteredNFTs = useMemo(() => {
     if (!nfts || nfts.length === 0) return [];
 
@@ -390,10 +480,10 @@ export const NFTProvider = ({ children }) => {
       );
     }
     
-    // Apply value filters
+    // Apply value filters using the helper function
     if (minValue > 0 || maxValue < Infinity) {
       filtered = filtered.filter(nft => {
-        const value = nft.estimatedValue || 0;
+        const value = getEstimatedValue(nft);
         return value >= minValue && value <= maxValue;
       });
     }
@@ -401,12 +491,12 @@ export const NFTProvider = ({ children }) => {
     // Apply date range filter if both start and end are set
     if (dateRange.start && dateRange.end) {
       filtered = filtered.filter(nft => {
-        if (!nft.acquiredAt && !nft.ownedAt) return false;
+        if (!nft.acquiredAt && !nft.ownedAt) return true; // Include if no date info
         
         const acquiredDate = nft.acquiredAt ? new Date(nft.acquiredAt) : 
                             nft.ownedAt ? new Date(nft.ownedAt) : null;
         
-        if (!acquiredDate) return false;
+        if (!acquiredDate) return true; // Include if no valid date
         
         return acquiredDate >= dateRange.start && acquiredDate <= dateRange.end;
       });
@@ -414,61 +504,54 @@ export const NFTProvider = ({ children }) => {
 
     return getSortedNFTs(filtered, sortBy, sortOrder);
   }, [
-    nfts, 
-    selectedChains, 
-    selectedCollections, 
-    searchQuery, 
-    sortBy, 
-    sortOrder, 
-    minValue, 
-    maxValue, 
-    dateRange
+    nfts,
+    selectedChains,
+    selectedCollections,
+    searchQuery,
+    minValue,
+    maxValue,
+    dateRange,
+    sortBy,
+    sortOrder,
+    getEstimatedValue
   ]);
 
-  // Improved sorting with multiple fields
+  // Helper function to sort NFTs
   const getSortedNFTs = useCallback((nftsToSort, sortByField, order) => {
     if (!nftsToSort || nftsToSort.length === 0) return [];
     
-    const sorted = [...nftsToSort];
-    
-    sorted.sort((a, b) => {
+    return [...nftsToSort].sort((a, b) => {
       let valueA, valueB;
       
       switch (sortByField) {
         case 'estimatedValue':
-          valueA = a.estimatedValue || 0;
-          valueB = b.estimatedValue || 0;
+          valueA = getEstimatedValue(a);
+          valueB = getEstimatedValue(b);
           break;
         case 'name':
           valueA = a.name || '';
           valueB = b.name || '';
           return order === 'asc' 
-            ? valueA.localeCompare(valueB) 
+            ? valueA.localeCompare(valueB)
             : valueB.localeCompare(valueA);
         case 'collection':
           valueA = a.collection?.name || '';
           valueB = b.collection?.name || '';
           return order === 'asc' 
-            ? valueA.localeCompare(valueB) 
+            ? valueA.localeCompare(valueB)
             : valueB.localeCompare(valueA);
-        case 'acquiredAt':
-          valueA = a.ownedAt ? new Date(a.ownedAt).getTime() : 0;
-          valueB = b.ownedAt ? new Date(b.ownedAt).getTime() : 0;
-          break;
-        case 'tokenId':
-          valueA = parseInt(a.tokenId) || 0;
-          valueB = parseInt(b.tokenId) || 0;
+        case 'recent':
+          valueA = a.acquiredAt ? new Date(a.acquiredAt).getTime() : 0;
+          valueB = b.acquiredAt ? new Date(b.acquiredAt).getTime() : 0;
           break;
         default:
-          valueA = a.estimatedValue || 0;
-          valueB = b.estimatedValue || 0;
+          valueA = getEstimatedValue(a);
+          valueB = getEstimatedValue(b);
       }
       
       return order === 'asc' ? valueA - valueB : valueB - valueA;
     });
-    
-    return sorted;
-  }, []);
+  }, [getEstimatedValue]);
 
   const value = {
     nfts,

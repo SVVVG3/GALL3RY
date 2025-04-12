@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
+import styled from 'styled-components';
+import { FaEthereum } from 'react-icons/fa';
+import { formatDistanceToNow } from 'date-fns';
 
 /**
  * NftCard component for displaying a single NFT
@@ -125,15 +128,11 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   const getValue = () => {
-    // Debug logging for value data
-    console.log("NFT Value Data:", {
+    // Debug log for value properties
+    console.log('NFT value debug:', {
       id: nft.id,
-      name: nft.name,
-      valueEth: nft.valueEth,
-      lastSale: nft.lastSale,
-      collection: nft.collection, 
+      collection: nft.collection?.name,
       estimatedValue: nft.estimatedValue,
-      _debug_value: nft._debug_value,
     });
     
     // Priority order for value sources (most accurate first)
@@ -146,24 +145,16 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 2. Collection floor price in ETH
-    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined && 
-        nft.collection.floorPrice.valueWithDenomination !== null) {
+    // 2. New estimatedValue format from updated zapperService
+    if (nft.estimatedValue?.amount !== undefined && 
+        nft.estimatedValue.amount !== null) {
       return {
-        value: nft.collection.floorPrice.valueWithDenomination,
-        symbol: nft.collection.floorPrice.denomination?.symbol || 'ETH'
+        value: nft.estimatedValue.amount,
+        symbol: nft.estimatedValue.currency || 'ETH'
       };
     }
     
-    // 2.1 Legacy collection floor price
-    if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
-      return {
-        value: nft.collection.floorPriceEth,
-        symbol: 'ETH'
-      };
-    }
-    
-    // 3. Estimated value
+    // 3. Estimated value from the API (older versions)
     if (nft.estimatedValue?.valueWithDenomination !== undefined && 
         nft.estimatedValue.valueWithDenomination !== null) {
       return {
@@ -172,7 +163,57 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 4. Last sale value
+    // 4. Legacy estimated value format
+    if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
+      return {
+        value: nft.estimatedValue.value,
+        symbol: nft.estimatedValue.token?.symbol || 'ETH'
+      };
+    }
+    
+    // 5. Direct estimatedValue as a number
+    if (typeof nft.estimatedValue === 'number' && !isNaN(nft.estimatedValue)) {
+      return {
+        value: nft.estimatedValue,
+        symbol: 'ETH'
+      };
+    }
+    
+    // 6. Collection floor price in ETH
+    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined && 
+        nft.collection.floorPrice.valueWithDenomination !== null) {
+      return {
+        value: nft.collection.floorPrice.valueWithDenomination,
+        symbol: nft.collection.floorPrice.denomination?.symbol || 'ETH'
+      };
+    }
+    
+    // 7. New collection floor price format
+    if (nft.collection?.floorPrice !== undefined && 
+        typeof nft.collection.floorPrice === 'number') {
+      return {
+        value: nft.collection.floorPrice,
+        symbol: 'ETH'
+      };
+    }
+    
+    // 8. Legacy collection floor price
+    if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
+      return {
+        value: nft.collection.floorPriceEth,
+        symbol: 'ETH'
+      };
+    }
+    
+    // 9. Last sale value (only use as fallback)
+    if (nft.lastSalePrice?.amount !== undefined) {
+      return {
+        value: nft.lastSalePrice.amount,
+        symbol: nft.lastSalePrice.currency || 'ETH'
+      };
+    }
+    
+    // 10. Legacy last sale formats
     if (nft.lastSale?.valueWithDenomination !== undefined && 
         nft.lastSale.valueWithDenomination !== null) {
       return {
@@ -181,7 +222,6 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 4.1 Legacy last sale value in ETH
     if (nft.lastSale?.valueEth !== undefined && nft.lastSale.valueEth !== null) {
       return {
         value: nft.lastSale.valueEth,
@@ -189,8 +229,15 @@ const NftCard = ({ nft, onClick }) => {
       };
     }
     
-    // 5. Debug value data
+    // 11. Debug value data
     if (nft._debug_value) {
+      if (nft._debug_value.estimatedValueEth) {
+        return {
+          value: nft._debug_value.estimatedValueEth,
+          symbol: 'ETH'
+        };
+      }
+      
       if (nft._debug_value.floorPriceEth) {
         return {
           value: nft._debug_value.floorPriceEth,
@@ -201,13 +248,6 @@ const NftCard = ({ nft, onClick }) => {
       if (nft._debug_value.lastSaleValueEth) {
         return {
           value: nft._debug_value.lastSaleValueEth,
-          symbol: 'ETH'
-        };
-      }
-      
-      if (nft._debug_value.estimatedValueEth) {
-        return {
-          value: nft._debug_value.estimatedValueEth,
           symbol: 'ETH'
         };
       }
@@ -307,48 +347,130 @@ const NftCard = ({ nft, onClick }) => {
     tokenCollectionAddress: nft.token?.collection?.address
   });
 
-  return (
-    <>
-      <div 
-        className="nft-card overflow-hidden rounded-xl bg-white shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-        onClick={handleClick}
-      >
-        <NFTImage 
-          src={imageUrl} 
-          alt={name}
-        />
-        
-        <div className="p-3">
-          <h3 className="font-semibold text-lg truncate">{name}</h3>
-          
-          <div className="flex flex-col mt-1">
-            <p className="text-sm text-gray-500 truncate">{collection}</p>
-            {tokenId && (
-              <p className="text-xs text-gray-400">#{tokenId}</p>
-            )}
-          </div>
-          
-          {valueData && (
-            <p className="text-sm font-medium mt-2 text-green-600">
-              {valueData.value !== undefined && typeof valueData.value === 'number' 
-                ? `${valueData.value.toLocaleString(undefined, { maximumFractionDigits: 4 })} ${valueData.symbol}`
-                : typeof valueData.value === 'string'
-                  ? `${parseFloat(valueData.value).toLocaleString(undefined, { maximumFractionDigits: 4 })} ${valueData.symbol}`
-                  : `${valueData.value} ${valueData.symbol}`}
-            </p>
-          )}
-        </div>
-      </div>
+  // Format the estimated value with appropriate precision
+  const formatEstimatedValue = (value) => {
+    if (!value) return 'N/A';
+    
+    if (value < 0.01) {
+      return '< 0.01 ETH';
+    }
+    
+    return `${parseFloat(value).toFixed(2)} ETH`;
+  };
+  
+  // Format acquisition date
+  const getAcquisitionTime = () => {
+    if (!nft.acquiredAt) return 'Unknown';
+    
+    const date = new Date(nft.acquiredAt);
+    return formatDistanceToNow(date, { addSuffix: true });
+  };
 
-      {showHolders && contractAddress && profile && (
-        <CollectionHoldersModal
-          collectionAddress={contractAddress}
-          userFid={profile.fid}
-          onClose={() => setShowHolders(false)}
-        />
-      )}
-    </>
+  return (
+    <CardContainer>
+      <ImageContainer>
+        {imageUrl ? (
+          <Image src={imageUrl} alt={name} />
+        ) : (
+          <PlaceholderImage>No Image</PlaceholderImage>
+        )}
+      </ImageContainer>
+      
+      <CardContent>
+        <Title>{name || `#${tokenId}`}</Title>
+        <CollectionName>{collection || 'Unknown Collection'}</CollectionName>
+        
+        <EstimatedValue>
+          <FaEthereum />
+          <span>{formatEstimatedValue(valueData?.value)}</span>
+        </EstimatedValue>
+        
+        <AcquisitionTime>
+          Acquired: {getAcquisitionTime()}
+        </AcquisitionTime>
+      </CardContent>
+    </CardContainer>
   );
 };
+
+// Styled components
+const CardContainer = styled.div`
+  background-color: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+  transition: transform 0.2s, box-shadow 0.2s;
+  
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+  }
+`;
+
+const ImageContainer = styled.div`
+  position: relative;
+  width: 100%;
+  padding-top: 100%; /* 1:1 Aspect Ratio */
+  background-color: #f0f0f0;
+`;
+
+const Image = styled.img`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+`;
+
+const PlaceholderImage = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+  color: #999;
+`;
+
+const CardContent = styled.div`
+  padding: 1rem;
+`;
+
+const Title = styled.h3`
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const CollectionName = styled.p`
+  margin: 0 0 0.75rem 0;
+  font-size: 0.85rem;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const EstimatedValue = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-bottom: 0.5rem;
+  color: #4caf50;
+  font-weight: 600;
+  font-size: 1rem;
+`;
+
+const AcquisitionTime = styled.div`
+  font-size: 0.75rem;
+  color: #999;
+`;
 
 export default NftCard; 
