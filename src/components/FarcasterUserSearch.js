@@ -274,7 +274,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   denomination {
                     symbol
                   }
-                  timestamp
                 }
                 transfers {
                   edges {
@@ -410,13 +409,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             // Process the acquisition timestamp data
             let acquisitionTimestamp = null;
             
-            // Try lastSale timestamp if available
-            if (nft.lastSale?.timestamp && typeof nft.lastSale.timestamp === 'number') {
-              acquisitionTimestamp = nft.lastSale.timestamp;
-              console.log(`NFT ${nft.id} (${nft.name}) has lastSale timestamp: ${new Date(acquisitionTimestamp * 1000).toISOString()}`);
-            }
-            // Then try transfer data - look for transfers TO the owner's addresses
-            else if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
+            // With lastSale.timestamp no longer available, we'll rely on transfers
+            if (nft.transfers && nft.transfers.edges && nft.transfers.edges.length > 0) {
               // Try to extract timestamps from transfers
               const transfersToOwner = nft.transfers.edges
                 .filter(edge => edge.node && typeof edge.node.timestamp === 'number' && 
@@ -836,10 +830,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let source = 'none';
             
             // Try all possible timestamp fields in order of preference
-            if (nft.lastSale?.timestamp && typeof nft.lastSale.timestamp === 'number' && nft.lastSale.timestamp > 0) {
-              timestamp = nft.lastSale.timestamp;
-              source = 'lastSale.timestamp';
-            } else if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
+            if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
               timestamp = nft.acquisitionTimestamp;
               source = 'acquisitionTimestamp';
             } else if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {

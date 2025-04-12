@@ -378,7 +378,6 @@ const zapperService = {
                   denomination {
                     symbol
                   }
-                  timestamp
                 }
                 traits {
                   attributeName
