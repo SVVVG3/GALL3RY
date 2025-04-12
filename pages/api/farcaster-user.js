@@ -117,15 +117,50 @@ async function fetchFromWarpcast(username) {
     
     const data = await response.json();
     
-    // Extract the user profile from the response
+    // Extract the user profile and extras from the response
     const result = {
       success: true,
-      user: data.result?.user || null
+      user: data.result?.user || null,
+      extras: data.result?.extras || {}
     };
     
     if (!result.user) {
       return null;
     }
+    
+    // Log the structure for debugging
+    console.log(`Warpcast API response structure for ${username}:`, {
+      hasExtras: !!result.extras,
+      hasCustodyAddress: !!result.extras?.custodyAddress,
+      hasEthWallets: Array.isArray(result.extras?.ethWallets),
+      ethWalletsCount: result.extras?.ethWallets?.length || 0,
+      hasSolWallets: Array.isArray(result.extras?.solanaWallets),
+      solWalletsCount: result.extras?.solanaWallets?.length || 0
+    });
+    
+    // Collect connected addresses from multiple sources
+    const connectedAddresses = [];
+    
+    // Add ethereum wallets if available
+    if (Array.isArray(result.extras?.ethWallets)) {
+      connectedAddresses.push(...result.extras.ethWallets);
+    }
+    
+    // Add solana wallets if available (may need to be handled differently in frontend)
+    if (Array.isArray(result.extras?.solanaWallets)) {
+      connectedAddresses.push(...result.extras.solanaWallets);
+    }
+    
+    // Add legacy verifications if available
+    if (Array.isArray(result.user.verifications)) {
+      connectedAddresses.push(...result.user.verifications);
+    }
+
+    // Get custody address
+    const custodyAddress = result.extras?.custodyAddress || null;
+    
+    // Log what we found
+    console.log(`Found ${connectedAddresses.length} connected addresses and custody address: ${custodyAddress || 'none'} for ${username}`);
     
     // Transform the response to match what our frontend expects
     return {
@@ -136,8 +171,12 @@ async function fetchFromWarpcast(username) {
       bio: result.user.profile?.bio?.text,
       followerCount: result.user.followerCount,
       followingCount: result.user.followingCount,
-      connectedAddresses: result.user.verifications || [],
-      custodyAddress: result.user.custodyAddress || null
+      connectedAddresses: connectedAddresses,
+      custodyAddress: custodyAddress,
+      _rawData: {
+        extras: result.extras,
+        user: result.user
+      }
     };
   } catch (error) {
     console.error(`Error fetching from Warpcast for ${username}:`, error);

@@ -18,10 +18,50 @@ export default async function handler(req, res) {
     // Get API key from environment variable
     const apiKey = process.env.ZAPPER_API_KEY;
     
+    // Extract query details for logging
+    let queryName = 'unknown';
+    let variablesSummary = {};
+    
+    try {
+      if (req.body?.query) {
+        // Try to extract the operation name from the query string
+        const match = req.body.query.match(/query\s+([a-zA-Z0-9_]+)/);
+        if (match && match[1]) {
+          queryName = match[1];
+        }
+        
+        // Parse important variable keys only
+        if (req.body.variables) {
+          if (req.body.variables.ownerAddress) {
+            variablesSummary.ownerAddress = `${req.body.variables.ownerAddress.substring(0, 8)}...`;
+          }
+          if (req.body.variables.addresses) {
+            variablesSummary.addresses = req.body.variables.addresses.length + ' addresses';
+          }
+          if (req.body.variables.limit) {
+            variablesSummary.limit = req.body.variables.limit;
+          }
+          if (req.body.variables.cursor) {
+            variablesSummary.cursor = 'present';
+          }
+          if (req.body.variables.username) {
+            variablesSummary.username = req.body.variables.username;
+          }
+          if (req.body.variables.fid) {
+            variablesSummary.fid = req.body.variables.fid;
+          }
+        }
+      }
+    } catch (parseError) {
+      console.error('Error parsing GraphQL query details:', parseError);
+    }
+    
     // Log detailed request info for debugging
     console.log('Proxying request to Zapper API:', {
       method: 'POST',
       url: ZAPPER_API_URL,
+      queryName,
+      variables: variablesSummary,
       bodySize: req.body ? JSON.stringify(req.body).length : 0,
       hasApiKey: !!apiKey
     });
@@ -36,7 +76,7 @@ export default async function handler(req, res) {
       'Accept': 'application/json'
     };
     
-    // Add API key if available
+    // Add API key if available - note that Zapper API uses Basic auth
     if (apiKey) {
       headers['Authorization'] = `Basic ${apiKey}`;
     }
@@ -54,12 +94,41 @@ export default async function handler(req, res) {
     const responseText = await response.text();
     
     // Log response status for debugging
-    console.log(`Zapper API responded with status: ${response.status}`);
+    console.log(`Zapper API (${queryName}) responded with status: ${response.status}, length: ${responseText.length}`);
     
     // Parse response text to JSON if possible
     let responseData;
     try {
       responseData = JSON.parse(responseText);
+      
+      // Check if there are GraphQL errors to log them
+      if (responseData.errors) {
+        console.warn(`GraphQL errors for ${queryName}:`, responseData.errors);
+      }
+      
+      // Check if data is empty
+      if (!responseData.data || Object.keys(responseData.data).length === 0) {
+        console.warn(`Empty data in response for ${queryName}`);
+      } else {
+        // Log summary of the response structure
+        const dataSummary = {};
+        for (const key in responseData.data) {
+          if (responseData.data[key]) {
+            // Add some summary info based on the query type
+            if (key === 'nfts' && responseData.data[key].items) {
+              dataSummary.nfts = `${responseData.data[key].items.length} items`;
+            } else if (key === 'portfolioV2' && responseData.data[key].nftBalances?.nfts?.edges) {
+              dataSummary.portfolioV2 = `${responseData.data[key].nftBalances.nfts.edges.length} NFTs`;
+            } else if (key === 'farcasterProfile') {
+              dataSummary.farcasterProfile = `username: ${responseData.data[key].username}, fid: ${responseData.data[key].fid}`;
+            } else {
+              dataSummary[key] = 'present';
+            }
+          }
+        }
+        
+        console.log(`Response data summary for ${queryName}:`, dataSummary);
+      }
     } catch (parseError) {
       console.error('Error parsing JSON response:', parseError);
       // If we can't parse JSON, return the text as is in an error object
