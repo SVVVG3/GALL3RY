@@ -221,7 +221,7 @@ module.exports = async (req, res) => {
           }
           
           // Other GraphQL errors
-          return res.status(400).json({
+        return res.status(400).json({
             errors: data.errors,
             message: data.errors[0]?.message || 'GraphQL error'
           });

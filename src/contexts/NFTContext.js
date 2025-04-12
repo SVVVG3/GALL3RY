@@ -405,8 +405,8 @@ export const NFTProvider = ({ children }) => {
       const query = `
         query GetCollectionHolders($collectionAddress: Address!, $network: Network!) {
           nftCollection(address: $collectionAddress, network: $network) {
-            id
-            name
+                id
+                name
             holders {
               address
               farcasterUser {
@@ -419,7 +419,7 @@ export const NFTProvider = ({ children }) => {
           }
         }
       `;
-      
+
       const variables = {
         collectionAddress,
         network: chain
@@ -757,4 +757,4 @@ export const useNFT = () => {
     throw new Error('useNFT must be used within an NFTProvider');
   }
   return context;
-};
+}; 
