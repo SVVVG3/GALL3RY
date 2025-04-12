@@ -4,6 +4,7 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './contexts/AuthContext';
+import { WalletProvider } from './contexts/WalletContext';
 
 // Create a root
 const root = createRoot(document.getElementById('root'));
@@ -12,7 +13,9 @@ const root = createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <WalletProvider>
+        <App />
+      </WalletProvider>
     </AuthProvider>
   </React.StrictMode>
 );
