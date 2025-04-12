@@ -582,6 +582,7 @@ export const NFTProvider = ({ children }) => {
       
       switch (sortByField) {
         case 'estimatedValue':
+        case 'value':
           valueA = getEstimatedValue(a);
           valueB = getEstimatedValue(b);
           break;

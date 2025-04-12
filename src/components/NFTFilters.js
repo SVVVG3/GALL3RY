@@ -39,6 +39,8 @@ const NFTFilters = ({ wallets = [] }) => {
   };
 
   const handleSortChange = (sort) => {
+    // When 'value' is selected, we'll sort NFTs by their estimated value in USD
+    // This works with the getSortedNFTs function in NFTContext.js
     setSortBy(sort);
   };
 
