@@ -276,7 +276,7 @@ const NftCard = ({ nft, onClick }) => {
     <CardContainer>
       <ImageContainer>
         {imageUrl ? (
-          <Image src={imageUrl} alt={name} />
+          <NFTImage src={imageUrl} alt={name} />
         ) : (
           <PlaceholderImage>No Image</PlaceholderImage>
         )}

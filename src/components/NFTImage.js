@@ -3,12 +3,13 @@ import './NFTImage.css';
 import Spinner from './Spinner';
 
 /**
- * NFTImage component that displays an NFT image with basic loading and error handling
+ * NFTImage component that displays an NFT image or video with basic loading and error handling
  */
 const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
-  const [imgSrc, setImgSrc] = useState('');
+  const [mediaSrc, setMediaSrc] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isVideo, setIsVideo] = useState(false);
 
   useEffect(() => {
     if (!src) {
@@ -25,20 +26,24 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
     } else if (src.startsWith('ar://')) {
       processedSrc = src.replace('ar://', 'https://arweave.net/');
     }
+
+    // Check if the media is a video based on extension
+    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(processedSrc);
+    setIsVideo(isVideoFile);
     
-    setImgSrc(processedSrc);
+    setMediaSrc(processedSrc);
     setLoading(true);
     setError(false);
   }, [src]);
 
-  const handleImageLoad = () => {
+  const handleMediaLoad = () => {
     setLoading(false);
   };
 
-  const handleImageError = () => {
+  const handleMediaError = () => {
     // Try with CORS proxy if not already
-    if (!imgSrc.includes('corsproxy.io') && !error) {
-      setImgSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
+    if (!mediaSrc.includes('corsproxy.io') && !error) {
+      setMediaSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
     } else {
       setError(true);
       setLoading(false);
@@ -53,14 +58,29 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
         </div>
       )}
       
-      {!error && (
+      {!error && !isVideo && (
         <img
-          src={imgSrc}
+          src={mediaSrc}
           alt={alt}
           className="nft-image"
-          onLoad={handleImageLoad}
-          onError={handleImageError}
+          onLoad={handleMediaLoad}
+          onError={handleMediaError}
           style={{ display: loading ? 'none' : 'block' }}
+        />
+      )}
+
+      {!error && isVideo && (
+        <video
+          src={mediaSrc}
+          className="nft-image"
+          onLoadedData={handleMediaLoad}
+          onError={handleMediaError}
+          style={{ display: loading ? 'none' : 'block' }}
+          autoPlay
+          loop
+          muted
+          playsInline
+          controlsList="nodownload"
         />
       )}
       

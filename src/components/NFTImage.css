@@ -17,6 +17,12 @@
   object-fit: cover;
 }
 
+/* Make sure videos use the same styling as images */
+video.nft-image {
+  object-fit: cover;
+  pointer-events: none; /* Prevent interaction with video controls */
+}
+
 .nft-image.loading {
   opacity: 0.5;
 }
