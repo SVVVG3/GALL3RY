@@ -70,6 +70,72 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
 };
 
 /**
+ * Get a Farcaster profile by username or FID
+ * @param {string|number} usernameOrFid - Farcaster username or FID
+ * @returns {Promise<object>} - Farcaster profile data
+ */
+export const getFarcasterProfile = async (usernameOrFid) => {
+  if (!usernameOrFid) {
+    throw new Error('Username or FID is required');
+  }
+
+  // Determine if input is a FID (number) or username (string)
+  const isFid = !isNaN(Number(usernameOrFid));
+  
+  // Construct the query variables based on input type
+  const variables = isFid 
+    ? { fid: parseInt(usernameOrFid, 10) }
+    : { username: usernameOrFid.toString() };
+  
+  console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${usernameOrFid}`);
+  
+  // GraphQL query according to Zapper API docs
+  const query = `
+    query GetFarcasterProfile($username: String, $fid: Int) {
+      farcasterProfile(username: $username, fid: $fid) {
+        username
+        fid
+        metadata {
+          displayName
+          description
+          imageUrl
+          warpcast
+        }
+        custodyAddress
+        connectedAddresses
+      }
+    }
+  `;
+  
+  try {
+    const response = await makeGraphQLRequest(query, variables);
+    
+    // Check if profile was found
+    if (!response.data || !response.data.farcasterProfile) {
+      throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${usernameOrFid}`);
+    }
+    
+    const profile = response.data.farcasterProfile;
+    
+    // Ensure we have consistent field names for our application
+    return {
+      fid: profile.fid,
+      username: profile.username,
+      displayName: profile.metadata?.displayName || profile.username,
+      avatarUrl: profile.metadata?.imageUrl,
+      bio: profile.metadata?.description,
+      custodyAddress: profile.custodyAddress,
+      connectedAddresses: profile.connectedAddresses || [],
+      // Include the full profile for debugging
+      _rawProfile: profile
+    };
+  } catch (error) {
+    console.error('Error fetching Farcaster profile:', error);
+    throw error;
+  }
+};
+
+/**
  * Get NFTs for multiple addresses
  * @param {string[]} addresses - Array of wallet addresses
  * @param {object} options - Options for the request
@@ -223,4 +289,5 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
 
 export default {
   getNftsForAddresses,
+  getFarcasterProfile
 }; 
