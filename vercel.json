@@ -5,8 +5,18 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "build",
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1" },
+    { "src": "/api/zapper", "dest": "/api/zapper.js" },
+    { "src": "/api/farcaster-user", "dest": "/api/farcaster-user.js" },
     { "src": "/(.*\\.(js|json|css|ico|png|jpg|svg))", "dest": "/$1" },
     { "src": "/(.*)", "dest": "/index.html" }
-  ]
+  ],
+  "functions": {
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "env": {
+    "NODE_ENV": "production"
+  }
 } 
