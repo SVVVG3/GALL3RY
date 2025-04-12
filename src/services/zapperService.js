@@ -487,61 +487,40 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     includeMetadata = true,
     endpoints = ZAPPER_API_ENDPOINTS,
     maxRetries = 3,
-    usePortfolioV2 = false // New option to use portfolioV2 endpoint instead of nfts
+    usePortfolioV2 = true // Changed default to true as this is the current API structure
   } = options;
   
-  // Try using the portfolioV2 endpoint first if specified (as recommended in docs)
+  // Use the portfolioV2 endpoint as recommended in docs
   if (usePortfolioV2) {
     try {
       console.log(`Using portfolioV2 endpoint for ${normalizedAddresses.length} addresses`);
       
+      // Updated query structure according to the Zapper API schema
       const portfolioV2Query = `
         query getPortfolioNfts($addresses: [Address!]!, $first: Int!, $after: String) {
           portfolioV2(addresses: $addresses) {
             nftBalances {
-              totalCount
-              nfts(first: $first, after: $after) {
-                pageInfo {
-                  endCursor
-                  hasNextPage
-                }
+              totalBalanceUSD
+              byCollection(first: $first, after: $after) {
                 edges {
                   node {
-                    id
-                    tokenId
-                    contractAddress
-                    name
-                    description
-                    imageUrl
-                    imageUrlThumbnail
                     collection {
                       id
                       name
                       address
-                      network
+                      network {
+                        name
+                      }
                       imageUrl
-                      floorPrice
-                      nftsCount
                     }
-                    estimatedValue {
-                      amount
-                      currency
-                    }
-                    lastSalePrice {
-                      amount
-                      currency
-                    }
-                    network
-                    attributes {
-                      trait_type
-                      value
-                    }
-                    marketplaceUrls {
-                      name
-                      url
-                    }
+                    balanceUSD
                   }
                 }
+                pageInfo {
+                  endCursor
+                  hasNextPage
+                }
+                totalCount
               }
             }
           }
@@ -560,63 +539,63 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       
       if (response.data && response.data.portfolioV2 && response.data.portfolioV2.nftBalances) {
         const nftData = response.data.portfolioV2.nftBalances;
-        const edges = nftData.nfts?.edges || [];
+        const edges = nftData.byCollection?.edges || [];
+        
+        console.log(`Found ${edges.length} NFT collections in portfolioV2 response`);
         
         const processedNfts = edges.map(edge => {
           const item = edge.node;
           return {
-            id: item.id,
-            tokenId: item.tokenId,
-            contractAddress: item.contractAddress,
-            name: item.name || `#${item.tokenId}`,
-            description: item.description || '',
-            imageUrl: item.imageUrl || '',
-            imageUrlThumbnail: item.imageUrlThumbnail || item.imageUrl || '',
+            id: item.collection?.id || '',
+            tokenId: 'collection',
+            contractAddress: item.collection?.address || '',
+            name: item.collection?.name || 'Unknown Collection',
+            description: '',
+            imageUrl: item.collection?.imageUrl || '',
+            imageUrlThumbnail: item.collection?.imageUrl || '',
             collection: {
               id: item.collection?.id || '',
               name: item.collection?.name || 'Unknown Collection',
-              address: item.collection?.address || item.contractAddress,
-              network: item.collection?.network || item.network || 'ethereum',
+              address: item.collection?.address || '',
+              network: item.collection?.network?.name || 'ethereum',
               imageUrl: item.collection?.imageUrl || '',
-              floorPrice: item.collection?.floorPrice || 0,
-              nftsCount: item.collection?.nftsCount || 0,
+              floorPrice: 0,
+              nftsCount: 0,
             },
             estimatedValue: {
-              amount: item.estimatedValue?.amount || 0,
-              currency: item.estimatedValue?.currency || 'USD',
+              amount: item.balanceUSD || 0,
+              currency: 'USD',
             },
-            lastSalePrice: {
-              amount: item.lastSalePrice?.amount || 0,
-              currency: item.lastSalePrice?.currency || 'USD',
-            },
-            network: item.network || 'ethereum',
-            attributes: (item.attributes || []).map(attr => ({
-              trait_type: attr.trait_type || '',
-              value: attr.value || '',
-            })),
-            marketplaceUrls: (item.marketplaceUrls || []).map(url => ({
-              name: url.name || '',
-              url: url.url || '',
-            })),
+            network: item.collection?.network?.name || 'ethereum',
+            balanceUSD: item.balanceUSD || 0,
+            isCollection: true // Flag to indicate this is a collection-level item
           };
         });
         
-        const pageInfo = nftData.nfts?.pageInfo || {};
+        const pageInfo = nftData.byCollection?.pageInfo || {};
         
         return {
           nfts: processedNfts,
           cursor: pageInfo.endCursor || null,
           hasMore: pageInfo.hasNextPage || false,
-          totalCount: nftData.totalCount || 0
+          totalCount: nftData.byCollection?.totalCount || 0
         };
+      } else {
+        console.warn('No NFT data found in portfolioV2 response:', response);
       }
     } catch (portfolioError) {
-      console.error('Error using portfolioV2 endpoint, falling back to nfts endpoint:', portfolioError);
-      // Continue to the nfts endpoint as fallback
+      console.error('Error using portfolioV2 endpoint:', portfolioError);
+      // Continue to the legacy fallback only if explicitly requested
+      if (!options.useLegacyFallback) {
+        return { nfts: [], cursor: null, hasMore: false };
+      }
     }
   }
   
-  // If portfolioV2 fails or is not requested, use the original implementation with nfts endpoint
+  // LEGACY FALLBACK - This code path is now deprecated and will likely not work
+  // Only keep it for backward compatibility if absolutely necessary
+  console.warn('Using deprecated nfts endpoint fallback - this will likely fail with current Zapper API');
+  
   const nftsQuery = `
     query getNfts($ownerAddress: String!, $limit: Int!, $cursor: String) {
       nfts(ownerAddress: $ownerAddress, limit: $limit, cursor: $cursor) {
