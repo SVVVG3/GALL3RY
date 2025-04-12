@@ -168,10 +168,13 @@ const NFTGallery = () => {
       {showSortMenu && (
         <SortMenu>
           <SortOption
-            $selected={sortBy === 'estimatedValue'}
-            onClick={() => setSortBy('estimatedValue')}
+            $selected={sortBy === 'value' || sortBy === 'estimatedValue'}
+            onClick={() => {
+              console.log("Setting sort to value");
+              setSortBy('value');
+            }}
           >
-            Estimated Value {sortBy === 'estimatedValue' && <FaCheck />}
+            Value {(sortBy === 'value' || sortBy === 'estimatedValue') && <FaCheck />}
           </SortOption>
           <SortOption
             $selected={sortBy === 'name'}
@@ -186,10 +189,10 @@ const NFTGallery = () => {
             Collection {sortBy === 'collection' && <FaCheck />}
           </SortOption>
           <SortOption
-            $selected={sortBy === 'acquiredAt'}
-            onClick={() => setSortBy('acquiredAt')}
+            $selected={sortBy === 'acquiredAt' || sortBy === 'recent'}
+            onClick={() => setSortBy('recent')}
           >
-            Acquisition Date {sortBy === 'acquiredAt' && <FaCheck />}
+            Acquisition Date {(sortBy === 'acquiredAt' || sortBy === 'recent') && <FaCheck />}
           </SortOption>
           <SortOrderOption onClick={toggleSortOrder}>
             Order: {sortOrder === 'asc' ? 'Ascending' : 'Descending'}
@@ -208,9 +211,58 @@ const NFTGallery = () => {
         </EmptyState>
       ) : (
         <NFTGrid>
-          {filteredNFTs.map(nft => (
-            <NFTCard key={nft.id} nft={nft} />
-          ))}
+          {sortBy === 'value' || sortBy === 'estimatedValue' 
+            ? [...filteredNFTs]
+                .sort((a, b) => {
+                  // Simple direct value comparison for debugging
+                  console.log("Force-sorting NFTs by value");
+                  
+                  // Helper to get USD value from an NFT
+                  const getUsdValue = (nft) => {
+                    // Direct USD values first
+                    if (nft.valueUsd !== undefined && nft.valueUsd !== null) 
+                      return Number(nft.valueUsd);
+                      
+                    // Convert ETH values to USD
+                    if (nft.valueEth !== undefined && nft.valueEth !== null)
+                      return Number(nft.valueEth) * 2500;
+                      
+                    // Estimated values that are objects
+                    if (nft.estimatedValue && typeof nft.estimatedValue === 'object') {
+                      if (nft.estimatedValue.valueUsd !== undefined)
+                        return Number(nft.estimatedValue.valueUsd);
+                        
+                      if (nft.estimatedValue.amount !== undefined) {
+                        if (nft.estimatedValue.currency === 'USD')
+                          return Number(nft.estimatedValue.amount);
+                        else if (nft.estimatedValue.currency === 'ETH' || !nft.estimatedValue.currency)
+                          return Number(nft.estimatedValue.amount) * 2500;
+                      }
+                    }
+                    
+                    // Floor prices
+                    if (nft.collection?.floorPrice) {
+                      if (nft.collection.floorPrice.valueUsd !== undefined)
+                        return Number(nft.collection.floorPrice.valueUsd);
+                      if (typeof nft.collection.floorPrice === 'number')
+                        return nft.collection.floorPrice * 2500; // Assume ETH
+                    }
+                    
+                    return 0;
+                  };
+                  
+                  const valueA = getUsdValue(a);
+                  const valueB = getUsdValue(b);
+                  
+                  return valueB - valueA; // Always descending
+                })
+                .map(nft => (
+                  <NFTCard key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} nft={nft} />
+                ))
+            : filteredNFTs.map(nft => (
+                <NFTCard key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} nft={nft} />
+              ))
+          }
         </NFTGrid>
       )}
 
