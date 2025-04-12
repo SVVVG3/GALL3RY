@@ -24,4 +24,7 @@ const config = {
   }
 };
 
+// API endpoints
+export const ZAPPER_PROXY_URL = process.env.REACT_APP_ZAPPER_PROXY_URL || '/api/zapper';
+
 export default config; 
