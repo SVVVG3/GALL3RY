@@ -41,7 +41,19 @@ module.exports = async (req, res) => {
     
     // Add API key if available
     if (apiKey) {
-      headers['Authorization'] = `Basic ${apiKey}`;
+      // Try different authentication formats
+      if (apiKey.includes(':')) {
+        // If the API key already includes a colon, it might be in the format username:password
+        headers['Authorization'] = `Basic ${Buffer.from(apiKey).toString('base64')}`;
+      } else {
+        // Standard format - might be already base64 encoded or a token
+        headers['Authorization'] = apiKey.startsWith('Basic ') ? apiKey : `Basic ${apiKey}`;
+        
+        // Some APIs also accept an API key header directly
+        headers['X-API-Key'] = apiKey;
+      }
+
+      console.log('Added authorization headers to request');
     }
     
     // Log more details about the request for debugging

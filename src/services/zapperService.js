@@ -34,7 +34,10 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
         
         // If using direct Zapper API, add the API key if available
         if (endpoint.includes('api.zapper.xyz') && ZAPPER_API_KEY) {
-          headers['Authorization'] = `Basic ${ZAPPER_API_KEY}`;
+          // Try different authentication formats based on what we have
+          headers['Authorization'] = ZAPPER_API_KEY.startsWith('Basic ') 
+            ? ZAPPER_API_KEY 
+            : `Basic ${ZAPPER_API_KEY}`;
         }
         
         console.log(`Trying endpoint: ${endpoint}, attempt ${retryCount + 1}/${maxRetries}`);
@@ -42,16 +45,57 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
         const response = await axios.post(endpoint, {
           query,
           variables,
-        }, { headers });
+        }, { 
+          headers,
+          // Add a longer timeout to prevent premature timeouts
+          timeout: 15000,
+        });
+        
+        // First check if we have response.data
+        if (!response.data) {
+          throw new Error('Empty response from server');
+        }
+        
+        // Log response details for debugging
+        console.log('Response status:', response.status);
+        console.log('Response shape:', {
+          hasData: !!response.data,
+          hasErrors: !!response.data.errors,
+          dataKeys: response.data ? Object.keys(response.data) : [],
+        });
         
         // Check if response has errors
         if (response.data.errors) {
-          throw new Error(response.data.errors[0]?.message || 'GraphQL error');
+          const errorMsg = response.data.errors[0]?.message || 'GraphQL error';
+          console.error('GraphQL errors:', response.data.errors);
+          throw new Error(errorMsg);
+        }
+        
+        // If we're looking for a specific entity that doesn't exist,
+        // handle that case without retrying
+        if (response.data.data && 
+            variables.username && 
+            query.includes('farcasterProfile') && 
+            !response.data.data.farcasterProfile) {
+          console.log(`Farcaster profile not found for username: ${variables.username}`);
+          
+          // Create a custom error with a more descriptive message
+          const notFoundError = new Error(`Could not find Farcaster profile for username: ${variables.username}`);
+          notFoundError.code = 'PROFILE_NOT_FOUND';
+          notFoundError.response = response;
+          throw notFoundError;
         }
         
         return response.data;
       } catch (error) {
         lastError = error;
+        
+        // If it's a known "not found" error, don't retry
+        if (error.code === 'PROFILE_NOT_FOUND') {
+          console.log('Not retrying for not found profile');
+          throw error;
+        }
+        
         retryCount++;
         
         const errorMessage = error.response?.data || error.message;
