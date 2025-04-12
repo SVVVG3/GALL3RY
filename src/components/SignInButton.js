@@ -1,20 +1,19 @@
-import React from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState } from 'react';
 import { SignInButton as FarcasterSignInButton, useSignIn } from '@farcaster/auth-kit';
 
 /**
- * SignInButton Component
- * Provides a button to sign in/out with Farcaster directly in the header
+ * Simplified SignInButton Component
+ * A minimal sign-in button to work with the debug version of the app
  */
 const SignInButton = ({ onSuccess }) => {
-  const { isAuthenticated, logout } = useAuth();
-  const { signIn, signOut, status } = useSignIn();
+  const [isLoading, setIsLoading] = useState(false);
+  const { signIn, signOut, status, isAuthenticated } = useSignIn();
   
   // Handle sign out
   const handleSignOut = async () => {
     try {
+      setIsLoading(true);
       await signOut();
-      logout(); // Call our local logout for compatibility
       
       // Call success callback if provided
       if (onSuccess && typeof onSuccess === 'function') {
@@ -22,11 +21,13 @@ const SignInButton = ({ onSuccess }) => {
       }
     } catch (error) {
       console.error('Error signing out:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
   
   // If loading
-  if (status === 'loading') {
+  if (isLoading || status === 'loading') {
     return (
       <button 
         className="btn btn-primary"
