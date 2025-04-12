@@ -3,12 +3,14 @@ import './NFTImage.css';
 import Spinner from './Spinner';
 
 /**
- * NFTImage component that displays an NFT image with basic loading and error handling
+ * NFTImage component that displays an NFT image or video with basic loading and error handling.
+ * Designed to work within a parent container that handles the aspect ratio.
  */
 const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
-  const [imgSrc, setImgSrc] = useState('');
+  const [mediaSrc, setMediaSrc] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [isVideo, setIsVideo] = useState(false);
 
   useEffect(() => {
     if (!src) {
@@ -25,20 +27,26 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
     } else if (src.startsWith('ar://')) {
       processedSrc = src.replace('ar://', 'https://arweave.net/');
     }
+
+    // Check if the media is a video based on extension
+    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(processedSrc);
+    setIsVideo(isVideoFile);
     
-    setImgSrc(processedSrc);
+    setMediaSrc(processedSrc);
     setLoading(true);
     setError(false);
   }, [src]);
 
-  const handleImageLoad = () => {
+  const handleMediaLoad = () => {
+    console.log(`Media loaded: ${mediaSrc}`);
     setLoading(false);
   };
 
-  const handleImageError = () => {
+  const handleMediaError = () => {
+    console.error(`Error loading media: ${mediaSrc}`);
     // Try with CORS proxy if not already
-    if (!imgSrc.includes('corsproxy.io') && !error) {
-      setImgSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
+    if (!mediaSrc.includes('corsproxy.io') && !error) {
+      setMediaSrc(`https://corsproxy.io/?${encodeURIComponent(src)}`);
     } else {
       setError(true);
       setLoading(false);
@@ -46,30 +54,48 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
   };
 
   return (
-    <div className={`nft-image-container ${className}`}>
+    <div className="nft-media-container">
+      {/* Always render the media elements (hidden while loading) so they can trigger onLoad */}
+      {!error && !isVideo && (
+        <img
+          src={mediaSrc}
+          alt={alt}
+          className={`nft-media ${className}`}
+          onLoad={handleMediaLoad}
+          onError={handleMediaError}
+          style={{ visibility: loading ? 'hidden' : 'visible' }}
+        />
+      )}
+
+      {!error && isVideo && (
+        <video
+          src={mediaSrc}
+          className={`nft-media ${className}`}
+          onLoadedData={handleMediaLoad}
+          onError={handleMediaError}
+          style={{ visibility: loading ? 'hidden' : 'visible' }}
+          autoPlay
+          loop
+          muted
+          playsInline
+          controlsList="nodownload"
+        />
+      )}
+
+      {/* Show loading spinner while loading */}
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="nft-media-loader">
           <Spinner size="md" />
         </div>
       )}
-      
-      {!error && (
-        <img
-          src={imgSrc}
-          alt={alt}
-          className="nft-image"
-          onLoad={handleImageLoad}
-          onError={handleImageError}
-          style={{ display: loading ? 'none' : 'block' }}
-        />
-      )}
-      
+
+      {/* Show placeholder if error */}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-100">
+        <div className="nft-media-error">
           <img 
             src="/placeholder.png"
             alt="NFT Placeholder"
-            className="w-12 h-12 opacity-50"
+            className="placeholder-image"
           />
         </div>
       )}

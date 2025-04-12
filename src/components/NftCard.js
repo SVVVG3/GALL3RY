@@ -4,7 +4,6 @@ import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
 import styled from 'styled-components';
 import { FaEthereum } from 'react-icons/fa';
-import { formatDistanceToNow } from 'date-fns';
 
 /**
  * NftCard component for displaying a single NFT
@@ -110,7 +109,7 @@ const NftCard = ({ nft, onClick }) => {
     
     // Check for collection image
     if (nft.collection?.imageUrl) return nft.collection.imageUrl;
-    if (nft.collection?.cardImageUrl) return nft.collection.cardImageUrl;
+    if (nft.collection?.cardImage) return nft.collection.cardImage;
     if (nft.collection?.medias?.logo?.thumbnail) return nft.collection.medias.logo.thumbnail;
     
     // Check for token image
@@ -351,20 +350,12 @@ const NftCard = ({ nft, onClick }) => {
       return `${parseFloat(value).toFixed(2)} ${symbol}`;
     }
   };
-  
-  // Format acquisition date
-  const getAcquisitionTime = () => {
-    if (!nft.acquiredAt) return 'Unknown';
-    
-    const date = new Date(nft.acquiredAt);
-    return formatDistanceToNow(date, { addSuffix: true });
-  };
 
   return (
     <CardContainer>
       <ImageContainer>
         {imageUrl ? (
-          <Image src={imageUrl} alt={name} />
+          <NFTImage src={imageUrl} alt={name} />
         ) : (
           <PlaceholderImage>No Image</PlaceholderImage>
         )}
@@ -379,10 +370,6 @@ const NftCard = ({ nft, onClick }) => {
             null : <FaEthereum />}
           <span>{formatEstimatedValue(valueData)}</span>
         </EstimatedValue>
-        
-        <AcquisitionTime>
-          Acquired: {getAcquisitionTime()}
-        </AcquisitionTime>
       </CardContent>
     </CardContainer>
   );
@@ -461,11 +448,6 @@ const EstimatedValue = styled.div`
   color: #4caf50;
   font-weight: 600;
   font-size: 1rem;
-`;
-
-const AcquisitionTime = styled.div`
-  font-size: 0.75rem;
-  color: #999;
 `;
 
 export default NftCard; 

@@ -31,6 +31,7 @@ module.exports = async (req, res) => {
     let queryName = 'unknown';
     let variablesSummary = {};
     let isFarcasterRequest = false;
+    let isNftQuery = false;
     let username = null;
     let fid = null;
     
@@ -53,11 +54,28 @@ module.exports = async (req, res) => {
           
           console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
         }
+
+        // Check if this is an NFT query - more comprehensive detection
+        if (req.body.query.includes('nftUsersTokens') || 
+            req.body.query.includes('UserNftTokens') || 
+            req.body.query.includes('portfolioItems') ||
+            (req.body.query.includes('filter: { excludeSpam: true, types: [NFT] }')) ||
+            (req.body.query.includes('mediasV3') && 
+             (req.body.query.includes('images') || req.body.query.includes('animations')))) {
+          isNftQuery = true;
+          console.log('NFT query detected');
+        }
         
         // Parse important variable keys for logging
         if (req.body.variables) {
           if (req.body.variables.ownerAddress) {
             variablesSummary.ownerAddress = `${req.body.variables.ownerAddress.substring(0, 8)}...`;
+          }
+          if (req.body.variables.owners) {
+            variablesSummary.owners = req.body.variables.owners.length + ' addresses';
+            if (req.body.variables.owners.length > 0) {
+              variablesSummary.firstOwner = `${req.body.variables.owners[0].substring(0, 8)}...`;
+            }
           }
           if (req.body.variables.addresses) {
             variablesSummary.addresses = req.body.variables.addresses.length + ' addresses';
@@ -65,8 +83,14 @@ module.exports = async (req, res) => {
           if (req.body.variables.limit) {
             variablesSummary.limit = req.body.variables.limit;
           }
+          if (req.body.variables.first) {
+            variablesSummary.first = req.body.variables.first;
+          }
           if (req.body.variables.cursor) {
             variablesSummary.cursor = 'present';
+          }
+          if (req.body.variables.after) {
+            variablesSummary.after = req.body.variables.after ? 'present' : 'null';
           }
           if (req.body.variables.username) {
             variablesSummary.username = req.body.variables.username;
@@ -86,6 +110,7 @@ module.exports = async (req, res) => {
       url: ZAPPER_API_URL,
       queryName,
       variables: variablesSummary,
+      isNftQuery,
       bodySize: req.body ? JSON.stringify(req.body).length : 0,
       hasApiKey: !!apiKey
     });
@@ -169,10 +194,167 @@ module.exports = async (req, res) => {
       'x-zapper-api-key': apiKey
     };
     
+    // FIX FOR ZAPPER API SCHEMA CHANGES
+    let updatedQuery = req.body.query;
+    let { variables } = req.body;
+
+    // Check if this is an NFT query that needs fixing
+    if (isNftQuery) {
+      console.log('Processing NFT query for field updates...');
+
+      // APPROACH 1: If it's the old portfolioItems structure, completely replace
+      if (updatedQuery.includes('portfolioItems') && updatedQuery.includes('filter: { excludeSpam: true, types: [NFT] }')) {
+        console.log('Replacing outdated portfolioItems query with nftUsersTokens structure');
+        
+        // Completely replace with new structure
+        updatedQuery = `
+query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String, $bypassHidden: Boolean = true) {
+  nftUsersTokens(
+    owners: $owners,
+    first: $first,
+    after: $after,
+    bypassHidden: $bypassHidden
+  ) {
+    edges {
+      node {
+        id
+        tokenId
+        name
+        description
+        collection {
+          id
+          name
+          address
+          network
+          nftStandard
+          type
+          medias {
+            logo {
+              thumbnail
+            }
+          }
+        }
+        mediasV3 {
+          images(first: 1) {
+            edges {
+              node {
+                original
+                thumbnail
+                large
+              }
+            }
+          }
+          animations(first: 1) {
+            edges {
+              node {
+                original
+                thumbnail
+                large
+              }
+            }
+          }
+        }
+        estimatedValue {
+          valueUsd
+          valueWithDenomination
+          denomination {
+            symbol
+            network
+          }
+        }
+      }
+      balance
+      balanceUSD
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}`;
+      }
+      // APPROACH 2: If it's using nftUsersTokens but with wrong field names - more precise replacements
+      else if (updatedQuery.includes('nftUsersTokens') || updatedQuery.includes('UserNftTokens')) {
+        console.log('Fixing field names in nftUsersTokens query');
+        
+        // Two-phase approach - first extract any objects containing the old field names
+        const mediasObjectPattern = /(mediasV3\s*{[\s\S]*?})/g;
+        const collectionObjectPattern = /(collection\s*{[\s\S]*?})/g;
+        
+        // Extract and fix mediasV3 object
+        let mediaMatches = updatedQuery.match(mediasObjectPattern);
+        if (mediaMatches) {
+          console.log(`Found ${mediaMatches.length} mediasV3 blocks to process`);
+          
+          // Process each mediasV3 block
+          for (const mediaMatch of mediaMatches) {
+            let updatedMediaBlock = mediaMatch;
+            
+            // Fix fields in images section
+            if (updatedMediaBlock.includes('images(')) {
+              console.log('Fixing image fields');
+              updatedMediaBlock = updatedMediaBlock
+                .replace(/url(\s*):/g, 'original$1:')
+                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
+                .replace(/largeUrl(\s*):/g, 'large$1:');
+            }
+            
+            // Fix fields in animations section
+            if (updatedMediaBlock.includes('animations(')) {
+              console.log('Fixing animation fields');
+              updatedMediaBlock = updatedMediaBlock
+                .replace(/url(\s*):/g, 'original$1:')
+                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
+                .replace(/largeUrl(\s*):/g, 'large$1:');
+            }
+            
+            // Replace the original block with the fixed one
+            updatedQuery = updatedQuery.replace(mediaMatch, updatedMediaBlock);
+          }
+        }
+        
+        // Extract and fix collection object
+        let collectionMatches = updatedQuery.match(collectionObjectPattern);
+        if (collectionMatches) {
+          console.log(`Found ${collectionMatches.length} collection blocks to process`);
+          
+          // Process each collection block
+          for (const collectionMatch of collectionMatches) {
+            let updatedCollectionBlock = collectionMatch;
+            
+            // Fix cardImageUrl field
+            if (updatedCollectionBlock.includes('cardImageUrl')) {
+              console.log('Fixing cardImageUrl field');
+              updatedCollectionBlock = updatedCollectionBlock
+                .replace(/cardImageUrl(\s*):/g, 'cardImage$1:');
+            }
+            
+            // Replace the original block with the fixed one
+            updatedQuery = updatedQuery.replace(collectionMatch, updatedCollectionBlock);
+          }
+        }
+        
+        console.log('Query transformed successfully');
+      }
+    }
+    
+    // Make the updated request to Zapper API
     console.log(`Making request to Zapper API: ${ZAPPER_API_URL}`);
     
     try {
-      const requestBody = JSON.stringify(req.body);
+      // Use the updated query but keep the original variables
+      const requestBody = JSON.stringify({
+        query: updatedQuery,
+        variables
+      });
+      
+      // For debugging purposes
+      if (isNftQuery) {
+        console.log('Sending transformed query structure');
+        // Log first 100 chars of both original and updated queries for comparison
+        console.log(`Original query preview: ${req.body.query.substring(0, 100)}...`);
+        console.log(`Updated query preview: ${updatedQuery.substring(0, 100)}...`);
+      }
       
       const response = await fetch(ZAPPER_API_URL, {
         method: 'POST',
@@ -220,8 +402,43 @@ module.exports = async (req, res) => {
             });
           }
           
+          // Check if it's a field error - indicate our fix failed
+          if (data.errors.some(err => 
+            err.message && (
+              err.message.includes('Cannot query field') ||
+              err.message.includes('Unknown field')
+            ))) {
+            console.error('Error: GraphQL field errors detected. Our field mapping fix failed!');
+            
+            // Extract exact field names that are causing problems
+            const fieldErrors = data.errors
+              .filter(e => e.message && (e.message.includes('Cannot query field') || e.message.includes('Unknown field')))
+              .map(e => {
+                const fieldMatch = e.message.match(/field ["']([^"']+)["']/);
+                return fieldMatch ? fieldMatch[1] : e.message;
+              });
+            
+            console.error('Problematic fields:', fieldErrors.join(', '));
+            console.error('Query after fix attempt:', updatedQuery);
+            
+            // Critical debugging - log the final transformed query
+            if (isNftQuery) {
+              console.error('CRITICAL DEBUG - Transformed query structure that failed:');
+              console.error(updatedQuery);
+            }
+            
+            // Return detailed error to help diagnose
+            return res.status(400).json({
+              error: 'GraphQL schema error',
+              message: 'The GraphQL schema has changed and our mapping could not fix it',
+              details: data.errors.map(e => e.message),
+              problematicFields: fieldErrors,
+              suggestion: 'Check the server logs for more details and update the field mappings'
+            });
+          }
+          
           // Other GraphQL errors
-        return res.status(400).json({
+          return res.status(400).json({
             errors: data.errors,
             message: data.errors[0]?.message || 'GraphQL error'
           });
