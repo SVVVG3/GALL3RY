@@ -286,7 +286,187 @@ export const getFarcasterProfile = async (usernameOrFid) => {
 };
 
 /**
- * Get NFTs for multiple addresses
+ * Get all wallet addresses associated with a Farcaster profile (both custody and connected)
+ * @param {string|number} usernameOrFid - Farcaster username or FID
+ * @returns {Promise<string[]>} - Array of all addresses associated with the Farcaster profile
+ */
+export const getFarcasterAddresses = async (usernameOrFid) => {
+  try {
+    // First get the Farcaster profile
+    const profile = await getFarcasterProfile(usernameOrFid);
+    
+    if (!profile) {
+      throw new Error(`No Farcaster profile found for ${usernameOrFid}`);
+    }
+    
+    // Combine custody address and connected addresses, ensuring no duplicates
+    const allAddresses = new Set();
+    
+    // Add custody address if available
+    if (profile.custodyAddress) {
+      allAddresses.add(profile.custodyAddress.toLowerCase());
+    }
+    
+    // Add all connected addresses
+    if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+      profile.connectedAddresses.forEach(addr => {
+        if (addr) allAddresses.add(addr.toLowerCase());
+      });
+    }
+    
+    console.log(`Found ${allAddresses.size} unique addresses for Farcaster user ${profile.username} (FID: ${profile.fid})`);
+    
+    return Array.from(allAddresses);
+  } catch (error) {
+    console.error('Error fetching Farcaster addresses:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get portfolio data for a Farcaster user by username or FID
+ * @param {string|number} usernameOrFid - Farcaster username or FID
+ * @param {object} options - Options for the request
+ * @returns {Promise<object>} - Portfolio data for the Farcaster user
+ */
+export const getFarcasterPortfolio = async (usernameOrFid, options = {}) => {
+  // Step 1: Get all addresses associated with the Farcaster profile
+  const addresses = await getFarcasterAddresses(usernameOrFid);
+  
+  if (!addresses || addresses.length === 0) {
+    throw new Error(`No addresses found for Farcaster user: ${usernameOrFid}`);
+  }
+  
+  // Step 2: Fetch portfolio data using the portfolioV2 endpoint
+  const {
+    includeTokens = true,
+    includeNfts = true,
+    includeApps = false,
+    networks = null,
+    limit = 100,
+    cursor = null
+  } = options;
+  
+  // Build a complete portfolio query based on what data is requested
+  let portfolioFragments = [];
+  
+  if (includeTokens) {
+    portfolioFragments.push(`
+      tokenBalances {
+        totalBalanceUSD
+        byToken(first: ${limit}${cursor ? `, after: "${cursor}"` : ''}) {
+          totalCount
+          pageInfo {
+            endCursor
+            hasNextPage
+          }
+          edges {
+            node {
+              symbol
+              tokenAddress
+              balance
+              balanceUSD
+              price
+              imgUrlV2
+              name
+              network {
+                name
+              }
+            }
+          }
+        }
+      }
+    `);
+  }
+  
+  if (includeNfts) {
+    portfolioFragments.push(`
+      nftBalances {
+        totalCount
+        nfts(first: ${limit}${cursor ? `, after: "${cursor}"` : ''}) {
+          pageInfo {
+            endCursor
+            hasNextPage
+          }
+          edges {
+            node {
+              id
+              tokenId
+              contractAddress
+              name
+              description
+              imageUrl
+              collection {
+                id
+                name
+                address
+                network
+                imageUrl
+                floorPrice
+              }
+              estimatedValue {
+                amount
+                currency
+              }
+              attributes {
+                trait_type
+                value
+              }
+              network
+            }
+          }
+        }
+      }
+    `);
+  }
+  
+  if (includeApps) {
+    portfolioFragments.push(`
+      appBalances {
+        totalCount
+        totalBalanceUSD
+        apps {
+          id
+          name
+          network {
+            name
+          }
+          balanceUSD
+        }
+      }
+    `);
+  }
+  
+  const portfolioQuery = `
+    query getPortfolio($addresses: [Address!]!) {
+      portfolioV2(addresses: $addresses) {
+        ${portfolioFragments.join('\n')}
+      }
+    }
+  `;
+  
+  try {
+    console.log(`Fetching portfolio data for ${addresses.length} Farcaster addresses:`, addresses);
+    
+    const response = await makeGraphQLRequest(portfolioQuery, { addresses });
+    
+    if (!response.data || !response.data.portfolioV2) {
+      throw new Error('No portfolio data found');
+    }
+    
+    return {
+      portfolio: response.data.portfolioV2,
+      addresses,
+      farcasterUser: usernameOrFid
+    };
+  } catch (error) {
+    console.error('Error fetching Farcaster portfolio:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get NFTs for multiple addresses with improved caching and pagination
  * @param {string[]} addresses - Array of wallet addresses
  * @param {object} options - Options for the request
  * @returns {Promise<object>} - Object containing NFTs and pagination info
@@ -297,6 +477,9 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     return { nfts: [], cursor: null, hasMore: false };
   }
   
+  // Normalize addresses to lowercase to ensure consistent caching
+  const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
+  
   const { 
     limit = 100, 
     cursor = null, 
@@ -304,13 +487,137 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     includeValue = true,
     includeMetadata = true,
     endpoints = ZAPPER_API_ENDPOINTS,
-    maxRetries = 3
+    maxRetries = 3,
+    usePortfolioV2 = false // New option to use portfolioV2 endpoint instead of nfts
   } = options;
   
-  // Use different query formats based on what endpoint we're using
-  // This is to support both Zapper's direct API and potentially different proxy implementations
+  // Try using the portfolioV2 endpoint first if specified (as recommended in docs)
+  if (usePortfolioV2) {
+    try {
+      console.log(`Using portfolioV2 endpoint for ${normalizedAddresses.length} addresses`);
+      
+      const portfolioV2Query = `
+        query getPortfolioNfts($addresses: [Address!]!, $first: Int!, $after: String) {
+          portfolioV2(addresses: $addresses) {
+            nftBalances {
+              totalCount
+              nfts(first: $first, after: $after) {
+                pageInfo {
+                  endCursor
+                  hasNextPage
+                }
+                edges {
+                  node {
+                    id
+                    tokenId
+                    contractAddress
+                    name
+                    description
+                    imageUrl
+                    imageUrlThumbnail
+                    collection {
+                      id
+                      name
+                      address
+                      network
+                      imageUrl
+                      floorPrice
+                      nftsCount
+                    }
+                    estimatedValue {
+                      amount
+                      currency
+                    }
+                    lastSalePrice {
+                      amount
+                      currency
+                    }
+                    network
+                    attributes {
+                      trait_type
+                      value
+                    }
+                    marketplaceUrls {
+                      name
+                      url
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      
+      const variables = {
+        addresses: normalizedAddresses,
+        first: limit,
+        after: cursor
+      };
+      
+      console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses using portfolioV2`);
+      
+      const response = await makeGraphQLRequest(portfolioV2Query, variables, endpoints, maxRetries);
+      
+      if (response.data && response.data.portfolioV2 && response.data.portfolioV2.nftBalances) {
+        const nftData = response.data.portfolioV2.nftBalances;
+        const edges = nftData.nfts?.edges || [];
+        
+        const processedNfts = edges.map(edge => {
+          const item = edge.node;
+          return {
+            id: item.id,
+            tokenId: item.tokenId,
+            contractAddress: item.contractAddress,
+            name: item.name || `#${item.tokenId}`,
+            description: item.description || '',
+            imageUrl: item.imageUrl || '',
+            imageUrlThumbnail: item.imageUrlThumbnail || item.imageUrl || '',
+            collection: {
+              id: item.collection?.id || '',
+              name: item.collection?.name || 'Unknown Collection',
+              address: item.collection?.address || item.contractAddress,
+              network: item.collection?.network || item.network || 'ethereum',
+              imageUrl: item.collection?.imageUrl || '',
+              floorPrice: item.collection?.floorPrice || 0,
+              nftsCount: item.collection?.nftsCount || 0,
+            },
+            estimatedValue: {
+              amount: item.estimatedValue?.amount || 0,
+              currency: item.estimatedValue?.currency || 'USD',
+            },
+            lastSalePrice: {
+              amount: item.lastSalePrice?.amount || 0,
+              currency: item.lastSalePrice?.currency || 'USD',
+            },
+            network: item.network || 'ethereum',
+            attributes: (item.attributes || []).map(attr => ({
+              trait_type: attr.trait_type || '',
+              value: attr.value || '',
+            })),
+            marketplaceUrls: (item.marketplaceUrls || []).map(url => ({
+              name: url.name || '',
+              url: url.url || '',
+            })),
+          };
+        });
+        
+        const pageInfo = nftData.nfts?.pageInfo || {};
+        
+        return {
+          nfts: processedNfts,
+          cursor: pageInfo.endCursor || null,
+          hasMore: pageInfo.hasNextPage || false,
+          totalCount: nftData.totalCount || 0
+        };
+      }
+    } catch (portfolioError) {
+      console.error('Error using portfolioV2 endpoint, falling back to nfts endpoint:', portfolioError);
+      // Continue to the nfts endpoint as fallback
+    }
+  }
   
-  // NFT query - updated to be compatible with Zapper API v2
+  // If portfolioV2 fails or is not requested, use the original implementation with nfts endpoint
   const nftsQuery = `
     query getNfts($ownerAddress: String!, $limit: Int!, $cursor: String) {
       nfts(ownerAddress: $ownerAddress, limit: $limit, cursor: $cursor) {
@@ -357,56 +664,12 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     }
   `;
 
-  // Alternative query format for portfolioV2 endpoint
-  const portfolioV2Query = `
-    query getPortfolioNfts($addresses: [Address!]!, $limit: Int!, $cursor: String) {
-      portfolioV2(addresses: $addresses) {
-        nftBalances {
-          totalCount
-          nfts(first: $limit, after: $cursor) {
-            pageInfo {
-              endCursor
-              hasNextPage
-            }
-            edges {
-              node {
-                id
-                tokenId
-                contractAddress
-                name
-                description
-                imageUrl
-                collection {
-                  id
-                  name
-                  address
-                  network
-                  imageUrl
-                  floorPrice
-                }
-                estimatedValue {
-                  amount
-                  currency
-                }
-                attributes {
-                  trait_type
-                  value
-                }
-                network
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
   const allNfts = [];
   let lastCursor = null;
   let hasMoreResults = false;
   
   // Limit the number of addresses processed if prioritizeSpeed is true
-  const addressesToProcess = prioritizeSpeed ? addresses.slice(0, 5) : addresses;
+  const addressesToProcess = prioritizeSpeed ? normalizedAddresses.slice(0, 5) : normalizedAddresses;
   
   for (const address of addressesToProcess) {
     let hasNextPage = true;
@@ -433,38 +696,39 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
               id: item.id,
               tokenId: item.tokenId,
               contractAddress: item.contractAddress,
-              name: item.name,
-              description: item.description,
-              imageUrl: item.imageUrl,
-              imageUrlThumbnail: item.imageUrlThumbnail,
+              name: item.name || `#${item.tokenId}`,
+              description: item.description || '',
+              imageUrl: item.imageUrl || '',
+              imageUrlThumbnail: item.imageUrlThumbnail || item.imageUrl || '',
               collection: {
-                id: item.collection.id,
-                name: item.collection.name,
-                address: item.collection.address,
-                network: item.collection.network,
-                imageUrl: item.collection.imageUrl,
-                floorPrice: item.collection.floorPrice,
-                nftsCount: item.collection.nftsCount,
+                id: item.collection?.id || '',
+                name: item.collection?.name || 'Unknown Collection',
+                address: item.collection?.address || item.contractAddress,
+                network: item.collection?.network || item.network || 'ethereum',
+                imageUrl: item.collection?.imageUrl || '',
+                floorPrice: item.collection?.floorPrice || 0,
+                nftsCount: item.collection?.nftsCount || 0,
               },
               estimatedValue: {
-                amount: item.estimatedValue.amount,
-                currency: item.estimatedValue.currency,
+                amount: item.estimatedValue?.amount || 0,
+                currency: item.estimatedValue?.currency || 'USD',
               },
               lastSalePrice: {
-                amount: item.lastSalePrice.amount,
-                currency: item.lastSalePrice.currency,
+                amount: item.lastSalePrice?.amount || 0,
+                currency: item.lastSalePrice?.currency || 'USD',
               },
-              network: item.network,
-              attributes: item.attributes.map(attr => ({
-                trait_type: attr.trait_type,
-                value: attr.value,
+              network: item.network || 'ethereum',
+              attributes: (item.attributes || []).map(attr => ({
+                trait_type: attr.trait_type || '',
+                value: attr.value || '',
               })),
-              marketplaceUrls: item.marketplaceUrls.map(url => ({
-                name: url.name,
-                url: url.url,
+              marketplaceUrls: (item.marketplaceUrls || []).map(url => ({
+                name: url.name || '',
+                url: url.url || '',
               })),
             }));
             
+            fetchedCount += nfts.length;
             allNfts.push(...nfts);
             
             if (response.data.nfts.pageInfo.hasNextPage) {
@@ -472,19 +736,17 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
             } else {
               hasNextPage = false;
             }
+          } else {
+            hasNextPage = false;
           }
         } catch (error) {
           console.error('Error fetching NFTs from Zapper API:', error);
-          throw error;
+          hasNextPage = false;
         }
       } catch (error) {
         console.error('Error fetching NFTs:', error);
-        throw error;
+        hasNextPage = false;
       }
-    }
-    
-    if (fetchedCount < maxToFetch) {
-      hasNextPage = false;
     }
     
     if (currentCursor) {
@@ -498,11 +760,14 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     nfts: allNfts,
     cursor: lastCursor,
     hasMore: hasMoreResults,
+    totalCount: allNfts.length
   };
 };
 
 // Default export for backward compatibility
 export default {
   getFarcasterProfile,
-  getNftsForAddresses
+  getNftsForAddresses,
+  getFarcasterAddresses,
+  getFarcasterPortfolio
 };

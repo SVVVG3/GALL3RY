@@ -135,7 +135,8 @@ export const NFTProvider = ({ children }) => {
     }
   }, [wallets]);
   
-  const updateCache = useCallback((data) => {
+  // Improved caching function with timestamp and wallet addresses
+  const updateCache = useCallback((data, cacheAddresses = null) => {
     if (!isBrowser || !data || data.length === 0) return;
     
     try {
@@ -144,7 +145,7 @@ export const NFTProvider = ({ children }) => {
       const cacheData = {
         data,
         timestamp: Date.now(),
-        walletAddresses: [...wallets],
+        walletAddresses: cacheAddresses || [...wallets],
         version: CACHE_VERSION
       };
       
@@ -553,6 +554,139 @@ export const NFTProvider = ({ children }) => {
     });
   }, [getEstimatedValue]);
 
+  // New function to fetch Farcaster profile and NFTs using the portfolio approach
+  const fetchFarcasterNFTs = useCallback(async (usernameOrFid, options = {}) => {
+    if (!usernameOrFid) {
+      console.error('No Farcaster username or FID provided');
+      setError('Please provide a Farcaster username or FID');
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    const {
+      forceRefresh = false,
+      loadMore = false,
+      limit = PAGE_SIZE
+    } = options;
+    
+    // Generate a cache key specific to this Farcaster user
+    const farcasterCacheKey = `${CACHE_KEY}_farcaster_${usernameOrFid.toString().toLowerCase()}`;
+    
+    // Check cache first if not forcing refresh
+    if (!forceRefresh && !loadMore && isBrowser) {
+      try {
+        const cachedData = localStorage.getItem(farcasterCacheKey);
+        
+        if (cachedData) {
+          const parsedCache = JSON.parse(cachedData);
+          const { data, timestamp, addresses, version } = parsedCache;
+          
+          // Basic validation
+          if (version === CACHE_VERSION && Date.now() - timestamp < CACHE_EXPIRATION_TIME) {
+            console.log(`Using cached NFT data for Farcaster user: ${usernameOrFid}`);
+            setNfts(data);
+            setIsLoading(false);
+            updateFiltersFromNFTs(data);
+            
+            // Set state for UI
+            setLastUpdated(new Date(timestamp));
+            setIsCached(true);
+            
+            return { nfts: data, addresses };
+          }
+        }
+      } catch (cacheError) {
+        console.error('Error reading from Farcaster cache:', cacheError);
+      }
+    }
+    
+    try {
+      // First get all addresses associated with the Farcaster profile
+      console.log(`Fetching addresses for Farcaster user: ${usernameOrFid}`);
+      const addresses = await zapperService.getFarcasterAddresses(usernameOrFid);
+      
+      if (!addresses || addresses.length === 0) {
+        throw new Error(`No addresses found for Farcaster user: ${usernameOrFid}`);
+      }
+      
+      console.log(`Found ${addresses.length} addresses for Farcaster user: ${usernameOrFid}`);
+      
+      // Now fetch NFTs for all these addresses using portfolioV2 endpoint
+      const fetchOptions = {
+        limit: options.limit || PAGE_SIZE,
+        cursor: loadMore ? endCursor : null,
+        prioritizeSpeed: false, // Don't prioritize speed for Farcaster profiles
+        includeValue: true,
+        includeMetadata: true,
+        usePortfolioV2: true, // Use the recommended portfolioV2 endpoint
+        maxRetries: 3
+      };
+      
+      console.log(`Fetching NFTs for ${addresses.length} Farcaster addresses with options:`, fetchOptions);
+      
+      // Call zapperService to get NFTs for all addresses at once
+      const result = await zapperService.getNftsForAddresses(addresses, fetchOptions);
+      
+      // Handle data from the response
+      const nftsData = result?.nfts || [];
+      const hasMoreData = result?.hasMore === true;
+      const cursorData = result?.cursor || null;
+      
+      console.log(`Fetched ${nftsData.length} NFTs for Farcaster user${hasMoreData ? ' (more available)' : ''}`);
+      
+      if (loadMore) {
+        // Append to existing NFTs
+        setNfts(prev => {
+          const combined = [...prev, ...nftsData];
+          return deduplicateNftsArray(combined);
+        });
+      } else {
+        // Replace with new NFTs
+        setNfts(nftsData);
+        
+        // Cache the data with Farcaster-specific key
+        if (isBrowser) {
+          try {
+            localStorage.setItem(farcasterCacheKey, JSON.stringify({
+              data: nftsData,
+              timestamp: Date.now(),
+              addresses,
+              version: CACHE_VERSION
+            }));
+            setLastUpdated(new Date());
+            setIsCached(true);
+          } catch (cacheError) {
+            console.error('Error caching Farcaster NFTs:', cacheError);
+          }
+        }
+        
+        // Update regular cache too if there's no other wallets loaded
+        if (!wallets.length) {
+          updateCache(nftsData, addresses);
+        }
+        
+        // Extract data for filters
+        updateFiltersFromNFTs(nftsData);
+      }
+      
+      // Update pagination state
+      setEndCursor(cursorData);
+      setHasMore(hasMoreData);
+      
+      // Clear loading state
+      setIsLoading(false);
+      
+      return { nfts: nftsData, addresses, hasMore: hasMoreData, cursor: cursorData };
+    } catch (error) {
+      console.error('Error fetching Farcaster NFTs:', error);
+      setError(error.message || 'Failed to fetch NFTs for Farcaster user');
+      setIsLoading(false);
+      throw error;
+    }
+  }, [endCursor, updateFiltersFromNFTs, deduplicateNftsArray, PAGE_SIZE, updateCache, isBrowser]);
+
   const value = {
     nfts,
     filteredNFTs,
@@ -577,6 +711,7 @@ export const NFTProvider = ({ children }) => {
     prioritizeSpeed,
     setPrioritizeSpeed,
     fetchNFTs,
+    fetchFarcasterNFTs,
     refreshNFTs,
     loadMoreNFTs,
     fetchCollectionHolders,
