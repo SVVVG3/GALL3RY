@@ -667,7 +667,6 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                 images(first: 1) {
                   edges {
                     node {
-                      id
                       url
                       previewUrl
                       largeUrl
@@ -677,7 +676,6 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
                 animations(first: 1) {
                   edges {
                     node {
-                      id
                       url
                       previewUrl
                       largeUrl
@@ -924,7 +922,6 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
                 images(first: 1) {
                   edges {
                     node {
-                      id
                       url
                       previewUrl
                       largeUrl
@@ -934,7 +931,6 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
                 animations(first: 1) {
                   edges {
                     node {
-                      id
                       url
                       previewUrl
                       largeUrl
