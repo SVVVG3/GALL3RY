@@ -89,6 +89,27 @@ module.exports = async (req, res) => {
       hasApiKey: !!apiKey
     });
     
+    // In development, provide test data for known Farcaster users to aid debugging
+    if (process.env.NODE_ENV !== 'production' && isFarcasterRequest && username === 'v') {
+      console.log('Using test data for user "v" in development mode');
+      return res.status(200).json({
+        data: {
+          farcasterProfile: {
+            username: 'v',
+            fid: 2,
+            metadata: {
+              displayName: 'Varun Srinivasan',
+              description: 'Farcaster co-founder',
+              imageUrl: 'https://i.imgur.com/UlMXxCQ.jpg',
+              warpcast: 'https://warpcast.com/v'
+            },
+            custodyAddress: '0x91031dcfdea024b4d51e775486111d2b2a715871',
+            connectedAddresses: ['0x91031dcfdea024b4d51e775486111d2b2a715871']
+          }
+        }
+      });
+    }
+    
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
@@ -99,22 +120,47 @@ module.exports = async (req, res) => {
       console.log('✅ Using ZAPPER_API_KEY from environment');
     }
     
-    // Prepare headers with API key
+    // Parse API key format
+    let formattedKey = apiKey;
+    // If the key doesn't look like it's base64 encoded (no colons, not starting with 'Basic ')
+    if (!apiKey.includes(':') && !apiKey.startsWith('Basic ')) {
+      // Check if it's a JWT token-like structure (contains periods)
+      if (apiKey.includes('.')) {
+        // Leave JWT tokens as-is
+        formattedKey = apiKey;
+      } else {
+        // Convert to base64 if it's plain text
+        try {
+          formattedKey = Buffer.from(apiKey).toString('base64');
+        } catch (e) {
+          console.error('Error encoding API key:', e);
+          formattedKey = apiKey;  // Fallback to original key
+        }
+      }
+    }
+    
+    // Prepare headers with correct authorization format for Zapper API
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json'
     };
     
-    // Add API key if available - trying multiple formats for compatibility
+    // Try multiple header formats to increase chances of success
     if (apiKey) {
-      // According to Zapper docs, their API key header format is:
-      headers['Authorization'] = `Basic ${apiKey}`;
+      // Format 1: Base64 encoded with Basic prefix (standard basic auth)
+      headers['Authorization'] = apiKey.startsWith('Basic ') ? apiKey : `Basic ${formattedKey}`;
       
-      // Some APIs also use x-api-key or x-zapper-api-key - include both for robustness
-      headers['x-api-key'] = apiKey;
-      headers['x-zapper-api-key'] = apiKey;
+      // Format 2: Raw API key as X headers (some APIs use this)
+      headers['X-API-Key'] = apiKey;
       
-      console.log('Added authorization headers to request');
+      // Format 3: Zapper-specific format (if documented)
+      headers['X-Zapper-API-Key'] = apiKey;
+      
+      console.log('Added authorization headers in multiple formats for compatibility');
+      
+      // Log a masked version of the key for debugging
+      const masked = apiKey.substring(0, 3) + '...' + apiKey.substring(apiKey.length - 3);
+      console.log(`API key (masked): ${masked}, format: ${apiKey.startsWith('Basic ') ? 'Basic auth' : 'Raw'}`);
     }
     
     // Make request to Zapper API with a timeout
@@ -124,10 +170,14 @@ module.exports = async (req, res) => {
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
     try {
+      // For debugging purposes, log the exact request we're making
+      const requestBody = JSON.stringify(req.body);
+      console.log(`Request body: ${requestBody.substring(0, 500)}${requestBody.length > 500 ? '...' : ''}`);
+      
       const response = await fetch(ZAPPER_API_URL, {
         method: 'POST',
         headers: headers,
-        body: JSON.stringify(req.body),
+        body: requestBody,
         signal: controller.signal
       });
       
