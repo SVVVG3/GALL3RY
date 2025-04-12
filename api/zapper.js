@@ -27,8 +27,28 @@ module.exports = async (req, res) => {
     // Get Zapper API key from environment variables
     const apiKey = process.env.ZAPPER_API_KEY || '';
     
+    // Check if this is a Farcaster profile request
+    let isFarcasterRequest = false;
+    let username = null;
+    let fid = null;
+    
+    if (req.body?.query && req.body.query.includes('farcasterProfile')) {
+      isFarcasterRequest = true;
+      
+      if (req.body.variables) {
+        username = req.body.variables.username;
+        fid = req.body.variables.fid;
+      }
+      
+      console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
+    }
+    
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
+      return res.status(500).json({
+        error: 'API Configuration Error',
+        message: 'Zapper API key is missing. Please check server configuration.'
+      });
     } else {
       console.log('✅ Using ZAPPER_API_KEY from environment');
     }
@@ -59,7 +79,6 @@ module.exports = async (req, res) => {
     // Log more details about the request for debugging
     let queryType = 'Unknown';
     let userInput = 'Unknown';
-    let isFarcasterRequest = false;
     
     try {
       console.log('Request body length:', JSON.stringify(req.body).length);
@@ -68,7 +87,6 @@ module.exports = async (req, res) => {
         // Determine query type and extract important variables for debugging
         if (req.body.query.includes('farcasterProfile')) {
           queryType = 'FARCASTER_PROFILE';
-          isFarcasterRequest = true;
           
           // Extract username or FID from variables
           if (req.body.variables) {
@@ -129,6 +147,7 @@ module.exports = async (req, res) => {
       console.error('Failed to parse response as JSON:', e);
       // Log more of the response for debugging purposes
       console.error(`Response (first 500 chars): ${responseText.substring(0, 500)}`);
+      
       return res.status(500).json({
         error: 'Invalid JSON response from API',
         responsePreview: responseText.substring(0, 500) // First 500 chars for debugging
@@ -152,13 +171,19 @@ module.exports = async (req, res) => {
           message: `Could not find a Farcaster profile for ${userInput}`
         });
       }
+      
+      // Forward GraphQL errors to client
+      return res.status(400).json({
+        errors: data.errors,
+        message: data.errors[0]?.message || 'GraphQL error'
+      });
     }
     
     // Special handling for Farcaster requests with empty data
     if (isFarcasterRequest && (!data.data || !data.data.farcasterProfile)) {
       console.log(`Farcaster profile data missing for ${userInput}`);
       
-      // Before returning error, check if we're using an ENS name and try extracting without .eth
+      // Before returning error, check if we're using an ENS name
       if (userInput.includes('.eth')) {
         console.log('ENS name detected, adding helper message');
         return res.status(404).json({
