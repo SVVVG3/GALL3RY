@@ -17,10 +17,6 @@
     "api/*.js": {
       "memory": 1024,
       "maxDuration": 10
-    },
-    "api/v2/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
     }
   },
   "env": {
