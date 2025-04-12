@@ -1,16 +1,13 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { fetchZapperData } from '../services/zapper';
 import axios from 'axios';
-import { ZAPPER_PROXY_URL } from '../config';
 import { useAuth } from './AuthContext';
 import { useWallet } from './WalletContext';
 import zapperService from '../services/zapperService';
+import { ZAPPER_PROXY_URL, CACHE_EXPIRATION_TIME, NFT_PAGE_SIZE } from '../constants';
 
 const NFTContext = createContext();
-const PAGE_SIZE = 32;
-
-// Cache configuration
-const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
+const PAGE_SIZE = NFT_PAGE_SIZE;
 
 export const NFTProvider = ({ children }) => {
   const [nfts, setNfts] = useState([]);
@@ -536,4 +533,4 @@ export const useNFT = () => {
     throw new Error('useNFT must be used within an NFTProvider');
   }
   return context;
-}; 
+};
