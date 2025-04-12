@@ -167,14 +167,70 @@ export const NFTProvider = ({ children }) => {
   const getEstimatedValue = useCallback((nft) => {
     if (!nft) return 0;
     
-    // New format: { estimatedValue: { amount: number, currency: string } }
-    if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && nft.estimatedValue.amount !== undefined) {
+    // First try to get USD values (preferred for consistent sorting)
+    
+    // 1. Try valueUsd
+    if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
+      return Number(nft.valueUsd) || 0;
+    }
+    
+    // 2. Try estimatedValue.valueUsd
+    if (nft.estimatedValue?.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
+      return Number(nft.estimatedValue.valueUsd) || 0;
+    }
+    
+    // 3. New format: { estimatedValue: { amount: number, currency: string } }
+    // If currency is USD, use that value
+    if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
+        nft.estimatedValue.amount !== undefined && 
+        nft.estimatedValue.currency === 'USD') {
       return Number(nft.estimatedValue.amount) || 0;
     }
     
-    // Old format: { estimatedValue: number }
+    // 4. Check collection floor price in USD
+    if (nft.collection?.floorPrice?.valueUsd !== undefined && 
+        nft.collection.floorPrice.valueUsd !== null) {
+      return Number(nft.collection.floorPrice.valueUsd) || 0;
+    }
+    
+    // If no USD values are found, fall back to ETH values
+    
+    // 5. If estimatedValue has amount but currency isn't USD
+    if (nft.estimatedValue && typeof nft.estimatedValue === 'object' && 
+        nft.estimatedValue.amount !== undefined) {
+      return Number(nft.estimatedValue.amount) || 0;
+    }
+    
+    // 6. Try valueEth
+    if (nft.valueEth !== undefined && nft.valueEth !== null) {
+      return Number(nft.valueEth) || 0;
+    }
+    
+    // 7. Try other estimatedValue formats
+    if (nft.estimatedValue?.valueWithDenomination !== undefined && 
+        nft.estimatedValue.valueWithDenomination !== null) {
+      return Number(nft.estimatedValue.valueWithDenomination) || 0;
+    }
+    
+    // 8. Old format: { estimatedValue: number }
     if (nft.estimatedValue && typeof nft.estimatedValue === 'number') {
       return nft.estimatedValue;
+    }
+    
+    // 9. Collection floor price in ETH
+    if (nft.collection?.floorPrice?.valueWithDenomination !== undefined) {
+      return Number(nft.collection.floorPrice.valueWithDenomination) || 0;
+    }
+    
+    // 10. Direct floor price number
+    if (nft.collection?.floorPrice !== undefined && 
+        typeof nft.collection.floorPrice === 'number') {
+      return nft.collection.floorPrice;
+    }
+    
+    // 11. Legacy floor price
+    if (nft.collection?.floorPriceEth !== undefined) {
+      return Number(nft.collection.floorPriceEth) || 0;
     }
     
     return 0;
