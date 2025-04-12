@@ -5,6 +5,8 @@
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "build",
   "routes": [
+    { "src": "/api/v2/graphql", "dest": "/api/v2/graphql.js" },
+    { "src": "/v2/graphql", "dest": "/api/v2/graphql.js" },
     { "src": "/api/zapper", "dest": "/api/zapper.js" },
     { "src": "/api/farcaster-user", "dest": "/api/farcaster-user.js" },
     { "src": "/api/nfts", "dest": "/api/nfts.js" },
@@ -13,6 +15,10 @@
   ],
   "functions": {
     "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/v2/*.js": {
       "memory": 1024,
       "maxDuration": 10
     }
