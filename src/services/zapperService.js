@@ -933,13 +933,15 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
       $addresses: [Address!]!,
       $networks: [Network!],
       $first: Int = 50,
-      $after: String
+      $after: String,
+      $bypassHidden: Boolean = true
     ) {
       nftUsersTokens(
         owners: $owners, 
         collections: { addresses: $addresses, networks: $networks },
         first: $first,
-        after: $after
+        after: $after,
+        bypassHidden: $bypassHidden
       ) {
         edges {
           node {
@@ -986,6 +988,11 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
             }
             estimatedValue {
               valueUsd
+              valueWithDenomination
+              denomination {
+                symbol
+                network
+              }
             }
           }
           balance
@@ -1003,7 +1010,8 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
     addresses: [normalizedCollection],
     networks: null,  // Auto-detect network
     first: limit,
-    after: cursor
+    after: cursor,
+    bypassHidden: true  // Ensure we get all NFTs, not just those passing Zapper's spam filter
   };
   
   try {
@@ -1061,6 +1069,8 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
           thumbnailUrl: thumbnailUrl || imageUrl,
           largeImageUrl: largeUrl || imageUrl,
           estimatedValueUsd: item.estimatedValue?.valueUsd || 0,
+          valueEth: item.estimatedValue?.valueWithDenomination || 0,
+          valueCurrency: item.estimatedValue?.denomination?.symbol || 'ETH',
           balance: edge.balance || 1
         };
       });

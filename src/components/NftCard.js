@@ -386,7 +386,7 @@ const NftCard = ({ nft, onClick }) => {
         </EstimatedValue>
         
         <AcquisitionTime>
-          Acquired: {getAcquisitionTime()}
+          {getAcquisitionTime()}
         </AcquisitionTime>
       </CardContent>
     </CardContainer>
