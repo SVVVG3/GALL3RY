@@ -86,7 +86,8 @@ export const NFTProvider = ({ children }) => {
       console.log('Received NFT data:', { 
         hasData: !!data,
         hasEdges: !!data?.nftUsersTokens?.edges,
-        edgeCount: data?.nftUsersTokens?.edges?.length
+        edgeCount: data?.nftUsersTokens?.edges?.length,
+        hasNextPage: data?.nftUsersTokens?.pageInfo?.hasNextPage
       });
 
       if (!data?.nftUsersTokens?.edges) {
@@ -144,8 +145,16 @@ export const NFTProvider = ({ children }) => {
         };
       }).filter(Boolean);
       
-      setNfts(nftsWithImages);
-      setHasMore(data.nftUsersTokens.pageInfo?.hasNextPage || false);
+      // Deduplicate NFTs in the frontend as well
+      const uniqueNfts = deduplicateNftsArray(nftsWithImages);
+      console.log(`Deduplicated NFTs: ${uniqueNfts.length} (removed ${nftsWithImages.length - uniqueNfts.length} duplicates)`);
+      
+      // Make sure we set hasMore correctly
+      const hasNextPage = data.nftUsersTokens.pageInfo?.hasNextPage === true;
+      console.log(`Setting hasMore to: ${hasNextPage ? 'true' : 'false'}`);
+      
+      setNfts(uniqueNfts);
+      setHasMore(hasNextPage);
       setPage(1);
       setSelectedWallets(addresses);
     } catch (err) {
@@ -157,12 +166,16 @@ export const NFTProvider = ({ children }) => {
   }, []);
 
   const loadMoreNFTs = useCallback(async () => {
-    if (!hasMore || loading || !selectedWallets.length) return;
+    // Only proceed if there are more NFTs to load
+    if (!hasMore || loading || !selectedWallets.length) {
+      console.log('Not loading more NFTs:', { hasMore, loading, selectedWalletsCount: selectedWallets.length });
+      return;
+    }
 
     setLoading(true);
     try {
       // Get the endCursor from the last batch - more reliable than the last item's cursor
-      const endCursor = nfts.length > 0 && nfts[nfts.length - 1].cursor;
+      const endCursor = nfts.length > 0 ? nfts[nfts.length - 1].cursor : null;
       
       if (!endCursor) {
         console.warn('No cursor available for pagination');
@@ -239,6 +252,11 @@ export const NFTProvider = ({ children }) => {
         throw new Error('Invalid response format');
       }
       
+      console.log('Received more NFT data:', { 
+        edgeCount: data.nftUsersTokens.edges.length,
+        hasNextPage: data.nftUsersTokens.pageInfo?.hasNextPage
+      });
+      
       // Process the new batch of NFTs
       const newNfts = data.nftUsersTokens.edges.map(edge => {
         const node = edge.node;
@@ -287,11 +305,29 @@ export const NFTProvider = ({ children }) => {
         };
       }).filter(Boolean);
 
+      // Check if we actually received new NFTs
+      if (newNfts.length === 0) {
+        console.log('No additional NFTs received, setting hasMore to false');
+        setHasMore(false);
+        return;
+      }
+
       console.log(`Loaded ${newNfts.length} more NFTs`);
       
-      // Append the new NFTs to the existing list
-      setNfts(prev => [...prev, ...newNfts]);
-      setHasMore(data.nftUsersTokens.pageInfo?.hasNextPage || false);
+      // Deduplicate new NFTs against existing ones
+      const allNfts = [...nfts, ...newNfts];
+      const uniqueAllNfts = deduplicateNftsArray(allNfts);
+      
+      console.log(`Combined ${nfts.length} existing + ${newNfts.length} new = ${allNfts.length} total NFTs`);
+      console.log(`After deduplication: ${uniqueAllNfts.length} unique NFTs`);
+      
+      // Get the hasMore value from the API response
+      const hasNextPage = data.nftUsersTokens.pageInfo?.hasNextPage === true;
+      console.log(`Setting hasMore to: ${hasNextPage ? 'true' : 'false'}`);
+      
+      // Append the deduplicated NFTs to the existing list
+      setNfts(uniqueAllNfts);
+      setHasMore(hasNextPage);
       setPage(p => p + 1);
     } catch (err) {
       console.error('Error loading more NFTs:', err);
@@ -300,6 +336,25 @@ export const NFTProvider = ({ children }) => {
       setLoading(false);
     }
   }, [hasMore, loading, nfts, selectedWallets]);
+
+  // Helper function to deduplicate NFTs by collection address + token ID
+  const deduplicateNftsArray = useCallback((nftsArray) => {
+    const uniqueMap = new Map();
+    const uniqueNfts = [];
+    
+    for (const nft of nftsArray) {
+      const collectionAddr = nft.collection?.address || '';
+      const tokenId = nft.tokenId || '';
+      const uniqueKey = `${collectionAddr.toLowerCase()}-${tokenId}`;
+      
+      if (!uniqueMap.has(uniqueKey)) {
+        uniqueMap.set(uniqueKey, true);
+        uniqueNfts.push(nft);
+      }
+    }
+    
+    return uniqueNfts;
+  }, []);
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, userFid) => {
     console.log("fetchCollectionHolders called with:", { collectionAddress, userFid });

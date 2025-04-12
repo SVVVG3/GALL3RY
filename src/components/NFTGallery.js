@@ -11,8 +11,14 @@ import SortControls from './SortControls';
 const NFTGallery = ({ addresses, onNFTClick }) => {
   const { nfts, loading, error, hasMore, fetchNFTs, loadMoreNFTs, setSearchQuery } = useNFT();
   const [searchText, setSearchText] = useState('');
-  const observer = useRef();
-  const lastNFTRef = useRef();
+  
+  // Add debug info to monitor hasMore state
+  console.log("NFTGallery render:", { 
+    nftsCount: nfts.length, 
+    hasMore, 
+    loading, 
+    addresses: addresses?.length || 0
+  });
 
   useEffect(() => {
     if (addresses && addresses.length > 0) {
@@ -20,34 +26,16 @@ const NFTGallery = ({ addresses, onNFTClick }) => {
     }
   }, [addresses, fetchNFTs]);
 
-  useEffect(() => {
-    const options = {
-      root: null,
-      rootMargin: '20px',
-      threshold: 1.0
-    };
-
-    observer.current = new IntersectionObserver(entries => {
-      const target = entries[0];
-      if (target.isIntersecting && hasMore && !loading) {
-        loadMoreNFTs();
-      }
-    }, options);
-
-    if (lastNFTRef.current) {
-      observer.current.observe(lastNFTRef.current);
-    }
-
-    return () => {
-      if (observer.current) {
-        observer.current.disconnect();
-      }
-    };
-  }, [nfts, hasMore, loading, loadMoreNFTs]);
-
   const handleSearch = (e) => {
     e.preventDefault();
     setSearchQuery(searchText);
+  };
+
+  const handleLoadMore = () => {
+    if (hasMore && !loading) {
+      console.log("Manual load more clicked");
+      loadMoreNFTs();
+    }
   };
 
   if (error) {
@@ -104,7 +92,17 @@ const NFTGallery = ({ addresses, onNFTClick }) => {
         </div>
       )}
       
-      {hasMore && <div ref={lastNFTRef} className="h-10" />}
+      {/* Explicit "Load More" button that's always visible when hasMore is true */}
+      {hasMore && !loading && (
+        <div className="mt-8 flex justify-center">
+          <button 
+            onClick={handleLoadMore}
+            className="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition duration-200"
+          >
+            Load More NFTs
+          </button>
+        </div>
+      )}
     </div>
   );
 };
