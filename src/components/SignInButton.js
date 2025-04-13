@@ -134,32 +134,6 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
           className="user-profile-button"
           onClick={() => setDropdownOpen(!dropdownOpen)}
         >
-          <img 
-            src={profile.avatarUrl || `https://warpcast.com/${profile.username}/pfp` || "https://warpcast.com/~/icon-512.png"} 
-            alt={profile.displayName || profile.username || "User"} 
-            className="profile-avatar"
-            onError={(e) => {
-              console.error('Profile avatar load error in header:', e);
-              console.log('Failed avatar URL:', e.target.src);
-              
-              // Try different fallback strategies
-              if (e.target.src === profile.avatarUrl && profile.username) {
-                // If the primary avatar URL failed, try Warpcast username URL
-                console.log('Trying Warpcast username URL fallback:', `https://warpcast.com/${profile.username}/pfp`);
-                e.target.src = `https://warpcast.com/${profile.username}/pfp`;
-              } 
-              else if (profile._rawProfile?.pfp?.url && e.target.src !== profile._rawProfile.pfp.url) {
-                // Try the raw pfp.url if available
-                console.log('Trying raw pfp.url fallback:', profile._rawProfile.pfp.url);
-                e.target.src = profile._rawProfile.pfp.url;
-              }
-              else {
-                // Final fallback to Farcaster icon
-                console.log('Using default Farcaster icon');
-                e.target.src = "https://warpcast.com/~/icon-512.png";
-              }
-            }}
-          />
           <span className="profile-username">@{profile.username}</span>
           <svg 
             className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} 
