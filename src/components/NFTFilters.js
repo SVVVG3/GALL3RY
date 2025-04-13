@@ -43,14 +43,6 @@ const NFTFilters = ({ wallets = [] }) => {
     // This works with the getSortedNFTs function in NFTContext.js
     console.log(`Setting sort to: ${sort}`); // Add logging to confirm sort is changing
     setSortBy(sort);
-    
-    // Force a refresh of the sort order when Value is clicked
-    if (sort === 'value') {
-      // Brief timeout to ensure state update has propagated
-      setTimeout(() => {
-        console.log('Forcing refresh for Value sort');
-      }, 10);
-    }
   };
 
   return (
