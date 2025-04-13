@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import NftGrid from './NFTGrid';
 import '../styles/FarcasterUserSearch.css';
-import { useRouter } from 'next/router';
+import { useNavigate } from 'react-router-dom';
 
 // Error boundary for handling API initialization issues
 class APIErrorBoundary extends React.Component {
@@ -103,7 +103,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');
 
-  const router = useRouter();
+  const navigate = useNavigate();
 
   // Handle API retries
   const handleRetry = () => {
@@ -704,7 +704,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setIsLoadingNfts(true);
     
     // Refresh the URL to show the selected username
-    router.push(`/user/${cleanQuery}`);
+    navigate(`/user/${cleanQuery}`);
     
     // Normalize and deduplicate addresses across all profiles
     try {
