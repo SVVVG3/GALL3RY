@@ -47,6 +47,27 @@ const NFTGallery = () => {
     }
   }, [connectedWallets, fetchNFTs, initialLoad]);
 
+  // Automatically continue loading NFTs until we hit a reasonable threshold or hasMore becomes false
+  // This helps ensure we load enough NFTs even with the pagination limits
+  useEffect(() => {
+    const AUTO_LOAD_THRESHOLD = 500; // Load up to this many NFTs automatically
+    
+    const autoLoadCheck = () => {
+      console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading);
+      
+      // If we have 'hasMore' true, not currently loading, and haven't hit the threshold yet, load more
+      if (hasMore && !isLoading && !loadingMore && filteredNFTs.length < AUTO_LOAD_THRESHOLD) {
+        console.log("Auto-loading next batch of NFTs...");
+        loadMoreNFTs();
+      }
+    };
+    
+    // Check if we should auto-load more NFTs when filteredNFTs, hasMore, or loading state changes
+    if (filteredNFTs.length > 0) {
+      autoLoadCheck();
+    }
+  }, [filteredNFTs.length, hasMore, isLoading, loadingMore, loadMoreNFTs]);
+
   // Intersection observer for infinite scrolling
   useEffect(() => {
     const options = {

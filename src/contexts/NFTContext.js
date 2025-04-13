@@ -308,6 +308,8 @@ export const NFTProvider = ({ children }) => {
         prioritizeSpeed,
         includeValue: true,
         includeMetadata: true,
+        bypassHidden: true,
+        useNftUsersTokens: true,
         endpoints: [
           `${window.location.origin}/api/zapper`, // Always try local API first
           'https://api.zapper.xyz/v2/graphql'     // Fallback to direct API
@@ -339,6 +341,7 @@ export const NFTProvider = ({ children }) => {
       const cursorData = result?.cursor || null;
       
       console.log(`Fetched ${nftsData.length} NFTs${hasMoreData ? ' (more available)' : ''}`);
+      console.log(`Pagination info: cursor=${cursorData}, hasMore=${hasMoreData}`);
       
       if (isLoadingMore) {
         // Append to existing NFTs
