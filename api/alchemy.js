@@ -14,8 +14,12 @@ try {
 }
 
 // Alchemy API key - fallback to environment variable if not in config
-const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY;
+const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
 const ALCHEMY_BASE_URL = config.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/';
+
+// Log debugging information about API key (masked for security)
+console.log(`API key source: ${config.ALCHEMY_API_KEY ? 'config' : process.env.ALCHEMY_API_KEY ? 'process.env' : process.env.REACT_APP_ALCHEMY_API_KEY ? 'REACT_APP env' : 'not found'}`);
+console.log(`API key length: ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.length : 0}`);
 
 // V3 NFT endpoints
 const ENDPOINTS = {
@@ -93,9 +97,16 @@ module.exports = async (req, res) => {
     
     // Log the request (without sensitive data)
     console.log(`Proxying Alchemy API request to ${endpoint} on ${chain} chain`);
+    console.log(`Full URL: ${endpointUrl}?${new URLSearchParams(requestParams).toString()}`);
     
     // Call the Alchemy API
     const response = await axios.get(endpointUrl, { params: requestParams });
+    
+    // Log success response summary
+    console.log(`Alchemy API success: ${response.status}, data length: ${JSON.stringify(response.data).length}`);
+    if (response.data.ownedNfts) {
+      console.log(`Retrieved ${response.data.ownedNfts.length} NFTs for owner`);
+    }
     
     // Return the API response
     return res.status(200).json(response.data);
@@ -106,6 +117,11 @@ module.exports = async (req, res) => {
     if (error.response) {
       console.error(`Status: ${error.response.status}`);
       console.error(`Data:`, error.response.data);
+      
+      if (error.response.status === 401) {
+        console.error('API KEY ERROR: Your Alchemy API key is invalid or missing');
+        console.error(`Key used: ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.substring(0, 4) + '...' + ALCHEMY_API_KEY.substring(ALCHEMY_API_KEY.length - 4) : 'NONE'}`);
+      }
       
       // Return the error details
       return res.status(error.response.status).json({
