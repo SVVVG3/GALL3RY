@@ -1,16 +1,9 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 // Import the hook directly to avoid initialization issues
 import { useAuth } from '../contexts/AuthContext';
 
-// Dynamic imports to prevent initialization issues
-const LazyFarcasterComponents = lazy(() => 
-  Promise.all([
-    import('@farcaster/auth-kit')
-  ]).then(([authKit]) => ({
-    SignInButton: authKit.SignInButton,
-    useSignIn: authKit.useSignIn
-  }))
-);
+// We won't dynamically import the Farcaster components to avoid initialization issues
+import { SignInButton as FarcasterSignInButton } from '@farcaster/auth-kit';
 
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
@@ -89,29 +82,15 @@ const SignInButton = ({ onSuccess }) => {
     );
   }
   
-  // If not authenticated, use the fallback button that will be shown until
-  // the real Farcaster auth button loads
-  return (
-    <Suspense fallback={<FallbackSignInButton />}>
-      <FarcasterSignInButtonWrapper onSuccess={onSuccess} />
-    </Suspense>
-  );
-};
-
-// Wrapper for the actual Farcaster sign-in button
-const FarcasterSignInButtonWrapper = ({ onSuccess }) => {
+  // If not authenticated, use the Farcaster auth button directly
   return (
     <ErrorBoundaryWrapper>
-      <LazyFarcasterComponents>
-        {({ SignInButton, useSignIn }) => (
-          <SignInButton onSuccess={onSuccess} />
-        )}
-      </LazyFarcasterComponents>
+      <FarcasterSignInButton onSuccess={onSuccess} />
     </ErrorBoundaryWrapper>
   );
 };
 
-// Fallback button shown while the real one loads
+// Fallback button shown when the real one fails
 const FallbackSignInButton = () => (
   <button className="btn btn-primary">
     Sign in

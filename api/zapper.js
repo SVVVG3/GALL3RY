@@ -192,8 +192,8 @@ module.exports = async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      // Add proper User-Agent header for Zapper API
-      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      // User-Agent should only be set server-side, not from client requests
+      // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
     };
     
     // FIX FOR ZAPPER API SCHEMA CHANGES
@@ -279,61 +279,21 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
       else if (updatedQuery.includes('nftUsersTokens') || updatedQuery.includes('UserNftTokens')) {
         console.log('Fixing field names in nftUsersTokens query');
         
-        // Two-phase approach - first extract any objects containing the old field names
-        const mediasObjectPattern = /(mediasV3\s*{[\s\S]*?})/g;
-        const collectionObjectPattern = /(collection\s*{[\s\S]*?})/g;
+        // Update the mediasV3 field names
+        updatedQuery = updatedQuery
+          .replace(/url(\s*):/g, 'original$1:')
+          .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
+          .replace(/largeUrl(\s*):/g, 'large$1:')
+          .replace(/cardImageUrl(\s*):/g, 'cardImage$1:');
         
-        // Extract and fix mediasV3 object
-        let mediaMatches = updatedQuery.match(mediasObjectPattern);
-        if (mediaMatches) {
-          console.log(`Found ${mediaMatches.length} mediasV3 blocks to process`);
-          
-          // Process each mediasV3 block
-          for (const mediaMatch of mediaMatches) {
-            let updatedMediaBlock = mediaMatch;
-            
-            // Fix fields in images section
-            if (updatedMediaBlock.includes('images(')) {
-              console.log('Fixing image fields');
-              updatedMediaBlock = updatedMediaBlock
-                .replace(/url(\s*):/g, 'original$1:')
-                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
-                .replace(/largeUrl(\s*):/g, 'large$1:');
-            }
-            
-            // Fix fields in animations section
-            if (updatedMediaBlock.includes('animations(')) {
-              console.log('Fixing animation fields');
-              updatedMediaBlock = updatedMediaBlock
-                .replace(/url(\s*):/g, 'original$1:')
-                .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
-                .replace(/largeUrl(\s*):/g, 'large$1:');
-            }
-            
-            // Replace the original block with the fixed one
-            updatedQuery = updatedQuery.replace(mediaMatch, updatedMediaBlock);
-          }
-        }
+        // Replace any other known problematic fields
+        updatedQuery = updatedQuery
+          .replace(/valueEth/g, 'estimatedValue { valueWithDenomination }')
+          .replace(/lastSaleValue/g, 'lastSale { valueWithDenomination }');
         
-        // Extract and fix collection object
-        let collectionMatches = updatedQuery.match(collectionObjectPattern);
-        if (collectionMatches) {
-          console.log(`Found ${collectionMatches.length} collection blocks to process`);
-          
-          // Process each collection block
-          for (const collectionMatch of collectionMatches) {
-            let updatedCollectionBlock = collectionMatch;
-            
-            // Fix cardImageUrl field
-            if (updatedCollectionBlock.includes('cardImageUrl')) {
-              console.log('Fixing cardImageUrl field');
-              updatedCollectionBlock = updatedCollectionBlock
-                .replace(/cardImageUrl(\s*):/g, 'cardImage$1:');
-            }
-            
-            // Replace the original block with the fixed one
-            updatedQuery = updatedQuery.replace(collectionMatch, updatedCollectionBlock);
-          }
+        // If query contains UserNftTokens, replace with correct type name
+        if (updatedQuery.includes('UserNftTokens')) {
+          updatedQuery = updatedQuery.replace(/UserNftTokens/g, 'nftUsersTokens');
         }
         
         console.log('Query transformed successfully');
@@ -462,7 +422,7 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
     } catch (fetchError) {
       console.error('Fetch error:', fetchError);
       
-      if (fetchError.name === 'AbortError') {
+      if (fetchError && fetchError.name === 'AbortError') {
         return res.status(504).json({
           error: 'Request timeout',
           message: 'The request to the Zapper API timed out'
@@ -477,19 +437,19 @@ query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String
     // Enhanced error reporting
     const errorResponse = {
       error: 'Internal server error',
-      message: error.message || 'An unknown error occurred',
+      message: error && error.message ? error.message : 'An unknown error occurred',
       timestamp: new Date().toISOString()
     };
     
     // Add more context for debugging in logs
-    if (error.name === 'AbortError') {
+    if (error && error.name === 'AbortError') {
       console.error('Request timed out');
       errorResponse.error = 'Request timeout';
       errorResponse.message = 'The request to the Zapper API timed out';
       return res.status(504).json(errorResponse);
     }
     
-    if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+    if (error && error.code === 'ECONNREFUSED' || (error && error.code === 'ENOTFOUND')) {
       console.error('Connection error:', error.code);
       errorResponse.error = 'Connection error';
       errorResponse.message = 'Could not connect to the Zapper API';

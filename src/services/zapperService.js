@@ -6,17 +6,18 @@ import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
 const zapperAxios = axios.create({
   headers: {
     'Content-Type': 'application/json',
-    'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+    // Don't set User-Agent in browser environment
+    // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
   }
 });
 
-// Add axios interceptor to ensure proper User-Agent for all requests
+// Add axios interceptor to ensure proper headers for all requests
 axios.interceptors.request.use(
   config => {
-    // Add User-Agent header to all requests if not already present
-    if (!config.headers['User-Agent']) {
-      config.headers['User-Agent'] = 'GALL3RY/1.0 (https://gall3ry.vercel.app)';
-    }
+    // We should NOT set User-Agent in browser environment
+    // if (!config.headers['User-Agent']) {
+    //   config.headers['User-Agent'] = 'GALL3RY/1.0 (https://gall3ry.vercel.app)';
+    // }
     return config;
   },
   error => {
@@ -60,8 +61,8 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
       try {
         const headers = {
           'Content-Type': 'application/json',
-          // Add User-Agent header to prevent initialization errors
-          'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+          // Don't set User-Agent in browser environment as it will cause errors
+          // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
         };
         
         // If using direct Zapper API, add the API key if available
@@ -576,28 +577,19 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
           edges {
             node {
               # Basic token information
+              id
               tokenId
               name
               description
 
               # Collection information
               collection {
+                id
                 name
                 address
                 network
                 nftStandard
                 type
-                supply
-                holdersCount
-                floorPrice {
-                  valueUsd
-                  valueWithDenomination
-                  denomination {
-                    symbol
-                    network
-                    address
-                  }
-                }
                 medias {
                   logo {
                     thumbnail
@@ -612,12 +604,7 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
                     node {
                       original
                       thumbnail
-                      blurhash
                       large
-                      width
-                      height
-                      mimeType
-                      fileSize
                     }
                   }
                 }
@@ -625,64 +612,33 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
                   edges {
                     node {
                       original
-                      mimeType
+                      thumbnail
+                      large
                     }
                   }
                 }
               }
 
-              # Value and pricing information - explicitly include all value fields
+              # Value and pricing information
               estimatedValue {
                 valueUsd
                 valueWithDenomination
-                amount
-                currency
                 denomination {
                   symbol
                   network
                 }
-              }
-              lastSale {
-                valueUsd
-                valueWithDenomination
-                denomination {
-                  symbol
-                }
-              }
-
-              # Traits/attributes
-              traits {
-                attributeName
-                attributeValue
-                supplyPercentage
-                supply
               }
             }
 
             # Ownership information
             balance
             balanceUSD
-            ownedAt
-            balances {
-              balance
-              account {
-                address
-                displayName {
-                  value
-                }
-              }
-            }
-
-            # Valuation strategy information
-            valuationStrategy
           }
 
           # Pagination information
           pageInfo {
             hasNextPage
             endCursor
-            startCursor
-            hasPreviousPage
           }
         }
       }

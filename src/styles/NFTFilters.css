@@ -82,4 +82,18 @@
 .reset-filters:hover {
   background: #e8e8e8;
   color: #333;
+}
+
+.fid {
+  font-size: 0.85rem;
+  color: #9333ea;
+  margin: 0 0 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.fid::before {
+  content: "🆔";
+  font-size: 0.9rem;
 } 

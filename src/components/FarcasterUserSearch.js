@@ -259,12 +259,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // Fetch Farcaster profile using our improved zapperService method
       const profile = await zapperService.getFarcasterProfile(cleanQuery);
       
+      // Extract wallet addresses using our helper method
+      const uniqueAddresses = extractWalletAddresses(profile);
+      
+      // Add addresses property to profile to work with loadAllNfts
+      profile.addresses = uniqueAddresses;
+      
       // Set profile data in state when received
       setUserProfile(profile);
       console.log('Profile found:', profile);
-      
-      // Extract wallet addresses using our helper method
-      const uniqueAddresses = extractWalletAddresses(profile);
       
       console.log(`Total unique addresses for ${profile.username}: ${uniqueAddresses.length}`);
       
@@ -719,9 +722,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     <APIErrorBoundary onRetry={handleRetry}>
       <div className="farcaster-search-container">
         <div className="search-header">
-          <h2>Farcaster NFT Search</h2>
-          <p className="search-subtitle">Search for a Farcaster user to see their NFT collection</p>
-          
           <form onSubmit={handleSearch} className="search-form">
             <input
               type="text"
@@ -754,7 +754,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           <div className="user-profile">
             <div className="profile-header">
               <div className="profile-image">
-                {userProfile.metadata?.imageUrl ? (
+                {userProfile.metadata && userProfile.metadata.imageUrl ? (
                   <img 
                     src={userProfile.metadata.imageUrl} 
                     alt={`${userProfile.username}'s profile`}
@@ -765,13 +765,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   />
                 ) : (
                   <div className="placeholder-image">
-                    {userProfile.username.charAt(0).toUpperCase()}
+                    {userProfile.username ? userProfile.username.charAt(0).toUpperCase() : '?'}
                   </div>
                 )}
               </div>
               <div className="profile-info">
                 <h3>{userProfile.metadata?.displayName || userProfile.username}</h3>
                 <p className="username">@{userProfile.username}</p>
+                {userProfile.fid && (
+                  <p className="fid">FID: {userProfile.fid}</p>
+                )}
                 {userProfile.metadata?.description && (
                   <p className="bio">{userProfile.metadata.description}</p>
                 )}

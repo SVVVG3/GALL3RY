@@ -71,7 +71,8 @@ module.exports = async (req, res) => {
     const response = await fetch(alchemyUrl, {
       headers: {
         'Accept': 'application/json',
-        'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+        // Don't set User-Agent header in browser environment
+        // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
       }
     });
     
