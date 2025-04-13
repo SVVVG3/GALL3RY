@@ -16,7 +16,26 @@ import analytics from '../utils/analytics';
 /**
  * NftCard component for displaying a single NFT
  */
-const NftCard = ({ nft, showCollectionName = true, showLastPrice = false }) => {
+const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabled = false, onClick }) => {
+  // Early return with a simpler placeholder if nft is null or undefined
+  if (!nft) {
+    console.warn('Attempted to render NftCard with null or undefined nft object');
+    return (
+      <div className="nft-card disabled">
+        <div className="image-container">
+          <div className="nft-image-loading">
+            <div>Invalid NFT data</div>
+          </div>
+        </div>
+        <div className="nft-details">
+          <div className="nft-info">
+            <h3 className="nft-name">Unknown NFT</h3>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const { likedNFTs, toggleLike, userFid } = useNFT();
   const navigate = useNavigate();
   const [showHolders, setShowHolders] = useState(false);
