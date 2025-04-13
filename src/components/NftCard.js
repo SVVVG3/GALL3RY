@@ -92,6 +92,29 @@ const NftCard = ({
   };
 
   const getImageUrl = () => {
+    // Follow Alchemy's recommended best practice order:
+    // 1. First try media.gateway
+    if (nft.media?.gateway && nft.media.gateway.startsWith('http')) {
+      return nft.media.gateway;
+    }
+    
+    // 2. Then try media.raw
+    if (nft.media?.raw && nft.media.raw.startsWith('http')) {
+      return nft.media.raw;
+    }
+    
+    // 3. Check media array (if it's an array)
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      for (const media of nft.media) {
+        if (media?.gateway && media.gateway.startsWith('http')) {
+          return media.gateway;
+        }
+        if (media?.raw && media.raw.startsWith('http')) {
+          return media.raw;
+        }
+      }
+    }
+    
     // If the NFT has an imageUrl property, use that
     if (nft.imageUrl && nft.imageUrl.startsWith('http')) {
       return nft.imageUrl;
@@ -140,24 +163,6 @@ const NftCard = ({
       }
     }
 
-    // Try to get image from media array
-    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
-      for (const media of nft.media) {
-        if (media?.gateway && media.gateway.startsWith('http')) {
-          return media.gateway;
-        }
-        if (media?.raw && media.raw.startsWith('http')) {
-          return media.raw;
-        }
-        if (media?.thumbnail && media.thumbnail.startsWith('http')) {
-          return media.thumbnail;
-        }
-      }
-    } else if (nft.media && nft.media.gateway && nft.media.gateway.startsWith('http')) {
-      // Handle when media is a single object, not an array
-      return nft.media.gateway;
-    }
-
     // Try to get image from mediasV2 array (legacy format)
     if (nft.mediasV2 && Array.isArray(nft.mediasV2) && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
@@ -170,7 +175,7 @@ const NftCard = ({
       }
     }
 
-    // If NFT has a metadata object with image
+    // 4. If NFT has a metadata object with image (Alchemy's final recommendation)
     if (nft.metadata?.image && nft.metadata.image.startsWith('http')) {
       return nft.metadata.image;
     }
@@ -181,7 +186,7 @@ const NftCard = ({
     }
 
     // If no valid image URL was found
-    return null;
+    return '/placeholder.png';
   };
   
   // Check if we can extract a valid contract address WITHOUT actually extracting it yet
@@ -693,8 +698,9 @@ const NftCard = ({
     }
   }, [nft, imageUrl]);
 
-  // Get price info for display (last sale price, etc.)
+  // Get price info for display (last sale price, etc.) - More robust implementation
   const getPriceInfo = () => {
+    // Check multiple possible sources for price data
     if (nft.lastSaleValue) {
       return {
         amount: parseFloat(nft.lastSaleValue),
@@ -705,6 +711,21 @@ const NftCard = ({
     if (nft.lastSale?.valueWithDenomination) {
       return {
         amount: parseFloat(nft.lastSale.valueWithDenomination),
+        currency: 'ETH'
+      };
+    }
+    
+    if (nft.lastSale?.value) {
+      return {
+        amount: parseFloat(nft.lastSale.value),
+        currency: 'ETH'
+      };
+    }
+    
+    // Check for Alchemy API format
+    if (nft.lastPrice || nft.lastPriceEth) {
+      return {
+        amount: parseFloat(nft.lastPrice || nft.lastPriceEth),
         currency: 'ETH'
       };
     }

@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import zapperService from '../services/zapperService';
+// Remove the direct import which causes initialization order issues
+// import zapperService from '../services/zapperService';
+import { useNFT } from '../contexts/NFTContext';
 import NftGrid from './NFTGrid';
 import '../styles/FarcasterUserSearch.css';
+import { useRouter } from 'next/router';
 
 // Error boundary for handling API initialization issues
 class APIErrorBoundary extends React.Component {
@@ -21,17 +24,18 @@ class APIErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      // Check for the specific 'Pe' initialization error
-      const isPeError = this.state.error && 
-        this.state.error.toString().includes("Cannot access 'Pe' before initialization");
+      // Check for the specific initialization error
+      const isInitError = this.state.error && 
+        (this.state.error.toString().includes("Cannot access") &&
+         this.state.error.toString().includes("before initialization"));
       
       return (
         <div className="error-container">
           <h3>API Error</h3>
-          {isPeError ? (
+          {isInitError ? (
             <>
-              <p>We're having trouble connecting to the NFT data provider.</p>
-              <p>This may be due to a User-Agent requirement. Please try refreshing the page.</p>
+              <p>We're having trouble with the initialization order.</p>
+              <p>Please try refreshing the page to fix this issue.</p>
             </>
           ) : (
             <p>There was an error loading NFT data. Please try again.</p>
@@ -61,6 +65,10 @@ class APIErrorBoundary extends React.Component {
  * @param {string} props.initialUsername - Optional initial username to search for
  */
 const FarcasterUserSearch = ({ initialUsername }) => {
+  // Get NFT context functions and services
+  const { getFarcasterProfile, services } = useNFT();
+  const alchemyService = services?.alchemy;
+  
   // Search state
   const [searchQuery, setSearchQuery] = useState(initialUsername || '');
   const [isSearching, setIsSearching] = useState(false);
@@ -95,6 +103,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');
 
+  const router = useRouter();
+
   // Handle API retries
   const handleRetry = () => {
     if (initialUsername) {
@@ -110,75 +120,22 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   }, [initialUsername]);
 
   // Load all available NFTs with pagination
-  const loadAllNfts = async () => {
-    if (!userProfile?.addresses || userProfile.addresses.length === 0) {
-      console.warn('No addresses available for loading NFTs');
-      return;
-    }
+  const loadAllNfts = async (username, profile) => {
+    console.log('Loading all NFTs for', username);
     
-    console.log('LOADING ALL NFTS: Starting');
     setIsLoadingNfts(true);
-    
-    // Start with initial state
-    let currentCursor = null;
-    let hasMore = true;
-    let allLoadedNfts = [...userNfts]; // Start with any existing NFTs
-    let batchesProcessed = 0;
-    let successfulLoads = 0;
-    let failedAttempts = 0;
-    const MAX_BATCHES = 5; // Reduced from 10 to prevent overwhelming Alchemy API
-    const MAX_FAILURES = 3; // Maximum consecutive failures before giving up
+    setUserNfts([]);
+    setFetchNftsError(null);
+    setHasMoreNfts(false);
+    setIsLoadingMoreNfts(false);
     
     try {
-      // Continue fetching while there are more NFTs and we haven't hit max batches
-      while (hasMore && batchesProcessed < MAX_BATCHES && failedAttempts < MAX_FAILURES) {
-        console.log(`LOADING ALL NFTS: Batch ${batchesProcessed + 1}, cursor: ${currentCursor || 'initial'}`);
-        
-        // Use our improved fetchUserNfts function
-        const result = await fetchUserNfts(userProfile.addresses, currentCursor, true);
-        batchesProcessed++;
-        
-        if (!result) {
-          console.warn(`LOADING ALL NFTS: Batch ${batchesProcessed} failed to load`);
-          failedAttempts++;
-          // Add delay when encountering errors
-          await new Promise(resolve => setTimeout(resolve, 1000 * failedAttempts));
-          continue;
-        }
-        
-        // Reset failed attempts counter after a successful load
-        failedAttempts = 0;
-        successfulLoads++;
-        
-        // Update our tracking variables
-        allLoadedNfts = result.nfts; // The function now returns the combined array
-        hasMore = result.hasMore;
-        currentCursor = result.cursor;
-        
-        console.log(`LOADING ALL NFTS: Batch ${batchesProcessed} loaded ${allLoadedNfts.length} NFTs total`);
-        
-        // If no more NFTs to load, break the loop
-        if (!hasMore) {
-          console.log('LOADING ALL NFTS: No more NFTs to load');
-          break;
-        }
-        
-        // Add a larger delay between requests to prevent rate limiting with Alchemy
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-      
-      // Final state update (should be unnecessary due to internal updates in fetchUserNfts, but for safety)
-      setUserNfts(allLoadedNfts);
-      setHasMoreNfts(hasMore);
-      setEndCursor(currentCursor);
-      
-      // Log completion
-      console.log(`LOADING ALL NFTS: Completed with ${batchesProcessed} batches, ${successfulLoads} successful, ${allLoadedNfts.length} NFTs loaded`);
+      await fetchUserNfts(username, profile);
     } catch (error) {
-      console.error('Error in loadAllNfts:', error);
+      console.error('Failed to load NFTs:', error);
+      setFetchNftsError(`Failed to load NFTs: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoadingNfts(false);
-      setIsLoadingMoreNfts(false);
     }
   };
 
@@ -256,8 +213,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return;
       }
       
-      // Fetch Farcaster profile using our improved zapperService method
-      const profile = await zapperService.getFarcasterProfile(cleanQuery);
+      // Use context method instead of direct zapperService call
+      const profile = await getFarcasterProfile(cleanQuery);
       
       // Extract wallet addresses using our helper method
       const uniqueAddresses = extractWalletAddresses(profile);
@@ -274,11 +231,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // If we have valid addresses, fetch NFTs
       if (uniqueAddresses.length > 0) {
         setWalletAddresses(uniqueAddresses);
-        await fetchUserNfts(uniqueAddresses);
+        await fetchUserNfts(cleanQuery, profile);
         
         // After initial fetch, start the aggressive loader to get all NFTs
         setTimeout(() => {
-          loadAllNfts();
+          loadAllNfts(cleanQuery, profile);
         }, 1000); // Slight delay to let UI update first
       } else {
         console.log('No addresses found for this user to fetch NFTs');
@@ -303,125 +260,78 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   };
 
   /**
-   * Fetches NFTs for a list of addresses, with proper error handling and state updates
-   * @param {Array<string>} addresses - List of Ethereum addresses to fetch NFTs for
-   * @param {string|null} cursor - Pagination cursor for fetching more NFTs
-   * @param {boolean} isLoadMore - Whether this is a "load more" operation or initial load
-   * @returns {Object|null} - Object containing NFTs, cursor and hasMore flag, or null on error
+   * Fetches NFTs owned by a user
+   * @param {string} username - Farcaster username
+   * @param {Object} profile - User profile data
    */
-  const fetchUserNfts = async (addresses, cursor = null, isLoadMore = false) => {
-    // Validate addresses
-    if (!addresses || addresses.length === 0) {
-      console.warn('fetchUserNfts called with no addresses');
-      setIsLoadingNfts(false);
-      setIsLoadingMoreNfts(false);
-      return null;
-    }
-
-    // Set appropriate loading state
-    if (isLoadMore) {
-      setIsLoadingMoreNfts(true);
-    } else {
-      setIsLoadingNfts(true);
-    }
-
+  const fetchUserNfts = async (username, profile) => {
     try {
-      // Log the fetch attempt
-      console.log(`Fetching NFTs for ${addresses.length} addresses, cursor: ${cursor || 'initial'}, loadMore: ${isLoadMore}`);
+      setIsLoadingNfts(true);
+      setUserNfts([]);
+      setFetchNftsError(null);
+
+      // Extract ETH addresses from the profile
+      const addresses = extractWalletAddresses(profile);
+      if (!addresses || addresses.length === 0) {
+        console.error(`No Ethereum addresses found for ${username}`);
+        setFetchNftsError(`No Ethereum addresses found for ${username}`);
+        setIsLoadingNfts(false);
+        return;
+      }
       
-      // Import the Alchemy service dynamically to avoid circular references
-      const alchemyService = await import('../services/alchemy');
+      console.log(`Fetching NFTs for ${username} with ${addresses.length} wallet addresses:`, addresses);
       
-      // Use Alchemy to fetch NFTs for all addresses
-      const allNfts = [];
-      let hasMore = false;
-      let nextCursor = null;
+      // Get the NFT service from context rather than importing directly
+      if (!alchemyService) {
+        console.error('Alchemy service not available');
+        throw new Error('Alchemy service not available. Please try again later.');
+      }
       
-      // Process addresses in batches to avoid overwhelming the API
-      const batchSize = 2; // Process 2 addresses at a time
-      for (let i = 0; i < addresses.length; i += batchSize) {
-        const addressBatch = addresses.slice(i, i + batchSize);
-        
-        // Fetch NFTs for each address in the batch
-        const batchResults = await Promise.all(
-          addressBatch.map(address => {
-            // Use appropriate options based on whether this is a load more operation
-            const options = {
-              pageSize: 100,
-              pageKey: isLoadMore && i === 0 ? cursor : null,
-              excludeSpam: true,
-              bypassCache: false
-            };
-            
-            // Try to fetch from multiple chains
-            return Promise.all([
-              alchemyService.fetchNFTsForAddress(address, 'eth', options)
-                .catch(err => ({ nfts: [], hasMore: false })),
-              alchemyService.fetchNFTsForAddress(address, 'base', options)
-                .catch(err => ({ nfts: [], hasMore: false }))
-            ]);
-          })
-        );
-        
-        // Flatten batch results and add to allNfts
-        batchResults.forEach(chainResults => {
-          chainResults.forEach(result => {
-            if (result.nfts && result.nfts.length > 0) {
-              allNfts.push(...result.nfts);
-              hasMore = hasMore || result.hasMore;
-              if (result.hasMore && !nextCursor) {
-                nextCursor = result.pageKey;
-              }
-            }
-          });
+      try {
+        // Fetch NFTs for all wallet addresses with improved error handling
+        const batchResults = await alchemyService.batchFetchNFTs(addresses, 'eth', {
+          pageSize: 50,
+          excludeSpam: true,
+          includeMetadata: true // Ensure we get complete metadata as per Alchemy docs
         });
         
-        // Add a small delay between batches to avoid rate limiting
-        if (i + batchSize < addresses.length) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+        console.log(`Fetched ${batchResults.nfts?.length || 0} NFTs for ${username}`, {
+          hasMore: !!batchResults.pageKey,
+          pageKey: batchResults.pageKey,
+          sampleNft: batchResults.nfts?.length > 0 ? batchResults.nfts[0] : null
+        });
+        
+        // Validate the NFT data structure
+        const validNfts = (batchResults.nfts || []).filter(nft => {
+          // Basic validation to ensure we have at least minimal required data
+          return nft && 
+                (nft.id || nft.tokenId) && 
+                (nft.contractAddress || nft.contract?.address || nft.collection?.address);
+        });
+        
+        if (validNfts.length !== batchResults.nfts?.length) {
+          console.warn(`Filtered out ${(batchResults.nfts?.length || 0) - validNfts.length} invalid NFTs`);
         }
+        
+        setUserNfts(validNfts);
+        setHasMoreNfts(!!batchResults.pageKey);
+        setEndCursor(batchResults.pageKey || null);
+        
+        if (validNfts.length === 0) {
+          console.warn(`No valid NFTs found for ${username}`);
+          setFetchNftsError(`No NFTs found for ${username}`);
+        }
+      } catch (apiError) {
+        console.error('Alchemy API error:', apiError);
+        throw new Error(`Alchemy API error: ${apiError.message || 'Unknown error'}`);
       }
-      
-      console.log(`Received ${allNfts.length} total NFTs from Alchemy, hasMore: ${hasMore}, cursor: ${nextCursor || 'null'}`);
-      
-      // Filter out any duplicate NFTs by ID
-      const uniqueNfts = Array.from(
-        new Map(allNfts.map(nft => [nft.id, nft])).values()
-      );
-      
-      console.log(`Filtered to ${uniqueNfts.length} unique NFTs`);
-      
-      // Update the state based on whether we're loading more or initial load
-      let updatedNfts;
-      if (isLoadMore) {
-        // When loading more, append to existing NFTs
-        updatedNfts = [...userNfts, ...uniqueNfts];
-      } else {
-        // Initial load replaces existing NFTs
-        updatedNfts = uniqueNfts;
-      }
-      
-      // Update the state
-      setUserNfts(updatedNfts);
-      setHasMoreNfts(hasMore);
-      setEndCursor(nextCursor);
-
-      // Return the result object for the caller
-      return {
-        nfts: updatedNfts,
-        hasMore: hasMore,
-        cursor: nextCursor
-      };
     } catch (error) {
-      console.error('Error in fetchUserNfts:', error);
-      return null;
+      console.error('Error fetching user NFTs:', error);
+      setFetchNftsError(`Failed to fetch NFTs: ${error.message}`);
+      setUserNfts([]);
+      setHasMoreNfts(false);
     } finally {
-      // Reset loading states
-      if (isLoadMore) {
-        setIsLoadingMoreNfts(false);
-      } else {
-        setIsLoadingNfts(false);
-      }
+      setIsLoadingNfts(false);
     }
   };
   
@@ -442,31 +352,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
 
   // Handle loading more NFTs
   const handleLoadMore = async () => {
-    if (!hasMoreNfts || isLoadingMoreNfts || !walletAddresses.length) return;
+    if (!hasMoreNfts || isLoadingMoreNfts || !userProfile) return;
     
-    console.log(`Loading more NFTs with cursor: ${endCursor}`);
+    console.log(`Loading more NFTs for ${userProfile.username}`);
     
     try {
-      // Track the current count before loading more
-      const prevCount = userNfts.length;
+      setIsLoadingMoreNfts(true);
       
       // Attempt to load the next batch
-      await fetchUserNfts(walletAddresses, endCursor, true);
+      await fetchUserNfts(userProfile.username, userProfile);
       
       // Check if we actually got more NFTs
-      const newCount = userNfts.length;
-      const loadedCount = newCount - prevCount;
-      
-      console.log(`Load more complete - Added ${loadedCount} NFTs (${prevCount} → ${newCount})`);
-      
-      // If we got no new NFTs but the API says there are more, it might be lying
-      if (loadedCount === 0 && hasMoreNfts) {
+      if (userNfts.length === 0) {
         console.warn("No NFTs loaded but API claims there are more - forcing hasMoreNfts to false");
         setHasMoreNfts(false);
       }
     } catch (error) {
       console.error('Error loading more NFTs:', error);
       setFetchNftsError(`Failed to load more NFTs: ${error.message}`);
+    } finally {
+      setIsLoadingMoreNfts(false);
     }
   };
   
@@ -758,6 +663,83 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
 
+  // Profile section
+  const getProfileImageUrl = (profile) => {
+    // Debug logging to understand the profile structure
+    console.log('Profile image data:', {
+      metadata: profile?.metadata,
+      imageUrl: profile?.metadata?.imageUrl,
+      pfp: profile?.pfp,
+      pfpUrl: profile?.pfp?.url
+    });
+    
+    // Try different sources for the profile image
+    if (profile?.metadata?.imageUrl) {
+      return profile.metadata.imageUrl;
+    }
+    
+    if (profile?.pfp?.url) {
+      return profile.pfp.url;
+    }
+    
+    if (typeof profile?.pfp === 'string') {
+      return profile.pfp;
+    }
+    
+    // Default placeholder
+    return '/placeholder.png';
+  };
+
+  const onProfileSelected = async (profile) => {
+    const cleanQuery = cleanUsername(profile.username);
+    setUserProfile(profile);
+    setUniqueUserAddresses(null);
+    
+    // Reset state
+    setCurrentPage('nfts');
+    setUserNfts([]);
+    setFetchNftsError(null);
+    setHasMoreNfts(false);
+    setEndCursor(null);
+    setIsLoadingNfts(true);
+    
+    // Refresh the URL to show the selected username
+    router.push(`/user/${cleanQuery}`);
+    
+    // Normalize and deduplicate addresses across all profiles
+    try {
+      // Extract and normalize addresses from multiple sources
+      let uniqueAddresses = [];
+      
+      if (profile.addresses && profile.addresses.length > 0) {
+        uniqueAddresses = [...new Set(profile.addresses.map(addr => addr.toLowerCase()))];
+        console.log(`Found ${uniqueAddresses.length} addresses for ${profile.username}`);
+      } else {
+        console.log(`No addresses found for ${profile.username}`);
+      }
+      
+      setUniqueUserAddresses(uniqueAddresses);
+      
+      // If we have addresses, fetch NFTs
+      if (uniqueAddresses.length > 0) {
+        setWalletAddresses(uniqueAddresses);
+        await fetchUserNfts(cleanQuery, profile);
+        
+        // After initial fetch, start the aggressive loader to get all NFTs
+        setTimeout(() => {
+          loadAllNfts(cleanQuery, profile);
+        }, 1000); // Slight delay to let UI update first
+      } else {
+        setIsLoadingNfts(false);
+        setFetchNftsError('No wallet addresses found for this user');
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+      setIsLoadingNfts(false);
+      setFetchNftsError(`Error: ${error.message}`);
+    }
+  };
+
   return (
     <APIErrorBoundary onRetry={handleRetry}>
       <div className="farcaster-search-container">
@@ -794,40 +776,30 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           <div className="user-profile">
             <div className="profile-section">
               <div className="profile-image">
-                {userProfile.metadata?.imageUrl ? (
-                  <img
-                    src={userProfile.metadata.imageUrl}
-                    alt={`${userProfile.username}'s profile`}
-                    onError={(e) => {
-                      console.log('Profile image failed to load:', e);
-                      e.target.onerror = null;
-                      e.target.src = 'https://via.placeholder.com/100?text=FC';
-                    }}
-                  />
-                ) : (
-                  <div className="placeholder-image">
-                    {userProfile.username ? userProfile.username.charAt(0).toUpperCase() : '?'}
-                  </div>
-                )}
+                <img 
+                  src={getProfileImageUrl(userProfile)} 
+                  alt={userProfile?.username || 'Profile'} 
+                  onError={(e) => {
+                    console.error('Profile image load error:', e);
+                    e.target.src = '/placeholder.png';
+                  }}
+                />
               </div>
               <div className="profile-info">
                 <div className="profile-header">
-                  <h3>{userProfile.metadata?.displayName || userProfile.username}</h3>
+                  <h3>{userProfile?.metadata?.displayName || userProfile?.username}</h3>
                   <a 
-                    href={`https://warpcast.com/${userProfile.username}`} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
+                    href={`https://warpcast.com/${userProfile?.username}`} 
                     className="username-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
                   >
-                    @{userProfile.username}
+                    @{userProfile?.username}
                   </a>
-                  {userProfile.fid && (
-                    <span className="fid-badge">FID: {userProfile.fid}</span>
-                  )}
+                  <span className="fid-badge">FID: {userProfile?.fid}</span>
                 </div>
-                
-                {userProfile.metadata?.description && (
-                  <p className="bio">{userProfile.metadata.description}</p>
+                {userProfile?.metadata?.description && (
+                  <p className="bio">{userProfile?.metadata?.description}</p>
                 )}
                 
                 {/* Display wallet addresses with toggle */}
