@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
@@ -7,37 +7,18 @@ import './styles/errors.css'; // Import our new error styles
 // Import Farcaster Auth Kit styles
 import '@farcaster/auth-kit/styles.css';
 
-// Import core React components without lazy loading to prevent initialization issues
+// Import all components directly to avoid lazy loading issues
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
+import { NFTProvider } from './contexts/NFTContext';
 import SignInButton from './components/SignInButton';
+import FarcasterUserSearch from './components/FarcasterUserSearch';
+import UserProfilePage from './components/UserProfilePage';
 
 // Check if we're in a browser environment with a robust check
 const isBrowser = typeof window !== 'undefined' && 
                  window.document !== undefined && 
                  window.localStorage !== undefined;
-
-// Lazy load components that aren't needed for initial render
-// Use a consistent pattern with default export to avoid initialization issues
-const AuthKitProvider = lazy(() => 
-  import('@farcaster/auth-kit').then(module => ({
-    default: module.AuthKitProvider
-  }))
-);
-
-const NFTProvider = lazy(() => 
-  import('./contexts/NFTContext').then(module => ({
-    default: module.NFTProvider
-  }))
-);
-
-const FarcasterUserSearch = lazy(() => 
-  import('./components/FarcasterUserSearch')
-);
-
-const UserProfilePage = lazy(() => 
-  import('./components/UserProfilePage')
-);
 
 // Safe localStorage wrapper
 const safeStorage = {
@@ -101,13 +82,9 @@ const HomePage = () => {
         
         {/* We're simplifying the component hierarchy for better error isolation */}
         <ErrorBoundary>
-          <Suspense fallback={<div className="loading-indicator">Loading NFT functionality...</div>}>
-            <NFTProvider>
-              <Suspense fallback={<div className="loading-indicator">Loading search...</div>}>
-                <FarcasterUserSearch />
-              </Suspense>
-            </NFTProvider>
-          </Suspense>
+          <NFTProvider>
+            <FarcasterUserSearch />
+          </NFTProvider>
         </ErrorBoundary>
       </div>
     </div>
@@ -203,13 +180,9 @@ function App() {
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/user/:username" element={
-                    <ErrorBoundary>
-                      <Suspense fallback={<LoadingScreen />}>
-                        <NFTProvider>
-                          <UserProfilePage />
-                        </NFTProvider>
-                      </Suspense>
-                    </ErrorBoundary>
+                    <NFTProvider>
+                      <UserProfilePage />
+                    </NFTProvider>
                   } />
                 </Routes>
               </main>

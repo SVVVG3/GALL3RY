@@ -863,4 +863,7 @@ export const NFTProvider = ({ children }) => {
   };
 
   return <NFTContext.Provider value={value}>{children}</NFTContext.Provider>;
-}; 
+};
+
+// Add a default export for lazy loading compatibility
+export default NFTProvider; 
