@@ -347,7 +347,7 @@ const extractMediaFromAlchemyNFT = (nft) => {
  * @param {object} options - Fetch options
  * @returns {Promise<Array>} - Combined array of NFTs
  */
-export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
+const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   if (!addresses || !addresses.length) {
     return { nfts: [], hasMore: false };
   }
@@ -384,12 +384,7 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
   }
 };
 
-// Export functions individually AND as default object for maximum compatibility
-export {
-  batchFetchNFTs
-};
-
-// Keep the default export for backward compatibility 
+// Export everything through the default export
 export default {
   fetchNFTsForAddress,
   batchFetchNFTs
