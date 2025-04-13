@@ -24,6 +24,15 @@ const NftCard = ({
   showLikeButton = false,
   onLike = null,
 }) => {
+  // Move all hooks to the top, before any conditionals
+  const { userFid } = useNFT();
+  const navigate = useNavigate();
+  const [showHolders, setShowHolders] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const { profile, isAuthenticated } = useAuth();
+  const [currentContractAddress, setCurrentContractAddress] = useState(null);
+  const [currentNetwork, setCurrentNetwork] = useState('ETHEREUM_MAINNET');
+  
   // Early return with a simpler placeholder if nft is null or undefined
   if (!nft) {
     console.warn('Attempted to render NftCard with null or undefined nft object');
@@ -43,14 +52,6 @@ const NftCard = ({
     );
   }
 
-  const { userFid } = useNFT();
-  const navigate = useNavigate();
-  const [showHolders, setShowHolders] = useState(false);
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const { profile, isAuthenticated } = useAuth();
-  const [currentContractAddress, setCurrentContractAddress] = useState(null);
-  const [currentNetwork, setCurrentNetwork] = useState('ETHEREUM_MAINNET');
-  
   // Data extraction with fallbacks for different API responses
   const getName = () => {
     if (nft.name) return nft.name;
