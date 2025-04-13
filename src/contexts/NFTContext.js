@@ -9,7 +9,18 @@ import { ZAPPER_PROXY_URL, CACHE_EXPIRATION_TIME, NFT_PAGE_SIZE } from '../const
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
 
+// Create context BEFORE any initialization
 const NFTContext = createContext();
+
+// Define useNFT hook BEFORE using it anywhere
+export const useNFT = () => {
+  const context = useContext(NFTContext);
+  if (!context) {
+    throw new Error('useNFT must be used within an NFTProvider');
+  }
+  return context;
+};
+
 const PAGE_SIZE = NFT_PAGE_SIZE;
 
 // Enhanced cache config
@@ -39,6 +50,7 @@ export const NFTProvider = ({ children }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cachingStatus, setCachingStatus] = useState({ status: 'idle', progress: 0 });
   const [likedNFTs, setLikedNFTs] = useState([]);
+  const [userFid, setUserFid] = useState(null);
 
   const { profile } = useAuth();
   const { connectedWallets, ensNames } = useWallet();
@@ -59,6 +71,13 @@ export const NFTProvider = ({ children }) => {
 
   // Add loading state tracking per wallet
   const [walletLoadingStatus, setWalletLoadingStatus] = useState({});
+
+  // Set userFid from profile when it changes
+  useEffect(() => {
+    if (profile?.fid) {
+      setUserFid(profile.fid);
+    }
+  }, [profile]);
 
   useEffect(() => {
     setNfts([]);
@@ -561,38 +580,37 @@ export const NFTProvider = ({ children }) => {
     return network.charAt(0).toUpperCase() + network.slice(1);
   }, []);
 
-  const fetchCollectionHolders = useCallback(async (collectionAddress, chain = 'ethereum') => {
+  // Add the missing fetchCollectionHolders method
+  const fetchCollectionHolders = useCallback(async (collectionAddress) => {
     if (!collectionAddress) {
+      console.error('Collection address is required');
       throw new Error('Collection address is required');
     }
-    
-    // Normalize the collection address
-    const normalizedAddress = collectionAddress.toString().toLowerCase().trim();
-    console.log(`Fetching holders for collection: ${normalizedAddress} on chain: ${chain}`);
-    
-    // Set loading state
-    setLoadingCollectionHolders(true);
-    
+
     try {
-      // Define the GraphQL query based on the Zapper API docs
+      console.log('Fetching collection holders for:', collectionAddress);
+      
+      // Set loading state
+      setLoadingCollectionHolders(true);
+      
+      // Normalize address
+      const normalizedAddress = collectionAddress.toLowerCase();
+      
+      // Default to Ethereum mainnet if no chain specified
+      const chain = 'ETHEREUM_MAINNET';
+      
+      // GraphQL query for collection holders
       const query = `
-        query GetCollectionHolders($collectionAddress: Address!, $network: Network!) {
+        query CollectionHolders($collectionAddress: String!, $network: Network) {
           nftCollection(address: $collectionAddress, network: $network) {
             id
             name
             address
             network
-            supply
-            holdersCount
             holders {
               address
               holdCount
-              holdTotalCount
               account {
-                address
-                displayName {
-                  value
-                }
                 farcasterProfile {
                   fid
                   username
@@ -609,14 +627,20 @@ export const NFTProvider = ({ children }) => {
 
       const variables = {
         collectionAddress: normalizedAddress,
-        network: chain.toUpperCase()
+        network: chain
       };
       
       console.log('Sending GraphQL query for collection holders:', variables);
       
+      // Use the safer axios instance with User-Agent
       const response = await axios.post(ZAPPER_PROXY_URL, {
         query,
         variables
+      }, {
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+        }
       });
       
       // Check for GraphQL errors
@@ -650,7 +674,7 @@ export const NFTProvider = ({ children }) => {
           imageUrl: holder.account.farcasterProfile?.pfpUrl,
           followersCount: holder.account.farcasterProfile?.followerCount || 0,
           followingCount: holder.account.farcasterProfile?.followingCount || 0,
-          // We can add relationship info later if needed
+          // Set relationship info
           relationship: null
         }))
         .filter(holder => holder.fid); // Ensure we have a valid FID
@@ -1090,12 +1114,4 @@ export const NFTProvider = ({ children }) => {
   };
 
   return <NFTContext.Provider value={value}>{children}</NFTContext.Provider>;
-};
-
-export const useNFT = () => {
-  const context = useContext(NFTContext);
-  if (!context) {
-    throw new Error('useNFT must be used within an NFTProvider');
-  }
-  return context;
 }; 

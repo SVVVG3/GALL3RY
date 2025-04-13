@@ -3,25 +3,34 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
-// Import Farcaster Auth Kit
+// Import Farcaster Auth Kit styles
 import '@farcaster/auth-kit/styles.css';
 
-// Safely import Farcaster Auth Kit
+// Use a consistent pattern for lazy loading to prevent initialization issues
+// Safely import AuthKitProvider
 const AuthKitProvider = lazy(() => 
   import('@farcaster/auth-kit').then(module => ({
     default: module.AuthKitProvider
   }))
 );
 
+// Import the direct component, not lazy loaded
 import SignInButton from './components/SignInButton';
 import { AuthProvider } from './contexts/AuthContext';
 
-// Lazy load NFT components to avoid initial loading issues
-const NFTProvider = lazy(() => import('./contexts/NFTContext').then(module => ({
-  default: module.NFTProvider
-})));
+// Import WalletContext provider directly to ensure proper loading order
+import { WalletProvider } from './contexts/WalletContext';
 
-const FarcasterUserSearch = lazy(() => import('./components/FarcasterUserSearch'));
+// Lazy load NFT components to avoid initialization issues
+const NFTProvider = lazy(() => 
+  import('./contexts/NFTContext').then(module => ({
+    default: module.NFTProvider
+  }))
+);
+
+const FarcasterUserSearch = lazy(() => 
+  import('./components/FarcasterUserSearch')
+);
 
 // Check if we're in a browser environment with a more robust check
 const isBrowser = typeof window !== 'undefined' && 
@@ -86,17 +95,18 @@ const HomePage = () => {
   return (
     <div className="home-container">
       <div style={{ textAlign: 'center', marginTop: '2rem', marginBottom: '2rem' }}>
+        <h3>Search Farcaster users to explore their NFT collections</h3>
+        
         {/* NFT UI with error boundary */}
-        <Suspense fallback={<LoadingScreen />}>
-          <ErrorBoundary>
-            {/* Wrap NFTContent with NFTProvider */}
-            <Suspense fallback={<div>Loading NFT context...</div>}>
-              <NFTProvider>
-                <NFTContent />
-              </NFTProvider>
-            </Suspense>
-          </ErrorBoundary>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<div>Loading NFT functionality...</div>}>
+            <NFTProvider>
+              <Suspense fallback={<div>Loading user search...</div>}>
+                <FarcasterUserSearch />
+              </Suspense>
+            </NFTProvider>
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   );
@@ -199,53 +209,49 @@ function App() {
     return <LoadingScreen />;
   }
   
-  // Render app with authentication but delay NFT functionality
+  // App configuration
+  const farcasterConfig = getFarcasterConfig();
+  
+  // Return the app with properly sequenced providers
   return (
-    <Suspense fallback={<LoadingScreen />}>
-      <AuthProvider>
-        <Router>
-          <div className="app">
-            <header className="app-header">
-              <div className="container">
-                <div className="logo">
-                  <Link to="/">
-                    <h1>GALL3RY</h1>
-                  </Link>
+    <ErrorBoundary onError={(error) => setAppError(error)}>
+      <Suspense fallback={<LoadingScreen />}>
+        <AuthProvider>
+          <WalletProvider>
+            <Router>
+              <header className="app-header">
+                <Link to="/" className="logo">GALL3RY</Link>
+                <div className="auth-container">
+                  <SignInButton />
                 </div>
-                
-                <div className="auth-actions">
-                  <Suspense fallback={<div>Loading auth...</div>}>
-                    <SignInButton />
-                  </Suspense>
-                </div>
-              </div>
-            </header>
-            
-            <main className="app-content">
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/user/:username" element={
-                  <Suspense fallback={<LoadingScreen />}>
-                    {/* Wrap UserProfilePage with NFTProvider */}
-                    <Suspense fallback={<div>Loading NFT context...</div>}>
-                      <NFTProvider>
-                        <UserProfilePage />
-                      </NFTProvider>
+              </header>
+              
+              <main className="app-content">
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/user/:username" element={
+                    <Suspense fallback={<LoadingScreen />}>
+                      <UserProfilePage />
                     </Suspense>
-                  </Suspense>
-                } />
-              </Routes>
-            </main>
-            
-            <footer className="app-footer">
-              <div className="container">
-                <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
-              </div>
-            </footer>
-          </div>
-        </Router>
-      </AuthProvider>
-    </Suspense>
+                  } />
+                </Routes>
+              </main>
+              
+              <footer className="app-footer">
+                <a 
+                  href="https://github.com/SVVVG3/GALL3RY"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="footer-link"
+                >
+                  vibe coded with 💜 by @svvvg3.eth
+                </a>
+              </footer>
+            </Router>
+          </WalletProvider>
+        </AuthProvider>
+      </Suspense>
+    </ErrorBoundary>
   );
 }
 

@@ -2,6 +2,14 @@ import axios from 'axios';
 import { ZAPPER_PROXY_URL } from '../constants';
 import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
 
+// Create a custom axios instance specifically for Zapper API calls
+const zapperAxios = axios.create({
+  headers: {
+    'Content-Type': 'application/json',
+    'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+  }
+});
+
 // Add axios interceptor to ensure proper User-Agent for all requests
 axios.interceptors.request.use(
   config => {
@@ -64,7 +72,8 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
         
         console.log(`Trying endpoint: ${endpoint}, attempt ${retryCount + 1}/${maxRetries}`);
         
-        const response = await axios.post(endpoint, {
+        // Use our custom zapperAxios instance with guaranteed User-Agent header
+        const response = await zapperAxios.post(endpoint, {
           query,
           variables,
         }, { 
