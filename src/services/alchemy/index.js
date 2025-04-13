@@ -53,7 +53,7 @@ const alchemyAxios = axios.create({
  * @param {object} options - Fetch options
  * @returns {Promise<Object>} - NFTs with pagination info
  */
-export const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
+const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
   if (!address) {
     throw new Error('Address is required');
   }
@@ -386,7 +386,6 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
 
 // Export functions individually AND as default object for maximum compatibility
 export {
-  fetchNFTsForAddress,
   batchFetchNFTs
 };
 
