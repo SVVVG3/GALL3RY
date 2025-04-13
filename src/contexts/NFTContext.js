@@ -1,8 +1,9 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { CACHE_EXPIRATION_TIME, NFT_PAGE_SIZE } from '../constants';
 
-// Import the direct Alchemy service to avoid dynamic loading issues
+// Import services
 import directAlchemyService from '../services/directAlchemy';
+import * as zapperService from '../services/zapperService';
 
 // Create context
 const NFTContext = createContext();
@@ -26,7 +27,7 @@ export const NFTProvider = ({ children }) => {
   const [services] = useState({ 
     // Use directAlchemy directly to avoid dynamic loading issues
     alchemy: directAlchemyService,
-    zapper: null
+    zapper: zapperService
   });
   const [pageKey, setPageKey] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -215,19 +216,13 @@ export const NFTProvider = ({ children }) => {
     }
     
     try {
-      // Implement a simple method to fetch profiles directly
-      // This would need to be replaced with a proper implementation
-      // using the server API
-      return {
-        username: usernameOrFid,
-        displayName: usernameOrFid,
-        fid: 123456,
-        addresses: [],
-        connectedAddresses: []
-      };
+      console.log(`Fetching Farcaster profile for ${usernameOrFid}`);
+      // Use the imported zapperService to get real profile data
+      const profile = await zapperService.getFarcasterProfile(usernameOrFid);
+      return profile;
     } catch (err) {
       console.error(`Error fetching Farcaster profile:`, err);
-      return null;
+      throw err; // Re-throw the error to be handled by the caller
     }
   }, []);
   
