@@ -50,7 +50,7 @@ const NFTGallery = () => {
   // Automatically continue loading NFTs until we hit a reasonable threshold or hasMore becomes false
   // This helps ensure we load enough NFTs even with the pagination limits
   useEffect(() => {
-    const AUTO_LOAD_THRESHOLD = 500; // Load up to this many NFTs automatically
+    const AUTO_LOAD_THRESHOLD = 1000; // Load up to this many NFTs automatically
     
     const autoLoadCheck = () => {
       console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading);

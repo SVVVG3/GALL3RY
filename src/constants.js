@@ -9,4 +9,4 @@ export const ZAPPER_PROXY_URL = '/api/zapper';
 export const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
 
 // Default page sizes
-export const NFT_PAGE_SIZE = 100; 
+export const NFT_PAGE_SIZE = 200; 

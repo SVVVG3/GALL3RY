@@ -305,7 +305,7 @@ export const NFTProvider = ({ children }) => {
       const fetchOptions = {
         limit: options.batchSize || PAGE_SIZE,
         cursor: isLoadingMore ? endCursor : null,
-        prioritizeSpeed,
+        prioritizeSpeed: isLoadingMore ? false : prioritizeSpeed, // Always use complete mode for loading more
         includeValue: true,
         includeMetadata: true,
         bypassHidden: true,
@@ -424,6 +424,8 @@ export const NFTProvider = ({ children }) => {
   const loadMoreNFTs = useCallback(async () => {
     if (!hasMore || isLoading || loadingMore) return;
     
+    console.log(`Loading more NFTs... Current count: ${nfts.length}, hasMore: ${hasMore}, endCursor: ${endCursor}`);
+    
     try {
       await fetchNFTs({
         loadMore: true,
@@ -432,7 +434,7 @@ export const NFTProvider = ({ children }) => {
     } catch (error) {
       console.error('Error loading more NFTs:', error);
     }
-  }, [fetchNFTs, hasMore, isLoading, loadingMore, PAGE_SIZE]);
+  }, [fetchNFTs, hasMore, isLoading, loadingMore, PAGE_SIZE, nfts.length, endCursor]);
 
   const refreshNFTs = useCallback(() => {
     fetchNFTs({ forceRefresh: true });

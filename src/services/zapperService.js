@@ -622,7 +622,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       query UserNftTokens(
         $owners: [Address!]!,
         $network: Network,
-        $first: Int = 100,
+        $first: Int = 200,
         $after: String,
         $search: String,
         $minEstimatedValueUsd: Float,
