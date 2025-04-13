@@ -4,6 +4,49 @@ import { useProfile } from '@farcaster/auth-kit';
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
 
+/**
+ * Helper function to get the profile image URL from Farcaster profile data
+ * This follows the data structure outlined in the Farcaster Auth Kit documentation
+ */
+const getProfileImageUrl = (profile) => {
+  if (!profile) return null;
+  
+  // Debug log the profile data structure
+  console.log('Processing profile image data:', {
+    pfpType: typeof profile.pfp,
+    hasPfpUrl: profile.pfp && typeof profile.pfp === 'object' && !!profile.pfp.url,
+    pfpDirectValue: typeof profile.pfp === 'string' ? profile.pfp : null,
+    hasMetadata: !!profile.metadata,
+    metadataImageUrl: profile.metadata?.imageUrl
+  });
+
+  // Handle pfp field from Auth Kit
+  if (profile.pfp) {
+    // pfp can be an object with a url property
+    if (typeof profile.pfp === 'object' && profile.pfp.url) {
+      return profile.pfp.url;
+    }
+    // pfp can be a direct string URL
+    if (typeof profile.pfp === 'string') {
+      return profile.pfp;
+    }
+  }
+  
+  // Try metadata.avatar or metadata.imageUrl
+  if (profile.metadata) {
+    if (profile.metadata.avatar) return profile.metadata.avatar;
+    if (profile.metadata.imageUrl) return profile.metadata.imageUrl;
+  }
+  
+  // Use Warpcast URL as fallback if we have a username
+  if (profile.username) {
+    return `https://warpcast.com/${profile.username}/pfp`;
+  }
+  
+  // Last resort fallback
+  return 'https://warpcast.com/~/icon-512.png';
+};
+
 // Create the auth context
 const AuthContext = createContext();
 
@@ -15,67 +58,35 @@ export const useAuth = () => {
   // Log Farcaster Auth profile data for debugging
   if (farcasterAuth.isAuthenticated && farcasterAuth.profile) {
     console.log('Farcaster Auth Profile:', farcasterAuth.profile);
-    console.log('Profile picture data:', {
+    console.log('Profile picture fields:', {
       pfp: farcasterAuth.profile?.pfp,
-      pfpUrl: farcasterAuth.profile?.pfp?.url
+      pfpType: typeof farcasterAuth.profile?.pfp,
+      pfpUrl: typeof farcasterAuth.profile?.pfp === 'object' ? farcasterAuth.profile?.pfp?.url : farcasterAuth.profile?.pfp,
     });
   }
   
-  // Get the correct avatar URL with consistent handling
-  const getAvatarUrl = () => {
+  // Create a properly formatted profile object from Farcaster Auth data
+  const getFormattedProfile = () => {
     if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) {
-      return 'https://warpcast.com/~/icon-512.png';
+      return null;
     }
     
-    // Log for improved debugging
-    console.log('Attempting to get avatar URL from profile:', {
-      metadata: farcasterAuth.profile.metadata,
-      pfp: farcasterAuth.profile.pfp,
+    return {
+      fid: farcasterAuth.profile.fid,
+      username: farcasterAuth.profile.username,
       displayName: farcasterAuth.profile.displayName,
-      username: farcasterAuth.profile.username
-    });
-    
-    // Check metadata.imageUrl which comes directly from Farcaster API
-    if (farcasterAuth.profile.metadata?.imageUrl && typeof farcasterAuth.profile.metadata.imageUrl === 'string') {
-      return farcasterAuth.profile.metadata.imageUrl;
-    }
-    
-    // Try pfp.url which is sometimes provided by Farcaster Auth Kit
-    if (farcasterAuth.profile.pfp?.url && typeof farcasterAuth.profile.pfp.url === 'string') {
-      return farcasterAuth.profile.pfp.url;
-    }
-    
-    // Try the pfp itself which might be a string URL
-    if (typeof farcasterAuth.profile.pfp === 'string' && farcasterAuth.profile.pfp.startsWith('http')) {
-      return farcasterAuth.profile.pfp;
-    }
-    
-    // Try avatar property
-    if (farcasterAuth.profile.avatar && typeof farcasterAuth.profile.avatar === 'string') {
-      return farcasterAuth.profile.avatar;
-    }
-    
-    // Construct a Warpcast profile image URL as a fallback
-    if (farcasterAuth.profile.username) {
-      return `https://warpcast.com/${farcasterAuth.profile.username}/pfp`;
-    }
-    
-    // Finally fall back to the Farcaster default avatar
-    return 'https://warpcast.com/~/icon-512.png';
+      avatarUrl: getProfileImageUrl(farcasterAuth.profile),
+      connectedAddresses: farcasterAuth.profile.verifications || [],
+      // Include the raw profile for debugging
+      _rawProfile: farcasterAuth.profile
+    };
   };
   
-  // Merge our context with Farcaster Auth Kit data for backward compatibility
+  // Merge our context with Farcaster Auth Kit data
   return {
     ...context,
     isAuthenticated: farcasterAuth.isAuthenticated,
-    profile: farcasterAuth.isAuthenticated ? {
-      fid: farcasterAuth.profile?.fid,
-      username: farcasterAuth.profile?.username,
-      displayName: farcasterAuth.profile?.displayName,
-      // Using consistent avatar URL handling
-      avatarUrl: getAvatarUrl(),
-      connectedAddresses: [], // We'll get these from user profile data later
-    } : null,
+    profile: getFormattedProfile(),
     loading: farcasterAuth.loading,
   };
 };

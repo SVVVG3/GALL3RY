@@ -14,17 +14,28 @@ const isBrowser = typeof window !== 'undefined' &&
  * Enhanced SignInButton Component
  * With error handling and safe localStorage access
  */
-const SignInButton = ({ onSuccess }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [redirected, setRedirected] = useState(false);
-  
-  // Use our AuthContext instead of direct Farcaster auth
+const SignInButton = ({ onSuccess, redirectPath }) => {
   const { isAuthenticated, logout, profile } = useAuth();
   // Direct access to Farcaster auth kit for sign-in events
   const farcasterProfile = useProfile();
   
+  // Add direct console logging of Farcaster profile data
+  useEffect(() => {
+    if (farcasterProfile.isAuthenticated && farcasterProfile.profile) {
+      console.log('Raw Farcaster Profile in SignInButton:', farcasterProfile.profile);
+      console.log('Profile picture fields:', {
+        pfp: farcasterProfile.profile?.pfp,
+        pfpType: typeof farcasterProfile.profile?.pfp,
+        pfpUrl: typeof farcasterProfile.profile?.pfp === 'object' ? farcasterProfile.profile?.pfp?.url : farcasterProfile.profile?.pfp,
+        avatarUrl: profile?.avatarUrl
+      });
+    }
+  }, [farcasterProfile.isAuthenticated, farcasterProfile.profile, profile]);
+  
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [redirected, setRedirected] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
   
   // Auto-redirect to profile page after sign-in
@@ -113,6 +124,7 @@ const SignInButton = ({ onSuccess }) => {
     console.log('Rendering authenticated user profile:', {
       username: profile.username,
       avatarUrl: profile.avatarUrl,
+      _rawProfile: profile._rawProfile,
       isLoggedIn: isAuthenticated
     });
     
@@ -123,16 +135,27 @@ const SignInButton = ({ onSuccess }) => {
           onClick={() => setDropdownOpen(!dropdownOpen)}
         >
           <img 
-            src={profile.avatarUrl || "https://warpcast.com/~/icon-512.png"} 
-            alt={profile.username || "User"} 
+            src={profile.avatarUrl || `https://warpcast.com/${profile.username}/pfp` || "https://warpcast.com/~/icon-512.png"} 
+            alt={profile.displayName || profile.username || "User"} 
             className="profile-avatar"
             onError={(e) => {
               console.error('Profile avatar load error in header:', e);
-              // Try Warpcast URL as fallback
-              if (profile.username && e.target.src !== `https://warpcast.com/${profile.username}/pfp`) {
+              console.log('Failed avatar URL:', e.target.src);
+              
+              // Try different fallback strategies
+              if (e.target.src === profile.avatarUrl && profile.username) {
+                // If the primary avatar URL failed, try Warpcast username URL
+                console.log('Trying Warpcast username URL fallback:', `https://warpcast.com/${profile.username}/pfp`);
                 e.target.src = `https://warpcast.com/${profile.username}/pfp`;
-              } else {
-                // Final fallback
+              } 
+              else if (profile._rawProfile?.pfp?.url && e.target.src !== profile._rawProfile.pfp.url) {
+                // Try the raw pfp.url if available
+                console.log('Trying raw pfp.url fallback:', profile._rawProfile.pfp.url);
+                e.target.src = profile._rawProfile.pfp.url;
+              }
+              else {
+                // Final fallback to Farcaster icon
+                console.log('Using default Farcaster icon');
                 e.target.src = "https://warpcast.com/~/icon-512.png";
               }
             }}
