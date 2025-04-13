@@ -1,0 +1,126 @@
+/* Error styles for improved error handling */
+.error-container {
+  background-color: #fff5f5;
+  border: 1px solid #fc8181;
+  border-radius: 8px;
+  padding: 2rem;
+  margin: 2rem auto;
+  max-width: 600px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.error-container h1 {
+  color: #e53e3e;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.error-container p {
+  margin-bottom: 1.5rem;
+  color: #4a5568;
+}
+
+.error-boundary {
+  background-color: #fff5f5;
+  border: 1px solid #fc8181;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+.error-boundary h3 {
+  color: #e53e3e;
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.error-details {
+  background: #f7fafc;
+  padding: 0.75rem;
+  overflow: auto;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  text-align: left;
+  max-height: 200px;
+  border-radius: 4px;
+  color: #2d3748;
+}
+
+.retry-button {
+  background-color: #805ad5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  margin-top: 1rem;
+}
+
+.retry-button:hover {
+  background-color: #6b46c1;
+}
+
+.loading-indicator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100px;
+  font-size: 0.9rem;
+  color: #718096;
+  background-color: #f7fafc;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+/* App container styles */
+.content-wrapper {
+  text-align: center;
+  margin: 2rem auto;
+  max-width: 1200px;
+  padding: 0 1rem;
+}
+
+/* Improved header styles */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background-color: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.logo-link {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #805ad5;
+  text-decoration: none;
+  letter-spacing: 1px;
+}
+
+.auth-container {
+  display: flex;
+  align-items: center;
+}
+
+/* Footer styles */
+.app-footer {
+  margin-top: 2rem;
+  padding: 1rem;
+  text-align: center;
+  color: #a0aec0;
+  font-size: 0.85rem;
+}
+
+.footer-link {
+  color: #805ad5;
+  text-decoration: none;
+}
+
+.footer-link:hover {
+  text-decoration: underline;
+} 

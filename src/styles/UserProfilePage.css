@@ -1,0 +1,46 @@
+/* User Profile Page Styles */
+.user-profile-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.profile-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.profile-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #4a5568;
+  margin-bottom: 0.5rem;
+}
+
+.profile-description {
+  color: #718096;
+  font-size: 1rem;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.profile-content {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+@media (max-width: 768px) {
+  .user-profile-page {
+    padding: 1rem;
+  }
+  
+  .profile-header h1 {
+    font-size: 1.75rem;
+  }
+  
+  .profile-content {
+    padding: 1rem;
+  }
+} 

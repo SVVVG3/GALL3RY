@@ -3,25 +3,28 @@ import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
+import './styles/errors.css'; // Import our new error styles
 // Import Farcaster Auth Kit styles
 import '@farcaster/auth-kit/styles.css';
 
-// Use a consistent pattern for lazy loading to prevent initialization issues
-// Safely import AuthKitProvider
+// Import core React components without lazy loading to prevent initialization issues
+import { AuthProvider } from './contexts/AuthContext';
+import { WalletProvider } from './contexts/WalletContext';
+import SignInButton from './components/SignInButton';
+
+// Check if we're in a browser environment with a robust check
+const isBrowser = typeof window !== 'undefined' && 
+                 window.document !== undefined && 
+                 window.localStorage !== undefined;
+
+// Lazy load components that aren't needed for initial render
+// Use a consistent pattern with default export to avoid initialization issues
 const AuthKitProvider = lazy(() => 
   import('@farcaster/auth-kit').then(module => ({
     default: module.AuthKitProvider
   }))
 );
 
-// Import the direct component, not lazy loaded
-import SignInButton from './components/SignInButton';
-import { AuthProvider } from './contexts/AuthContext';
-
-// Import WalletContext provider directly to ensure proper loading order
-import { WalletProvider } from './contexts/WalletContext';
-
-// Lazy load NFT components to avoid initialization issues
 const NFTProvider = lazy(() => 
   import('./contexts/NFTContext').then(module => ({
     default: module.NFTProvider
@@ -32,10 +35,9 @@ const FarcasterUserSearch = lazy(() =>
   import('./components/FarcasterUserSearch')
 );
 
-// Check if we're in a browser environment with a more robust check
-const isBrowser = typeof window !== 'undefined' && 
-                 window.document !== undefined && 
-                 window.localStorage !== undefined;
+const UserProfilePage = lazy(() => 
+  import('./components/UserProfilePage')
+);
 
 // Safe localStorage wrapper
 const safeStorage = {
@@ -86,22 +88,22 @@ const ErrorDisplay = ({ error, onRetry }) => (
   <div className="error-container">
     <h1>Error</h1>
     <p>{error?.message || 'An unknown error occurred'}</p>
-    <button onClick={onRetry}>Try Again</button>
+    <button onClick={onRetry} className="retry-button">Try Again</button>
   </div>
 );
 
-// Home page component
+// Home page component with proper error boundaries
 const HomePage = () => {
   return (
     <div className="home-container">
-      <div style={{ textAlign: 'center', marginTop: '2rem', marginBottom: '2rem' }}>
-        <h3>Search Farcaster users to explore their NFT collections</h3>
+      <div className="content-wrapper">
+        <h2>Search Farcaster users to explore their NFT collections</h2>
         
-        {/* NFT UI with error boundary */}
+        {/* We're simplifying the component hierarchy for better error isolation */}
         <ErrorBoundary>
-          <Suspense fallback={<div>Loading NFT functionality...</div>}>
+          <Suspense fallback={<div className="loading-indicator">Loading NFT functionality...</div>}>
             <NFTProvider>
-              <Suspense fallback={<div>Loading user search...</div>}>
+              <Suspense fallback={<div className="loading-indicator">Loading search...</div>}>
                 <FarcasterUserSearch />
               </Suspense>
             </NFTProvider>
@@ -112,30 +114,7 @@ const HomePage = () => {
   );
 };
 
-// NFT Content component - safely wrapped
-const NFTContent = () => {
-  const [error, setError] = useState(null);
-  
-  if (error) {
-    return (
-      <ErrorDisplay 
-        error={error} 
-        onRetry={() => setError(null)} 
-      />
-    );
-  }
-  
-  return (
-    <div className="nft-container">
-      <h3 style={{ marginBottom: '1.5rem' }}>Search Farcaster users to explore their NFT collections</h3>
-      <Suspense fallback={<div>Loading user search...</div>}>
-        <FarcasterUserSearch />
-      </Suspense>
-    </div>
-  );
-};
-
-// Error boundary specific for NFT components
+// Error boundary component
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -147,25 +126,25 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("NFT component error:", error);
+    console.error("Component error:", error);
     console.error("Component stack:", errorInfo.componentStack);
   }
 
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', border: '1px solid #f0f0f0', borderRadius: '8px', margin: '20px 0' }}>
-          <h3 style={{ color: '#e53e3e' }}>NFT Component Error</h3>
-          <p>We encountered an error loading the NFT functionality.</p>
-          <details style={{ marginTop: '10px' }}>
-            <summary style={{ cursor: 'pointer' }}>Error details</summary>
-            <pre style={{ background: '#f7fafc', padding: '10px', overflow: 'auto', fontSize: '0.8em' }}>
+        <div className="error-boundary">
+          <h3>Component Error</h3>
+          <p>We encountered an error loading this component.</p>
+          <details>
+            <summary>Error details</summary>
+            <pre className="error-details">
               {this.state.error && this.state.error.toString()}
             </pre>
           </details>
           <button 
             onClick={() => this.setState({ hasError: false, error: null })} 
-            style={{ marginTop: '10px', padding: '5px 10px' }}
+            className="retry-button"
           >
             Try Again
           </button>
@@ -177,18 +156,15 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Main App function
+// Main App function with simplified provider hierarchy
 function App() {
   const [loading, setLoading] = useState(true);
   const [appError, setAppError] = useState(null);
-  const [isClient, setIsClient] = useState(false);
-  const [authKitLoaded, setAuthKitLoaded] = useState(false);
   
   // Initialize app on mount - reduced timer for faster loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
-      setIsClient(true);
     }, 100); // Reduced from 1000ms to 100ms
     
     return () => clearTimeout(timer);
@@ -209,18 +185,15 @@ function App() {
     return <LoadingScreen />;
   }
   
-  // App configuration
-  const farcasterConfig = getFarcasterConfig();
-  
-  // Return the app with properly sequenced providers
+  // Return the app with a simplified provider hierarchy
   return (
     <ErrorBoundary onError={(error) => setAppError(error)}>
-      <Suspense fallback={<LoadingScreen />}>
-        <AuthProvider>
-          <WalletProvider>
-            <Router>
+      <AuthProvider>
+        <WalletProvider>
+          <Router>
+            <div className="app">
               <header className="app-header">
-                <Link to="/" className="logo">GALL3RY</Link>
+                <Link to="/" className="logo-link">GALL3RY</Link>
                 <div className="auth-container">
                   <SignInButton />
                 </div>
@@ -230,9 +203,13 @@ function App() {
                 <Routes>
                   <Route path="/" element={<HomePage />} />
                   <Route path="/user/:username" element={
-                    <Suspense fallback={<LoadingScreen />}>
-                      <UserProfilePage />
-                    </Suspense>
+                    <ErrorBoundary>
+                      <Suspense fallback={<LoadingScreen />}>
+                        <NFTProvider>
+                          <UserProfilePage />
+                        </NFTProvider>
+                      </Suspense>
+                    </ErrorBoundary>
                   } />
                 </Routes>
               </main>
@@ -247,40 +224,12 @@ function App() {
                   vibe coded with 💜 by @svvvg3.eth
                 </a>
               </footer>
-            </Router>
-          </WalletProvider>
-        </AuthProvider>
-      </Suspense>
+            </div>
+          </Router>
+        </WalletProvider>
+      </AuthProvider>
     </ErrorBoundary>
   );
 }
-
-// User Profile Page component with lazy loading
-const UserProfilePage = () => {
-  const [username, setUsername] = useState('');
-  
-  useEffect(() => {
-    // Get username from URL
-    const pathParts = window.location.pathname.split('/');
-    if (pathParts.length >= 3) {
-      setUsername(pathParts[2]);
-    }
-  }, []);
-  
-  return (
-    <div className="profile-container">
-      {username ? (
-        <>
-          <h2>NFTs for @{username}</h2>
-          <Suspense fallback={<div>Loading user NFTs...</div>}>
-            <FarcasterUserSearch initialUsername={username} />
-          </Suspense>
-        </>
-      ) : (
-        <div>User not found</div>
-      )}
-    </div>
-  );
-};
 
 export default App;
