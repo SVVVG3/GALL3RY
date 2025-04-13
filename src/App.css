@@ -173,39 +173,39 @@ body {
   color: var(--color-primary);
 }
 
-/* Updated NFT Grid Styling */
-.nft-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  padding: 16px 0;
+/* NFT Grid Styling */
+.nft-grid-container {
   width: 100%;
-  max-width: 1280px;
+  padding: 0;
+  overflow: hidden;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-@media (min-width: 640px) {
-  .nft-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+.nft-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 24px;
+  padding: 16px 0;
+  width: 100%;
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1400px) {
   .nft-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   }
-}
-
-@media (min-width: 1024px) {
-  .nft-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+  
+  .nft-grid-container,
+  .farcaster-search-container {
+    max-width: 1400px;
   }
 }
 
 @media (max-width: 640px) {
   .nft-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 16px;
+    padding: 12px 0;
   }
 }
 
@@ -512,11 +512,15 @@ body {
   }
 }
 
+/* Load more container for NFT pagination */
 .load-more-container {
   display: flex;
   justify-content: center;
   margin-top: 2rem;
   margin-bottom: 3rem;
+  max-width: 1200px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 /* Footer */
@@ -1278,7 +1282,7 @@ img {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
-  max-width: 600px;
+  max-width: 900px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -1390,7 +1394,7 @@ img {
 
 /* Center the search container and user profile */
 .farcaster-search-container {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
