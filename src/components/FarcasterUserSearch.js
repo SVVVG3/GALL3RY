@@ -366,6 +366,27 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     return networkMap[networkId] || 'ethereum';
   };
 
+  // Auto-load NFTs until we reach a threshold or there are no more
+  useEffect(() => {
+    const autoLoadMoreNfts = async () => {
+      // Only auto-load if:
+      // 1. We have NFTs already (initial load complete)
+      // 2. There are more NFTs to load
+      // 3. Not already loading more
+      // 4. We have less than a higher threshold (increased to load all NFTs)
+      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 5000) {
+        console.log(`AUTO-LOADING MORE NFTs - Currently have ${userNfts.length}, hasMore=${hasMoreNfts}`);
+        // Reduce delay to speed up loading (still respect API limitations)
+        await new Promise(resolve => setTimeout(resolve, 300));
+        await handleLoadMore();
+      } else {
+        console.log(`AUTO-LOAD CHECK: userNfts=${userNfts.length}, hasMore=${hasMoreNfts}, isLoading=${isLoadingMoreNfts}`);
+      }
+    };
+    
+    autoLoadMoreNfts();
+  }, [userNfts, hasMoreNfts, isLoadingMoreNfts]);
+
   // Handle loading more NFTs
   const handleLoadMore = async () => {
     if (!hasMoreNfts || isLoadingMoreNfts || !userProfile) return;
@@ -375,42 +396,59 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     try {
       setIsLoadingMoreNfts(true);
       
-      // Attempt to load the next batch
-      await fetchUserNfts(userProfile.username, userProfile);
-      
-      // Check if we actually got more NFTs
-      if (userNfts.length === 0) {
-        console.warn("No NFTs loaded but API claims there are more - forcing hasMoreNfts to false");
-        setHasMoreNfts(false);
+      // Get the addresses from the user profile
+      const addresses = userProfile.addresses || [];
+      if (addresses.length === 0 && userProfile.connectedAddresses) {
+        addresses.push(...userProfile.connectedAddresses);
       }
+      
+      if (addresses.length === 0) {
+        console.error('No addresses found for loading more NFTs');
+        setFetchNftsError('No wallet addresses found for this user');
+        setHasMoreNfts(false);
+        return;
+      }
+      
+      // Fetch with a larger page size
+      const batchResults = await alchemyService.batchFetchNFTs(addresses, 'eth', {
+        pageSize: 100, // Increased batch size
+        pageKey: endCursor,
+        excludeSpam: true,
+        includeMetadata: true,
+        bypassCache: false
+      });
+      
+      console.log(`Loaded ${batchResults.nfts?.length || 0} more NFTs`, {
+        hasMore: batchResults.hasMore || !!batchResults.pageKey,
+        pageKey: batchResults.pageKey,
+      });
+      
+      // Check if we actually got new NFTs
+      if (batchResults.nfts && batchResults.nfts.length > 0) {
+        // Add newly loaded NFTs to existing ones
+        setUserNfts(prev => {
+          // Check for duplicates and only add new NFTs
+          const existingIds = new Set(prev.map(nft => nft.id));
+          const newNfts = batchResults.nfts.filter(nft => !existingIds.has(nft.id));
+          
+          console.log(`Adding ${newNfts.length} new NFTs to collection`);
+          
+          return [...prev, ...newNfts];
+        });
+      }
+      
+      // Set page info
+      setEndCursor(batchResults.pageKey || null);
+      setHasMoreNfts(!!batchResults.pageKey || batchResults.hasMore || false);
+      
     } catch (error) {
       console.error('Error loading more NFTs:', error);
       setFetchNftsError(`Failed to load more NFTs: ${error.message}`);
+      // Keep hasMoreNfts true to allow retry
     } finally {
       setIsLoadingMoreNfts(false);
     }
   };
-  
-  // Auto-load NFTs until we reach a threshold or there are no more
-  useEffect(() => {
-    const autoLoadMoreNfts = async () => {
-      // Only auto-load if:
-      // 1. We have NFTs already (initial load complete)
-      // 2. There are more NFTs to load
-      // 3. Not already loading more
-      // 4. We have less than 2000 NFTs loaded (higher limit to ensure we get all)
-      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 2000) {
-        console.log(`AUTO-LOADING MORE NFTs - Currently have ${userNfts.length}, hasMore=${hasMoreNfts}`);
-        // Add a small delay to avoid overwhelming the API and browser
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await handleLoadMore();
-      } else {
-        console.log(`AUTO-LOAD CHECK: userNfts=${userNfts.length}, hasMore=${hasMoreNfts}, isLoading=${isLoadingMoreNfts}`);
-      }
-    };
-    
-    autoLoadMoreNfts();
-  }, [userNfts, hasMoreNfts, isLoadingMoreNfts]);
 
   // Handle NFT click to open modal
   const handleNftClick = (nft) => {

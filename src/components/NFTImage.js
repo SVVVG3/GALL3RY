@@ -6,7 +6,7 @@ import Spinner from './Spinner';
  * NFTImage component that displays an NFT image or video with improved 
  * error handling and IPFS gateway fallbacks.
  */
-const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
+const NFTImage = ({ src, alt = 'NFT Image', className = '', onLoad = () => {}, onError = () => {} }) => {
   const [mediaSrc, setMediaSrc] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -33,7 +33,7 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
   // Process image URL with different fallback strategies
   const processImageUrl = (originalSrc, attempt) => {
     // Log the attempt for debugging
-    console.log(`Processing image URL (attempt ${attempt}):`, originalSrc);
+    console.log(`Processing image URL (attempt ${attempt + 1}):`, originalSrc);
     
     let processedSrc = originalSrc;
     
@@ -51,30 +51,16 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
         processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.infura.io/ipfs/');
       } else if (originalSrc.includes('ipfs.io')) {
         processedSrc = originalSrc.replace('ipfs.io', 'ipfs.infura.io');
+      } else if (originalSrc.startsWith('/')) {
+        // Handle relative URLs properly
+        processedSrc = originalSrc;
       } else {
-        // Try CORS proxy for non-IPFS URLs
-        processedSrc = `https://corsproxy.io/?${encodeURIComponent(originalSrc)}`;
-      }
-    } else if (attempt === 2) {
-      // Third attempt: try another IPFS gateway
-      if (originalSrc.startsWith('ipfs://') || originalSrc.includes('ipfs')) {
-        const cid = originalSrc.includes('ipfs://') 
-          ? originalSrc.replace('ipfs://', '') 
-          : originalSrc.split('ipfs/')[1];
-        
-        if (cid) {
-          processedSrc = `https://cloudflare-ipfs.com/ipfs/${cid}`;
-        }
-      } else {
-        // Last resort for non-IPFS: try direct with img-src-fallback
+        // Try a direct URL without CORS proxy
         processedSrc = originalSrc;
       }
     } else {
-      // Give up after 3 attempts
-      console.error(`Failed to load image after ${attempt} attempts:`, originalSrc);
-      setError(true);
-      setLoading(false);
-      return;
+      // Final attempt - simple fallback to placeholder
+      processedSrc = '/assets/placeholder-nft.svg';
     }
 
     // Check if the media is a video based on extension or content type
@@ -89,18 +75,21 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
   const handleMediaLoad = () => {
     console.log(`Media loaded successfully: ${mediaSrc}`);
     setLoading(false);
+    onLoad();
   };
 
   const handleMediaError = () => {
-    console.warn(`Error loading media (attempt ${attemptCount}): ${mediaSrc}`);
+    console.warn(`Error loading media (attempt ${attemptCount + 1}): ${mediaSrc}`);
     
     // Try next fallback strategy if we haven't exhausted them
-    if (attemptCount < 3) {
+    if (attemptCount < 2) {
       processImageUrl(src, attemptCount + 1);
     } else {
       // Give up after 3 attempts
+      console.error(`Failed to load image after ${attemptCount + 1} attempts:`, src);
       setError(true);
       setLoading(false);
+      onError();
     }
   };
 
@@ -116,7 +105,6 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
           onError={handleMediaError}
           style={{ visibility: loading ? 'hidden' : 'visible' }}
           loading="lazy"
-          crossOrigin="anonymous"
         />
       )}
 
@@ -132,7 +120,6 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
           muted
           playsInline
           controlsList="nodownload"
-          crossOrigin="anonymous"
         />
       )}
 
@@ -143,14 +130,12 @@ const NFTImage = ({ src, alt = 'NFT Image', className = '' }) => {
         </div>
       )}
 
-      {/* Show placeholder if error */}
+      {/* Show placeholder on error - with inline fallback in case placeholder image also fails */}
       {error && (
         <div className="nft-media-error">
-          <img 
-            src="/placeholder.png"
-            alt="NFT Placeholder"
-            className="placeholder-image"
-          />
+          <div className="placeholder-content">
+            {alt || "NFT"}
+          </div>
         </div>
       )}
     </div>

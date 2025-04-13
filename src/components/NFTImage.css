@@ -41,4 +41,18 @@ video.nft-media {
   width: 48px;
   height: 48px;
   opacity: 0.5;
+}
+
+/* New style for text-based placeholder */
+.placeholder-content {
+  color: #666;
+  font-size: 14px;
+  max-width: 90%;
+  text-align: center;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 } 
