@@ -21,8 +21,19 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // Get Alchemy API key from environment variables or use our default
-    const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak";
+    // Get Alchemy API key from environment variables with better fallbacks
+    const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || 
+                           process.env.REACT_APP_ALCHEMY_API_KEY || 
+                           process.env.REACT_APP_ALCHEMY_ETH_API_KEY;
+    
+    // Check if we have a valid API key
+    if (!ALCHEMY_API_KEY) {
+      console.error('No Alchemy API key found in environment variables');
+      return res.status(500).json({
+        error: 'Configuration error',
+        message: 'Alchemy API key is missing. Please check your environment variables.'
+      });
+    }
     
     console.log(`Using Alchemy API Key: ${ALCHEMY_API_KEY ? (ALCHEMY_API_KEY.substring(0, 5) + "...") : "none"}`);
     
@@ -75,6 +86,17 @@ module.exports = async (req, res) => {
         'Accept': 'application/json',
       }
     });
+    
+    // Check for non-successful status codes
+    if (!response.ok) {
+      console.error(`Alchemy API returned status ${response.status}`);
+      const errorData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({
+        error: 'Alchemy API error',
+        message: errorData.message || `API returned status ${response.status}`,
+        details: errorData
+      });
+    }
     
     // Get the response data
     const data = await response.json();

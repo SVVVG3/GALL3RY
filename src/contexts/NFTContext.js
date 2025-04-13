@@ -34,6 +34,12 @@ const loadServices = async () => {
     try {
       const alchemyModule = await import('../services/alchemy');
       alchemyService = alchemyModule.default;
+      
+      // Validate alchemy service by checking required methods
+      if (!alchemyService || !alchemyService.fetchNFTsForAddress || !alchemyService.batchFetchNFTs) {
+        throw new Error('Alchemy service module is missing required methods');
+      }
+      
       console.log('Successfully loaded Alchemy service');
     } catch (alchemyError) {
       console.error('Failed to load Alchemy service:', alchemyError);
@@ -43,13 +49,19 @@ const loadServices = async () => {
     try {
       const zapperModule = await import('../services/zapperService');
       zapperService = zapperModule;
+      
+      // Validate zapper service
+      if (!zapperService || !zapperService.getFarcasterProfile) {
+        throw new Error('Zapper service module is missing required methods');
+      }
+      
       console.log('Successfully loaded Zapper service');
     } catch (zapperError) {
       console.error('Failed to load Zapper service:', zapperError);
       zapperService = null;
     }
     
-    // Mark as initialized to avoid repeated loading
+    // Mark as initialized if at least one service loaded successfully
     servicesInitialized = Boolean(alchemyService || zapperService);
     
     if (!servicesInitialized) {
@@ -186,6 +198,22 @@ export const NFTProvider = ({ children }) => {
       return { nfts: [], pageKey: null, hasMore: false };
     }
     
+    // If services aren't loaded yet, try to load them
+    if (!services.alchemy && !services.zapper) {
+      console.log('Services not loaded yet, attempting to reload...');
+      try {
+        const loadedServices = await loadServices();
+        setServices(loadedServices);
+        if (!loadedServices.alchemy && !loadedServices.zapper) {
+          throw new Error('Failed to load NFT services after retry');
+        }
+      } catch (err) {
+        console.error('Service reload failed:', err);
+        setError('Alchemy service not available. Please try refreshing the page.');
+        return { nfts: [], pageKey: null, hasMore: false };
+      }
+    }
+    
     try {
       setIsLoading(true);
       setError(null);
@@ -203,28 +231,32 @@ export const NFTProvider = ({ children }) => {
           }
         );
         
-        return result;
-      } else if (services.zapper) {
-        // Fallback to Zapper service if available
-        console.log(`Fetching NFTs for ${addresses.length} addresses with Zapper`);
-        const result = await services.zapper.getNftsForAddresses(
-          addresses,
-          options.pageSize || NFT_PAGE_SIZE,
-          options.pageKey
-        );
+        // Set the pageKey and hasMore flag based on the response
+        setPageKey(result.pageKey || null);
+        setHasMore(!!result.hasMore);
         
         return result;
       } else {
-        throw new Error('NFT services unavailable');
+        // Fallback to Zapper service if available
+        if (services.zapper && services.zapper.getNftsForAddresses) {
+          console.log(`Fallback: Fetching NFTs for ${addresses.length} addresses with Zapper`);
+          // Implement Zapper fallback here if needed
+          const result = await services.zapper.getNftsForAddresses(addresses, options);
+          return result;
+        }
+        
+        // No available services
+        console.error('No NFT services available for fetching');
+        throw new Error('Alchemy service not available. Please try refreshing the page.');
       }
     } catch (err) {
-      console.error(`Error fetching NFTs for multiple addresses:`, err);
+      console.error(`Error fetching NFTs for addresses:`, err);
       setError(err.message || 'Failed to fetch NFTs');
       return { nfts: [], pageKey: null, hasMore: false };
     } finally {
       setIsLoading(false);
     }
-  }, [services]);
+  }, [services, setServices, setIsLoading, setError, setPageKey, setHasMore]);
   
   // Normalize NFT IDs to ensure consistency
   const normalizeId = (nft) => {
