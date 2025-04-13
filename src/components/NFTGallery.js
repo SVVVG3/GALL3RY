@@ -50,7 +50,7 @@ const NFTGallery = () => {
   // Automatically continue loading NFTs until we hit a reasonable threshold or hasMore becomes false
   // This helps ensure we load enough NFTs even with the pagination limits
   useEffect(() => {
-    const AUTO_LOAD_THRESHOLD = 1000; // Load up to this many NFTs automatically
+    const AUTO_LOAD_THRESHOLD = 300; // Reduced from 1000 to 300 to be less aggressive
     
     const autoLoadCheck = () => {
       console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading + ", loadingMore=" + loadingMore);
@@ -63,10 +63,10 @@ const NFTGallery = () => {
       if (hasMore && !isLoading && !loadingMore && shouldAutoLoad) {
         console.log(`Auto-loading next batch of NFTs (current count: ${filteredNFTs.length}/${AUTO_LOAD_THRESHOLD})...`);
         
-        // Increased delay to avoid rate limiting
+        // Significantly increased delay to avoid rate limiting
         setTimeout(() => {
           loadMoreNFTs();
-        }, 800);
+        }, 1500); // 1.5 seconds between auto-loads
       } else {
         console.log(`Auto-loading stopped: hasMore=${hasMore}, isLoading=${isLoading}, loadingMore=${loadingMore}, shouldAutoLoad=${shouldAutoLoad}`);
       }
@@ -133,10 +133,24 @@ const NFTGallery = () => {
     fetchNFTs(true);
   };
 
+  // Add a manual load function that bypasses all the auto-loading logic
+  const handleManualLoadMore = () => {
+    if (hasMore && !isLoading && !loadingMore) {
+      console.log(`MANUAL LOAD: Fetching next page of NFTs with cursor: ${endCursor}`);
+      
+      // Directly call fetchNFTs with loadMore=true to bypass auto-loading logic
+      fetchNFTs({
+        loadMore: true,
+        batchSize: 100, // Set a consistent batch size
+        bypassCache: true // Ensure we're getting fresh data
+      });
+    }
+  };
+
   return (
     <GalleryContainer>
       <GalleryHeader>
-        <h2>My NFTs</h2>
+        <h2>My NFTs {filteredNFTs.length > 0 && <span>({filteredNFTs.length})</span>}</h2>
         <ControlsContainer>
           <SearchBox
             type="text"
@@ -159,6 +173,18 @@ const NFTGallery = () => {
           </SpeedToggle>
         </ControlsContainer>
       </GalleryHeader>
+
+      {/* Display NFT count and manual load button if we have NFTs */}
+      {filteredNFTs.length > 0 && hasMore && (
+        <ManualLoadContainer>
+          <p>Showing {filteredNFTs.length} NFTs {hasMore ? "(more available)" : ""}</p>
+          {!isLoading && !loadingMore && (
+            <ManualLoadButton onClick={handleManualLoadMore}>
+              Load Next 100 NFTs
+            </ManualLoadButton>
+          )}
+        </ManualLoadContainer>
+      )}
 
       {showFilters && (
         <FiltersPanel>
@@ -521,6 +547,30 @@ const LoadingSpinner = styled.div`
   @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+  }
+`;
+
+const ManualLoadContainer = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background-color: #f0f0f0;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+`;
+
+const ManualLoadButton = styled.button`
+  padding: 0.75rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  &:hover {
+    background-color: #3d8b40;
   }
 `;
 

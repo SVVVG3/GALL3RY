@@ -252,6 +252,7 @@ export const NFTProvider = ({ children }) => {
     // Check if we're loading more or starting fresh
     const isLoadingMore = options.loadMore === true;
     const forceRefresh = options.forceRefresh === true;
+    const bypassCache = options.bypassCache === true;
     
     if (!isLoadingMore) {
       setIsLoading(true);
@@ -263,7 +264,7 @@ export const NFTProvider = ({ children }) => {
       }
       
       // Check cache first if we're not forcing a refresh
-      if (!forceRefresh) {
+      if (!forceRefresh && !bypassCache) {
         const cachedNFTs = getCachedNFTs();
         if (cachedNFTs) {
           console.log('Using cached NFT data');
@@ -309,6 +310,7 @@ export const NFTProvider = ({ children }) => {
         includeValue: true,
         includeMetadata: true,
         bypassHidden: true,
+        bypassCache: bypassCache || false,
         useNftUsersTokens: true,
         endpoints: [
           `${window.location.origin}/api/zapper`, // Always try local API first
@@ -340,15 +342,28 @@ export const NFTProvider = ({ children }) => {
       const nftsData = result?.nfts || [];
       const hasMoreData = result?.hasMore === true;
       const cursorData = result?.cursor || null;
+      const totalCount = result?.totalNftCount || nftsData.length;
       
       // Enhanced logging to understand pagination
-      console.log(`NFT Data: count=${nftsData.length}, hasMore=${hasMoreData}, cursor=${cursorData || 'null'}`);
+      console.log(`NFT Data: count=${nftsData.length}, totalCount=${totalCount}, hasMore=${hasMoreData}, cursor=${cursorData || 'null'}`);
+      
+      // Log full pagination info if available
+      if (result?.pageInfo) {
+        console.log('Full pagination info:', result.pageInfo);
+      }
       
       if (isLoadingMore) {
         // Append to existing NFTs
         setNfts(prev => {
+          // Create a combined array with new NFTs at the end
           const combined = [...prev, ...nftsData];
-          return deduplicateNftsArray(combined);
+          
+          // DISABLED: Skip deduplication as Zapper API should handle this
+          // const deduplicated = deduplicateNftsArray(combined);
+          console.log(`Added ${nftsData.length} new NFTs without deduplication`);
+          
+          // Simply return the combined array without deduplication
+          return combined;
         });
       } else {
         // Replace with new NFTs
@@ -393,7 +408,7 @@ export const NFTProvider = ({ children }) => {
       setLoadingMore(false);
       setIsRefreshing(false);
     }
-  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, deduplicateNftsArray, walletLoadingStatus, PAGE_SIZE]);
+  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, walletLoadingStatus, PAGE_SIZE]);
 
   // Extract filter data from NFTs
   const updateFiltersFromNFTs = useCallback((nftsData) => {
@@ -448,7 +463,8 @@ export const NFTProvider = ({ children }) => {
       console.log(`Calling fetchNFTs with loadMore=true, endCursor=${endCursor}, batchSize=${PAGE_SIZE}`);
       await fetchNFTs({
         loadMore: true,
-        batchSize: PAGE_SIZE
+        batchSize: PAGE_SIZE,
+        bypassCache: true  // Always bypass cache for loading more to ensure fresh data
       });
     } catch (error) {
       console.error('Error loading more NFTs:', error);
@@ -460,15 +476,61 @@ export const NFTProvider = ({ children }) => {
   }, [fetchNFTs]);
 
   const deduplicateNftsArray = useCallback((nftsArray) => {
+    console.log(`Deduplicating array of ${nftsArray.length} NFTs`);
+    
+    // Log some sample NFTs to debug their structure
+    if (nftsArray.length > 0) {
+      console.log("Sample NFT for deduplication:", {
+        id: nftsArray[0].id,
+        tokenId: nftsArray[0].tokenId,
+        collection: nftsArray[0].collection ? {
+          address: nftsArray[0].collection.address,
+          name: nftsArray[0].collection.name
+        } : null
+      });
+    }
+    
     const seen = new Map();
-    return nftsArray.filter(nft => {
-      const key = `${nft.collection?.address || ''}-${nft.tokenId}`;
-      if (seen.has(key)) {
+    const originalLength = nftsArray.length;
+    
+    // Track duplicates for debugging
+    const duplicates = [];
+    
+    const result = nftsArray.filter(nft => {
+      // Generate a more robust key using multiple fields
+      // Adding network to avoid cross-chain duplicates
+      const collectionAddr = (nft.collection?.address || '').toLowerCase();
+      const network = (nft.collection?.network || nft.network || '').toLowerCase();
+      const tokenId = nft.tokenId || '';
+      
+      // More reliable key generation
+      const key = `${network}-${collectionAddr}-${tokenId}`;
+      
+      // Skip items with empty tokenId as they're likely invalid
+      if (!tokenId) {
+        console.log("Skipping NFT with empty tokenId:", nft.name);
         return false;
       }
+      
+      if (seen.has(key)) {
+        duplicates.push({ key, name: nft.name, collection: nft.collection?.name });
+        return false;
+      }
+      
       seen.set(key, true);
       return true;
     });
+    
+    const removedCount = originalLength - result.length;
+    
+    console.log(`Deduplication removed ${removedCount} NFTs (${(removedCount/originalLength*100).toFixed(1)}%)`);
+    
+    // If we're removing a large percentage, log duplicates for debugging
+    if (removedCount > 0 && (removedCount/originalLength > 0.2)) {
+      console.log("Duplicate NFTs found:", duplicates.slice(0, 5));
+    }
+    
+    return result;
   }, []);
 
   const formatNetworkName = useCallback((network) => {
