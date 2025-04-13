@@ -22,20 +22,25 @@ module.exports = async (req, res) => {
 
   try {
     // Get Alchemy API key from environment variables with better fallbacks
+    // For Vercel, these need to be configured in the Vercel dashboard
     const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || 
                            process.env.REACT_APP_ALCHEMY_API_KEY || 
-                           process.env.REACT_APP_ALCHEMY_ETH_API_KEY;
+                           process.env.REACT_APP_ALCHEMY_ETH_API_KEY ||
+                           "2ZaODCGR5YEA0cACkf0iqLs3ohiwTUwC"; // Hardcoded fallback for testing
     
     // Check if we have a valid API key
     if (!ALCHEMY_API_KEY) {
       console.error('No Alchemy API key found in environment variables');
       return res.status(500).json({
         error: 'Configuration error',
-        message: 'Alchemy API key is missing. Please check your environment variables.'
+        message: 'Alchemy API key is missing. Please check your environment variables in Vercel.'
       });
     }
     
+    // Log key (first few chars only) for debugging
     console.log(`Using Alchemy API Key: ${ALCHEMY_API_KEY ? (ALCHEMY_API_KEY.substring(0, 5) + "...") : "none"}`);
+    console.log(`Environment: ${process.env.NODE_ENV || 'unknown'}`);
+    console.log(`Request query params:`, req.query);
     
     // Get query parameters
     const { chain = 'eth', endpoint = 'getNFTsForOwner', ...params } = req.query;
@@ -80,41 +85,59 @@ module.exports = async (req, res) => {
     
     console.log(`Proxying request to Alchemy API: ${alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')}`);
     
-    // Make the request to Alchemy API
-    const response = await fetch(alchemyUrl, {
-      headers: {
-        'Accept': 'application/json',
-      }
-    });
+    // Make the request to Alchemy API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
-    // Check for non-successful status codes
-    if (!response.ok) {
-      console.error(`Alchemy API returned status ${response.status}`);
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(response.status).json({
-        error: 'Alchemy API error',
-        message: errorData.message || `API returned status ${response.status}`,
-        details: errorData
+    try {
+      const response = await fetch(alchemyUrl, {
+        headers: {
+          'Accept': 'application/json',
+        },
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
+      // Check for non-successful status codes
+      if (!response.ok) {
+        console.error(`Alchemy API returned status ${response.status}`);
+        const errorData = await response.json().catch(() => ({}));
+        return res.status(response.status).json({
+          error: 'Alchemy API error',
+          message: errorData.message || `API returned status ${response.status}`,
+          details: errorData
+        });
+      }
+      
+      // Get the response data
+      const data = await response.json();
+      
+      // Check for error response
+      if (data.error) {
+        console.error('Alchemy API error:', data.error);
+        return res.status(response.status || 500).json(data);
+      }
+      
+      // Return the data
+      return res.status(200).json(data);
+    } catch (fetchError) {
+      if (fetchError.name === 'AbortError') {
+        console.error('Alchemy API request timed out');
+        return res.status(504).json({
+          error: 'Gateway Timeout',
+          message: 'Request to Alchemy API timed out'
+        });
+      }
+      throw fetchError;
     }
-    
-    // Get the response data
-    const data = await response.json();
-    
-    // Check for error response
-    if (data.error) {
-      console.error('Alchemy API error:', data.error);
-      return res.status(response.status || 500).json(data);
-    }
-    
-    // Return the data
-    return res.status(200).json(data);
   } catch (error) {
     console.error('Error proxying to Alchemy API:', error);
     
     return res.status(500).json({
       error: 'Internal server error',
-      message: error.message || 'An unknown error occurred'
+      message: error.message || 'An unknown error occurred',
+      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
     });
   }
 }; 
