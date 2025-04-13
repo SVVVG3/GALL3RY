@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
@@ -63,13 +63,15 @@ const NftCard = ({
     return 'Unnamed NFT';
   };
 
-  const getCollection = () => {
+  const getCollectionName = () => {
     if (nft.collection?.name) return nft.collection.name;
-    if (nft.token?.collection?.name) return nft.token.collection.name;
-    if (nft.contractName) return nft.contractName;
-    if (nft.contract?.name) return nft.contract.name;
-    if (nft.token?.symbol) return nft.token.symbol;
-    return 'Unknown Collection';
+    if (nft.contractMetadata?.name) return nft.contractMetadata.name;
+    if (nft.contractMetadata?.openSea?.collectionName) return nft.contractMetadata.openSea.collectionName;
+    if (nft.title && nft.title.includes('#')) {
+      // Extract collection name from title if it follows "Collection Name #123" format
+      return nft.title.split('#')[0].trim();
+    }
+    return "Unknown Collection";
   };
 
   const getTokenId = () => {
@@ -90,66 +92,95 @@ const NftCard = ({
   };
 
   const getImageUrl = () => {
-    // Follow Alchemy's best practices for image URLs:
-    // 1. Prefer media.gateway (already resolved gateway URLs)
-    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
-      const mediaItem = nft.media[0];
-      // Prefer gateway URL (already resolved)
-      if (mediaItem.gateway) return mediaItem.gateway;
-      // Fall back to raw URL
-      if (mediaItem.raw) return mediaItem.raw;
+    // If the NFT has an imageUrl property, use that
+    if (nft.imageUrl && nft.imageUrl.startsWith('http')) {
+      return nft.imageUrl;
     }
-    
-    // 2. Check for mediaV3 format (as used in our app)
+
+    // Try to get image from mediasV3 object with edges structure (Alchemy API format)
     if (nft.mediasV3) {
-      // Check images first
+      // Check images edges first
       if (nft.mediasV3.images?.edges && nft.mediasV3.images.edges.length > 0) {
-        for (const edge of nft.mediasV3.images.edges) {
-          const image = edge.node;
-          if (!image) continue;
-          
-          // Try various sizes in order of preference
-          if (image.large) return image.large;
-          if (image.original) return image.original;
-          if (image.thumbnail) return image.thumbnail;
+        const imageEdge = nft.mediasV3.images.edges[0];
+        if (imageEdge?.node?.original && imageEdge.node.original.startsWith('http')) {
+          return imageEdge.node.original;
+        }
+        if (imageEdge?.node?.thumbnail && imageEdge.node.thumbnail.startsWith('http')) {
+          return imageEdge.node.thumbnail;
+        }
+        if (imageEdge?.node?.large && imageEdge.node.large.startsWith('http')) {
+          return imageEdge.node.large;
         }
       }
       
-      // Check animations if no images
+      // Check animations edges as fallback
       if (nft.mediasV3.animations?.edges && nft.mediasV3.animations.edges.length > 0) {
-        for (const edge of nft.mediasV3.animations.edges) {
-          const animation = edge.node;
-          if (!animation) continue;
-          
-          if (animation.original) return animation.original;
+        const animationEdge = nft.mediasV3.animations.edges[0];
+        if (animationEdge?.node?.thumbnail && animationEdge.node.thumbnail.startsWith('http')) {
+          return animationEdge.node.thumbnail;
+        }
+        if (animationEdge?.node?.original && animationEdge.node.original.startsWith('http')) {
+          return animationEdge.node.original;
+        }
+      }
+      
+      // Handle older mediasV3 as array format (legacy support)
+      if (Array.isArray(nft.mediasV3) && nft.mediasV3.length > 0) {
+        for (const media of nft.mediasV3) {
+          if (media?.originalUrl && media.originalUrl.startsWith('http')) {
+            return media.originalUrl;
+          }
+          if (media?.thumbnailUrl && media.thumbnailUrl.startsWith('http')) {
+            return media.thumbnailUrl;
+          }
+          if (media?.url && media.url.startsWith('http')) {
+            return media.url;
+          }
         }
       }
     }
-    
-    // 3. Check for mediasV2 format (used in older data)
-    if (nft.mediasV2 && nft.mediasV2.length > 0) {
+
+    // Try to get image from media array
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      for (const media of nft.media) {
+        if (media?.gateway && media.gateway.startsWith('http')) {
+          return media.gateway;
+        }
+        if (media?.raw && media.raw.startsWith('http')) {
+          return media.raw;
+        }
+        if (media?.thumbnail && media.thumbnail.startsWith('http')) {
+          return media.thumbnail;
+        }
+      }
+    } else if (nft.media && nft.media.gateway && nft.media.gateway.startsWith('http')) {
+      // Handle when media is a single object, not an array
+      return nft.media.gateway;
+    }
+
+    // Try to get image from mediasV2 array (legacy format)
+    if (nft.mediasV2 && Array.isArray(nft.mediasV2) && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
-        if (!media) continue;
-        if (media.original) return media.original;
-        if (media.originalUri) return media.originalUri;
-        if (media.url) return media.url;
+        if (media?.url && media.url.startsWith('http')) {
+          return media.url;
+        }
+        if (media?.original && media.original.startsWith('http')) {
+          return media.original;
+        }
       }
     }
-    
-    // 4. Check for direct imageUrl property
-    if (nft.imageUrl) return nft.imageUrl;
-    
-    // 5. Check for image URL in metadata (per Alchemy best practices)
-    if (nft.metadata?.image) return nft.metadata.image;
-    
-    // 6. Collection fallbacks
-    if (nft.collection?.imageUrl) return nft.collection.imageUrl;
-    if (nft.collection?.cardImage) return nft.collection.cardImage;
-    if (nft.collection?.medias?.logo?.thumbnail) return nft.collection.medias.logo.thumbnail;
-    
-    // 7. Token fallback
-    if (nft.token?.imageUrl) return nft.token.imageUrl;
-    
+
+    // If NFT has a metadata object with image
+    if (nft.metadata?.image && nft.metadata.image.startsWith('http')) {
+      return nft.metadata.image;
+    }
+
+    // Try the contractMetadata for the collection logo as last resort
+    if (nft.contractMetadata?.openSea?.imageUrl && nft.contractMetadata.openSea.imageUrl.startsWith('http')) {
+      return nft.contractMetadata.openSea.imageUrl;
+    }
+
+    // If no valid image URL was found
     return null;
   };
   
@@ -344,11 +375,39 @@ const NftCard = ({
 
   // Get data for rendering
   const name = getName();
-  const collection = getCollection();
+  const collection = getCollectionName();
   const imageUrl = getImageUrl();
   const hasCollectionAddress = hasValidContractAddress();
   const tokenId = getTokenId();
   
+  // Debug logging
+  if (!imageUrl) {
+    console.warn(`NFT is missing image URL:`, {
+      id: nft.id,
+      name,
+      collection,
+      tokenId,
+      mediaV3: nft.mediasV3 ? 'present' : 'missing',
+      mediaV2: nft.mediasV2 ? 'present' : 'missing',
+      media: nft.media ? 'present' : 'missing',
+      imageUrl: nft.imageUrl || 'missing'
+    });
+  }
+  
+  // Additional price debugging
+  const valueDebug = {
+    id: nft.id,
+    name,
+    valueUsd: nft.valueUsd,
+    estimatedValue: nft.estimatedValue,
+    balanceUSD: nft.balanceUSD,
+    floorPrice: getFloorPrice(),
+    hasContractMetadata: !!nft.contractMetadata,
+    contractMetadataOpenSea: nft.contractMetadata?.openSea ? 'present' : 'missing',
+    collectionFloorPrice: nft.collection?.floorPrice ? 'present' : 'missing',
+  };
+  console.log('NFT price debug:', valueDebug);
+
   // Card loading skeleton shown until image is loaded
   const imageLoadingState = !imageLoaded && (
     <div className="nft-image-loading">
@@ -418,60 +477,222 @@ const NftCard = ({
   };
 
   const getValue = () => {
-    // Debug log for value properties
-    console.log('NFT value debug:', {
-      id: nft.id,
-      hasValue: !!nft.valueUsd,
-      valueUsd: nft.valueUsd,
-      estimatedValue: nft.estimatedValue,
-      balanceUSD: nft.balanceUSD
-    });
-    
     // Try all possible ways this property might exist
+    
+    // 1. First check direct USD values
     if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
-      return parseFloat(nft.valueUsd);
+      return {
+        value: parseFloat(nft.valueUsd),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
     }
     
-    if (nft.estimatedValue?.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
-      return parseFloat(nft.estimatedValue.valueUsd);
+    // 2. Check for Alchemy-style estimatedValue
+    if (nft.estimatedValue) {
+      if (nft.estimatedValue.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
+        return {
+          value: parseFloat(nft.estimatedValue.valueUsd),
+          symbol: 'USD',
+          isUsd: true,
+          label: 'Est. Value'
+        };
+      }
+      
+      if (nft.estimatedValue.valueWithDenomination !== undefined) {
+        return {
+          value: parseFloat(nft.estimatedValue.valueWithDenomination),
+          symbol: nft.estimatedValue.denomination?.symbol || 'ETH',
+          isUsd: false,
+          label: 'Est. Value'
+        };
+      }
+      
+      if (nft.estimatedValue.amount !== undefined) {
+        return {
+          value: parseFloat(nft.estimatedValue.amount),
+          symbol: nft.estimatedValue.currency || 'USD',
+          isUsd: (nft.estimatedValue.currency === 'USD'),
+          label: 'Est. Value'
+        };
+      }
     }
     
-    if (nft.estimatedValue?.amount !== undefined) {
-      return parseFloat(nft.estimatedValue.amount);
+    // 3. Check collection floor price as a fallback
+    if (nft.collection?.floorPrice) {
+      const floorPrice = nft.collection.floorPrice;
+      
+      if (floorPrice.valueUsd !== undefined && floorPrice.valueUsd !== null) {
+        return {
+          value: parseFloat(floorPrice.valueUsd),
+          symbol: 'USD',
+          isUsd: true,
+          label: 'Floor'
+        };
+      }
+      
+      if (floorPrice.value !== undefined && floorPrice.value !== null) {
+        return {
+          value: parseFloat(floorPrice.value),
+          symbol: floorPrice.currency || 'ETH',
+          isUsd: false,
+          label: 'Floor'
+        };
+      }
     }
     
+    // 4. Check for other common price fields
     if (nft.balanceUSD !== undefined && nft.balanceUSD !== null) {
-      return parseFloat(nft.balanceUSD);
+      return {
+        value: parseFloat(nft.balanceUSD),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
     }
     
-    // Default to 0 if no value
-    return 0;
+    if (nft.valuation?.balance_usd !== undefined && nft.valuation.balance_usd !== null) {
+      return {
+        value: parseFloat(nft.valuation.balance_usd),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
+    }
+    
+    // 5. Look for contractMetadata with price info
+    if (nft.contractMetadata?.openSea?.floorPrice !== undefined && 
+        nft.contractMetadata.openSea.floorPrice !== null) {
+      return {
+        value: parseFloat(nft.contractMetadata.openSea.floorPrice),
+        symbol: 'ETH',
+        isUsd: false,
+        label: 'Floor'
+      };
+    }
+    
+    // Return null if no value found to indicate absence
+    return null;
   };
   
   // Get floor price from NFT data
   const getFloorPrice = () => {
-    // Check for OpenSea floor price from Alchemy (highest priority)
-    if (nft.contractMetadata?.openSea?.floorPrice) {
-      return parseFloat(nft.contractMetadata.openSea.floorPrice);
+    // Check collection floor price (most reliable source)
+    if (nft.collection?.floorPrice) {
+      // Check for valueUsd first for consistency
+      if (nft.collection.floorPrice.valueUsd !== undefined && 
+          nft.collection.floorPrice.valueUsd !== null) {
+        const value = parseFloat(nft.collection.floorPrice.valueUsd);
+        return value < 0.01 ? '< $0.01' : `$${value.toFixed(2)}`;
+      }
+      
+      // Then check for ETH value
+      if (nft.collection.floorPrice.value !== undefined && 
+          nft.collection.floorPrice.value !== null) {
+        const value = parseFloat(nft.collection.floorPrice.value);
+        const symbol = nft.collection.floorPrice.currency || 'ETH';
+        return value < 0.01 ? `< 0.01 ${symbol}` : `${value.toFixed(2)} ${symbol}`;
+      }
     }
     
-    // Try various other possible paths for floor price
-    if (nft.collection?.floorPrice?.valueUsd) {
-      return parseFloat(nft.collection.floorPrice.valueUsd);
+    // Check for OpenSea floor price in contractMetadata
+    if (nft.contractMetadata?.openSea?.floorPrice !== undefined && 
+        nft.contractMetadata.openSea.floorPrice !== null) {
+      const value = parseFloat(nft.contractMetadata.openSea.floorPrice);
+      return value < 0.01 ? '< 0.01 ETH' : `${value.toFixed(2)} ETH`;
     }
     
-    if (nft.collection?.floorPriceEth) {
-      return parseFloat(nft.collection.floorPriceEth);
+    // Check Alchemy estimatedValue
+    if (nft.estimatedValue) {
+      if (nft.estimatedValue.valueUsd !== undefined && 
+          nft.estimatedValue.valueUsd !== null) {
+        const value = parseFloat(nft.estimatedValue.valueUsd);
+        return value < 0.01 ? '< $0.01' : `$${value.toFixed(2)}`;
+      }
+      
+      if (nft.estimatedValue.valueWithDenomination !== undefined) {
+        const value = parseFloat(nft.estimatedValue.valueWithDenomination);
+        const symbol = nft.estimatedValue.denomination?.symbol || 'ETH';
+        return value < 0.01 ? `< 0.01 ${symbol}` : `${value.toFixed(2)} ${symbol}`;
+      }
     }
     
-    if (nft.collection?.floorPrice?.amount) {
-      return parseFloat(nft.collection.floorPrice.amount);
+    // Check direct USD values
+    if (nft.estimatedValueInUSD !== undefined && nft.estimatedValueInUSD !== null) {
+      const value = parseFloat(nft.estimatedValueInUSD);
+      return value < 0.01 ? '< $0.01' : `$${value.toFixed(2)}`;
     }
     
-    // Default to 0 if no floor price found
-    return 0;
+    if (nft.valuation?.balance_usd !== undefined && nft.valuation.balance_usd !== null) {
+      const value = parseFloat(nft.valuation.balance_usd);
+      return value < 0.01 ? '< $0.01' : `$${value.toFixed(2)}`;
+    }
+    
+    return "N/A";
   };
+
+  const valueData = getValue();
   
+  // Format the estimated value with appropriate precision
+  const formatEstimatedValue = (valueData) => {
+    if (!valueData || valueData.value === undefined || valueData.value === null) return 'N/A';
+    
+    const { value, symbol, isUsd, label } = valueData;
+    
+    // Always display in USD format for consistency
+    if (isUsd || symbol === 'USD') {
+      // Handle near-zero values
+      if (value < 0.01) {
+        return '< $0.01';
+      }
+      
+      // Format USD value
+      return `$${parseFloat(value).toFixed(2)}`;
+    }
+    // If there's an original ETH value, show it in parentheses
+    else {
+      // Handle near-zero values
+      if (value < 0.01) {
+        return `< 0.01 ${symbol}`;
+      }
+      
+      // Format with currency symbol
+      return `${parseFloat(value).toFixed(2)} ${symbol}`;
+    }
+  };
+
+  const estimatedValue = formatEstimatedValue(valueData);
+
+  // Debug logging for prices and URLs
+  useEffect(() => {
+    if (!imageUrl) {
+      console.debug(`NFT missing image URL - Debug info:`, {
+        id: nft.id,
+        name: nft.title || nft.name,
+        collection: getCollectionName(),
+        tokenId: nft.tokenId,
+        hasMedia: Boolean(nft.media?.length),
+        hasMediasV2: Boolean(nft.mediasV2?.length),
+        hasMediasV3: Boolean(nft.mediasV3?.length),
+        hasMetadataImage: Boolean(nft.metadata?.image)
+      });
+    }
+    
+    const floorPrice = getFloorPrice();
+    if (floorPrice === "N/A") {
+      console.debug(`NFT pricing debug info:`, {
+        id: nft.id,
+        name: nft.title || nft.name,
+        valueInUSD: nft.valueInUSD,
+        estimatedValue: nft.estimatedValueInUSD,
+        balanceUSD: nft.valuation?.balance_usd,
+        floorPrice: nft.collection?.floorPrice?.value,
+        hasContractMetadata: Boolean(nft.contractMetadata)
+      });
+    }
+  }, [nft, imageUrl]);
+
   // Get price info for display (last sale price, etc.)
   const getPriceInfo = () => {
     if (nft.lastSaleValue) {
@@ -490,48 +711,6 @@ const NftCard = ({
     
     return null;
   };
-
-  const valueData = getValue();
-  
-  // Format the estimated value with appropriate precision
-  const formatEstimatedValue = (valueData) => {
-    if (!valueData || valueData.value === undefined || valueData.value === null) return 'N/A';
-    
-    const { value, symbol, isUsd, originalValue, originalSymbol } = valueData;
-    
-    // Always display in USD format for consistency
-    if (isUsd || symbol === 'USD') {
-      // Handle near-zero values
-      if (value < 0.01) {
-        return '< $0.01';
-      }
-      
-      // Format USD value
-      return `$${parseFloat(value).toFixed(2)}`;
-    }
-    // If there's an original ETH value, show it in parentheses
-    else if (originalValue !== undefined && originalSymbol) {
-      // Handle near-zero values
-      if (value < 0.01) {
-        return `< 0.01 ${symbol}`;
-      }
-      
-      // Format with original value
-      return `${parseFloat(value).toFixed(2)} ${symbol} (${parseFloat(originalValue).toFixed(2)} ${originalSymbol})`;
-    }
-    // For other currencies
-    else {
-      // Handle near-zero values
-      if (value < 0.01) {
-        return `< 0.01 ${symbol}`;
-      }
-      
-      // Format with currency symbol
-      return `${parseFloat(value).toFixed(2)} ${symbol}`;
-    }
-  };
-
-  const estimatedValue = formatEstimatedValue(valueData);
 
   return (
     <CardContainer 
@@ -570,30 +749,23 @@ const NftCard = ({
         
         <CardFooter>
           <PriceContainer>
-            {getValue() > 0 ? (
+            {/* Floor Price or Estimated Value display */}
+            {valueData ? (
               <PriceDisplay 
-                label="Est. Value"
-                amount={getValue()}
-                currency="USD"
+                label={valueData.label}
+                amount={valueData.value}
+                currency={valueData.symbol}
               />
-            ) : showLastPrice && getPriceInfo() ? (
+            ) : getFloorPrice() !== "N/A" ? (
               <PriceDisplay 
-                label="Last Price"
-                amount={getPriceInfo().amount}
-                currency={getPriceInfo().currency}
-              />
-            ) : getFloorPrice() > 0 ? (
-              <PriceDisplay 
-                label="Floor Price"
+                label="Floor"
                 amount={getFloorPrice()}
-                currency="ETH"
               />
             ) : (
-              <PriceDisplay 
-                label="Price"
-                amount="N/A"
-                currency=""
-              />
+              <div className="price-container">
+                <span className="price-label">Price:</span>
+                <span className="price-value">N/A</span>
+              </div>
             )}
           </PriceContainer>
           
