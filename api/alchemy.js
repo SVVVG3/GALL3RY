@@ -60,13 +60,13 @@ module.exports = async (req, res) => {
       });
     }
     
-    // Map chain names to base URLs - Using v2 NFT API endpoints as per documentation
+    // Map chain names to base URLs - Using v3 NFT API endpoints
     const chainBaseUrls = {
-      eth: 'https://eth-mainnet.g.alchemy.com/nft/v2',
-      base: 'https://base-mainnet.g.alchemy.com/nft/v2',
-      polygon: 'https://polygon-mainnet.g.alchemy.com/nft/v2',
-      arbitrum: 'https://arb-mainnet.g.alchemy.com/nft/v2',
-      optimism: 'https://opt-mainnet.g.alchemy.com/nft/v2',
+      eth: 'https://eth-mainnet.g.alchemy.com/nft/v3',
+      base: 'https://base-mainnet.g.alchemy.com/nft/v3',
+      polygon: 'https://polygon-mainnet.g.alchemy.com/nft/v3',
+      arbitrum: 'https://arb-mainnet.g.alchemy.com/nft/v3',
+      optimism: 'https://opt-mainnet.g.alchemy.com/nft/v3',
     };
     
     // Get the base URL for the requested chain
@@ -82,8 +82,9 @@ module.exports = async (req, res) => {
     // The getNFTsForOwner endpoint expects specific parameter names
     let renamedParams = { ...params };
     
-    // Rename parameters according to the Alchemy NFT API v2 docs
+    // Rename parameters according to the Alchemy NFT API v3 docs
     if (params.excludeSpam) {
+      // v3 uses excludeFilters directly
       renamedParams.excludeFilters = ['SPAM'];
       delete renamedParams.excludeSpam;
     }
@@ -92,12 +93,13 @@ module.exports = async (req, res) => {
       renamedParams.withMetadata = true;
     }
     
-    // Map NFT API endpoints to Alchemy API paths
+    // Map NFT API endpoints to Alchemy API v3 paths
+    // In v3, the endpoint is part of the URL structure
     let apiPath;
     switch (endpoint) {
       case 'getNFTsForOwner':
       case 'getNFTs':
-        apiPath = 'getNFTs';
+        apiPath = 'getNFTsForOwner';
         break;
       case 'getNftsForCollection':
         apiPath = 'getNFTsForCollection';
@@ -112,7 +114,7 @@ module.exports = async (req, res) => {
         apiPath = endpoint;
     }
     
-    // Build the Alchemy API URL according to documentation
+    // Build the Alchemy API URL according to v3 documentation
     let alchemyUrl = `${baseUrl}/${ALCHEMY_API_KEY}/${apiPath}`;
     
     // Add query parameters
@@ -130,7 +132,7 @@ module.exports = async (req, res) => {
       alchemyUrl += `?${queryString}`;
     }
     
-    console.log(`Proxying request to Alchemy API: ${alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')}`);
+    console.log(`Proxying request to Alchemy API v3: ${alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')}`);
     
     // Make the request to Alchemy API with timeout
     const controller = new AbortController();
@@ -174,7 +176,7 @@ module.exports = async (req, res) => {
         return res.status(response.status || 500).json(data);
       }
       
-      console.log(`Alchemy API response successful, returning data with ${data.ownedNfts?.length || 0} NFTs`);
+      console.log(`Alchemy API v3 response successful, returning data with ${data.ownedNfts?.length || 0} NFTs`);
       
       // Return the data
       return res.status(200).json(data);

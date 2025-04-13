@@ -1,7 +1,7 @@
 /**
  * Alchemy API Service
- * A robust implementation for fetching NFTs from Alchemy using the NFT API v2
- * See documentation: https://docs.alchemy.com/reference/nft-api-quickstart
+ * A robust implementation for fetching NFTs from Alchemy using the NFT API v3
+ * See documentation: https://docs.alchemy.com/reference/getnftsforowner-v3
  */
 import axios from 'axios';
 import { CACHE_EXPIRATION_TIME } from '../../constants';
@@ -84,7 +84,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
   }
 
   try {
-    console.log(`Fetching NFTs for ${normalizedAddress} on ${chain} from Alchemy`);
+    console.log(`Fetching NFTs for ${normalizedAddress} on ${chain} from Alchemy v3 API`);
     console.log(`Using API base URL: ${API_BASE_URL}`);
     
     // Get the appropriate chain value
@@ -93,10 +93,11 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       throw new Error(`Unsupported chain: ${chain}`);
     }
 
-    // Construct the URL with query parameters for the v2 API format
-    let url = `${API_BASE_URL}?chain=${chainValue}&endpoint=getNFTs&owner=${normalizedAddress}`;
+    // Construct the URL with query parameters for the v3 API format
+    // In v3, we use the 'getNFTsForOwner' endpoint explicitly
+    let url = `${API_BASE_URL}?chain=${chainValue}&endpoint=getNFTsForOwner&owner=${normalizedAddress}`;
     
-    // Add parameters with correct names for v2 API - EXACTLY as specified in Alchemy docs
+    // Add parameters with correct names for v3 API
     if (includeMetadata) {
       url += `&withMetadata=true`;
     }
@@ -159,24 +160,24 @@ const processAlchemyResponse = (response, chain) => {
   }
   
   // Log for debugging
-  console.log(`Processing ${ownedNfts.length} NFTs from Alchemy API (${chain})`);
+  console.log(`Processing ${ownedNfts.length} NFTs from Alchemy API v3 (${chain})`);
   console.log('Sample NFT response:', ownedNfts[0]);
   
   // Map Alchemy NFTs to our expected format
   const processedNfts = ownedNfts.map(nft => {
     try {
-      // Extract token ID and address from v2 API format
+      // Extract token ID and address from v3 API format
       const contractAddress = nft.contract?.address;
-      const tokenId = nft.id?.tokenId || nft.tokenId;
-      const metadata = nft.metadata || {};
-      const title = nft.title || metadata?.name;
+      const tokenId = nft.tokenId;
+      const metadata = nft.tokenMetadata || nft.metadata || {};
+      const title = nft.name || nft.title || metadata?.name;
       const description = nft.description || metadata?.description;
       const balance = nft.balance || "1";
       
-      // Handle media from v2 API format
+      // Handle media from v3 API format
       const media = extractMediaFromAlchemyNFT(nft);
       
-      // Get contract metadata (important for floor price)
+      // Get contract metadata
       const contractMetadata = nft.contractMetadata || {};
       
       // Map to our app's expected format
@@ -189,7 +190,7 @@ const processAlchemyResponse = (response, chain) => {
         network: chain,
         // Collection info
         collection: {
-          name: metadata?.collection || nft.contract?.name || 'Unknown Collection',
+          name: nft.contract?.name || metadata?.collection || 'Unknown Collection',
           address: contractAddress,
           id: `${chain}:${contractAddress}`,
           network: chain,
@@ -229,17 +230,19 @@ const processAlchemyResponse = (response, chain) => {
  */
 const extractMediaFromAlchemyNFT = (nft) => {
   try {
-    // Handle both v2 and v3 API formats
-    const metadata = nft.metadata || {};
-    // V2 API has media array, V3 has media object
-    const media = Array.isArray(nft.media) ? nft.media : [nft.media].filter(Boolean);
+    // Handle v3 API format - structure is slightly different from v2
+    const metadata = nft.tokenMetadata || nft.metadata || {};
+    
+    // In v3, media is typically in the 'media' property or available as an 'image' property
+    const mediaItems = nft.media || [];
     
     // For debugging media data
-    console.log(`Extracting media for NFT: ${nft.title || nft.metadata?.name || nft.id?.tokenId}`, {
+    console.log(`Extracting media for NFT: ${nft.name || nft.title || nft.tokenId}`, {
       hasMedia: !!nft.media,
-      mediaArrayLength: Array.isArray(nft.media) ? nft.media.length : 'not array',
-      firstMediaItem: Array.isArray(nft.media) && nft.media.length > 0 ? nft.media[0] : nft.media,
-      metadataImage: nft.metadata?.image
+      mediaLength: Array.isArray(nft.media) ? nft.media.length : 'not array',
+      firstMediaItem: Array.isArray(nft.media) && nft.media.length > 0 ? nft.media[0] : null,
+      image: nft.image,
+      metadataImage: metadata?.image
     });
     
     // Default result object
@@ -256,10 +259,10 @@ const extractMediaFromAlchemyNFT = (nft) => {
       }
     };
     
-    // Extract from Alchemy media array
-    if (media && media.length > 0) {
+    // Extract from media array
+    if (mediaItems && mediaItems.length > 0) {
       // Find the first valid media
-      const firstMedia = media.find(m => m && m.gateway && !m.gateway.includes('defaulticon'));
+      const firstMedia = mediaItems.find(m => m && m.gateway && !m.gateway.includes('defaulticon'));
       if (firstMedia) {
         // Use gateway URL as it's already IPFS-resolved
         result.imageUrl = firstMedia.gateway;
@@ -283,7 +286,37 @@ const extractMediaFromAlchemyNFT = (nft) => {
       }
     }
     
-    // If no media found, try metadata.image from either format
+    // If no media found, try image directly from the NFT object
+    if (!result.imageUrl && nft.image) {
+      let imageUrl = null;
+      
+      // In v3, image might be an object with gateway property
+      if (typeof nft.image === 'object' && nft.image.gateway) {
+        imageUrl = nft.image.gateway;
+      } else if (typeof nft.image === 'string') {
+        imageUrl = nft.image;
+      }
+      
+      if (imageUrl) {
+        result.imageUrl = imageUrl;
+        result.mediasV2.push({
+          original: imageUrl,
+          originalUri: imageUrl,
+          url: imageUrl,
+          mimeType: 'image/png'
+        });
+        
+        result.mediasV3.images.edges.push({
+          node: {
+            original: imageUrl,
+            thumbnail: imageUrl,
+            large: imageUrl
+          }
+        });
+      }
+    }
+    
+    // If still no image, check metadata.image
     if (!result.imageUrl) {
       let imageUrl = null;
       
@@ -292,8 +325,6 @@ const extractMediaFromAlchemyNFT = (nft) => {
         imageUrl = metadata.image;
       } else if (nft.tokenUri && nft.tokenUri.gateway) {
         imageUrl = nft.tokenUri.gateway;
-      } else if (nft.image && nft.image.gateway) {
-        imageUrl = nft.image.gateway;
       }
       
       if (imageUrl) {
