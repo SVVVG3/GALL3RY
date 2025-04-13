@@ -138,6 +138,10 @@ const NFTGallery = () => {
     if (hasMore && !isLoading && !loadingMore) {
       console.log(`MANUAL LOAD: Fetching next page of NFTs with cursor: ${endCursor}`);
       
+      // NOTE: It appears that Zapper's API may have an undocumented limit of ~200 NFTs
+      // per query session regardless of pagination. If you can't load more than ~200 NFTs,
+      // this is likely due to API limitations, not a bug in our implementation.
+      
       // Directly call fetchNFTs with loadMore=true to bypass auto-loading logic
       fetchNFTs({
         loadMore: true,
