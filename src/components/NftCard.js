@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
 import styled from 'styled-components';
-import { FaEthereum, FaUsers } from 'react-icons/fa';
+import { FaEthereum, FaUsers, FaHeart } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { useNFT } from '../contexts/NFTContext';
 import './NftCard.css';
@@ -13,7 +13,7 @@ import { formatAddress } from '../utils/format';
 import analytics from '../utils/analytics';
 
 /**
- * NftCard component for displaying a single NFT
+ * Enhanced NFT Card component with better styling and animations
  */
 const NftCard = ({ 
   nft, 
@@ -29,6 +29,7 @@ const NftCard = ({
   const navigate = useNavigate();
   const [showHolders, setShowHolders] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const { profile, isAuthenticated } = useAuth();
   const [currentContractAddress, setCurrentContractAddress] = useState(null);
   const [currentNetwork, setCurrentNetwork] = useState('ETHEREUM_MAINNET');
@@ -410,6 +411,10 @@ const NftCard = ({
     });
   };
 
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   const getValue = () => {
     // Debug log for value properties
     console.log('NFT value debug:', {
@@ -636,82 +641,69 @@ const NftCard = ({
     }
   };
 
+  const estimatedValue = formatEstimatedValue(valueData);
+
   return (
-    <CardContainer 
-      onClick={handleCardClick} 
-      className={`nft-card ${disabled ? 'disabled' : ''}`}
-      disabled={disabled}
-    >
-      <div className="image-container">
-        {imageLoadingState}
-        <img
-          src={imageUrl}
-          alt={name}
-          className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
-          onLoad={() => setImageLoaded(true)}
-        />
-      </div>
-
-      <div className="nft-details">
-        <div className="nft-info">
-          <h3 className="nft-name">{name || `#${tokenId}`}</h3>
-          {showCollectionName && (
-            <p className="collection-name">{collection || 'Unknown Collection'}</p>
+    <CardContainer $disabled={disabled}>
+      <div onClick={handleCardClick}>
+        <ImageContainer>
+          {!imageLoaded && !imageError && <CardLoadingAnimation />}
+          
+          {imageUrl && (
+            <CardImage
+              src={imageUrl}
+              alt={name || 'NFT'}
+              onLoad={() => setImageLoaded(true)}
+              onError={handleImageError}
+              className={imageLoaded ? 'loaded' : ''}
+            />
           )}
-        </div>
+          
+          {imageError && (
+            <FallbackImage>
+              <CollectionInitial>{getCollection()?.name?.[0] || '?'}</CollectionInitial>
+              <TokenIdDisplay>#{getTokenId()}</TokenIdDisplay>
+            </FallbackImage>
+          )}
+          
+          {showLikeButton && onLike && (
+            <LikeButton onClick={handleLikeClick}>
+              <FaHeart color={nft.isLiked ? '#ff4757' : '#fff'} />
+            </LikeButton>
+          )}
+        </ImageContainer>
 
-        <div className="nft-meta">
-          <div className="nft-price">
-            {showLastPrice && nft.lastPrice ? (
-              <PriceDisplay 
-                label="Last Price" 
-                amount={nft.lastPrice} 
-                currency={nft.lastPriceCurrency} 
-              />
-            ) : (
-              <PriceDisplay 
-                label="Est. Value" 
-                amount={valueData.value} 
-                currency={valueData.symbol}
-                precision={2} 
-                isUsd={valueData.isUsd}
-              />
+        <CardDetails>
+          <CardInfo>
+            <CardName>{getName()}</CardName>
+            {showCollectionName && (
+              <CollectionName>{getCollection()?.name || 'Unknown Collection'}</CollectionName>
             )}
-          </div>
+          </CardInfo>
           
-          {/* Only render like button if showLikeButton prop is true */}
-          {showLikeButton && (
-            <button 
-              className="like-button" 
-              aria-label="Like NFT" 
-              onClick={handleLikeClick}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
-            </button>
-          )}
-          
-          {/* Only render holders button if authenticated, has profile FID, and has a valid collection address */}
-          {isAuthenticated && profile?.fid && hasCollectionAddress && (
-            <button
-              className="holders-button"
-              onClick={handleHoldersClick}
-              aria-label="View collection holders"
-            >
+          <CardMeta>
+            <PriceSection>
+              <PriceDisplay 
+                amount={estimatedValue} 
+                currency="USD" 
+                precision={2}
+              />
+            </PriceSection>
+            
+            <HoldersButton onClick={handleHoldersClick}>
               <FaUsers />
-            </button>
-          )}
-        </div>
+            </HoldersButton>
+          </CardMeta>
+        </CardDetails>
       </div>
-
-      {/* Only render the modal when showHolders is true AND we have a contract address */}
+      
       {showHolders && (
         currentContractAddress ? (
           <CollectionHoldersModal
             collectionAddress={currentContractAddress}
             network={currentNetwork}
             tokenId={tokenId}
-            userFid={profile?.fid}
+            userFid={null}
             onClose={handleCloseModal}
           />
         ) : (
@@ -728,17 +720,20 @@ const NftCard = ({
   );
 };
 
-// Styled components
+// Styled components for enhanced NFT Card
 const CardContainer = styled.div`
   background-color: white;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: ${props => props.$disabled ? 'default' : 'pointer'};
+  opacity: ${props => props.$disabled ? 0.7 : 1};
+  height: 100%;
   
   &:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    transform: ${props => props.$disabled ? 'none' : 'translateY(-5px)'};
+    box-shadow: ${props => props.$disabled ? '0 4px 8px rgba(0, 0, 0, 0.05)' : '0 8px 16px rgba(0, 0, 0, 0.1)'};
   }
 `;
 
@@ -746,36 +741,59 @@ const ImageContainer = styled.div`
   position: relative;
   width: 100%;
   padding-top: 100%; /* 1:1 Aspect Ratio */
-  background-color: #f0f0f0;
+  background-color: #f5f5f5;
+  overflow: hidden;
 `;
 
-const Image = styled.img`
+const CardImage = styled.img`
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  
+  &.loaded {
+    opacity: 1;
+  }
 `;
 
-const PlaceholderImage = styled.div`
+const FallbackImage = styled.div`
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: #f0f0f0;
-  color: #999;
+  background-color: #e9ecef;
+  color: #495057;
 `;
 
-const CardContent = styled.div`
+const CollectionInitial = styled.div`
+  font-size: 3rem;
+  font-weight: bold;
+  text-transform: uppercase;
+`;
+
+const TokenIdDisplay = styled.div`
+  font-size: 1rem;
+  margin-top: 0.5rem;
+`;
+
+const CardDetails = styled.div`
   padding: 1rem;
 `;
 
-const Title = styled.h3`
+const CardInfo = styled.div`
+  margin-bottom: 0.75rem;
+`;
+
+const CardName = styled.h3`
   margin: 0 0 0.25rem 0;
   font-size: 1rem;
   font-weight: 600;
@@ -785,7 +803,7 @@ const Title = styled.h3`
 `;
 
 const CollectionName = styled.p`
-  margin: 0 0 0.75rem 0;
+  margin: 0;
   font-size: 0.85rem;
   color: #666;
   white-space: nowrap;
@@ -793,40 +811,54 @@ const CollectionName = styled.p`
   text-overflow: ellipsis;
 `;
 
-const CardFooter = styled.div`
+const CardMeta = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 0.5rem;
 `;
 
-const EstimatedValue = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: #4caf50;
-  font-weight: 600;
-  font-size: 1rem;
+const PriceSection = styled.div`
+  font-size: 0.9rem;
 `;
 
-const HoldersButton = styled.button`
-  background-color: rgba(0, 0, 0, 0.7);
+const LikeButton = styled.button`
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
   border: none;
   border-radius: 50%;
-  width: 2rem;
-  height: 2rem;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1rem;
-  color: white;
   cursor: pointer;
-  transition: background-color 0.2s, transform 0.2s;
-  margin-left: 0.5rem;
+  transition: transform 0.2s;
+  z-index: 2;
   
   &:hover {
-    background-color: rgba(76, 175, 80, 0.8);
     transform: scale(1.1);
+  }
+`;
+
+const HoldersButton = styled.button`
+  background-color: rgba(0, 0, 0, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+  color: #666;
+  
+  &:hover {
+    background-color: rgba(76, 175, 80, 0.2);
+    transform: scale(1.1);
+    color: #4CAF50;
   }
 `;
 

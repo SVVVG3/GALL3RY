@@ -106,6 +106,7 @@ export const NFTProvider = ({ children }) => {
   const [sortOrder, setSortOrder] = useState('desc');
   const [prioritizeSpeed, setPrioritizeSpeed] = useState(true);
   const [page, setPage] = useState(1);
+  const [excludeSpam, setExcludeSpam] = useState(true); // Default to exclude spam
   
   // Collection holders state
   const [collectionHolders, setCollectionHolders] = useState({});
@@ -233,6 +234,13 @@ export const NFTProvider = ({ children }) => {
       includeValue = true
     } = options;
     
+    // Helper to normalize NFT IDs for deduplication
+    const normalizeId = (nft) => {
+      const id = nft.id || 
+        `${nft.network || nft.collection?.network || 'unknown'}:${nft.contractAddress || nft.collection?.address || ''}-${nft.tokenId || ''}`;
+      return id.toLowerCase(); // Normalize to lowercase
+    };
+    
     // Don't do anything if no addresses provided
     if (!addresses || addresses.length === 0) {
       console.log('No addresses provided, skipping NFT fetch');
@@ -276,7 +284,7 @@ export const NFTProvider = ({ children }) => {
           // Fetch NFTs for this chain
           const chainResult = await services.alchemy.batchFetchNFTs(addresses, chain, {
             pageSize: batchSize,
-            excludeSpam: true,
+            excludeSpam: excludeSpam,
             bypassCache
           });
           
@@ -310,16 +318,29 @@ export const NFTProvider = ({ children }) => {
       // Process collections and chains
       processNFTCollectionsAndChains(allNfts);
       
+      // Deduplicate NFTs before updating state
+      const uniqueNftIds = new Set();
+      const uniqueNfts = allNfts.filter(nft => {
+        const normalizedId = normalizeId(nft);
+        if (uniqueNftIds.has(normalizedId)) {
+          return false;
+        }
+        uniqueNftIds.add(normalizedId);
+        return true;
+      });
+      
+      console.log(`Filtered to ${uniqueNfts.length} unique NFTs out of ${allNfts.length} total`);
+      
       // Update state based on whether this is initial load or load more
       if (loadMore) {
         setNfts(prevNfts => {
           // Deduplicate by ID
-          const existing = new Set(prevNfts.map(nft => nft.id));
-          const newNfts = allNfts.filter(nft => !existing.has(nft.id));
+          const existing = new Set(prevNfts.map(nft => normalizeId(nft)));
+          const newNfts = uniqueNfts.filter(nft => !existing.has(normalizeId(nft)));
           return [...prevNfts, ...newNfts];
         });
       } else {
-        setNfts(allNfts);
+        setNfts(uniqueNfts);
       }
       
       // Update pagination state
@@ -327,7 +348,7 @@ export const NFTProvider = ({ children }) => {
       
       // Return the results
       return {
-        nfts: allNfts,
+        nfts: uniqueNfts,
         hasMore: hasMoreResults
       };
     } catch (error) {
@@ -339,7 +360,7 @@ export const NFTProvider = ({ children }) => {
       setIsLoading(false);
       setLoadingMore(false);
     }
-  }, [selectedWallets, services]);
+  }, [selectedWallets, services, excludeSpam]);
   
   // Function to enrich NFTs with value data from Zapper
   const enrichNFTsWithValueData = async (nftsToEnrich) => {
@@ -409,7 +430,7 @@ export const NFTProvider = ({ children }) => {
               const nftsForThisCollection = nftsByAddress[collection.address.toLowerCase()] || [];
               
               nftsForThisCollection.forEach(nft => {
-                const index = enrichedNfts.findIndex(n => n.id === nft.id);
+                const index = enrichedNfts.findIndex(n => normalizeId(n) === normalizeId(nft));
                 if (index !== -1) {
                   // Update collection and floor price
                   enrichedNfts[index] = {
@@ -622,7 +643,10 @@ export const NFTProvider = ({ children }) => {
           fid: holder.account.farcasterProfile?.fid,
           username: holder.account.farcasterProfile?.username || 'unknown',
           displayName: holder.account.farcasterProfile?.displayName,
-          imageUrl: holder.account.farcasterProfile?.pfpUrl,
+          imageUrl: holder.account.farcasterProfile?.imageUrl || 
+                    holder.account.farcasterProfile?.pfpUrl || 
+                    holder.account.farcasterProfile?.metadata?.imageUrl || 
+                    '/placeholder.png',
           followersCount: holder.account.farcasterProfile?.followerCount || 0,
           followingCount: holder.account.farcasterProfile?.followingCount || 0,
           // Set relationship info
@@ -851,11 +875,13 @@ export const NFTProvider = ({ children }) => {
     
     // Filter options
     minValue,
-    maxValue,
-    dateRange,
     setMinValue,
+    maxValue,
     setMaxValue,
+    dateRange,
     setDateRange,
+    excludeSpam,
+    setExcludeSpam,
     
     // Metadata
     availableChains,

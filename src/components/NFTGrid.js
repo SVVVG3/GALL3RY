@@ -1,5 +1,6 @@
 import React from 'react';
 import NftCard from './NftCard';
+import styled from 'styled-components';
 
 /**
  * NftGrid component for displaying a grid of NFTs
@@ -11,10 +12,10 @@ import NftCard from './NftCard';
 const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NFTs found' }) => {
   if (loading) {
     return (
-      <div className="nft-grid-loading">
-        <div className="loading-spinner"></div>
+      <LoadingContainer>
+        <LoadingSpinner />
         <p>Loading NFTs...</p>
-      </div>
+      </LoadingContainer>
     );
   }
 
@@ -22,9 +23,9 @@ const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NF
   if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
     console.warn('NftGrid received invalid NFT data:', nfts);
     return (
-      <div className="nft-grid-empty">
+      <EmptyStateContainer>
         <p>{emptyMessage}</p>
-      </div>
+      </EmptyStateContainer>
     );
   }
 
@@ -34,14 +35,14 @@ const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NF
   if (validNfts.length === 0) {
     console.warn('NftGrid filtered out all invalid NFTs from array');
     return (
-      <div className="nft-grid-empty">
+      <EmptyStateContainer>
         <p>{emptyMessage}</p>
-      </div>
+      </EmptyStateContainer>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
+    <GridContainer>
       {validNfts.map((nft, index) => (
         <NftCard 
           key={`${nft.collection?.address || 'unknown'}-${nft.tokenId || index}-${index}`}
@@ -50,8 +51,51 @@ const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NF
           disabled={false}
         />
       ))}
-    </div>
+    </GridContainer>
   );
 };
+
+// Styled components
+const GridContainer = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 1rem;
+  }
+`;
+
+const LoadingContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 0;
+  color: #666;
+`;
+
+const LoadingSpinner = styled.div`
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: #3498db;
+  animation: spin 1s ease-in-out infinite;
+  margin-bottom: 1rem;
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+`;
+
+const EmptyStateContainer = styled.div`
+  text-align: center;
+  padding: 3rem 0;
+  color: #666;
+  font-size: 1.1rem;
+`;
 
 export default NftGrid; 
