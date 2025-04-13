@@ -790,19 +790,19 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         {userProfile && (
           <div className="user-profile">
             <div className="profile-section">
-              <div className="profile-image">
-                <img 
-                  src={getProfileImageUrl(userProfile)} 
-                  alt={userProfile?.username || 'Profile'} 
-                  onError={(e) => {
-                    console.error('Profile image load error:', e);
-                    e.target.src = '/placeholder.png';
-                  }}
-                />
-              </div>
-              <div className="profile-info">
-                <div className="profile-header">
-                  <h3>{userProfile?.metadata?.displayName || userProfile?.username}</h3>
+              <div className="profile-content">
+                <div className="profile-image">
+                  <img 
+                    src={getProfileImageUrl(userProfile)} 
+                    alt={userProfile?.username || 'Profile'} 
+                    onError={(e) => {
+                      console.error('Profile image load error:', e);
+                      e.target.src = '/placeholder.png';
+                    }}
+                  />
+                </div>
+                <div className="profile-details">
+                  <h3 className="profile-display-name">{userProfile?.metadata?.displayName || userProfile?.username}</h3>
                   <a 
                     href={`https://warpcast.com/${userProfile?.username}`} 
                     className="username-link"
@@ -813,9 +813,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   </a>
                   <span className="fid-badge">FID: {userProfile?.fid}</span>
                 </div>
-                {userProfile?.metadata?.description && (
-                  <p className="bio">{userProfile?.metadata?.description}</p>
-                )}
                 
                 {/* Display wallet addresses with toggle */}
                 <div className="wallet-addresses">
@@ -823,9 +820,20 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                     <span>
                       {getWalletCount()} connected {getWalletCount() === 1 ? 'wallet' : 'wallets'}
                     </span>
-                    <button className="toggle-button">
-                      {walletsExpanded ? 'Hide' : 'Show'}
-                    </button>
+                    <svg 
+                      className={`wallet-toggle-arrow ${walletsExpanded ? 'expanded' : ''}`}
+                      xmlns="http://www.w3.org/2000/svg" 
+                      width="16" 
+                      height="16" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
                   </div>
                   
                   {walletsExpanded && (

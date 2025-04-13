@@ -1176,3 +1176,226 @@ img {
     letter-spacing: normal !important;
   }
 }
+
+/* User Profile Dropdown Styles */
+.user-profile-dropdown {
+  position: relative;
+}
+
+.user-profile-button {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 20px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.user-profile-button:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 8px;
+}
+
+.profile-username {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-gray-800);
+  margin-right: 4px;
+}
+
+.dropdown-arrow {
+  transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 160px;
+  z-index: 100;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: block;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--color-gray-700);
+  text-decoration: none;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+}
+
+.dropdown-item:hover {
+  background-color: var(--color-gray-100);
+}
+
+.dropdown-item.sign-out {
+  color: #e53e3e;
+  border-top: 1px solid var(--color-gray-200);
+}
+
+/* Responsive adjustments for the dropdown */
+@media (max-width: 640px) {
+  .profile-username {
+    display: none;
+  }
+  
+  .user-profile-button {
+    padding: 4px;
+  }
+  
+  .dropdown-arrow {
+    display: none;
+  }
+}
+
+/* Updated Profile Section Styling */
+.profile-section {
+  margin-bottom: 2rem;
+  background-color: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.profile-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+}
+
+.profile-image {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.profile-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.profile-display-name {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+  color: var(--color-gray-900);
+}
+
+.username-link {
+  font-size: 1rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  margin-bottom: 0.5rem;
+}
+
+.fid-badge {
+  font-size: 0.875rem;
+  background-color: var(--color-gray-100);
+  color: var(--color-gray-700);
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+}
+
+/* Updated Wallet Addresses Styling */
+.wallet-addresses {
+  width: 100%;
+  max-width: 400px;
+  margin-top: 1rem;
+}
+
+.address-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background-color: var(--color-gray-50);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-size: 0.9rem;
+  color: var(--color-gray-700);
+  border: 1px solid var(--color-gray-200);
+}
+
+.address-header:hover {
+  background-color: var(--color-gray-100);
+}
+
+.wallet-toggle-arrow {
+  transition: transform 0.2s;
+}
+
+.wallet-toggle-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.address-list {
+  list-style: none;
+  margin-top: 0.5rem;
+  border: 1px solid var(--color-gray-200);
+  border-radius: 8px;
+  background-color: white;
+  overflow: hidden;
+}
+
+.address-list li {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-gray-200);
+  font-family: monospace;
+  font-size: 0.875rem;
+  color: var(--color-gray-800);
+}
+
+.address-list li:last-child {
+  border-bottom: none;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .profile-image {
+    width: 90px;
+    height: 90px;
+  }
+  
+  .profile-display-name {
+    font-size: 1.25rem;
+  }
+  
+  .wallet-addresses {
+    max-width: 100%;
+  }
+}
