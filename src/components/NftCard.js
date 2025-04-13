@@ -90,10 +90,17 @@ const NftCard = ({
   };
 
   const getImageUrl = () => {
-    // Check for direct image URL
-    if (nft.imageUrl) return nft.imageUrl;
+    // Follow Alchemy's best practices for image URLs:
+    // 1. Prefer media.gateway (already resolved gateway URLs)
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      const mediaItem = nft.media[0];
+      // Prefer gateway URL (already resolved)
+      if (mediaItem.gateway) return mediaItem.gateway;
+      // Fall back to raw URL
+      if (mediaItem.raw) return mediaItem.raw;
+    }
     
-    // Check for mediasV3 (new in Zapper API)
+    // 2. Check for mediaV3 format (as used in our app)
     if (nft.mediasV3) {
       // Check images first
       if (nft.mediasV3.images?.edges && nft.mediasV3.images.edges.length > 0) {
@@ -119,7 +126,7 @@ const NftCard = ({
       }
     }
     
-    // Check for mediasV2 (common in older Zapper API)
+    // 3. Check for mediasV2 format (used in older data)
     if (nft.mediasV2 && nft.mediasV2.length > 0) {
       for (const media of nft.mediasV2) {
         if (!media) continue;
@@ -129,24 +136,19 @@ const NftCard = ({
       }
     }
     
-    // Check for image URL in metadata
+    // 4. Check for direct imageUrl property
+    if (nft.imageUrl) return nft.imageUrl;
+    
+    // 5. Check for image URL in metadata (per Alchemy best practices)
     if (nft.metadata?.image) return nft.metadata.image;
     
-    // Check for collection image
+    // 6. Collection fallbacks
     if (nft.collection?.imageUrl) return nft.collection.imageUrl;
     if (nft.collection?.cardImage) return nft.collection.cardImage;
     if (nft.collection?.medias?.logo?.thumbnail) return nft.collection.medias.logo.thumbnail;
     
-    // Check for token image
+    // 7. Token fallback
     if (nft.token?.imageUrl) return nft.token.imageUrl;
-    
-    // Check for legacy media array
-    if (Array.isArray(nft.media)) {
-      for (const media of nft.media) {
-        if (media.url) return media.url;
-        if (media.originalUrl) return media.originalUrl;
-      }
-    }
     
     return null;
   };
@@ -448,7 +450,12 @@ const NftCard = ({
   
   // Get floor price from NFT data
   const getFloorPrice = () => {
-    // Try various possible paths for floor price
+    // Check for OpenSea floor price from Alchemy (highest priority)
+    if (nft.contractMetadata?.openSea?.floorPrice) {
+      return parseFloat(nft.contractMetadata.openSea.floorPrice);
+    }
+    
+    // Try various other possible paths for floor price
     if (nft.collection?.floorPrice?.valueUsd) {
       return parseFloat(nft.collection.floorPrice.valueUsd);
     }

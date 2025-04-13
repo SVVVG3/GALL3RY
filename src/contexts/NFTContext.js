@@ -289,7 +289,21 @@ export const NFTProvider = ({ children }) => {
           });
           
           // Combine results
-          allNfts = [...allNfts, ...chainResult.nfts];
+          const fetchedNfts = chainResult.nfts || [];
+          
+          // Additional client-side spam filtering if excludeSpam is true
+          const filteredNfts = excludeSpam 
+            ? fetchedNfts.filter(nft => {
+                // Check Alchemy's spam info directly if available
+                if (nft.spamInfo && nft.spamInfo.isSpam === true) {
+                  console.log(`Filtered out spam NFT: ${nft.name || nft.tokenId} (${nft.contractAddress})`);
+                  return false;
+                }
+                return true;
+              })
+            : fetchedNfts;
+          
+          allNfts = [...allNfts, ...filteredNfts];
           
           // Update hasMore flag
           if (chainResult.hasMore) {
