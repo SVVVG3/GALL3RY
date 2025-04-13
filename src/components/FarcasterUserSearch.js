@@ -271,16 +271,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       const response = await zapperService.getNftsForAddresses(addresses, 50, cursor, true);
       
       // Log the response summary
-      console.log(`Received ${response?.items?.length || 0} NFTs, hasMore: ${response?.hasMore}, cursor: ${response?.cursor}`);
+      console.log(`Received ${response?.items?.length || response?.nfts?.length || 0} NFTs, hasMore: ${response?.hasMore}, cursor: ${response?.cursor}`);
 
-      // Return early if no items array in response
-      if (!response || !response.items) {
+      // Return early if no valid items array in response
+      if (!response || (!response.items && !response.nfts)) {
         console.warn('No valid response or items from getNftsForAddresses');
         return null;
       }
 
       // Filter out any invalid NFT objects 
-      const validNfts = response.items.filter(nft => 
+      const validNfts = (response.items || response.nfts).filter(nft => 
         nft && nft.token && nft.token.collection && nft.token.collection.name);
       
       console.log(`Filtered to ${validNfts.length} valid NFTs`);

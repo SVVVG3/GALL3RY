@@ -30,7 +30,8 @@ const NFTGallery = () => {
     prioritizeSpeed,
     setPrioritizeSpeed,
     loadMoreNFTs,
-    fetchNFTs
+    fetchNFTs,
+    endCursor
   } = useNFT();
   
   const { connectedWallets } = useWallet();

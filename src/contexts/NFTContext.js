@@ -341,7 +341,8 @@ export const NFTProvider = ({ children }) => {
       setWalletLoadingStatus(updatedLoadingStatus);
       
       // Handle data from the new response format
-      const nftsData = result?.nfts || [];
+      // Support both old and new response formats (nfts or items)
+      const nftsData = result?.items || result?.nfts || [];
       const hasMoreData = result?.hasMore === true;
       const cursorData = result?.cursor || null;
       const totalCount = result?.totalNftCount || nftsData.length;
@@ -1018,6 +1019,7 @@ export const NFTProvider = ({ children }) => {
     error,
     hasMore,
     loadingMore,
+    endCursor,
     collections,
     chains,
     selectedChains,

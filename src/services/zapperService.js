@@ -473,25 +473,41 @@ export const getFarcasterPortfolio = async (usernameOrFid, options = {}) => {
 
 /**
  * Get NFTs for multiple addresses with improved caching and pagination
- * @param {string[]} addresses - Array of wallet addresses
- * @param {number} limit - Number of NFTs to fetch per request
- * @param {string|null} cursor - Pagination cursor
- * @param {boolean} bypassCache - Whether to bypass cache
+ * Supports both direct parameters and options object for backward compatibility
+ * @param {string[]} addresses - Array of wallet addresses 
+ * @param {number|object} limitOrOptions - Either the limit number or full options object
+ * @param {string|null} cursor - Pagination cursor (only used if limitOrOptions is a number)
+ * @param {boolean} bypassCache - Whether to bypass cache (only used if limitOrOptions is a number)
  * @returns {Promise<object>} - Object containing NFTs and pagination info
  */
-export const getNftsForAddresses = async (addresses, limit = 50, cursor = null, bypassCache = false) => {
+export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor = null, bypassCache = false) => {
   if (!addresses || addresses.length === 0) {
     console.warn('No addresses provided for getNftsForAddresses');
-    return { items: [], cursor: null, hasMore: false };
+    return { items: [], nfts: [], cursor: null, hasMore: false };
+  }
+  
+  // Handle both parameter formats for backward compatibility
+  let limit = 50;
+  let options = {};
+  
+  // If second parameter is an object, treat it as options
+  if (typeof limitOrOptions === 'object' && limitOrOptions !== null) {
+    options = limitOrOptions;
+    limit = options.limit || options.batchSize || 50;
+    cursor = options.cursor || null;
+    bypassCache = options.bypassCache || false;
+  } else {
+    // Otherwise use the direct parameters
+    limit = limitOrOptions || 50;
   }
   
   // Normalize addresses to lowercase to ensure consistent caching
   const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
   
   // Additional options with defaults
-  const cacheTTL = NFT_CACHE_TTL;
-  const endpoints = ZAPPER_API_ENDPOINTS;
-  const maxRetries = 3;
+  const cacheTTL = options.cacheTTL || NFT_CACHE_TTL;
+  const endpoints = options.endpoints || ZAPPER_API_ENDPOINTS;
+  const maxRetries = options.maxRetries || 3;
   
   // Generate a cache key based on addresses and cursor
   const cacheKey = `nfts:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
@@ -651,8 +667,11 @@ export const getNftsForAddresses = async (addresses, limit = 50, cursor = null, 
       owners: normalizedAddresses,
       first: limit,
       after: cursor,
-      bypassHidden: true
-      // network and minEstimatedValueUsd are optional, so we don't include them by default
+      bypassHidden: true,
+      // Include additional options if specified
+      ...(options.network && { network: options.network }),
+      ...(options.minEstimatedValueUsd && { minEstimatedValueUsd: options.minEstimatedValueUsd }),
+      ...(options.search && { search: options.search })
     };
     
     // Log detailed request information for debugging
@@ -771,10 +790,19 @@ export const getNftsForAddresses = async (addresses, limit = 50, cursor = null, 
       console.log(`Page Results: items=${processedNfts.length}, hasMore=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor || 'null'}`);
       
       const result = {
+        // Provide both formats for backward compatibility
         items: processedNfts,
+        nfts: processedNfts,
         cursor: pageInfo.endCursor || null,
         hasMore: Boolean(pageInfo.hasNextPage), // Ensure it's a boolean
-        totalNftCount: edges.length
+        totalNftCount: edges.length,
+        // Include pageInfo for debugging
+        pageInfo: {
+          hasNextPage: pageInfo.hasNextPage,
+          endCursor: pageInfo.endCursor,
+          startCursor: pageInfo.startCursor,
+          hasPreviousPage: pageInfo.hasPreviousPage
+        }
       };
       
       // Cache the result
@@ -786,11 +814,11 @@ export const getNftsForAddresses = async (addresses, limit = 50, cursor = null, 
       return result;
     } else {
       console.warn('No NFT data found in response:', response);
-      return { items: [], cursor: null, hasMore: false };
+      return { items: [], nfts: [], cursor: null, hasMore: false };
     }
   } catch (error) {
     console.error('Error fetching NFTs:', error);
-    return { items: [], cursor: null, hasMore: false };
+    return { items: [], nfts: [], cursor: null, hasMore: false };
   }
 };
 
