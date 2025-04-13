@@ -136,7 +136,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
                 className="flex items-center gap-4 p-4 holder-item"
               >
                 <img
-                  src={holder.imageUrl}
+                  src={holder.imageUrl || holder.avatarUrl || holder.pfpUrl || "/placeholder.png"}
                   alt={holder.username}
                   className="w-12 h-12 rounded-full"
                   onError={(e) => {

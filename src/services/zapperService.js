@@ -243,9 +243,16 @@ export const getFarcasterProfile = async (usernameOrFid) => {
               username: profile.username,
               displayName: profile.metadata?.displayName || profile.username,
               avatarUrl: profile.metadata?.imageUrl,
+              imageUrl: profile.metadata?.imageUrl,
+              pfpUrl: profile.metadata?.imageUrl,
               bio: profile.metadata?.description,
               custodyAddress: profile.custodyAddress,
               connectedAddresses: profile.connectedAddresses || [],
+              metadata: {
+                displayName: profile.metadata?.displayName,
+                description: profile.metadata?.description,
+                imageUrl: profile.metadata?.imageUrl
+              }
             };
           }
         } catch (altError) {
@@ -271,9 +278,16 @@ export const getFarcasterProfile = async (usernameOrFid) => {
                 username: profile.username,
                 displayName: profile.metadata?.displayName || profile.username,
                 avatarUrl: profile.metadata?.imageUrl,
+                imageUrl: profile.metadata?.imageUrl,
+                pfpUrl: profile.metadata?.imageUrl,
                 bio: profile.metadata?.description,
                 custodyAddress: profile.custodyAddress,
                 connectedAddresses: profile.connectedAddresses || [],
+                metadata: {
+                  displayName: profile.metadata?.displayName,
+                  description: profile.metadata?.description,
+                  imageUrl: profile.metadata?.imageUrl
+                }
               };
             }
           } catch (fidError) {
@@ -292,17 +306,24 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     console.log(`Profile found via Zapper API: ${profile.username}, FID: ${profile.fid}`);
     console.log(`Connected addresses: ${profile.connectedAddresses?.length || 0}, custody address: ${profile.custodyAddress || 'none'}`);
     
-    // Return data in the expected format
-      return {
+    // Return data in the expected format - include both avatarUrl and imageUrl for compatibility
+    return {
       fid: profile.fid,
       username: profile.username,
       displayName: profile.metadata?.displayName || profile.username,
       avatarUrl: profile.metadata?.imageUrl,
+      imageUrl: profile.metadata?.imageUrl,
+      pfpUrl: profile.metadata?.imageUrl,
       bio: profile.metadata?.description,
       custodyAddress: profile.custodyAddress,
       connectedAddresses: profile.connectedAddresses || [],
-      };
-    } catch (error) {
+      metadata: {
+        displayName: profile.metadata?.displayName,
+        description: profile.metadata?.description,
+        imageUrl: profile.metadata?.imageUrl
+      }
+    };
+  } catch (error) {
     // Enhanced error logging
     console.error('Error fetching Farcaster profile from Zapper API:', error);
     console.error('Error details:', {
