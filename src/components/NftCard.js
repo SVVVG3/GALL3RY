@@ -46,6 +46,7 @@ const NftCard = ({
   const [showHolders, setShowHolders] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
   const { profile, isAuthenticated } = useAuth();
+  const [currentContractAddress, setCurrentContractAddress] = useState(null);
 
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
@@ -131,7 +132,7 @@ const NftCard = ({
     return null;
   };
   
-  // Extract collection address - MOVED UP before it's used
+  // Extract collection address - Only called when needed, not during initial render
   const getContractAddress = () => {
     // First try direct access to address property
     if (nft.collection?.address) {
@@ -199,18 +200,6 @@ const NftCard = ({
   const name = getName();
   const collection = getCollection();
   const imageUrl = getImageUrl();
-  const contractAddress = getContractAddress();
-  
-  // Debug contract address
-  console.log("NFT Contract Address:", {
-    extracted: contractAddress,
-    collectionAddress: nft.collection?.address,
-    collectionId: nft.collection?.id,
-    nftId: nft.id,
-    contractAddress: nft.contractAddress,
-    contractAddressFromContract: nft.contract?.address,
-    tokenCollectionAddress: nft.token?.collection?.address
-  });
   
   // Card loading skeleton shown until image is loaded
   const imageLoadingState = !imageLoaded && (
@@ -231,20 +220,26 @@ const NftCard = ({
   };
   
   const handleHoldersClick = (e) => {
-    console.log('Holders button clicked', { contractAddress, profile });
     e.preventDefault();
     e.stopPropagation();
+    
+    // Only extract the contract address when the button is clicked
+    const contractAddress = getContractAddress();
+    setCurrentContractAddress(contractAddress);
+    
+    console.log('Holders button clicked', { contractAddress, profile });
     setShowHolders(true);
-    analytics.track('NFT Holders Viewed', {
-      collectionAddress: contractAddress
-    });
+    
+    if (contractAddress) {
+      analytics.track('NFT Holders Viewed', {
+        collectionAddress: contractAddress
+      });
+    }
   };
   
   const handleCloseModal = () => {
     setShowHolders(false);
   };
-
-  if (!nft) return null;
 
   const getValue = () => {
     // Debug log for value properties
@@ -490,6 +485,14 @@ const NftCard = ({
     }
   };
 
+  // Check if this NFT has a collection address that can be extracted (but don't extract it yet)
+  const hasContractAddress = nft.collection?.address || 
+                             nft.collection?.id || 
+                             nft.contractAddress || 
+                             nft.contract?.address || 
+                             nft.token?.collection?.address ||
+                             (nft.id && nft.id.includes(':'));
+
   return (
     <CardContainer 
       onClick={handleCardClick} 
@@ -533,7 +536,7 @@ const NftCard = ({
             )}
           </div>
           
-          {isAuthenticated && profile?.fid && contractAddress && (
+          {isAuthenticated && profile?.fid && hasContractAddress && (
             <button
               className="holders-button"
               onClick={handleHoldersClick}
@@ -545,14 +548,14 @@ const NftCard = ({
         </div>
       </div>
 
-      {showHolders && contractAddress && (
+      {showHolders && currentContractAddress && (
         <CollectionHoldersModal
-          collectionAddress={contractAddress}
+          collectionAddress={currentContractAddress}
           userFid={profile?.fid}
           onClose={handleCloseModal}
         />
       )}
-      {showHolders && !contractAddress && (
+      {showHolders && !currentContractAddress && (
         <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', 
                     backgroundColor: 'white', padding: '20px', zIndex: 1000, borderRadius: '8px' }}>
           <p>Unable to display holders: Missing collection address</p>
