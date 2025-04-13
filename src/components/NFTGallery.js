@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import NFTCard from './NFTCard';
 import { useNFT } from '../contexts/NFTContext';
 import { useWallet } from '../contexts/WalletContext';
-import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock } from 'react-icons/fa';
+import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock, FaShieldAlt } from 'react-icons/fa';
 import styled from 'styled-components';
 
 /**
@@ -29,6 +29,8 @@ const NFTGallery = () => {
     setSortOrder,
     prioritizeSpeed,
     setPrioritizeSpeed,
+    excludeSpam,
+    setExcludeSpam,
     loadMoreNFTs,
     fetchNFTs,
     endCursor
@@ -138,6 +140,15 @@ const NFTGallery = () => {
     fetchNFTs(true);
   };
 
+  // Toggle spam filtering
+  const toggleSpamFilter = () => {
+    setExcludeSpam(!excludeSpam);
+    // Refresh NFTs to apply the new filter
+    fetchNFTs({
+      bypassCache: true
+    });
+  };
+
   // Add a manual load function that bypasses all the auto-loading logic
   const handleManualLoadMore = () => {
     if (hasMore && !isLoading && !loadingMore) {
@@ -189,6 +200,11 @@ const NFTGallery = () => {
             {prioritizeSpeed ? <FaBolt /> : <FaClock />}
             {prioritizeSpeed ? 'Speed' : 'Complete'}
           </SpeedToggle>
+          
+          <SpamToggle $active={excludeSpam} onClick={toggleSpamFilter}>
+            <FaShieldAlt />
+            {excludeSpam ? 'Spam Filtered' : 'Show All'}
+          </SpamToggle>
         </ControlsContainer>
       </GalleryHeader>
 
@@ -384,6 +400,23 @@ const FilterButton = styled.button`
 const SortButton = styled(FilterButton)``;
 
 const SpeedToggle = styled.button`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: ${props => props.$active ? '#4caf50' : '#f0f0f0'};
+  color: ${props => props.$active ? 'white' : 'black'};
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  &:hover {
+    background-color: ${props => props.$active ? '#3d8b40' : '#e0e0e0'};
+  }
+`;
+
+const SpamToggle = styled.button`
   display: flex;
   align-items: center;
   gap: 0.5rem;
