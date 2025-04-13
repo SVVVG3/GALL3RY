@@ -750,6 +750,8 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       }
     `;
     
+    // Make sure we're sending correctly formatted owners parameter
+    // Zapper requires addresses in the format 0x... (without checksums)
     const variables = {
       owners: normalizedAddresses,
       first: limit,
@@ -759,7 +761,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     };
     
     // Log detailed request information for debugging
-    console.log(`API Request: cursor=${cursor}, limit=${limit}, addresses=${normalizedAddresses.length}`);
+    console.log(`API Request: cursor=${cursor}, limit=${limit}, addresses=${normalizedAddresses.length}, first address=${normalizedAddresses[0]}`);
     
     const response = await makeGraphQLRequest(nftTokensQuery, variables, endpoints, maxRetries);
     

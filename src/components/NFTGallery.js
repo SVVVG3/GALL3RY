@@ -55,17 +55,20 @@ const NFTGallery = () => {
     const autoLoadCheck = () => {
       console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading + ", loadingMore=" + loadingMore);
       
-      // Only auto-load if we have less than 200 NFTs to avoid aggressive loading on first visit
-      const shouldAutoLoad = filteredNFTs.length < 200 || (filteredNFTs.length >= 200 && filteredNFTs.length < AUTO_LOAD_THRESHOLD);
+      // Fix the auto-loading logic - REMOVE arbitrary 200 NFT check
+      // The goal is to load up to AUTO_LOAD_THRESHOLD NFTs automatically
+      const shouldAutoLoad = filteredNFTs.length < AUTO_LOAD_THRESHOLD;
       
       // If we have 'hasMore' true, not currently loading, and haven't hit the threshold yet, load more
       if (hasMore && !isLoading && !loadingMore && shouldAutoLoad) {
-        console.log(`Auto-loading next batch of NFTs (current count: ${filteredNFTs.length})...`);
+        console.log(`Auto-loading next batch of NFTs (current count: ${filteredNFTs.length}/${AUTO_LOAD_THRESHOLD})...`);
         
-        // Add a small delay to avoid too many rapid requests
+        // Increased delay to avoid rate limiting
         setTimeout(() => {
           loadMoreNFTs();
-        }, 500);
+        }, 800);
+      } else {
+        console.log(`Auto-loading stopped: hasMore=${hasMore}, isLoading=${isLoading}, loadingMore=${loadingMore}, shouldAutoLoad=${shouldAutoLoad}`);
       }
     };
     
@@ -248,7 +251,16 @@ const NFTGallery = () => {
 
       {(hasMore || loadingMore) && (
         <LoaderElement ref={loaderRef}>
-          {loadingMore ? <FaSpinner className="spinner" /> : <LoadMoreButton onClick={loadMoreNFTs}>Load More NFTs</LoadMoreButton>}
+          {loadingMore ? (
+            <LoadingSpinner>
+              <FaSpinner className="spinner" /> 
+              <span>Loading more NFTs...</span>
+            </LoadingSpinner>
+          ) : (
+            <LoadMoreButton onClick={loadMoreNFTs}>
+              Load More NFTs
+            </LoadMoreButton>
+          )}
         </LoaderElement>
       )}
     </GalleryContainer>
@@ -488,6 +500,27 @@ const LoadMoreButton = styled.button`
   
   &:hover {
     background-color: #3d8b40;
+  }
+`;
+
+const LoadingSpinner = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  
+  .spinner {
+    animation: spin 1s linear infinite;
+    font-size: 1.5rem;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 `;
 

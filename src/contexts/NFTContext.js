@@ -430,9 +430,12 @@ export const NFTProvider = ({ children }) => {
   }, [maxValue, getEstimatedValue]);
 
   const loadMoreNFTs = useCallback(async () => {
-    if (!hasMore || isLoading || loadingMore) return;
+    if (!hasMore || isLoading || loadingMore) {
+      console.log(`Not loading more NFTs because: hasMore=${hasMore}, isLoading=${isLoading}, loadingMore=${loadingMore}`);
+      return;
+    }
     
-    console.log(`Loading more NFTs... Current count: ${nfts.length}, hasMore: ${hasMore}, endCursor: ${endCursor || 'null'}`);
+    console.log(`Loading more NFTs... Current count: ${nfts.length}, hasMore=${hasMore}, endCursor=${endCursor || 'null'}`);
     
     try {
       // Make sure we're not loading if we don't have a valid cursor
@@ -442,6 +445,7 @@ export const NFTProvider = ({ children }) => {
         return;
       }
       
+      console.log(`Calling fetchNFTs with loadMore=true, endCursor=${endCursor}, batchSize=${PAGE_SIZE}`);
       await fetchNFTs({
         loadMore: true,
         batchSize: PAGE_SIZE
