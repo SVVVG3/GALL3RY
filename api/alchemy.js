@@ -24,6 +24,8 @@ module.exports = async (req, res) => {
     // Get Alchemy API key from environment variables or use our default
     const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak";
     
+    console.log(`Using Alchemy API Key: ${ALCHEMY_API_KEY ? (ALCHEMY_API_KEY.substring(0, 5) + "...") : "none"}`);
+    
     // Get query parameters
     const { chain = 'eth', endpoint = 'getNFTsForOwner', ...params } = req.query;
     

@@ -126,7 +126,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     let batchesProcessed = 0;
     let successfulLoads = 0;
     let failedAttempts = 0;
-    const MAX_BATCHES = 10; // Maximum number of batches to fetch
+    const MAX_BATCHES = 5; // Reduced from 10 to prevent overwhelming Alchemy API
     const MAX_FAILURES = 3; // Maximum consecutive failures before giving up
     
     try {
@@ -163,8 +163,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           break;
         }
         
-        // Add a small delay between requests to avoid rate limiting
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Add a larger delay between requests to prevent rate limiting with Alchemy
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Final state update (should be unnecessary due to internal updates in fetchUserNfts, but for safety)
@@ -329,48 +329,88 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // Log the fetch attempt
       console.log(`Fetching NFTs for ${addresses.length} addresses, cursor: ${cursor || 'initial'}, loadMore: ${isLoadMore}`);
       
-      // Fetch NFTs from the API
-      const response = await zapperService.getNftsForAddresses(addresses, 50, cursor, true);
+      // Import the Alchemy service dynamically to avoid circular references
+      const alchemyService = await import('../services/alchemy');
       
-      // Log the response summary
-      console.log(`Received ${response?.items?.length || response?.nfts?.length || 0} NFTs, hasMore: ${response?.hasMore}, cursor: ${response?.cursor}`);
-
-      // Return early if no valid items array in response
-      if (!response || (!response.items && !response.nfts)) {
-        console.warn('No valid response or items from getNftsForAddresses');
-        return null;
+      // Use Alchemy to fetch NFTs for all addresses
+      const allNfts = [];
+      let hasMore = false;
+      let nextCursor = null;
+      
+      // Process addresses in batches to avoid overwhelming the API
+      const batchSize = 2; // Process 2 addresses at a time
+      for (let i = 0; i < addresses.length; i += batchSize) {
+        const addressBatch = addresses.slice(i, i + batchSize);
+        
+        // Fetch NFTs for each address in the batch
+        const batchResults = await Promise.all(
+          addressBatch.map(address => {
+            // Use appropriate options based on whether this is a load more operation
+            const options = {
+              pageSize: 100,
+              pageKey: isLoadMore && i === 0 ? cursor : null,
+              excludeSpam: true,
+              bypassCache: false
+            };
+            
+            // Try to fetch from multiple chains
+            return Promise.all([
+              alchemyService.fetchNFTsForAddress(address, 'eth', options)
+                .catch(err => ({ nfts: [], hasMore: false })),
+              alchemyService.fetchNFTsForAddress(address, 'base', options)
+                .catch(err => ({ nfts: [], hasMore: false }))
+            ]);
+          })
+        );
+        
+        // Flatten batch results and add to allNfts
+        batchResults.forEach(chainResults => {
+          chainResults.forEach(result => {
+            if (result.nfts && result.nfts.length > 0) {
+              allNfts.push(...result.nfts);
+              hasMore = hasMore || result.hasMore;
+              if (result.hasMore && !nextCursor) {
+                nextCursor = result.pageKey;
+              }
+            }
+          });
+        });
+        
+        // Add a small delay between batches to avoid rate limiting
+        if (i + batchSize < addresses.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
-
-      // Use either items or nfts from the response
-      const nftsArray = response.items || response.nfts || [];
       
-      // Filter out any invalid NFT objects
-      // The API now returns objects with collection directly, not within a token property
-      const validNfts = nftsArray.filter(nft => 
-        nft && nft.collection && nft.collection.name);
+      console.log(`Received ${allNfts.length} total NFTs from Alchemy, hasMore: ${hasMore}, cursor: ${nextCursor || 'null'}`);
       
-      console.log(`Filtered to ${validNfts.length} valid NFTs`);
-
+      // Filter out any duplicate NFTs by ID
+      const uniqueNfts = Array.from(
+        new Map(allNfts.map(nft => [nft.id, nft])).values()
+      );
+      
+      console.log(`Filtered to ${uniqueNfts.length} unique NFTs`);
+      
       // Update the state based on whether we're loading more or initial load
       let updatedNfts;
       if (isLoadMore) {
         // When loading more, append to existing NFTs
-        updatedNfts = [...userNfts, ...validNfts];
+        updatedNfts = [...userNfts, ...uniqueNfts];
       } else {
         // Initial load replaces existing NFTs
-        updatedNfts = validNfts;
+        updatedNfts = uniqueNfts;
       }
       
       // Update the state
       setUserNfts(updatedNfts);
-      setHasMoreNfts(response.hasMore);
-      setEndCursor(response.cursor);
+      setHasMoreNfts(hasMore);
+      setEndCursor(nextCursor);
 
       // Return the result object for the caller
       return {
         nfts: updatedNfts,
-        hasMore: response.hasMore,
-        cursor: response.cursor
+        hasMore: hasMore,
+        cursor: nextCursor
       };
     } catch (error) {
       console.error('Error in fetchUserNfts:', error);

@@ -38,7 +38,8 @@ const alchemyAxios = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+    // User-Agent headers cause issues in browser environments
+    // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
   },
   timeout: 15000 // 15 second timeout
 });
