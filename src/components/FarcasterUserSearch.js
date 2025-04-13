@@ -214,6 +214,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       }
       
       // Use context method instead of direct zapperService call
+      // Add safety check for getFarcasterProfile availability
+      if (!getFarcasterProfile || typeof getFarcasterProfile !== 'function') {
+        throw new Error('Farcaster profile service unavailable. Please try refreshing the page.');
+      }
+      
       const profile = await getFarcasterProfile(cleanQuery);
       
       // Extract wallet addresses using our helper method
@@ -284,22 +289,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // Get the NFT service from context rather than importing directly
       if (!alchemyService) {
         console.error('Alchemy service not available');
-        // Retry loading the service one more time
-        try {
-          console.log('Attempting to reload services...');
-          const { getFarcasterProfile, services } = useNFT();
-          if (services?.alchemy) {
-            console.log('Successfully reloaded Alchemy service');
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay
-            location.reload(); // Reload the page as a last resort
-            return;
-          } else {
-            throw new Error('Alchemy service still not available after reload attempt');
-          }
-        } catch (retryError) {
-          console.error('Service reload failed:', retryError);
-          throw new Error('Alchemy service not available. Please try refreshing the page.');
-        }
+        // Remove the problematic useNFT hook call and use a safer approach
+        throw new Error('Alchemy service not available. Please try refreshing the page.');
       }
       
       try {
@@ -720,12 +711,18 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   };
 
   const onProfileSelected = async (profile) => {
+    // Use a safe username cleaning function
+    const cleanUsername = (username) => username?.trim().replace(/^@/, '') || '';
+    
     const cleanQuery = cleanUsername(profile.username);
     setUserProfile(profile);
-    setUniqueUserAddresses(null);
+    
+    // Define these state setters if they don't exist
+    // Or simply remove them if not needed in this component
+    // setUniqueUserAddresses(null);
     
     // Reset state
-    setCurrentPage('nfts');
+    // setCurrentPage('nfts');
     setUserNfts([]);
     setFetchNftsError(null);
     setHasMoreNfts(false);
@@ -747,7 +744,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         console.log(`No addresses found for ${profile.username}`);
       }
       
-      setUniqueUserAddresses(uniqueAddresses);
+      // setUniqueUserAddresses(uniqueAddresses);
       
       // If we have addresses, fetch NFTs
       if (uniqueAddresses.length > 0) {
