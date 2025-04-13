@@ -15,17 +15,26 @@ const PriceDisplay = ({
 }) => {
   // Format number to appropriate precision
   const formatAmount = (value) => {
-    if (value === undefined || value === null) return 'N/A';
+    if (value === undefined || value === null || value === '' || value === 'N/A') {
+      return 'N/A';
+    }
     
     // Handle objects with amount and currency properties
     if (typeof value === 'object' && value.amount !== undefined) {
       return formatAmount(value.amount);
     }
     
+    // Handle string values
+    if (typeof value === 'string' && value.toLowerCase() === 'n/a') {
+      return 'N/A';
+    }
+    
     const numValue = parseFloat(value);
     
     // Check if value is a valid number
-    if (isNaN(numValue)) return 'N/A';
+    if (isNaN(numValue)) {
+      return 'N/A';
+    }
     
     // Format based on size of value
     if (numValue < 0.01) return `< ${currency === 'USD' ? '$' : ''}0.01`;

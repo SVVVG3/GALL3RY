@@ -1,202 +1,125 @@
-// Alchemy API proxy with improved error handling
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const axios = require('axios');
+const { parse } = require('url');
 
-// Export the function for Vercel serverless deployment
+// Load configuration - ensure this is compatible with Vercel's serverless environment
+let config;
+try {
+  config = require('../src/config');
+} catch (error) {
+  console.error('Error loading config:', error.message);
+  config = {
+    ALCHEMY_API_KEY: process.env.ALCHEMY_API_KEY || '',
+    ALCHEMY_BASE_URL: process.env.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/',
+  };
+}
+
+// Alchemy API key - fallback to environment variable if not in config
+const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY;
+const ALCHEMY_BASE_URL = config.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/';
+
+// V3 NFT endpoints
+const ENDPOINTS = {
+  getNFTsForOwner: (apiKey, chain = 'eth') => {
+    const baseUrl = chain === 'eth' 
+      ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+      : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+    return `${baseUrl}${apiKey}/getNFTsForOwner`;
+  },
+  getNFTMetadata: (apiKey, chain = 'eth') => {
+    const baseUrl = chain === 'eth' 
+      ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+      : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+    return `${baseUrl}${apiKey}/getNFTMetadata`;
+  }
+};
+
+/**
+ * Alchemy API proxy handler for serverless environments
+ */
 module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // CORS headers for local development
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
-
-  // Handle preflight OPTIONS request
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle OPTIONS requests (pre-flight)
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+    return res.status(200).end();
   }
-
-  // Only allow GET requests for Alchemy NFT API
-  if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Method not allowed' });
+  
+  // Parse query parameters
+  const { query } = parse(req.url, true);
+  const { endpoint, chain = 'eth', ...params } = query;
+  
+  // Validate API key
+  if (!ALCHEMY_API_KEY) {
+    console.error('Alchemy API key not configured');
+    return res.status(401).json({ 
+      error: 'API key not configured',
+      message: 'Please set your ALCHEMY_API_KEY in config or environment variables'
+    });
   }
-
+  
+  // Log a masked version of the API key for debugging
+  const maskedKey = ALCHEMY_API_KEY.substring(0, 4) + '...' + ALCHEMY_API_KEY.substring(ALCHEMY_API_KEY.length - 4);
+  console.log(`Using Alchemy API key: ${maskedKey}`);
+  
+  // Validate endpoint
+  if (!endpoint) {
+    return res.status(400).json({ error: 'Missing endpoint parameter' });
+  }
+  
+  if (!ENDPOINTS[endpoint]) {
+    return res.status(400).json({ error: `Invalid endpoint: ${endpoint}` });
+  }
+  
   try {
-    // Get Alchemy API key from environment variables with better fallbacks
-    // For Vercel, these need to be configured in the Vercel dashboard
-    const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || 
-                           process.env.REACT_APP_ALCHEMY_API_KEY || 
-                           process.env.REACT_APP_ALCHEMY_ETH_API_KEY ||
-                           "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak"; // Use original fallback key
+    // Build the request URL
+    const endpointUrl = ENDPOINTS[endpoint](ALCHEMY_API_KEY, chain);
     
-    // Check if we have a valid API key
-    if (!ALCHEMY_API_KEY) {
-      console.error('No Alchemy API key found in environment variables');
-      return res.status(500).json({
-        error: 'Configuration error',
-        message: 'Alchemy API key is missing. Please check your environment variables in Vercel.'
-      });
-    }
+    // Prepare request parameters
+    const requestParams = { ...params };
     
-    // Log key (first few chars only) for debugging
-    console.log(`Using Alchemy API Key: ${ALCHEMY_API_KEY ? (ALCHEMY_API_KEY.substring(0, 5) + "...") : "none"}`);
-    console.log(`Environment: ${process.env.NODE_ENV || 'unknown'}`);
-    console.log(`Request query params:`, req.query);
-    
-    // Get query parameters
-    const { chain = 'eth', endpoint = 'getNFTsForOwner', ...params } = req.query;
-    
-    // Validate required parameters based on endpoint
-    if (endpoint === 'getNFTsForOwner' && !params.owner) {
-      return res.status(400).json({ 
-        error: 'Missing required parameter', 
-        message: 'The "owner" parameter is required for getNFTsForOwner endpoint' 
-      });
-    }
-    
-    if (endpoint === 'getNftsForCollection' && !params.contractAddress) {
-      return res.status(400).json({ 
-        error: 'Missing required parameter', 
-        message: 'The "contractAddress" parameter is required for getNftsForCollection endpoint' 
-      });
-    }
-    
-    // Map chain names to base URLs - Using v3 NFT API endpoints
-    const chainBaseUrls = {
-      eth: 'https://eth-mainnet.g.alchemy.com/nft/v3',
-      base: 'https://base-mainnet.g.alchemy.com/nft/v3',
-      polygon: 'https://polygon-mainnet.g.alchemy.com/nft/v3',
-      arbitrum: 'https://arb-mainnet.g.alchemy.com/nft/v3',
-      optimism: 'https://opt-mainnet.g.alchemy.com/nft/v3',
-    };
-    
-    // Get the base URL for the requested chain
-    const baseUrl = chainBaseUrls[chain];
-    if (!baseUrl) {
-      return res.status(400).json({ 
-        error: 'Invalid chain', 
-        message: `Chain "${chain}" is not supported` 
-      });
-    }
-    
-    // Rename parameters to match expected Alchemy API format
-    // The getNFTsForOwner endpoint expects specific parameter names
-    let renamedParams = { ...params };
-    
-    // Rename parameters according to the Alchemy NFT API v3 docs
-    if (params.excludeSpam) {
-      // v3 uses excludeFilters directly
-      renamedParams.excludeFilters = ['SPAM'];
-      delete renamedParams.excludeSpam;
-    }
-    
-    if (params.withMetadata === undefined && endpoint === 'getNFTsForOwner') {
-      renamedParams.withMetadata = true;
-    }
-    
-    // Map NFT API endpoints to Alchemy API v3 paths
-    // In v3, the endpoint is part of the URL structure
-    let apiPath;
-    switch (endpoint) {
-      case 'getNFTsForOwner':
-      case 'getNFTs':
-        apiPath = 'getNFTsForOwner';
-        break;
-      case 'getNftsForCollection':
-        apiPath = 'getNFTsForCollection';
-        break;
-      case 'getContractMetadata':
-        apiPath = 'getContractMetadata';
-        break;
-      case 'getNFTMetadata':
-        apiPath = 'getNFTMetadata';
-        break;
-      default:
-        apiPath = endpoint;
-    }
-    
-    // Build the Alchemy API URL according to v3 documentation
-    let alchemyUrl = `${baseUrl}/${ALCHEMY_API_KEY}/${apiPath}`;
-    
-    // Add query parameters
-    const queryString = Object.entries(renamedParams)
-      .map(([key, value]) => {
-        // Handle array values (like excludeFilters)
-        if (Array.isArray(value)) {
-          return value.map(v => `${key}[]=${encodeURIComponent(v)}`).join('&');
+    // Handle array parameters
+    Object.keys(requestParams).forEach(key => {
+      if (key.endsWith('[]')) {
+        const baseKey = key.slice(0, -2);
+        if (!Array.isArray(requestParams[baseKey])) {
+          requestParams[baseKey] = [requestParams[key]];
         }
-        return `${key}=${encodeURIComponent(value)}`;
-      })
-      .join('&');
-    
-    if (queryString) {
-      alchemyUrl += `?${queryString}`;
-    }
-    
-    console.log(`Proxying request to Alchemy API v3: ${alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')}`);
-    
-    // Make the request to Alchemy API with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
-    
-    try {
-      const response = await fetch(alchemyUrl, {
-        headers: {
-          'Accept': 'application/json',
-        },
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      // Check for non-successful status codes
-      if (!response.ok) {
-        console.error(`Alchemy API returned status ${response.status}`);
-        const errorText = await response.text();
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          errorData = { message: errorText };
-        }
-        
-        return res.status(response.status).json({
-          error: 'Alchemy API error',
-          message: errorData.message || `API returned status ${response.status}`,
-          details: errorData,
-          url: alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')
-        });
+        delete requestParams[key];
       }
-      
-      // Get the response data
-      const data = await response.json();
-      
-      // Check for error response
-      if (data.error) {
-        console.error('Alchemy API error:', data.error);
-        return res.status(response.status || 500).json(data);
-      }
-      
-      console.log(`Alchemy API v3 response successful, returning data with ${data.ownedNfts?.length || 0} NFTs`);
-      
-      // Return the data
-      return res.status(200).json(data);
-    } catch (fetchError) {
-      if (fetchError.name === 'AbortError') {
-        console.error('Alchemy API request timed out');
-        return res.status(504).json({
-          error: 'Gateway Timeout',
-          message: 'Request to Alchemy API timed out'
-        });
-      }
-      throw fetchError;
-    }
+    });
+    
+    // Log the request (without sensitive data)
+    console.log(`Proxying Alchemy API request to ${endpoint} on ${chain} chain`);
+    
+    // Call the Alchemy API
+    const response = await axios.get(endpointUrl, { params: requestParams });
+    
+    // Return the API response
+    return res.status(200).json(response.data);
   } catch (error) {
-    console.error('Error proxying to Alchemy API:', error);
+    console.error('Alchemy API error:', error.message);
     
+    // Check for a response with error details
+    if (error.response) {
+      console.error(`Status: ${error.response.status}`);
+      console.error(`Data:`, error.response.data);
+      
+      // Return the error details
+      return res.status(error.response.status).json({
+        error: 'Alchemy API request failed',
+        status: error.response.status,
+        message: error.message,
+        details: error.response.data
+      });
+    }
+    
+    // Generic error handling
     return res.status(500).json({
       error: 'Internal server error',
-      message: error.message || 'An unknown error occurred',
-      stack: process.env.NODE_ENV !== 'production' ? error.stack : undefined
+      message: error.message
     });
   }
 }; 

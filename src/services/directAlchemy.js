@@ -1,10 +1,11 @@
 /**
  * Direct Alchemy Service
  * Simple implementation that directly follows the Alchemy NFT API v3 documentation
+ * Optimized for Vercel deployments
  */
 import axios from 'axios';
 
-// API base URL - use relative path for compatibility
+// API base URL - use relative path for compatibility with Vercel deployments
 const API_BASE_URL = '/api/alchemy';
 
 // Create axios instance with proper configuration
@@ -13,16 +14,44 @@ const alchemyClient = axios.create({
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   },
-  timeout: 15000
+  timeout: 15000 // 15 second timeout
 });
+
+// Add a response interceptor for better error handling
+alchemyClient.interceptors.response.use(
+  response => response,
+  error => {
+    console.error('Alchemy API error:', error.message);
+    
+    // Check if we have a response with error data
+    if (error.response) {
+      console.error('Error response:', error.response.status, error.response.data);
+      
+      // Customize error message based on status code
+      if (error.response.status === 401) {
+        error.message = 'Alchemy API authentication failed. Please check your API key.';
+      } else if (error.response.status === 429) {
+        error.message = 'Alchemy API rate limit exceeded. Please try again later.';
+      } else if (error.response.status >= 500) {
+        error.message = 'Alchemy API server error. Please try again later.';
+      }
+    } else if (error.request) {
+      // Request was made but no response received
+      error.message = 'No response from Alchemy API. Please check your network connection.';
+    }
+    
+    return Promise.reject(error);
+  }
+);
 
 /**
  * Fetch all NFTs for a wallet address
  * @param {string} owner - Wallet address to get NFTs for
+ * @param {string} chain - Chain name (eth, base, etc.)
  * @param {object} options - Additional options
  * @returns {Promise<object>} NFT data
  */
-export const getNFTsForOwner = async (owner, options = {}) => {
+export const getNFTsForOwner = async (owner, chain = 'eth', options = {}) => {
   if (!owner) {
     throw new Error('Owner address is required');
   }
@@ -58,8 +87,8 @@ export const getNFTsForOwner = async (owner, options = {}) => {
     }
     
     // Add chain parameter if specified
-    if (options.chain) {
-      url += `&chain=${options.chain}`;
+    if (chain) {
+      url += `&chain=${chain}`;
     }
     
     console.log(`Direct Alchemy v3 request URL: ${url}`);
@@ -81,7 +110,7 @@ export const getNFTsForOwner = async (owner, options = {}) => {
       pageKey: data.pageKey || null,
       totalCount: data.totalCount || 0,
       hasMore: !!data.pageKey,
-      chain: options.chain || 'eth'
+      chain: chain || 'eth'
     };
   } catch (error) {
     console.error(`Error fetching NFTs from Alchemy:`, error);
@@ -91,7 +120,8 @@ export const getNFTsForOwner = async (owner, options = {}) => {
       console.error('Alchemy API error details:', error.response.data);
     }
     
-    throw error;
+    // Rethrow the error with a friendly message
+    throw new Error(`Failed to fetch NFTs: ${error.message}`);
   }
 };
 
@@ -116,27 +146,36 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
       chain,
     };
     
-    // Sequential fetching to avoid rate limits
+    // Process addresses in smaller batches to avoid overwhelming the API
+    const batchSize = 3; // Process 3 addresses at a time to limit concurrency
     let allNfts = [];
     let hasMore = false;
     
-    for (const address of addresses) {
-      try {
-        // Individual fetch for each address
-        const result = await getNFTsForOwner(address, requestOptions);
-        
-        // Add NFTs to combined result
+    for (let i = 0; i < addresses.length; i += batchSize) {
+      const chunk = addresses.slice(i, i + batchSize);
+      const chunkPromises = chunk.map(address => 
+        getNFTsForOwner(address, chain, requestOptions)
+          .catch(error => {
+            console.error(`Error fetching NFTs for address ${address}:`, error);
+            // Continue with other addresses even if one fails
+            return { nfts: [], hasMore: false, totalCount: 0 };
+          })
+      );
+      
+      // Wait for all fetches in this batch to complete
+      const results = await Promise.all(chunkPromises);
+      
+      // Combine results from this batch
+      results.forEach(result => {
         if (result.nfts && result.nfts.length > 0) {
           allNfts = [...allNfts, ...result.nfts];
+          hasMore = hasMore || result.hasMore;
         }
-        
-        // Track if any address has more NFTs
-        hasMore = hasMore || result.hasMore;
-        
-        console.log(`Fetched ${result.nfts.length} NFTs for address ${address}`);
-      } catch (error) {
-        console.error(`Error fetching NFTs for address ${address}:`, error);
-        // Continue with other addresses even if one fails
+      });
+      
+      // Add a small delay between batches to avoid rate limiting
+      if (i + batchSize < addresses.length) {
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
     
@@ -173,13 +212,19 @@ const formatNft = (nft) => {
     const description = nft.description || metadata?.description || '';
     const chain = nft.chain || 'eth';
     
-    // Extract media from v3 structure
+    // Extract media from v3 structure with fallbacks
     let imageUrl = '';
+    
+    // First check for image object
     if (nft.image) {
       imageUrl = typeof nft.image === 'object' ? nft.image.gateway || nft.image.url : nft.image;
-    } else if (nft.media && nft.media.length > 0) {
+    } 
+    // Then check media array
+    else if (nft.media && nft.media.length > 0) {
       imageUrl = nft.media[0]?.gateway || '';
-    } else if (metadata?.image) {
+    } 
+    // Finally check metadata
+    else if (metadata?.image) {
       imageUrl = metadata.image;
     }
     
@@ -201,9 +246,11 @@ const formatNft = (nft) => {
         floorPrice: contractMetadata?.openSea?.floorPrice || null
       },
       imageUrl,
-      // Include original data for completeness
+      // Include metadata for completeness
       metadata,
       contractMetadata,
+      // Original data for debugging
+      alchemyData: process.env.NODE_ENV === 'development' ? nft : undefined
     };
   } catch (error) {
     console.error('Error formatting NFT:', error);
@@ -211,7 +258,11 @@ const formatNft = (nft) => {
   }
 };
 
-export default {
+// Create a proper service object
+const alchemyService = {
+  fetchNFTsForAddress: getNFTsForOwner,
   getNFTsForOwner,
   batchFetchNFTs
-}; 
+};
+
+export default alchemyService; 

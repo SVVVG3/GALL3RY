@@ -1,6 +1,16 @@
 /**
  * Client-side application configuration settings
  */
+const dotenv = require('dotenv');
+
+// Load environment variables from .env file if available
+try {
+  dotenv.config();
+} catch (error) {
+  console.warn('Failed to load .env file:', error.message);
+}
+
+// Default configuration values with fallbacks
 const config = {
   // API base URL, defaulting to localhost in development
   apiUrl: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
@@ -21,14 +31,52 @@ const config = {
   // Default pagination settings
   pagination: {
     itemsPerPage: 12
-  }
+  },
+
+  // API keys (will be properly hidden in production builds)
+  ALCHEMY_API_KEY: process.env.ALCHEMY_API_KEY || '',
+  ALCHEMY_BASE_URL: process.env.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/',
+  
+  // Server configuration
+  PORT: process.env.PORT || 3003,
+  
+  // MongoDB connection
+  MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/gall3ry',
+  
+  // API Proxies
+  API_BASE_URL: process.env.API_BASE_URL || '/api',
+  ALCHEMY_PROXY_URL: '/api/alchemy',
+  OPENSEA_PROXY_URL: '/api/opensea',
+  ZAPPER_PROXY_URL: '/api/zapper',
+  
+  // NFT Configuration
+  DEFAULT_CHAIN: process.env.DEFAULT_CHAIN || 'eth',
+  NFT_SERVICES: process.env.NFT_SERVICES 
+    ? process.env.NFT_SERVICES.split(',') 
+    : ['alchemy', 'directAlchemy'],
+
+  // Feature flags
+  ENABLE_CACHING: process.env.ENABLE_CACHING !== 'false',
+  ENABLE_LOGGING: process.env.ENABLE_LOGGING !== 'false',
+  
+  // Environment detection
+  IS_PRODUCTION: process.env.NODE_ENV === 'production',
+  IS_DEVELOPMENT: process.env.NODE_ENV === 'development' || !process.env.NODE_ENV,
+  IS_VERCEL: !!process.env.VERCEL,
 };
 
-// API endpoints
-const ZAPPER_PROXY_URL = process.env.REACT_APP_ZAPPER_PROXY_URL || '/api/zapper';
+// Ensure API paths are properly formatted for Vercel deployments
+if (config.IS_VERCEL) {
+  // Use relative API paths in Vercel environment
+  config.ALCHEMY_PROXY_URL = '/api/alchemy';
+  config.OPENSEA_PROXY_URL = '/api/opensea';
+  config.ZAPPER_PROXY_URL = '/api/zapper';
+  
+  // Prefer direct API calls in Vercel environment
+  if (!config.NFT_SERVICES.includes('directAlchemy')) {
+    config.NFT_SERVICES.push('directAlchemy');
+  }
+}
 
 // Export all config values
-module.exports = {
-  ...config,
-  ZAPPER_PROXY_URL
-}; 
+module.exports = config;
