@@ -76,55 +76,15 @@ const ErrorDisplay = ({ error, onRetry }) => (
 
 // Home page component
 const HomePage = () => {
-  const [showNFTUI, setShowNFTUI] = useState(false);
-
   return (
     <div className="home-container">
       <div style={{ textAlign: 'center', marginTop: '2rem', marginBottom: '2rem' }}>
-        <h2>Welcome to GALL3RY</h2>
-        
-        {/* System info */}
-        <div className="debug-info" style={{ margin: '1rem 0', padding: '1rem', background: '#f8f9fa', borderRadius: '8px' }}>
-          <p><strong>System Check:</strong></p>
-          <p>Browser environment: {isBrowser ? '✅ Detected' : '❌ Not detected'}</p>
-          <p>LocalStorage Test: {
-            (() => {
-              try {
-                safeStorage.setItem('test', 'Working!');
-                const result = safeStorage.getItem('test');
-                safeStorage.removeItem('test');
-                return result ? '✅ ' + result : '❌ Not working';
-              } catch (e) {
-                return `❌ Error: ${e.message}`;
-              }
-            })()
-          }</p>
-        </div>
-        
-        {/* NFT UI toggle button */}
-        <button 
-          onClick={() => setShowNFTUI(!showNFTUI)}
-          style={{
-            padding: '10px 20px',
-            background: '#8b5cf6',
-            color: 'white',
-            border: 'none',
-            borderRadius: '20px',
-            cursor: 'pointer',
-            margin: '10px 0'
-          }}
-        >
-          {showNFTUI ? 'Hide NFT UI' : 'Show NFT UI'}
-        </button>
-        
         {/* NFT UI with error boundary */}
-        {showNFTUI && (
-          <Suspense fallback={<LoadingScreen />}>
-            <ErrorBoundary>
-              <NFTContent />
-            </ErrorBoundary>
-          </Suspense>
-        )}
+        <Suspense fallback={<LoadingScreen />}>
+          <ErrorBoundary>
+            <NFTContent />
+          </ErrorBoundary>
+        </Suspense>
       </div>
     </div>
   );

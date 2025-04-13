@@ -172,6 +172,7 @@ const NFTGallery = () => {
             onClick={() => {
               console.log("Setting sort to value");
               setSortBy('value');
+              setSortOrder('desc');
             }}
           >
             Value {(sortBy === 'value' || sortBy === 'estimatedValue') && <FaCheck />}

@@ -8,10 +8,12 @@ const NFTFilters = ({ wallets = [] }) => {
     selectedWallets,
     searchQuery,
     sortBy,
+    sortOrder,
     setSelectedChains,
     setSelectedWallets,
     setSearchQuery,
     setSortBy,
+    setSortOrder,
     resetFilters
   } = useNFT();
 
@@ -43,6 +45,11 @@ const NFTFilters = ({ wallets = [] }) => {
     // This works with the getSortedNFTs function in NFTContext.js
     console.log(`Setting sort to: ${sort}`); // Add logging to confirm sort is changing
     setSortBy(sort);
+    
+    // For value sorting, ensure we're sorting in descending order (highest first)
+    if (sort === 'value') {
+      setSortOrder('desc');
+    }
   };
 
   return (
