@@ -433,8 +433,9 @@ const NFTGallery = () => {
 // Styled components
 const GalleryContainer = styled.div`
   padding: 1rem;
-  max-width: 1200px;
+  max-width: 1800px;
   margin: 0 auto;
+  width: 95%;
 `;
 
 const GalleryHeader = styled.div`
@@ -617,7 +618,7 @@ const SortOrderOption = styled(SortOption)`
 
 const NFTGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 1.5rem;
 `;
 
