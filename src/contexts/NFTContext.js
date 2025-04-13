@@ -34,6 +34,10 @@ export const NFTProvider = ({ children }) => {
   const [collectionHolders, setCollectionHolders] = useState({});
   const [loadingCollectionHolders, setLoadingCollectionHolders] = useState(false);
   
+  // Additional state for wallet tracking
+  const [loadedWallets, setLoadedWallets] = useState([]);
+  const [fetchProgress, setFetchProgress] = useState({});
+  
   // Filter states
   const [selectedChains, setSelectedChains] = useState(['all']);
   const [selectedWallets, setSelectedWallets] = useState([]);
@@ -378,6 +382,196 @@ export const NFTProvider = ({ children }) => {
     }
   }, [getFilteredNfts, sortBy, sortOrder]);
   
+  // New function: Fetch all NFTs for multiple wallets
+  const fetchAllNFTsForWallets = useCallback(async (walletAddresses, options = {}) => {
+    if (!walletAddresses || walletAddresses.length === 0) {
+      console.warn('No wallet addresses provided to fetchAllNFTsForWallets');
+      return { nfts: [], hasMore: false };
+    }
+    
+    try {
+      // Set loading state
+      setIsLoading(true);
+      setError(null);
+      
+      // Initialize fetch progress tracking
+      const initialProgress = {};
+      walletAddresses.forEach(address => {
+        initialProgress[address] = { 
+          completed: false, 
+          pagesFetched: 0, 
+          totalNFTs: 0,
+          hasMore: true 
+        };
+      });
+      setFetchProgress(initialProgress);
+      
+      console.log(`Starting batch fetch for ${walletAddresses.length} wallets`);
+      
+      // Determine chains to fetch from (default to ETH if not specified)
+      const chains = options.chains || ['eth'];
+      
+      let allNFTs = [];
+      
+      // Process each chain
+      for (const chain of chains) {
+        console.log(`Fetching NFTs from chain: ${chain}`);
+        
+        // Process each wallet with pagination
+        const walletPromises = walletAddresses.map(async (address) => {
+          let walletNFTs = [];
+          let currentPageKey = null;
+          let hasMorePages = true;
+          let pagesFetched = 0;
+          
+          // Fetch initial data
+          const pageSize = options.pageSize || 100; // Maximize page size for efficiency
+          
+          while (hasMorePages) {
+            try {
+              // Use the directAlchemyService for fetching
+              const result = await services.alchemy.getNFTsForOwner(
+                address,
+                chain,
+                {
+                  pageKey: currentPageKey,
+                  pageSize: pageSize,
+                  excludeSpam: options.excludeSpam !== false,
+                  withMetadata: true
+                }
+              );
+              
+              // Add the wallet address to each NFT for tracking
+              const nftsWithWalletInfo = result.nfts.map(nft => ({
+                ...nft,
+                ownerAddress: address
+              }));
+              
+              // Add to our collection
+              walletNFTs = [...walletNFTs, ...nftsWithWalletInfo];
+              
+              // Update pagination state
+              currentPageKey = result.pageKey;
+              hasMorePages = !!result.pageKey;
+              pagesFetched++;
+              
+              // Update progress state
+              setFetchProgress(prev => ({
+                ...prev,
+                [address]: {
+                  ...prev[address],
+                  pagesFetched,
+                  totalNFTs: walletNFTs.length,
+                  hasMore: hasMorePages
+                }
+              }));
+              
+              // Add a small delay to avoid rate limiting
+              if (hasMorePages) {
+                await new Promise(resolve => setTimeout(resolve, 250));
+              }
+            } catch (error) {
+              console.error(`Error fetching NFTs for wallet ${address} on ${chain}:`, error);
+              // Move to the next wallet on error
+              hasMorePages = false;
+            }
+          }
+          
+          // Mark this wallet as completed
+          setFetchProgress(prev => ({
+            ...prev,
+            [address]: {
+              ...prev[address],
+              completed: true,
+              hasMore: false
+            }
+          }));
+          
+          console.log(`Completed fetch for wallet ${address}: ${walletNFTs.length} NFTs`);
+          return walletNFTs;
+        });
+        
+        // Wait for all wallet fetches to complete for this chain
+        const chainResults = await Promise.all(walletPromises);
+        
+        // Combine results from this chain
+        const chainNFTs = chainResults.flat();
+        allNFTs = [...allNFTs, ...chainNFTs];
+      }
+      
+      // Add to loaded wallets tracking
+      setLoadedWallets(prev => {
+        const newWallets = [...prev];
+        walletAddresses.forEach(address => {
+          if (!newWallets.includes(address)) {
+            newWallets.push(address);
+          }
+        });
+        return newWallets;
+      });
+      
+      // Deduplicate NFTs (same NFT might appear in multiple wallets)
+      const uniqueNFTMap = new Map();
+      allNFTs.forEach(nft => {
+        // Use normalized ID as the key
+        const normalizedId = normalizeId(nft);
+        if (normalizedId) {
+          // If we already have this NFT, update the owners array
+          if (uniqueNFTMap.has(normalizedId)) {
+            const existingNFT = uniqueNFTMap.get(normalizedId);
+            const ownerAddresses = existingNFT.ownerAddresses || [existingNFT.ownerAddress];
+            if (!ownerAddresses.includes(nft.ownerAddress)) {
+              ownerAddresses.push(nft.ownerAddress);
+            }
+            uniqueNFTMap.set(normalizedId, {
+              ...existingNFT,
+              ownerAddresses
+            });
+          } else {
+            // First time seeing this NFT
+            uniqueNFTMap.set(normalizedId, {
+              ...nft,
+              ownerAddresses: [nft.ownerAddress]
+            });
+          }
+        }
+      });
+      
+      // Convert the Map to array
+      const uniqueNFTs = Array.from(uniqueNFTMap.values());
+      console.log(`Total unique NFTs fetched: ${uniqueNFTs.length}`);
+      
+      // Update the main NFTs state
+      setNfts(prev => {
+        const combinedNFTs = [...prev, ...uniqueNFTs];
+        // Deduplicate again in case there's overlap with previous state
+        const dedupMap = new Map();
+        combinedNFTs.forEach(nft => {
+          const id = normalizeId(nft);
+          if (id && !dedupMap.has(id)) {
+            dedupMap.set(id, nft);
+          }
+        });
+        return Array.from(dedupMap.values());
+      });
+      
+      // Set hasMore to false since we've fetched all NFTs from all wallets
+      setHasMore(false);
+      
+      return {
+        nfts: uniqueNFTs,
+        hasMore: false,
+        loadedWallets: walletAddresses
+      };
+    } catch (err) {
+      console.error('Error in fetchAllNFTsForWallets:', err);
+      setError(err.message || 'Failed to fetch NFTs for connected wallets');
+      return { nfts: [], hasMore: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [normalizeId, services.alchemy]);
+  
   // Provide context values
   const contextValue = {
     // State
@@ -421,9 +615,12 @@ export const NFTProvider = ({ children }) => {
     fetchNftsForAddresses,
     fetchCollectionHolders,
     getFarcasterProfile,
+    fetchAllNFTsForWallets,
     
     // Helper methods
-    normalizeId
+    normalizeId,
+    loadedWallets,
+    fetchProgress
   };
   
   return (

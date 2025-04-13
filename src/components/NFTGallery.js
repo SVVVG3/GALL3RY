@@ -4,6 +4,7 @@ import { useNFT } from '../contexts/NFTContext';
 import { useWallet } from '../contexts/WalletContext';
 import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock, FaShieldAlt } from 'react-icons/fa';
 import styled from 'styled-components';
+import { formatAddress } from '../utils/format';
 
 /**
  * NFT Gallery component
@@ -33,7 +34,10 @@ const NFTGallery = () => {
     setExcludeSpam,
     loadMoreNFTs,
     fetchNFTs,
-    endCursor
+    endCursor,
+    fetchAllNFTsForWallets,
+    fetchProgress,
+    loadedWallets
   } = useNFT();
   
   const { connectedWallets } = useWallet();
@@ -41,18 +45,40 @@ const NFTGallery = () => {
   const [showSortMenu, setShowSortMenu] = useState(false);
   const loaderRef = useRef(null);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [fetchingAllWallets, setFetchingAllWallets] = useState(false);
 
   // Initial load of NFTs when wallets are connected
   useEffect(() => {
     if (connectedWallets && connectedWallets.length > 0 && initialLoad) {
-      // Make sure to set includeValue to true to fetch estimated values
-      fetchNFTs({
-        includeValue: true,
-        includeBalanceUSD: true
-      });
-      setInitialLoad(false);
+      // Check if we need to fetch from all wallets
+      const walletAddresses = connectedWallets.map(wallet => wallet.address);
+      const newWallets = walletAddresses.filter(address => !loadedWallets.includes(address));
+      
+      if (newWallets.length > 0) {
+        console.log(`Fetching NFTs for ${newWallets.length} new connected wallets`);
+        setFetchingAllWallets(true);
+        
+        // Use the new function to fetch from all wallets at once
+        fetchAllNFTsForWallets(walletAddresses, {
+          includeValue: true,
+          includeBalanceUSD: true,
+          // Fetch from multiple chains if needed
+          chains: ['eth', 'base', 'polygon', 'arbitrum', 'optimism'],
+          excludeSpam: excludeSpam
+        }).finally(() => {
+          setInitialLoad(false);
+          setFetchingAllWallets(false);
+        });
+      } else {
+        // If all wallets already loaded, just fetch with refreshed options
+        fetchNFTs({
+          includeValue: true,
+          includeBalanceUSD: true
+        });
+        setInitialLoad(false);
+      }
     }
-  }, [connectedWallets, fetchNFTs, initialLoad]);
+  }, [connectedWallets, fetchNFTs, fetchAllNFTsForWallets, initialLoad, loadedWallets, excludeSpam]);
 
   // Automatically continue loading NFTs until we hit a reasonable threshold or hasMore becomes false
   // This helps ensure we load enough NFTs even with the pagination limits
@@ -176,6 +202,47 @@ const NFTGallery = () => {
     // Since the toggleLikeNFT function is not implemented, we'll just log this
   };
 
+  // Add a method to manually fetch from all wallets
+  const handleFetchAllWallets = () => {
+    if (connectedWallets && connectedWallets.length > 0 && !fetchingAllWallets) {
+      const walletAddresses = connectedWallets.map(wallet => wallet.address);
+      setFetchingAllWallets(true);
+      
+      fetchAllNFTsForWallets(walletAddresses, {
+        includeValue: true, 
+        includeBalanceUSD: true,
+        bypassCache: true,
+        chains: selectedChains.includes('all') ? 
+          ['eth', 'base', 'polygon', 'arbitrum', 'optimism'] : 
+          selectedChains,
+        excludeSpam: excludeSpam
+      }).finally(() => {
+        setFetchingAllWallets(false);
+      });
+    }
+  };
+
+  // Add wallet fetch progress display
+  const renderFetchProgress = () => {
+    if (Object.keys(fetchProgress).length === 0) return null;
+    
+    return (
+      <FetchProgressContainer>
+        <h4>Fetching NFTs from Wallets</h4>
+        {Object.entries(fetchProgress).map(([address, progress]) => (
+          <ProgressItem key={address}>
+            <ProgressLabel>{formatAddress(address)}</ProgressLabel>
+            <ProgressInfo>
+              <div>{progress.completed ? 'Complete' : 'Loading...'}</div>
+              <div>{progress.totalNFTs} NFTs</div>
+              <div>Page {progress.pagesFetched}</div>
+            </ProgressInfo>
+          </ProgressItem>
+        ))}
+      </FetchProgressContainer>
+    );
+  };
+
   return (
     <GalleryContainer>
       <GalleryHeader>
@@ -205,8 +272,19 @@ const NFTGallery = () => {
             <FaShieldAlt />
             {excludeSpam ? 'Spam Filtered' : 'Show All'}
           </SpamToggle>
+          
+          {/* Add button to fetch all wallets */}
+          {connectedWallets && connectedWallets.length > 1 && (
+            <RefreshButton onClick={handleFetchAllWallets} disabled={fetchingAllWallets || isLoading}>
+              {fetchingAllWallets ? <FaSpinner className="spinning" /> : 'Refresh All Wallets'}
+            </RefreshButton>
+          )}
         </ControlsContainer>
       </GalleryHeader>
+      
+      {/* Add fetch progress display */}
+      {(fetchingAllWallets || Object.values(fetchProgress).some(p => !p.completed)) && 
+        renderFetchProgress()}
 
       {/* Display NFT count and manual load button if we have NFTs */}
       {filteredNFTs.length > 0 && hasMore && (
@@ -628,6 +706,51 @@ const ManualLoadButton = styled.button`
   &:hover {
     background-color: #3d8b40;
   }
+`;
+
+const RefreshButton = styled.button`
+  padding: 0.75rem 1rem;
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  margin-left: 0.5rem;
+  
+  &:hover {
+    background-color: #3d8b40;
+  }
+`;
+
+const FetchProgressContainer = styled.div`
+  background-color: white;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const ProgressItem = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.5rem;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+`;
+
+const ProgressLabel = styled.div`
+  font-weight: 500;
+`;
+
+const ProgressInfo = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
 `;
 
 export default NFTGallery; 
