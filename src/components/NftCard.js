@@ -50,40 +50,6 @@ const NftCard = ({
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
   
-  // Card loading skeleton shown until image is loaded
-  const imageLoadingState = !imageLoaded && (
-    <div className="nft-image-loading">
-      <CardLoadingAnimation />
-    </div>
-  );
-
-  const handleCardClick = (e) => {
-    // Don't navigate if clicking on holders button
-    if (e.target.closest('.holders-button')) {
-      return;
-    }
-
-    if (onClick) {
-      onClick(nft);
-    }
-  };
-  
-  const handleHoldersClick = (e) => {
-    console.log('Holders button clicked', { contractAddress, profile });
-    e.preventDefault();
-    e.stopPropagation();
-    setShowHolders(true);
-    analytics.track('NFT Holders Viewed', {
-      collectionAddress: contractAddress
-    });
-  };
-  
-  const handleCloseModal = () => {
-    setShowHolders(false);
-  };
-
-  if (!nft) return null;
-
   // Data extraction with fallbacks for different API responses
   const getName = () => {
     if (nft.name) return nft.name;
@@ -164,6 +130,121 @@ const NftCard = ({
     
     return null;
   };
+  
+  // Extract collection address - MOVED UP before it's used
+  const getContractAddress = () => {
+    // First try direct access to address property
+    if (nft.collection?.address) {
+      return nft.collection.address;
+    } 
+    // Then try to extract from collection ID (which is base64 encoded)
+    else if (nft.collection?.id) {
+      try {
+        const collectionId = nft.collection.id;
+        console.log("Collection ID:", collectionId);
+        
+        // If it's a base64 encoded string, decode it
+        if (collectionId.match(/^[A-Za-z0-9+/=]+$/)) {
+          try {
+            const decoded = atob(collectionId);
+            console.log("Decoded collection ID:", decoded);
+            
+            // If the decoded ID contains a hyphen, extract the second part as the collection ID
+            if (decoded.includes('-')) {
+              const parts = decoded.split('-');
+              if (parts.length > 1) {
+                const extracted = parts[1];
+                console.log("Successfully extracted collection ID:", extracted);
+                return extracted;
+              }
+            }
+          } catch (e) {
+            console.error("Error decoding collection ID:", e);
+          }
+        } 
+        // If it's already in the format of a collection ID, use it directly
+        else {
+          console.log("Using collection ID directly:", collectionId);
+          return collectionId;
+        }
+      } catch (e) {
+        console.error("Error processing collection ID:", e);
+      }
+    }
+    
+    // Fallback to other potential sources
+    if (nft.contractAddress || nft.contract?.address || nft.token?.collection?.address) {
+      return (
+        nft.contractAddress || 
+        nft.contract?.address ||
+        nft.token?.collection?.address
+      );
+    }
+    
+    // Try one more approach if we still don't have a contract address
+    if (nft.id) {
+      // NFT IDs often include collection info
+      const idParts = nft.id.split(':');
+      if (idParts.length >= 2) {
+        const extracted = idParts[1];
+        console.log("Extracted contract address from NFT ID:", extracted);
+        return extracted;
+      }
+    }
+    
+    return null;
+  };
+
+  // Get data for rendering
+  const name = getName();
+  const collection = getCollection();
+  const imageUrl = getImageUrl();
+  const contractAddress = getContractAddress();
+  
+  // Debug contract address
+  console.log("NFT Contract Address:", {
+    extracted: contractAddress,
+    collectionAddress: nft.collection?.address,
+    collectionId: nft.collection?.id,
+    nftId: nft.id,
+    contractAddress: nft.contractAddress,
+    contractAddressFromContract: nft.contract?.address,
+    tokenCollectionAddress: nft.token?.collection?.address
+  });
+  
+  // Card loading skeleton shown until image is loaded
+  const imageLoadingState = !imageLoaded && (
+    <div className="nft-image-loading">
+      <CardLoadingAnimation />
+    </div>
+  );
+
+  const handleCardClick = (e) => {
+    // Don't navigate if clicking on holders button
+    if (e.target.closest('.holders-button')) {
+      return;
+    }
+
+    if (onClick) {
+      onClick(nft);
+    }
+  };
+  
+  const handleHoldersClick = (e) => {
+    console.log('Holders button clicked', { contractAddress, profile });
+    e.preventDefault();
+    e.stopPropagation();
+    setShowHolders(true);
+    analytics.track('NFT Holders Viewed', {
+      collectionAddress: contractAddress
+    });
+  };
+  
+  const handleCloseModal = () => {
+    setShowHolders(false);
+  };
+
+  if (!nft) return null;
 
   const getValue = () => {
     // Debug log for value properties
@@ -368,83 +449,9 @@ const NftCard = ({
     return null;
   };
 
-  const name = getName();
-  const collection = getCollection();
-  const imageUrl = getImageUrl();
-  const valueData = getValue();
   const tokenId = getTokenId();
+  const valueData = getValue();
   
-  // Extract collection address from collection ID
-  let contractAddress = null;
-  
-  // First try direct access to address property
-  if (nft.collection?.address) {
-    contractAddress = nft.collection.address;
-  } 
-  // Then try to extract from collection ID (which is base64 encoded)
-  else if (nft.collection?.id) {
-    try {
-      const collectionId = nft.collection.id;
-      console.log("Collection ID:", collectionId);
-      
-      // If it's a base64 encoded string, decode it
-      if (collectionId.match(/^[A-Za-z0-9+/=]+$/)) {
-        try {
-          const decoded = atob(collectionId);
-          console.log("Decoded collection ID:", decoded);
-          
-          // If the decoded ID contains a hyphen, extract the second part as the collection ID
-          if (decoded.includes('-')) {
-            const parts = decoded.split('-');
-            if (parts.length > 1) {
-              contractAddress = parts[1];
-              console.log("Successfully extracted collection ID:", contractAddress);
-            }
-          }
-        } catch (e) {
-          console.error("Error decoding collection ID:", e);
-        }
-      } 
-      // If it's already in the format of a collection ID, use it directly
-      else {
-        contractAddress = collectionId;
-        console.log("Using collection ID directly:", contractAddress);
-      }
-    } catch (e) {
-      console.error("Error processing collection ID:", e);
-    }
-  }
-  
-  // Fallback to other potential sources
-  if (!contractAddress) {
-    contractAddress = (
-      nft.contractAddress || 
-      nft.contract?.address ||
-      nft.token?.collection?.address
-    );
-  }
-  
-  // Try one more approach if we still don't have a contract address
-  if (!contractAddress && nft.id) {
-    // NFT IDs often include collection info
-    const idParts = nft.id.split(':');
-    if (idParts.length >= 2) {
-      contractAddress = idParts[1];
-      console.log("Extracted contract address from NFT ID:", contractAddress);
-    }
-  }
-  
-  // Debug contract address
-  console.log("NFT Contract Address:", {
-    extracted: contractAddress,
-    collectionAddress: nft.collection?.address,
-    collectionId: nft.collection?.id,
-    nftId: nft.id,
-    contractAddress: nft.contractAddress,
-    contractAddressFromContract: nft.contract?.address,
-    tokenCollectionAddress: nft.token?.collection?.address
-  });
-
   // Format the estimated value with appropriate precision
   const formatEstimatedValue = (valueData) => {
     if (!valueData || valueData.value === undefined || valueData.value === null) return 'N/A';
