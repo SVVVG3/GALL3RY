@@ -5,7 +5,14 @@ import './styles/app.css';
 import './styles/folder.css';
 // Import Farcaster Auth Kit
 import '@farcaster/auth-kit/styles.css';
-import { AuthKitProvider } from '@farcaster/auth-kit';
+
+// Safely import Farcaster Auth Kit
+const AuthKitProvider = lazy(() => 
+  import('@farcaster/auth-kit').then(module => ({
+    default: module.AuthKitProvider
+  }))
+);
+
 import SignInButton from './components/SignInButton';
 import { AuthProvider } from './contexts/AuthContext';
 
@@ -51,11 +58,11 @@ const safeStorage = {
 };
 
 // Configure Farcaster Auth Kit
-const farcasterConfig = {
+const getFarcasterConfig = () => ({
   rpcUrl: process.env.REACT_APP_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
   domain: process.env.REACT_APP_FARCASTER_DOMAIN || 'gall3ry.vercel.app',
   siweUri: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
-};
+});
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -165,6 +172,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [appError, setAppError] = useState(null);
   const [isClient, setIsClient] = useState(false);
+  const [authKitLoaded, setAuthKitLoaded] = useState(false);
   
   // Initialize app on mount - reduced timer for faster loading
   useEffect(() => {
@@ -193,7 +201,7 @@ function App() {
   
   // Render app with authentication but delay NFT functionality
   return (
-    <AuthKitProvider config={farcasterConfig}>
+    <Suspense fallback={<LoadingScreen />}>
       <AuthProvider>
         <Router>
           <div className="app">
@@ -206,7 +214,9 @@ function App() {
                 </div>
                 
                 <div className="auth-actions">
-                  <SignInButton />
+                  <Suspense fallback={<div>Loading auth...</div>}>
+                    <SignInButton />
+                  </Suspense>
                 </div>
               </div>
             </header>
@@ -235,7 +245,7 @@ function App() {
           </div>
         </Router>
       </AuthProvider>
-    </AuthKitProvider>
+    </Suspense>
   );
 }
 
@@ -252,12 +262,17 @@ const UserProfilePage = () => {
   }, []);
   
   return (
-    <div className="user-profile-page">
-      <Suspense fallback={<LoadingScreen />}>
-        <ErrorBoundary>
-          <FarcasterUserSearch initialUsername={username} />
-        </ErrorBoundary>
-      </Suspense>
+    <div className="profile-container">
+      {username ? (
+        <>
+          <h2>NFTs for @{username}</h2>
+          <Suspense fallback={<div>Loading user NFTs...</div>}>
+            <FarcasterUserSearch initialUsername={username} />
+          </Suspense>
+        </>
+      ) : (
+        <div>User not found</div>
+      )}
     </div>
   );
 };

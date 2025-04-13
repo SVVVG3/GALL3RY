@@ -21,6 +21,7 @@ const NftCard = ({
   disabled, 
   showLastPrice = false, 
   showCollectionName = true,
+  showLikeButton = false,
 }) => {
   // Early return with a simpler placeholder if nft is null or undefined
   if (!nft) {
@@ -47,9 +48,7 @@ const NftCard = ({
   const [imageLoaded, setImageLoaded] = useState(false);
   const { profile, isAuthenticated } = useAuth();
   const [currentContractAddress, setCurrentContractAddress] = useState(null);
-
-  // Add debugging
-  console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
+  const [currentNetwork, setCurrentNetwork] = useState('ETHEREUM_MAINNET');
   
   // Data extraction with fallbacks for different API responses
   const getName = () => {
@@ -68,6 +67,23 @@ const NftCard = ({
     if (nft.contract?.name) return nft.contract.name;
     if (nft.token?.symbol) return nft.token.symbol;
     return 'Unknown Collection';
+  };
+
+  const getTokenId = () => {
+    if (nft.tokenId) return nft.tokenId;
+    if (nft.token?.tokenId) return nft.token.tokenId;
+    // Try to extract from NFT ID if it includes a colon and a dash (common format)
+    if (nft.id && typeof nft.id === 'string') {
+      const parts = nft.id.split(':');
+      if (parts.length > 1) {
+        const secondPart = parts[1];
+        if (secondPart.includes('-')) {
+          const tokenIdPart = secondPart.split('-')[1];
+          if (tokenIdPart) return tokenIdPart;
+        }
+      }
+    }
+    return null;
   };
 
   const getImageUrl = () => {
@@ -132,11 +148,39 @@ const NftCard = ({
     return null;
   };
   
-  // Extract collection address - Only called when needed, not during initial render
+  // Check if we can extract a valid contract address WITHOUT actually extracting it yet
+  // This is just to determine if we should show the holders button
+  const hasValidContractAddress = () => {
+    if (nft.collection?.address) return true;
+    if (nft.contractAddress) return true;
+    if (nft.contract?.address) return true;
+    if (nft.token?.collection?.address) return true;
+    
+    // Try to extract from collection ID only if it exists
+    if (nft.collection?.id) return true;
+    
+    // Try to extract from NFT ID if it contains a colon (common format)
+    if (nft.id && typeof nft.id === 'string' && nft.id.includes(':')) return true;
+    
+    return false;
+  };
+  
+  // Extract collection address and network - Only called when needed, not during initial render
   const getContractAddress = () => {
+    // Default network to ethereum mainnet if not specified
+    let network = 'ETHEREUM_MAINNET';
+    let contractAddress = null;
+    
     // First try direct access to address property
     if (nft.collection?.address) {
-      return nft.collection.address;
+      contractAddress = nft.collection.address;
+      // Update network if available
+      if (nft.collection.network) {
+        // Format properly for GraphQL query - all caps with _MAINNET suffix
+        network = formatNetworkForGraphQL(nft.collection.network);
+      } else if (nft.network) {
+        network = formatNetworkForGraphQL(nft.network);
+      }
     } 
     // Then try to extract from collection ID (which is base64 encoded)
     else if (nft.collection?.id) {
@@ -154,9 +198,13 @@ const NftCard = ({
             if (decoded.includes('-')) {
               const parts = decoded.split('-');
               if (parts.length > 1) {
-                const extracted = parts[1];
-                console.log("Successfully extracted collection ID:", extracted);
-                return extracted;
+                contractAddress = parts[1];
+                console.log("Successfully extracted collection ID:", contractAddress);
+                
+                // Try to extract network from the first part if possible
+                if (parts[0]) {
+                  network = formatNetworkForGraphQL(parts[0]);
+                }
               }
             }
           } catch (e) {
@@ -166,7 +214,7 @@ const NftCard = ({
         // If it's already in the format of a collection ID, use it directly
         else {
           console.log("Using collection ID directly:", collectionId);
-          return collectionId;
+          contractAddress = collectionId;
         }
       } catch (e) {
         console.error("Error processing collection ID:", e);
@@ -174,32 +222,80 @@ const NftCard = ({
     }
     
     // Fallback to other potential sources
-    if (nft.contractAddress || nft.contract?.address || nft.token?.collection?.address) {
-      return (
+    if (!contractAddress) {
+      contractAddress = (
         nft.contractAddress || 
         nft.contract?.address ||
         nft.token?.collection?.address
       );
-    }
-    
-    // Try one more approach if we still don't have a contract address
-    if (nft.id) {
-      // NFT IDs often include collection info
-      const idParts = nft.id.split(':');
-      if (idParts.length >= 2) {
-        const extracted = idParts[1];
-        console.log("Extracted contract address from NFT ID:", extracted);
-        return extracted;
+      
+      // Update network if available
+      if (nft.network) {
+        network = formatNetworkForGraphQL(nft.network);
+      } else if (nft.token?.collection?.network) {
+        network = formatNetworkForGraphQL(nft.token.collection.network);
       }
     }
     
-    return null;
+    // Try one more approach if we still don't have a contract address
+    if (!contractAddress && nft.id) {
+      // NFT IDs often include collection info
+      const idParts = nft.id.split(':');
+      if (idParts.length >= 2) {
+        contractAddress = idParts[1];
+        
+        // If we can extract network from the ID, update it
+        if (idParts[0]) {
+          network = formatNetworkForGraphQL(idParts[0]);
+        }
+        
+        console.log("Extracted contract address from NFT ID:", contractAddress);
+      }
+    }
+    
+    // Store the network for later use
+    setCurrentNetwork(network);
+    
+    return contractAddress;
+  };
+  
+  // Helper to format network name for GraphQL
+  const formatNetworkForGraphQL = (network) => {
+    if (!network) return 'ETHEREUM_MAINNET';
+    
+    // Convert to uppercase
+    const normalizedNetwork = network.toUpperCase();
+    
+    // Add _MAINNET suffix if not already present
+    if (!normalizedNetwork.includes('_MAINNET')) {
+      // Handle known network names
+      if (normalizedNetwork === 'ETHEREUM' || normalizedNetwork === 'ETH') {
+        return 'ETHEREUM_MAINNET';
+      } else if (normalizedNetwork === 'POLYGON' || normalizedNetwork === 'MATIC') {
+        return 'POLYGON_MAINNET';
+      } else if (normalizedNetwork === 'ARBITRUM') {
+        return 'ARBITRUM_MAINNET';
+      } else if (normalizedNetwork === 'OPTIMISM') {
+        return 'OPTIMISM_MAINNET';
+      } else if (normalizedNetwork === 'BASE') {
+        return 'BASE_MAINNET';
+      } else if (normalizedNetwork === 'ZORA') {
+        return 'ZORA_MAINNET';
+      }
+      
+      // Default to adding _MAINNET suffix
+      return `${normalizedNetwork}_MAINNET`;
+    }
+    
+    return normalizedNetwork;
   };
 
   // Get data for rendering
   const name = getName();
   const collection = getCollection();
   const imageUrl = getImageUrl();
+  const hasCollectionAddress = hasValidContractAddress();
+  const tokenId = getTokenId();
   
   // Card loading skeleton shown until image is loaded
   const imageLoadingState = !imageLoaded && (
@@ -227,13 +323,19 @@ const NftCard = ({
     const contractAddress = getContractAddress();
     setCurrentContractAddress(contractAddress);
     
-    console.log('Holders button clicked', { contractAddress, profile });
-    setShowHolders(true);
+    console.log('Holders button clicked', { contractAddress, network: currentNetwork, profile });
     
     if (contractAddress) {
+      setShowHolders(true);
+      
       analytics.track('NFT Holders Viewed', {
-        collectionAddress: contractAddress
+        collectionAddress: contractAddress,
+        network: currentNetwork
       });
+    } else {
+      // Show an error if we couldn't extract the contract address
+      console.error('Could not extract a valid contract address for this NFT');
+      alert('Unable to show holders: Missing collection address');
     }
   };
   
@@ -419,18 +521,7 @@ const NftCard = ({
       }
     }
     
-    // 11. Legacy collection floor price
-    if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
-      return {
-        value: nft.collection.floorPriceEth * ETH_USD_ESTIMATE,
-        symbol: 'USD',
-        isUsd: true,
-        originalValue: nft.collection.floorPriceEth,
-        originalSymbol: 'ETH'
-      };
-    }
-    
-    // If no value found
+    // 11. If no value is found, return a default
     return {
       value: 0,
       symbol: 'USD',
@@ -438,13 +529,6 @@ const NftCard = ({
     };
   };
 
-  const getTokenId = () => {
-    if (nft.tokenId) return nft.tokenId;
-    if (nft.token?.tokenId) return nft.token.tokenId;
-    return null;
-  };
-
-  const tokenId = getTokenId();
   const valueData = getValue();
   
   // Format the estimated value with appropriate precision
@@ -484,14 +568,6 @@ const NftCard = ({
       return `${parseFloat(value).toFixed(2)} ${symbol}`;
     }
   };
-
-  // Check if this NFT has a collection address that can be extracted (but don't extract it yet)
-  const hasContractAddress = nft.collection?.address || 
-                             nft.collection?.id || 
-                             nft.contractAddress || 
-                             nft.contract?.address || 
-                             nft.token?.collection?.address ||
-                             (nft.id && nft.id.includes(':'));
 
   return (
     <CardContainer 
@@ -536,7 +612,17 @@ const NftCard = ({
             )}
           </div>
           
-          {isAuthenticated && profile?.fid && hasContractAddress && (
+          {/* Only render like button if showLikeButton prop is true */}
+          {showLikeButton && (
+            <button className="like-button" aria-label="Like NFT">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            </button>
+          )}
+          
+          {/* Only render holders button if authenticated, has profile FID, and has a valid collection address */}
+          {isAuthenticated && profile?.fid && hasCollectionAddress && (
             <button
               className="holders-button"
               onClick={handleHoldersClick}
@@ -548,19 +634,25 @@ const NftCard = ({
         </div>
       </div>
 
-      {showHolders && currentContractAddress && (
-        <CollectionHoldersModal
-          collectionAddress={currentContractAddress}
-          userFid={profile?.fid}
-          onClose={handleCloseModal}
-        />
-      )}
-      {showHolders && !currentContractAddress && (
-        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', 
-                    backgroundColor: 'white', padding: '20px', zIndex: 1000, borderRadius: '8px' }}>
-          <p>Unable to display holders: Missing collection address</p>
-          <button onClick={() => setShowHolders(false)}>Close</button>
-        </div>
+      {/* Only render the modal when showHolders is true AND we have a contract address */}
+      {showHolders && (
+        currentContractAddress ? (
+          <CollectionHoldersModal
+            collectionAddress={currentContractAddress}
+            network={currentNetwork}
+            tokenId={tokenId}
+            userFid={profile?.fid}
+            onClose={handleCloseModal}
+          />
+        ) : (
+          <div className="modal error-modal">
+            <div className="modal-content">
+              <h3>Error</h3>
+              <p>Could not extract a valid contract address for this NFT.</p>
+              <button onClick={handleCloseModal}>Close</button>
+            </div>
+          </div>
+        )
       )}
     </CardContainer>
   );

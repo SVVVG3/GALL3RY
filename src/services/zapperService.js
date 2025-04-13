@@ -2,6 +2,20 @@ import axios from 'axios';
 import { ZAPPER_PROXY_URL } from '../constants';
 import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
 
+// Add axios interceptor to ensure proper User-Agent for all requests
+axios.interceptors.request.use(
+  config => {
+    // Add User-Agent header to all requests if not already present
+    if (!config.headers['User-Agent']) {
+      config.headers['User-Agent'] = 'GALL3RY/1.0 (https://gall3ry.vercel.app)';
+    }
+    return config;
+  },
+  error => {
+    return Promise.reject(error);
+  }
+);
+
 // Constants
 const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
@@ -38,6 +52,8 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
       try {
         const headers = {
           'Content-Type': 'application/json',
+          // Add User-Agent header to prevent initialization errors
+          'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
         };
         
         // If using direct Zapper API, add the API key if available

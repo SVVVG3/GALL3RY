@@ -191,7 +191,9 @@ module.exports = async (req, res) => {
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'x-zapper-api-key': apiKey
+      'x-zapper-api-key': apiKey,
+      // Add proper User-Agent header for Zapper API
+      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
     };
     
     // FIX FOR ZAPPER API SCHEMA CHANGES

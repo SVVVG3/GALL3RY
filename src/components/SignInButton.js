@@ -1,5 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { SignInButton as FarcasterSignInButton, useSignIn } from '@farcaster/auth-kit';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+// Import the hook directly to avoid initialization issues
+import { useAuth } from '../contexts/AuthContext';
+
+// Dynamic imports to prevent initialization issues
+const LazyFarcasterComponents = lazy(() => 
+  Promise.all([
+    import('@farcaster/auth-kit')
+  ]).then(([authKit]) => ({
+    SignInButton: authKit.SignInButton,
+    useSignIn: authKit.useSignIn
+  }))
+);
 
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
@@ -12,22 +23,9 @@ const isBrowser = typeof window !== 'undefined' &&
 const SignInButton = ({ onSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const { signIn, signOut, status } = useSignIn();
   
-  // Safely check authentication status
-  useEffect(() => {
-    try {
-      if (status === 'authenticated') {
-        setIsAuthenticated(true);
-      } else {
-        setIsAuthenticated(false);
-      }
-    } catch (err) {
-      console.error("Error checking auth status:", err);
-      setError(err);
-    }
-  }, [status]);
+  // Use our AuthContext instead of direct Farcaster auth
+  const { isAuthenticated, logout } = useAuth();
   
   // Handle sign out with extra error protection
   const handleSignOut = async () => {
@@ -40,8 +38,7 @@ const SignInButton = ({ onSuccess }) => {
         throw new Error("Cannot sign out in non-browser environment");
       }
       
-      await signOut();
-      setIsAuthenticated(false);
+      await logout();
       
       // Call success callback if provided
       if (onSuccess && typeof onSuccess === 'function') {
@@ -69,7 +66,7 @@ const SignInButton = ({ onSuccess }) => {
   }
   
   // If loading
-  if (isLoading || status === 'loading') {
+  if (isLoading) {
     return (
       <button 
         className="btn btn-primary"
@@ -92,13 +89,34 @@ const SignInButton = ({ onSuccess }) => {
     );
   }
   
-  // If not authenticated, wrap the Farcaster SignInButton in error boundary
+  // If not authenticated, use the fallback button that will be shown until
+  // the real Farcaster auth button loads
+  return (
+    <Suspense fallback={<FallbackSignInButton />}>
+      <FarcasterSignInButtonWrapper onSuccess={onSuccess} />
+    </Suspense>
+  );
+};
+
+// Wrapper for the actual Farcaster sign-in button
+const FarcasterSignInButtonWrapper = ({ onSuccess }) => {
   return (
     <ErrorBoundaryWrapper>
-      <FarcasterSignInButton onSuccess={onSuccess} />
+      <LazyFarcasterComponents>
+        {({ SignInButton, useSignIn }) => (
+          <SignInButton onSuccess={onSuccess} />
+        )}
+      </LazyFarcasterComponents>
     </ErrorBoundaryWrapper>
   );
 };
+
+// Fallback button shown while the real one loads
+const FallbackSignInButton = () => (
+  <button className="btn btn-primary">
+    Sign in
+  </button>
+);
 
 // Simple error boundary for the sign-in button
 class ErrorBoundaryWrapper extends React.Component {
@@ -117,11 +135,7 @@ class ErrorBoundaryWrapper extends React.Component {
 
   render() {
     if (this.state.hasError) {
-      return (
-        <button className="btn btn-primary">
-          Sign in
-        </button>
-      );
+      return <FallbackSignInButton />;
     }
 
     return this.props.children;

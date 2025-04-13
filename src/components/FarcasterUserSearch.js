@@ -3,6 +3,58 @@ import zapperService from '../services/zapperService';
 import NftGrid from './NFTGrid';
 import '../styles/FarcasterUserSearch.css';
 
+// Error boundary for handling API initialization issues
+class APIErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("API Error:", error);
+    console.error("Component Stack:", errorInfo.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      // Check for the specific 'Pe' initialization error
+      const isPeError = this.state.error && 
+        this.state.error.toString().includes("Cannot access 'Pe' before initialization");
+      
+      return (
+        <div className="error-container">
+          <h3>API Error</h3>
+          {isPeError ? (
+            <>
+              <p>We're having trouble connecting to the NFT data provider.</p>
+              <p>This may be due to a User-Agent requirement. Please try refreshing the page.</p>
+            </>
+          ) : (
+            <p>There was an error loading NFT data. Please try again.</p>
+          )}
+          <button 
+            onClick={() => {
+              this.setState({ hasError: false, error: null });
+              if (this.props.onRetry) {
+                this.props.onRetry();
+              }
+            }}
+            className="retry-button"
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 /**
  * Component for searching Farcaster users and displaying their NFTs
  * @param {Object} props - Component props
@@ -42,6 +94,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');
+
+  // Handle API retries
+  const handleRetry = () => {
+    if (initialUsername) {
+      performSearch(initialUsername);
+    }
+  };
 
   // Effect for initial search if username is provided
   useEffect(() => {
@@ -656,334 +715,171 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
 
-  // Render component
   return (
-    <div className="farcaster-user-search">
-      {/* Search Form */}
-      <form onSubmit={handleSearch} className="search-form">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Enter Farcaster username or FID"
-          className="search-input"
-          disabled={isSearching}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck="false"
-        />
-        <button 
-          type="submit" 
-          className="search-button"
-          disabled={isSearching || !searchQuery.trim()}
-        >
-          Search
-        </button>
-      </form>
-      
-      {/* Loading or Error Messages */}
-      {isSearching && <div className="loading-message">Searching...</div>}
-      {searchError && <div className="error-message">{searchError}</div>}
-      
-      {/* User Profile */}
-      {userProfile && (
-        <div className="user-profile">
-          <div className="profile-header">
-            {userProfile.avatarUrl && (
-              <img 
-                src={userProfile.avatarUrl} 
-                alt={`${userProfile.displayName || userProfile.username} avatar`}
-                onError={(e) => { 
-                  console.error('Profile avatar failed to load:', userProfile.avatarUrl);
-                  e.target.src = 'https://via.placeholder.com/150?text=No+Image'; 
-                }}
-                className="profile-avatar"
-              />
-            )}
-            <div className="profile-info">
-              <h3 className="display-name">{userProfile.displayName || userProfile.username}</h3>
-              <p className="username">
-                <a 
-                  href={`https://warpcast.com/${userProfile.username}`} 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  className="warpcast-link"
-                >
-                  @{userProfile.username}
-                </a> · FID: {userProfile.fid}
-              </p>
-              
-              {/* NFT Count Display */}
-              {!isLoadingNfts && userNfts.length > 0 && (
-                <p className="nft-count">
-                  <span className="nft-count-number" style={{ fontWeight: 'bold', fontSize: '18px' }}>
-                    {hasMoreNfts ? (
-                      <>
-                        {userNfts.length}
-                        <span className="nft-count-plus" style={{ color: '#7b3fe4', marginLeft: '1px' }}>+</span>
-                      </>
-                    ) : userNfts.length}
-                  </span> 
-                  <span className="nft-count-label" style={{ marginLeft: '4px' }}>NFTs</span>
-                  {hasMoreNfts && 
-                    <span className="nft-count-estimate" style={{ 
-                      fontSize: '14px',
-                      color: '#666',
-                      marginLeft: '6px',
-                      fontStyle: 'italic'
-                    }}>
-                      (loaded {userNfts.length} of {estimateTotalNftCount()})
-                    </span>
-                  }
-                </p>
-              )}
-              {isLoadingNfts && (
-                <p className="nft-count loading">
-                  Loading NFTs...
-                </p>
-              )}
-            </div>
-          </div>
+    <APIErrorBoundary onRetry={handleRetry}>
+      <div className="farcaster-search-container">
+        <div className="search-header">
+          <h2>Farcaster NFT Search</h2>
+          <p className="search-subtitle">Search for a Farcaster user to see their NFT collection</p>
           
-          {/* Connected Wallets Dropdown */}
-          {(userProfile.connectedAddresses?.length > 0 || userProfile.custodyAddress) && (
-            <div className="connected-wallets">
-              <div 
-                className="wallets-header" 
-                onClick={toggleWallets}
-              >
-                <h4>
-                  <span>Connected Wallets ({getWalletCount()})</span>
-                  <span className={`dropdown-arrow ${walletsExpanded ? 'expanded' : ''}`}>▼</span>
-                </h4>
+          <form onSubmit={handleSearch} className="search-form">
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Enter Farcaster username (e.g. dwr, vitalik, etc.)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              disabled={isSearching}
+              aria-label="Farcaster username"
+            />
+            <button 
+              type="submit" 
+              className="search-button"
+              disabled={isSearching}
+            >
+              {isSearching ? 'Searching...' : 'Search'}
+            </button>
+          </form>
+        </div>
+        
+        {/* Display search error */}
+        {searchError && (
+          <div className="error-message">
+            {searchError}
+          </div>
+        )}
+        
+        {/* Display user profile */}
+        {userProfile && (
+          <div className="user-profile">
+            <div className="profile-header">
+              <div className="profile-image">
+                {userProfile.metadata?.imageUrl ? (
+                  <img 
+                    src={userProfile.metadata.imageUrl} 
+                    alt={`${userProfile.username}'s profile`}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://via.placeholder.com/100?text=FC';
+                    }}
+                  />
+                ) : (
+                  <div className="placeholder-image">
+                    {userProfile.username.charAt(0).toUpperCase()}
+                  </div>
+                )}
               </div>
-              
-              {walletsExpanded && (
-                <ul className="wallet-list">
-                  {userProfile.connectedAddresses?.map((address, index) => (
-                    <li key={index} className="wallet-item">
-                      <span className="wallet-address">
-                        {address.substring(0, 6)}...{address.substring(address.length - 4)}
-                      </span>
-                      <a 
-                        href={`https://etherscan.io/address/${address}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="etherscan-link"
-                      >
-                        View on Etherscan
-                      </a>
-                    </li>
-                  ))}
-                  {userProfile.custodyAddress && (
-                    <li className="wallet-item">
-                      <span className="wallet-address custody">
-                        {userProfile.custodyAddress.substring(0, 6)}...
-                        {userProfile.custodyAddress.substring(userProfile.custodyAddress.length - 4)}
-                        <span className="custody-label">(Custody)</span>
-                      </span>
-                      <a 
-                        href={`https://etherscan.io/address/${userProfile.custodyAddress}`} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="etherscan-link"
-                      >
-                        View on Etherscan
-                      </a>
-                    </li>
+              <div className="profile-info">
+                <h3>{userProfile.metadata?.displayName || userProfile.username}</h3>
+                <p className="username">@{userProfile.username}</p>
+                {userProfile.metadata?.description && (
+                  <p className="bio">{userProfile.metadata.description}</p>
+                )}
+                
+                {/* Display wallet addresses with toggle */}
+                <div className="wallet-addresses">
+                  <div className="address-header" onClick={toggleWallets}>
+                    <span>
+                      {getWalletCount()} connected {getWalletCount() === 1 ? 'wallet' : 'wallets'}
+                    </span>
+                    <button className="toggle-button">
+                      {walletsExpanded ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  
+                  {walletsExpanded && (
+                    <ul className="address-list">
+                      {walletAddresses.map((address, index) => (
+                        <li key={index} title={address}>
+                          {address.slice(0, 6)}...{address.slice(-4)}
+                        </li>
+                      ))}
+                    </ul>
                   )}
-                </ul>
-              )}
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Debug Info */}
-      {process.env.NODE_ENV === 'development' && userProfile && (
-        <div className="debug-info" style={{margin: '10px 0', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px'}}>
-          <h4>Debug Info:</h4>
-          <p>Loading NFTs: {isLoadingNfts ? 'Yes' : 'No'}</p>
-          <p>Loading More NFTs: {isLoadingMoreNfts ? 'Yes' : 'No'}</p>
-          <p>NFT Count: {userNfts.length}</p>
-          <p>Has More NFTs: {hasMoreNfts ? 'Yes' : 'No'}</p>
-          <p>End Cursor: {endCursor || 'None'}</p>
-          <p>Connected Addresses: {userProfile.connectedAddresses?.length || 0}</p>
-          <p>Has Custody Address: {userProfile.custodyAddress ? 'Yes' : 'No'}</p>
-        </div>
-      )}
-
-      {/* Fetch NFTs Error Message */}
-      {fetchNftsError && (
-        <div className="error-message">
-          <p>{fetchNftsError}</p>
-        </div>
-      )}
-
-      {/* NFT Grid */}
-      {userProfile && (
-        <div className="nft-section">
-          {/* NFT Filter Search Bar */}
-          <div className="nft-filter-container">
-            <div className="nft-search-bar">
-              <input
-                type="text"
-                value={nftFilterText}
-                onChange={(e) => setNftFilterText(e.target.value)}
-                placeholder="Search by NFT or collection name"
-                className="nft-filter-input"
-                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-              />
-              {nftFilterText && (
-                <button 
-                  onClick={clearFilter}
-                  className="nft-filter-clear"
-                  style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-                >
-                  ×
-                </button>
-              )}
-            </div>
-            <div className="sort-options">
-              <button 
-                className={`sort-option ${sortMethod === 'recent' ? 'active' : ''}`}
-                onClick={() => handleSortChange('recent')}
-                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-              >
-                Recent
-              </button>
-              <button 
-                className={`sort-option ${sortMethod === 'nameAsc' ? 'active' : ''}`}
-                onClick={() => handleSortChange('nameAsc')}
-                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-              >
-                A-Z
-              </button>
-              <button 
-                className={`sort-option ${sortMethod === 'collection' ? 'active' : ''}`}
-                onClick={() => handleSortChange('collection')}
-                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-              >
-                Collection
-              </button>
-              <button 
-                className={`sort-option ${sortMethod === 'value' ? 'active' : ''}`}
-                onClick={() => handleSortChange('value')}
-                style={{ fontFamily: "'Comic Sans MS', 'Comic Sans', sans-serif", fontStyle: "normal" }}
-              >
-                Value
-              </button>
-            </div>
-          </div>
-          
-          {/* Filtered Results Count */}
-          {nftFilterText && userNfts.length > 0 && (
-            <div className="filter-results-count">
-              Found {getFilteredNfts().length} of {userNfts.length} NFTs
-            </div>
-          )}
-          
-          <NftGrid 
-            nfts={getFilteredNfts()} 
-            onNftClick={handleNftClick} 
-            loading={isLoadingNfts} 
-            emptyMessage={
-              (!userProfile.connectedAddresses?.length && !userProfile.custodyAddress)
-                ? "This user has no connected wallets to display NFTs from." 
-                : isLoadingNfts 
-                  ? "Loading NFTs..." 
-                  : nftFilterText && getFilteredNfts().length === 0
-                    ? `No NFTs found matching "${nftFilterText}"`
-                    : "No NFTs found for this user's wallets."
-            }
-          />
-          
-          {/* Load More Button */}
-          {hasMoreNfts && userNfts.length > 0 && (
-            <div className="load-more-container" style={{ 
-              marginTop: '20px', 
-              textAlign: 'center', 
-              padding: '15px', 
-              backgroundColor: '#f9f6ff',
-              borderRadius: '12px'
-            }}>
-              <button 
-                className="load-more-button"
-                onClick={loadAllNfts}
-                disabled={isLoadingMoreNfts}
-                style={{
-                  backgroundColor: '#7b3fe4',
-                  color: 'white',
-                  border: 'none',
-                  padding: '12px 30px',
-                  borderRadius: '8px',
-                  fontWeight: 'bold',
-                  fontSize: '16px',
-                  cursor: 'pointer'
-                }}
-              >
-                {isLoadingMoreNfts ? 'Loading...' : `Load More NFTs (${userNfts.length} loaded so far)`}
-              </button>
-              <p className="text-sm text-gray-600 mt-3" style={{ fontSize: '14px' }}>
-                <strong>Note:</strong> Zapper API loads NFTs in batches of 100. Click the button above to load more NFTs.
-              </p>
-              <p className="text-xs text-gray-500 mt-1" style={{ fontSize: '12px' }}>
-                You currently have {userNfts.length} NFTs loaded{hasMoreNfts ? ', but there are more available' : ''}.
-              </p>
-            </div>
-          )}
-          
-          {/* Loading More Indicator */}
-          {isLoadingMoreNfts && (
-            <div className="loading-more">
-              <div className="loading-spinner-small"></div>
-              <p>Loading more NFTs...</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* NFT Detail Modal */}
-      {isModalOpen && selectedNft && (
-        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <button className="modal-close" onClick={() => setIsModalOpen(false)}>×</button>
             
-            <h3>{selectedNft.name || 'Unnamed NFT'}</h3>
-            
-            {!imageError ? (
-              <img 
-                src={selectedNft.imageUrl} 
-                alt={selectedNft.name || 'NFT'} 
-                className="modal-image"
-                onError={handleImageError}
-              />
-            ) : (
-              <div className="image-placeholder">Image unavailable</div>
+            {/* NFT sorting and filtering controls */}
+            {userNfts.length > 0 && (
+              <div className="nft-controls">
+                <div className="sort-controls">
+                  <label>Sort by:</label>
+                  <select 
+                    value={sortMethod} 
+                    onChange={(e) => handleSortChange(e.target.value)}
+                  >
+                    <option value="value">Estimated Value</option>
+                    <option value="recent">Recently Acquired</option>
+                    <option value="collection">Collection</option>
+                  </select>
+                </div>
+                
+                <div className="filter-controls">
+                  <input
+                    type="text"
+                    placeholder="Filter NFTs..."
+                    value={nftFilterText}
+                    onChange={(e) => setNftFilterText(e.target.value)}
+                    className="filter-input"
+                  />
+                  {nftFilterText && (
+                    <button 
+                      className="clear-filter" 
+                      onClick={clearFilter}
+                      aria-label="Clear filter"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
             
-            <div className="nft-details">
-              {selectedNft.collection && (
-                <p><strong>Collection:</strong> {selectedNft.collection.name}</p>
-              )}
-              <p><strong>Token ID:</strong> {selectedNft.tokenId}</p>
-              {selectedNft.valueEth && (
-                <p><strong>Estimated Value:</strong> {parseFloat(selectedNft.valueEth).toFixed(4)} ETH</p>
-              )}
-              {selectedNft.collection?.floorPriceEth && (
-                <p><strong>Floor Price:</strong> {parseFloat(selectedNft.collection.floorPriceEth).toFixed(4)} ETH</p>
-              )}
-              {selectedNft.description && (
-                <div className="nft-description">
-                  <h4>Description:</h4>
-                  <p>{selectedNft.description}</p>
+            {/* NFT Gallery */}
+            <div className="nft-gallery">
+              {isLoadingNfts && userNfts.length === 0 ? (
+                <div className="loading-nfts">
+                  <div className="loading-animation"></div>
+                  <p>Loading NFTs...</p>
+                </div>
+              ) : fetchNftsError ? (
+                <div className="fetch-error">
+                  <p>{fetchNftsError}</p>
+                </div>
+              ) : userNfts.length > 0 ? (
+                <>
+                  <div className="nft-count">
+                    <p>
+                      {getFilteredNfts().length} NFTs displayed
+                      {totalNftCount > 0 && hasEstimatedCount && (
+                        <span> (of approximately {totalNftCount} total)</span>
+                      )}
+                    </p>
+                  </div>
+                  <NftGrid nfts={getFilteredNfts()} onNftClick={handleNftClick} />
+                  {hasMoreNfts && (
+                    <div className="load-more">
+                      <button 
+                        onClick={handleLoadMore}
+                        disabled={isLoadingMoreNfts}
+                        className="load-more-button"
+                      >
+                        {isLoadingMoreNfts ? 'Loading...' : 'Load More NFTs'}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="no-nfts">
+                  <p>No NFTs found for this user.</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </APIErrorBoundary>
   );
 };
 

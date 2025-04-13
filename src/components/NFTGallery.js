@@ -281,7 +281,11 @@ const NFTGallery = () => {
       ) : (
         <NFTGrid>
           {filteredNFTs.map(nft => (
-            <NFTCard key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} nft={nft} />
+            <NFTCard 
+              key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} 
+              nft={nft} 
+              showLikeButton={true}
+            />
           ))}
         </NFTGrid>
       )}
