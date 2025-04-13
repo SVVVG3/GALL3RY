@@ -50,52 +50,77 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   }, [initialUsername]);
 
-  // Function to forcibly load all NFTs for a user through multiple requests
-  const loadAllNfts = async (addresses) => {
-    if (!addresses || addresses.length === 0) return;
-    
-    console.log("LOADING ALL NFTS: Starting aggressive loading process");
-    let cursor = null;
-    let totalLoaded = 0;
-    let hasMore = true;
-    let loadAttempts = 0;
-    const maxAttempts = 10; // Limit to 10 batches to avoid infinite loops
-    
-    // Don't mark loading as true here, as it's handled by fetchUserNfts
-
-    while (hasMore && loadAttempts < maxAttempts) {
-      try {
-        console.log(`LOADING ALL NFTS: Batch ${loadAttempts+1}, cursor: ${cursor || 'initial'}`);
-        
-        // Use the existing fetch but force loadMore to true for all except first batch
-        await fetchUserNfts(addresses, cursor, loadAttempts > 0);
-        
-        // Check if we got more and update for next iteration
-        if (endCursor && endCursor !== cursor && hasMoreNfts) {
-          cursor = endCursor;
-          hasMore = true;
-          totalLoaded += 500; // Assume batch size of 500
-        } else {
-          hasMore = false;
-        }
-        
-        loadAttempts++;
-        
-        // Add a delay between batches to avoid rate limiting
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      } catch (error) {
-        console.error("Error during aggressive loading:", error);
-        // Don't break on error, try the next batch
-        loadAttempts++;
-        if (hasMore) {
-          await new Promise(resolve => setTimeout(resolve, 2000)); // Longer delay after error
-        }
-      }
+  // Load all available NFTs with pagination
+  const loadAllNfts = async () => {
+    if (!userProfile?.addresses || userProfile.addresses.length === 0) {
+      console.warn('No addresses available for loading NFTs');
+      return;
     }
     
-    console.log(`LOADING ALL NFTS: Completed with ${loadAttempts} batches, ${userNfts.length} NFTs loaded`);
+    console.log('LOADING ALL NFTS: Starting');
+    setIsLoadingNfts(true);
+    
+    // Start with initial state
+    let currentCursor = null;
+    let hasMore = true;
+    let allLoadedNfts = [...userNfts]; // Start with any existing NFTs
+    let batchesProcessed = 0;
+    let successfulLoads = 0;
+    let failedAttempts = 0;
+    const MAX_BATCHES = 10; // Maximum number of batches to fetch
+    const MAX_FAILURES = 3; // Maximum consecutive failures before giving up
+    
+    try {
+      // Continue fetching while there are more NFTs and we haven't hit max batches
+      while (hasMore && batchesProcessed < MAX_BATCHES && failedAttempts < MAX_FAILURES) {
+        console.log(`LOADING ALL NFTS: Batch ${batchesProcessed + 1}, cursor: ${currentCursor || 'initial'}`);
+        
+        // Use our improved fetchUserNfts function
+        const result = await fetchUserNfts(userProfile.addresses, currentCursor, true);
+        batchesProcessed++;
+        
+        if (!result) {
+          console.warn(`LOADING ALL NFTS: Batch ${batchesProcessed} failed to load`);
+          failedAttempts++;
+          // Add delay when encountering errors
+          await new Promise(resolve => setTimeout(resolve, 1000 * failedAttempts));
+          continue;
+        }
+        
+        // Reset failed attempts counter after a successful load
+        failedAttempts = 0;
+        successfulLoads++;
+        
+        // Update our tracking variables
+        allLoadedNfts = result.nfts; // The function now returns the combined array
+        hasMore = result.hasMore;
+        currentCursor = result.cursor;
+        
+        console.log(`LOADING ALL NFTS: Batch ${batchesProcessed} loaded ${allLoadedNfts.length} NFTs total`);
+        
+        // If no more NFTs to load, break the loop
+        if (!hasMore) {
+          console.log('LOADING ALL NFTS: No more NFTs to load');
+          break;
+        }
+        
+        // Add a small delay between requests to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+      
+      // Final state update (should be unnecessary due to internal updates in fetchUserNfts, but for safety)
+      setUserNfts(allLoadedNfts);
+      setHasMoreNfts(hasMore);
+      setEndCursor(currentCursor);
+      
+      // Log completion
+      console.log(`LOADING ALL NFTS: Completed with ${batchesProcessed} batches, ${successfulLoads} successful, ${allLoadedNfts.length} NFTs loaded`);
+    } catch (error) {
+      console.error('Error in loadAllNfts:', error);
+    } finally {
+      setIsLoadingNfts(false);
+      setIsLoadingMoreNfts(false);
+    }
   };
 
   // Handle form submission
@@ -191,7 +216,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         
         // After initial fetch, start the aggressive loader to get all NFTs
         setTimeout(() => {
-          loadAllNfts(uniqueAddresses);
+          loadAllNfts();
         }, 1000); // Slight delay to let UI update first
       } else {
         console.log('No addresses found for this user to fetch NFTs');
@@ -215,89 +240,78 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
 
-  // Fetch NFTs for the user
-  const fetchUserNfts = async (addresses, cursor = null, loadMore = false) => {
-    // Guard against empty addresses array
+  /**
+   * Fetches NFTs for a list of addresses, with proper error handling and state updates
+   * @param {Array<string>} addresses - List of Ethereum addresses to fetch NFTs for
+   * @param {string|null} cursor - Pagination cursor for fetching more NFTs
+   * @param {boolean} isLoadMore - Whether this is a "load more" operation or initial load
+   * @returns {Object|null} - Object containing NFTs, cursor and hasMore flag, or null on error
+   */
+  const fetchUserNfts = async (addresses, cursor = null, isLoadMore = false) => {
+    // Validate addresses
     if (!addresses || addresses.length === 0) {
-      console.warn('No addresses provided to fetchUserNfts');
-      setFetchNftsError('No wallet addresses found for this Farcaster user.');
+      console.warn('fetchUserNfts called with no addresses');
       setIsLoadingNfts(false);
       setIsLoadingMoreNfts(false);
-      return;
+      return null;
     }
-    
-    if (loadMore) {
+
+    // Set appropriate loading state
+    if (isLoadMore) {
       setIsLoadingMoreNfts(true);
     } else {
       setIsLoadingNfts(true);
-      setTotalNftCount(0);
-      setHasEstimatedCount(false);
     }
-    
-    setFetchNftsError(null);
-    
+
     try {
-      console.log(`Fetching NFTs for ${addresses.length} wallet addresses:`, addresses);
-      console.log(loadMore ? 'Loading more NFTs from cursor: ' + cursor : 'Initial NFT load');
+      // Log the fetch attempt
+      console.log(`Fetching NFTs for ${addresses.length} addresses, cursor: ${cursor || 'initial'}, loadMore: ${isLoadMore}`);
       
-      // Skip the direct API call attempts and go straight to the zapperService method
-      // which now uses portfolioV2 by default
-      console.log('Using zapperService.getNftsForAddresses with portfolioV2...');
-      const result = await zapperService.getNftsForAddresses(addresses, { 
-        cursor: cursor,
-        usePortfolioV2: true,  // Explicitly set this to true to ensure it uses the new API format
-        limit: 100,
-        prioritizeSpeed: false // Get more complete results by not limiting address count
-      });
+      // Fetch NFTs from the API
+      const response = await zapperService.getNftsForAddresses(addresses, 50, cursor, true);
       
-      if (!result || !result.nfts) {
-        throw new Error('Failed to fetch NFTs: empty response');
+      // Log the response summary
+      console.log(`Received ${response?.items?.length || 0} NFTs, hasMore: ${response?.hasMore}, cursor: ${response?.cursor}`);
+
+      // Return early if no items array in response
+      if (!response || !response.items) {
+        console.warn('No valid response or items from getNftsForAddresses');
+        return null;
       }
+
+      // Filter out any invalid NFT objects 
+      const validNfts = response.items.filter(nft => 
+        nft && nft.token && nft.token.collection && nft.token.collection.name);
       
-      const nfts = result.nfts;
-      console.log(`Fetched ${nfts.length} NFTs via zapperService`);
-      console.log(`Pagination from zapperService: hasMore=${result.hasMore}, nextCursor=${result.cursor || 'none'}`);
-      
-      // Process NFTs if we have collections
-      if (nfts.length > 0 && nfts[0].isCollection) {
-        console.log('Processing collection-level NFT data');
-        // Collections need to be handled differently
-        nfts.forEach(collection => {
-          console.log(`Collection: ${collection.name}, Balance USD: ${collection.balanceUSD}`);
-        });
-      }
-      
-      // Update the NFT state
-      if (loadMore) {
-        setUserNfts(prevNfts => [...prevNfts, ...nfts]);
+      console.log(`Filtered to ${validNfts.length} valid NFTs`);
+
+      // Update the state based on whether we're loading more or initial load
+      let updatedNfts;
+      if (isLoadMore) {
+        // When loading more, append to existing NFTs
+        updatedNfts = [...userNfts, ...validNfts];
       } else {
-        setUserNfts(nfts);
+        // Initial load replaces existing NFTs
+        updatedNfts = validNfts;
       }
       
-      // Set pagination data from the result
-      setHasMoreNfts(result.hasMore === true);
-      setEndCursor(result.cursor);
-      
-      // Update total count - estimate based on result length and hasMore flag
-      const estimatedCount = (loadMore ? userNfts.length : 0) + nfts.length + (result.hasMore ? 100 : 0);
-      setTotalNftCount(Math.max(totalNftCount, estimatedCount));
-      setHasEstimatedCount(true);
-      
+      // Update the state
+      setUserNfts(updatedNfts);
+      setHasMoreNfts(response.hasMore);
+      setEndCursor(response.cursor);
+
+      // Return the result object for the caller
+      return {
+        nfts: updatedNfts,
+        hasMore: response.hasMore,
+        cursor: response.cursor
+      };
     } catch (error) {
-      console.error(loadMore ? 'Error loading more NFTs:' : 'Error fetching NFTs:', error);
-      
-      if (loadMore) {
-        setFetchNftsError('Failed to load more NFTs. Please try again.');
-      } else {
-        setFetchNftsError(
-          error.message.includes('API call failed') 
-            ? 'Error connecting to NFT data service. Please try again later.'
-            : error.message || 'Failed to fetch NFTs. Please try again.'
-        );
-      }
-      
+      console.error('Error in fetchUserNfts:', error);
+      return null;
     } finally {
-      if (loadMore) {
+      // Reset loading states
+      if (isLoadMore) {
         setIsLoadingMoreNfts(false);
       } else {
         setIsLoadingNfts(false);
@@ -900,7 +914,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             }}>
               <button 
                 className="load-more-button"
-                onClick={handleLoadMore}
+                onClick={loadAllNfts}
                 disabled={isLoadingMoreNfts}
                 style={{
                   backgroundColor: '#7b3fe4',

@@ -474,28 +474,24 @@ export const getFarcasterPortfolio = async (usernameOrFid, options = {}) => {
 /**
  * Get NFTs for multiple addresses with improved caching and pagination
  * @param {string[]} addresses - Array of wallet addresses
- * @param {object} options - Options for the request
+ * @param {number} limit - Number of NFTs to fetch per request
+ * @param {string|null} cursor - Pagination cursor
+ * @param {boolean} bypassCache - Whether to bypass cache
  * @returns {Promise<object>} - Object containing NFTs and pagination info
  */
-export const getNftsForAddresses = async (addresses, options = {}) => {
+export const getNftsForAddresses = async (addresses, limit = 50, cursor = null, bypassCache = false) => {
   if (!addresses || addresses.length === 0) {
     console.warn('No addresses provided for getNftsForAddresses');
-    return { nfts: [], cursor: null, hasMore: false };
+    return { items: [], cursor: null, hasMore: false };
   }
   
   // Normalize addresses to lowercase to ensure consistent caching
   const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
   
-  const { 
-    limit = 100, 
-    cursor = null,
-    bypassCache = false,
-    includeCollectionsOnly = false, // New option to first fetch just collections
-    collectionsFilter = null,      // Optional filter for collections (e.g., specific contract addresses)
-    cacheTTL = NFT_CACHE_TTL,
-    endpoints = ZAPPER_API_ENDPOINTS,
-    maxRetries = 3
-  } = options;
+  // Additional options with defaults
+  const cacheTTL = NFT_CACHE_TTL;
+  const endpoints = ZAPPER_API_ENDPOINTS;
+  const maxRetries = 3;
   
   // Generate a cache key based on addresses and cursor
   const cacheKey = `nfts:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
@@ -513,108 +509,7 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
   }
   
   try {
-    // Fetch NFT collections first if requested (more efficient for browsing)
-    if (includeCollectionsOnly) {
-      const collectionsQuery = `
-        query UserNftCollections(
-          $owners: [Address!]!,
-          $first: Int = 100,
-          $after: String,
-          $bypassHidden: Boolean = true
-        ) {
-          nftUsersCollections(
-            owners: $owners,
-            first: $first,
-            after: $after,
-            bypassHidden: $bypassHidden
-          ) {
-            edges {
-              node {
-                id
-                name
-                address
-                network
-                nftStandard
-                type
-                cardImage
-                floorPrice {
-                  valueUsd
-                  valueWithDenomination
-                  denomination {
-                    symbol
-                    network
-                  }
-                }
-                medias {
-                  logo {
-                    thumbnail
-                  }
-                }
-                totalCount
-              }
-            }
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-          }
-        }
-      `;
-      
-      const variables = {
-        owners: normalizedAddresses,
-        first: limit,
-        after: cursor,
-        bypassHidden: true
-      };
-      
-      console.log(`Fetching NFT collections for ${normalizedAddresses.length} addresses`);
-      
-      const response = await makeGraphQLRequest(collectionsQuery, variables, endpoints, maxRetries);
-      
-      if (response.data && response.data.nftUsersCollections) {
-        const collectionsData = response.data.nftUsersCollections;
-        const edges = collectionsData.edges || [];
-        
-        console.log(`Found ${edges.length} NFT collections`);
-        
-        const processedCollections = edges.map(edge => {
-          const collection = edge.node;
-          
-          return {
-            id: collection.id || '',
-            address: collection.address || '',
-            name: collection.name || 'Unknown Collection',
-            network: collection.network || 'ethereum',
-            nftStandard: collection.nftStandard || '',
-            type: collection.type || 'GENERAL',
-            description: collection.description || '',
-            imageUrl: collection.cardImage || 
-                     (collection.medias?.logo?.thumbnail || ''),
-            floorPrice: collection.floorPrice?.valueUsd || 0,
-            floorPriceEth: collection.floorPrice?.valueWithDenomination || 0,
-            totalCount: collection.totalCount || 0,
-          };
-        });
-        
-        const result = {
-          collections: processedCollections,
-          cursor: collectionsData.pageInfo?.endCursor || null,
-          hasMore: collectionsData.pageInfo?.hasNextPage || false,
-          totalCollectionsCount: edges.length
-        };
-        
-        // Cache the result
-        NFT_CACHE.set(cacheKey, {
-          timestamp: Date.now(),
-          data: result
-        });
-        
-        return result;
-      }
-    }
-    
-    // If not just collections, fetch actual NFT tokens
+    // Fetch actual NFT tokens
     console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses with cursor: ${cursor || 'initial'}, limit: ${limit}`);
     
     // Query structure directly from Zapper documentation
@@ -876,16 +771,10 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       console.log(`Page Results: items=${processedNfts.length}, hasMore=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor || 'null'}`);
       
       const result = {
-        nfts: processedNfts,
+        items: processedNfts,
         cursor: pageInfo.endCursor || null,
         hasMore: Boolean(pageInfo.hasNextPage), // Ensure it's a boolean
-        totalNftCount: edges.length,
-        pageInfo: {  // Include full pageInfo for debugging
-          hasNextPage: pageInfo.hasNextPage,
-          endCursor: pageInfo.endCursor,
-          startCursor: pageInfo.startCursor,
-          hasPreviousPage: pageInfo.hasPreviousPage
-        }
+        totalNftCount: edges.length
       };
       
       // Cache the result
@@ -897,11 +786,11 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       return result;
     } else {
       console.warn('No NFT data found in response:', response);
-      return { nfts: [], cursor: null, hasMore: false };
+      return { items: [], cursor: null, hasMore: false };
     }
   } catch (error) {
     console.error('Error fetching NFTs:', error);
-    return { nfts: [], cursor: null, hasMore: false };
+    return { items: [], cursor: null, hasMore: false };
   }
 };
 
