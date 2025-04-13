@@ -615,14 +615,14 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
     }
     
     // If not just collections, fetch actual NFT tokens
-    console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses`);
+    console.log(`Fetching NFTs for ${normalizedAddresses.length} addresses with cursor: ${cursor || 'initial'}, limit: ${limit}`);
     
     // Query structure directly from Zapper documentation
     const nftTokensQuery = `
       query UserNftTokens(
         $owners: [Address!]!,
         $network: Network,
-        $first: Int = 200,
+        $first: Int = 100,
         $after: String,
         $search: String,
         $minEstimatedValueUsd: Float,
@@ -743,6 +743,8 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
           pageInfo {
             hasNextPage
             endCursor
+            startCursor
+            hasPreviousPage
           }
         }
       }
@@ -756,12 +758,18 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
       // network and minEstimatedValueUsd are optional, so we don't include them by default
     };
     
+    // Log detailed request information for debugging
+    console.log(`API Request: cursor=${cursor}, limit=${limit}, addresses=${normalizedAddresses.length}`);
+    
     const response = await makeGraphQLRequest(nftTokensQuery, variables, endpoints, maxRetries);
     
     if (response.data && response.data.nftUsersTokens) {
       const nftData = response.data.nftUsersTokens;
       const edges = nftData.edges || [];
+      const pageInfo = nftData.pageInfo || {};
       
+      // Log detailed pagination info
+      console.log(`Pagination: hasNextPage=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor}`);
       console.log(`Found ${edges.length} NFTs in response`);
       
       const processedNfts = edges.map(edge => {
@@ -862,11 +870,20 @@ export const getNftsForAddresses = async (addresses, options = {}) => {
         };
       });
       
+      // Enhanced logging for pagination debugging
+      console.log(`Page Results: items=${processedNfts.length}, hasMore=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor || 'null'}`);
+      
       const result = {
         nfts: processedNfts,
-        cursor: nftData.pageInfo?.endCursor || null,
-        hasMore: nftData.pageInfo?.hasNextPage || false,
-        totalNftCount: edges.length
+        cursor: pageInfo.endCursor || null,
+        hasMore: Boolean(pageInfo.hasNextPage), // Ensure it's a boolean
+        totalNftCount: edges.length,
+        pageInfo: {  // Include full pageInfo for debugging
+          hasNextPage: pageInfo.hasNextPage,
+          endCursor: pageInfo.endCursor,
+          startCursor: pageInfo.startCursor,
+          hasPreviousPage: pageInfo.hasPreviousPage
+        }
       };
       
       // Cache the result

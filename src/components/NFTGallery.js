@@ -53,12 +53,19 @@ const NFTGallery = () => {
     const AUTO_LOAD_THRESHOLD = 1000; // Load up to this many NFTs automatically
     
     const autoLoadCheck = () => {
-      console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading);
+      console.log("AUTO-LOAD CHECK: userNfts=" + filteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading + ", loadingMore=" + loadingMore);
+      
+      // Only auto-load if we have less than 200 NFTs to avoid aggressive loading on first visit
+      const shouldAutoLoad = filteredNFTs.length < 200 || (filteredNFTs.length >= 200 && filteredNFTs.length < AUTO_LOAD_THRESHOLD);
       
       // If we have 'hasMore' true, not currently loading, and haven't hit the threshold yet, load more
-      if (hasMore && !isLoading && !loadingMore && filteredNFTs.length < AUTO_LOAD_THRESHOLD) {
-        console.log("Auto-loading next batch of NFTs...");
-        loadMoreNFTs();
+      if (hasMore && !isLoading && !loadingMore && shouldAutoLoad) {
+        console.log(`Auto-loading next batch of NFTs (current count: ${filteredNFTs.length})...`);
+        
+        // Add a small delay to avoid too many rapid requests
+        setTimeout(() => {
+          loadMoreNFTs();
+        }, 500);
       }
     };
     

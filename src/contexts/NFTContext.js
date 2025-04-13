@@ -319,7 +319,8 @@ export const NFTProvider = ({ children }) => {
       
       console.log(`Fetching NFTs for ${addresses.length} wallets with options:`, {
         ...fetchOptions,
-        endpoints: fetchOptions.endpoints.map(e => e.includes('/api/zapper') ? '/api/zapper' : e)
+        endpoints: fetchOptions.endpoints.map(e => e.includes('/api/zapper') ? '/api/zapper' : e),
+        cursor: fetchOptions.cursor
       });
       
       // Call Zapper API to get NFTs using the improved service
@@ -340,8 +341,8 @@ export const NFTProvider = ({ children }) => {
       const hasMoreData = result?.hasMore === true;
       const cursorData = result?.cursor || null;
       
-      console.log(`Fetched ${nftsData.length} NFTs${hasMoreData ? ' (more available)' : ''}`);
-      console.log(`Pagination info: cursor=${cursorData}, hasMore=${hasMoreData}`);
+      // Enhanced logging to understand pagination
+      console.log(`NFT Data: count=${nftsData.length}, hasMore=${hasMoreData}, cursor=${cursorData || 'null'}`);
       
       if (isLoadingMore) {
         // Append to existing NFTs
@@ -363,8 +364,15 @@ export const NFTProvider = ({ children }) => {
       }
       
       // Update pagination state
-      setEndCursor(cursorData);
+      if (cursorData) {
+        console.log(`Setting endCursor to: ${cursorData}`);
+        setEndCursor(cursorData);
+      }
+      
+      // Explicitly log the hasMore value we're setting
+      console.log(`Setting hasMore to: ${hasMoreData}`);
       setHasMore(hasMoreData);
+      
     } catch (err) {
       console.error('Error fetching NFTs:', err);
       setError(err.message || 'Failed to fetch NFTs');
@@ -424,9 +432,16 @@ export const NFTProvider = ({ children }) => {
   const loadMoreNFTs = useCallback(async () => {
     if (!hasMore || isLoading || loadingMore) return;
     
-    console.log(`Loading more NFTs... Current count: ${nfts.length}, hasMore: ${hasMore}, endCursor: ${endCursor}`);
+    console.log(`Loading more NFTs... Current count: ${nfts.length}, hasMore: ${hasMore}, endCursor: ${endCursor || 'null'}`);
     
     try {
+      // Make sure we're not loading if we don't have a valid cursor
+      if (!endCursor && nfts.length > 0) {
+        console.warn('No endCursor available for pagination but hasMore is true. Setting hasMore to false.');
+        setHasMore(false);
+        return;
+      }
+      
       await fetchNFTs({
         loadMore: true,
         batchSize: PAGE_SIZE
