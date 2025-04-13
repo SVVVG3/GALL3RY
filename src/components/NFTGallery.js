@@ -141,7 +141,7 @@ const NFTGallery = () => {
       // Directly call fetchNFTs with loadMore=true to bypass auto-loading logic
       fetchNFTs({
         loadMore: true,
-        batchSize: 100, // Set a consistent batch size
+        batchSize: 24, // Exactly match Zapper's default page size
         bypassCache: true // Ensure we're getting fresh data
       });
     }
@@ -180,7 +180,7 @@ const NFTGallery = () => {
           <p>Showing {filteredNFTs.length} NFTs {hasMore ? "(more available)" : ""}</p>
           {!isLoading && !loadingMore && (
             <ManualLoadButton onClick={handleManualLoadMore}>
-              Load Next 100 NFTs
+              Load Next 24 NFTs
             </ManualLoadButton>
           )}
         </ManualLoadContainer>
