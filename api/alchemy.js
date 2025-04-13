@@ -26,7 +26,7 @@ module.exports = async (req, res) => {
     const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || 
                            process.env.REACT_APP_ALCHEMY_API_KEY || 
                            process.env.REACT_APP_ALCHEMY_ETH_API_KEY ||
-                           "2ZaODCGR5YEA0cACkf0iqLs3ohiwTUwC"; // Hardcoded fallback for testing
+                           "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak"; // Use original fallback key
     
     // Check if we have a valid API key
     if (!ALCHEMY_API_KEY) {
