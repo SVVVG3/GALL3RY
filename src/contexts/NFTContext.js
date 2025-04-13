@@ -32,15 +32,27 @@ const loadServices = async () => {
     
     // Import services dynamically to avoid circular dependencies
     try {
+      // Import functions directly instead of the default export
       const alchemyModule = await import('../services/alchemy');
-      alchemyService = alchemyModule.default;
+      
+      // Check if we have individual functions or just the default export
+      if (alchemyModule.fetchNFTsForAddress && alchemyModule.batchFetchNFTs) {
+        alchemyService = {
+          fetchNFTsForAddress: alchemyModule.fetchNFTsForAddress,
+          batchFetchNFTs: alchemyModule.batchFetchNFTs
+        };
+      } else if (alchemyModule.default) {
+        alchemyService = alchemyModule.default;
+      } else {
+        throw new Error('Alchemy module has invalid structure');
+      }
       
       // Validate alchemy service by checking required methods
-      if (!alchemyService || !alchemyService.fetchNFTsForAddress || !alchemyService.batchFetchNFTs) {
+      if (!alchemyService || typeof alchemyService.fetchNFTsForAddress !== 'function' || typeof alchemyService.batchFetchNFTs !== 'function') {
         throw new Error('Alchemy service module is missing required methods');
       }
       
-      console.log('Successfully loaded Alchemy service');
+      console.log('Successfully loaded Alchemy service:', alchemyService);
     } catch (alchemyError) {
       console.error('Failed to load Alchemy service:', alchemyError);
       alchemyService = null;
@@ -134,7 +146,17 @@ export const NFTProvider = ({ children }) => {
   
   // Init services on first mount
   useEffect(() => {
-    loadAndSetServices();
+    let mounted = true;
+    const init = async () => {
+      try {
+        await loadAndSetServices();
+      } catch (err) {
+        console.error('Service initialization error:', err);
+      }
+    };
+    
+    init();
+    return () => { mounted = false; };
   }, [loadAndSetServices]);
   
   // Reset filters
@@ -200,30 +222,43 @@ export const NFTProvider = ({ children }) => {
     }
   }, [services]);
   
-  // Fetch NFTs for multiple addresses
+  // Fetch NFTs for multiple addresses - safe version that doesn't violate React rules
   const fetchNftsForAddresses = useCallback(async (addresses, chain = 'eth', options = {}) => {
     if (!addresses || !addresses.length) {
       console.error('No addresses provided to fetchNftsForAddresses');
       return { nfts: [], pageKey: null, hasMore: false };
     }
     
-    // This approach directly uses services var instead of trying to reload
-    // which avoids the React hook error in minified code (#321)
     try {
       setIsLoading(true);
       setError(null);
       
+      // Capture current services value to prevent hooks violation on reload attempts
+      const currentServices = services;
+      
+      // Check if services are available
+      if (!currentServices.alchemy && !currentServices.zapper) {
+        console.error('No NFT services available for fetching');
+        throw new Error('NFT services unavailable. Please refresh the page and try again.');
+      }
+      
       // Use alchemy service if available
-      if (services.alchemy) {
+      if (currentServices.alchemy) {
         console.log(`Fetching NFTs for ${addresses.length} addresses on ${chain} with Alchemy`);
         try {
-          const result = await services.alchemy.batchFetchNFTs(
+          // Ensure required methods exist
+          if (typeof currentServices.alchemy.batchFetchNFTs !== 'function') {
+            throw new Error('Alchemy service missing batchFetchNFTs method');
+          }
+          
+          const result = await currentServices.alchemy.batchFetchNFTs(
             addresses, 
             chain, 
             { 
               pageKey: options.pageKey, 
               pageSize: options.pageSize || NFT_PAGE_SIZE,
-              excludeSpam: options.excludeSpam !== false
+              excludeSpam: options.excludeSpam !== false,
+              withMetadata: true
             }
           );
           
@@ -231,24 +266,27 @@ export const NFTProvider = ({ children }) => {
           setPageKey(result.pageKey || null);
           setHasMore(!!result.hasMore);
           
+          // Log success
+          console.log(`Successfully fetched ${result.nfts?.length || 0} NFTs from Alchemy`);
+          
           return result;
         } catch (alchemyError) {
           console.error(`Alchemy API error:`, alchemyError);
           
           // If we have zapper as a fallback, try it
-          if (services.zapper && services.zapper.getNftsForAddresses) {
+          if (currentServices.zapper && typeof currentServices.zapper.getNftsForAddresses === 'function') {
             console.log(`Fallback: Fetching NFTs for ${addresses.length} addresses with Zapper`);
-            const result = await services.zapper.getNftsForAddresses(addresses, options);
+            const result = await currentServices.zapper.getNftsForAddresses(addresses, options);
             return result;
           }
           
           // If no fallback, re-throw the error
           throw alchemyError;
         }
-      } else if (services.zapper && services.zapper.getNftsForAddresses) {
+      } else if (currentServices.zapper && typeof currentServices.zapper.getNftsForAddresses === 'function') {
         // Fallback to Zapper service if available
         console.log(`No Alchemy service, using Zapper for ${addresses.length} addresses`);
-        const result = await services.zapper.getNftsForAddresses(addresses, options);
+        const result = await currentServices.zapper.getNftsForAddresses(addresses, options);
         return result;
       } else {
         // No available services

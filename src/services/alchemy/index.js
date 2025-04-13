@@ -384,6 +384,13 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
   }
 };
 
+// Export functions individually AND as default object for maximum compatibility
+export {
+  fetchNFTsForAddress,
+  batchFetchNFTs
+};
+
+// Keep the default export for backward compatibility 
 export default {
   fetchNFTsForAddress,
   batchFetchNFTs

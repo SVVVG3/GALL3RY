@@ -45,11 +45,18 @@ module.exports = async (req, res) => {
     // Get query parameters
     const { chain = 'eth', endpoint = 'getNFTsForOwner', ...params } = req.query;
     
-    // Validate required parameters
+    // Validate required parameters based on endpoint
     if (endpoint === 'getNFTsForOwner' && !params.owner) {
       return res.status(400).json({ 
         error: 'Missing required parameter', 
-        message: 'The "owner" parameter is required' 
+        message: 'The "owner" parameter is required for getNFTsForOwner endpoint' 
+      });
+    }
+    
+    if (endpoint === 'getNftsForCollection' && !params.contractAddress) {
+      return res.status(400).json({ 
+        error: 'Missing required parameter', 
+        message: 'The "contractAddress" parameter is required for getNftsForCollection endpoint' 
       });
     }
     
@@ -71,12 +78,48 @@ module.exports = async (req, res) => {
       });
     }
     
+    // Rename parameters to match expected Alchemy API format
+    // The getNFTsForOwner endpoint expects specific parameter names
+    let renamedParams = { ...params };
+    
+    // Rename parameters according to the Alchemy NFT API v2 docs
+    if (params.excludeSpam) {
+      renamedParams.excludeFilters = ['SPAM'];
+      delete renamedParams.excludeSpam;
+    }
+    
+    if (params.withMetadata === undefined && endpoint === 'getNFTsForOwner') {
+      renamedParams.withMetadata = true;
+    }
+    
+    // Map NFT API endpoints to Alchemy API paths
+    let apiPath;
+    switch (endpoint) {
+      case 'getNFTsForOwner':
+        apiPath = 'getNFTs';
+        break;
+      case 'getNftsForCollection':
+        apiPath = 'getNFTsForCollection';
+        break;
+      case 'getContractMetadata':
+        apiPath = 'getContractMetadata';
+        break;
+      default:
+        apiPath = endpoint;
+    }
+    
     // Build the Alchemy API URL according to documentation
-    let alchemyUrl = `${baseUrl}/${ALCHEMY_API_KEY}/${endpoint}`;
+    let alchemyUrl = `${baseUrl}/${ALCHEMY_API_KEY}/${apiPath}`;
     
     // Add query parameters
-    const queryString = Object.entries(params)
-      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+    const queryString = Object.entries(renamedParams)
+      .map(([key, value]) => {
+        // Handle array values (like excludeFilters)
+        if (Array.isArray(value)) {
+          return value.map(v => `${key}[]=${encodeURIComponent(v)}`).join('&');
+        }
+        return `${key}=${encodeURIComponent(value)}`;
+      })
       .join('&');
     
     if (queryString) {
@@ -102,11 +145,19 @@ module.exports = async (req, res) => {
       // Check for non-successful status codes
       if (!response.ok) {
         console.error(`Alchemy API returned status ${response.status}`);
-        const errorData = await response.json().catch(() => ({}));
+        const errorText = await response.text();
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          errorData = { message: errorText };
+        }
+        
         return res.status(response.status).json({
           error: 'Alchemy API error',
           message: errorData.message || `API returned status ${response.status}`,
-          details: errorData
+          details: errorData,
+          url: alchemyUrl.replace(ALCHEMY_API_KEY, '[REDACTED]')
         });
       }
       
@@ -118,6 +169,8 @@ module.exports = async (req, res) => {
         console.error('Alchemy API error:', data.error);
         return res.status(response.status || 500).json(data);
       }
+      
+      console.log(`Alchemy API response successful, returning data with ${data.ownedNfts?.length || 0} NFTs`);
       
       // Return the data
       return res.status(200).json(data);
