@@ -279,9 +279,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return null;
       }
 
-      // Filter out any invalid NFT objects 
-      const validNfts = (response.items || response.nfts).filter(nft => 
-        nft && nft.token && nft.token.collection && nft.token.collection.name);
+      // Use either items or nfts from the response
+      const nftsArray = response.items || response.nfts || [];
+      
+      // Filter out any invalid NFT objects
+      // The API now returns objects with collection directly, not within a token property
+      const validNfts = nftsArray.filter(nft => 
+        nft && nft.collection && nft.collection.name);
       
       console.log(`Filtered to ${validNfts.length} valid NFTs`);
 
@@ -430,15 +434,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     switch (sortMethod) {
       case 'nameAsc': // A-Z by NFT name
         return sortedNfts.sort((a, b) => {
-          const nameA = (a.name || a.metadata?.name || a.token_id || '').toLowerCase();
-          const nameB = (b.name || b.metadata?.name || b.token_id || '').toLowerCase();
+          const nameA = (a.name || a.tokenId || '').toLowerCase();
+          const nameB = (b.name || b.tokenId || '').toLowerCase();
           return nameA.localeCompare(nameB);
         });
         
       case 'collection': // By collection name
         return sortedNfts.sort((a, b) => {
-          const collectionA = (a.collection?.name || a.contract_name || '').toLowerCase();
-          const collectionB = (b.collection?.name || b.contract_name || '').toLowerCase();
+          const collectionA = (a.collection?.name || '').toLowerCase();
+          const collectionB = (b.collection?.name || '').toLowerCase();
           return collectionA.localeCompare(collectionB);
         });
         
@@ -451,38 +455,29 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let value = 0;
             let source = 'none';
             
-            // Use collection floor price as primary value source
+            // Check for collection floor price (most reliable value)
             if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
               value = parseFloat(nft.collection.floorPriceEth);
               source = 'collection.floorPriceEth';
             } 
-            // Use lastSale value as alternative
-            else if (nft.lastSale?.valueWithDenomination !== undefined && nft.lastSale.valueWithDenomination !== null) {
-              value = parseFloat(nft.lastSale.valueWithDenomination);
-              source = 'lastSale.valueWithDenomination';
-            }
-            // Check for estimatedValue
-            else if (nft.estimatedValue?.valueWithDenomination !== undefined && nft.estimatedValue.valueWithDenomination !== null) {
-              value = parseFloat(nft.estimatedValue.valueWithDenomination);
-              source = 'estimatedValue.valueWithDenomination';
-            }
-            // Fall back to assigned valueEth if available
+            // Check for valueEth (directly from API)
             else if (nft.valueEth !== undefined && nft.valueEth !== null) {
               value = parseFloat(nft.valueEth);
               source = 'valueEth';
             }
-            // Check debug value fields as last resort
-            else if (nft._debug_value) {
-              if (nft._debug_value.floorPriceEth) {
-                value = parseFloat(nft._debug_value.floorPriceEth);
-                source = '_debug_value.floorPriceEth';
-              } else if (nft._debug_value.lastSaleValueEth) {
-                value = parseFloat(nft._debug_value.lastSaleValueEth);
-                source = '_debug_value.lastSaleValueEth';
-              } else if (nft._debug_value.estimatedValueEth) {
-                value = parseFloat(nft._debug_value.estimatedValueEth);
-                source = '_debug_value.estimatedValueEth';
-              }
+            // Check for estimatedValue (new API format)
+            else if (nft.estimatedValue?.valueWithDenomination !== undefined) {
+              value = parseFloat(nft.estimatedValue.valueWithDenomination);
+              source = 'estimatedValue.valueWithDenomination';
+            }
+            // Check for lastSale (new API format)
+            else if (nft.lastSaleValue !== undefined && nft.lastSaleValue !== null) {
+              value = parseFloat(nft.lastSaleValue);
+              source = 'lastSaleValue';
+            }
+            else if (nft.lastSale?.valueWithDenomination !== undefined) {
+              value = parseFloat(nft.lastSale.valueWithDenomination);
+              source = 'lastSale.valueWithDenomination';
             }
             
             // Ensure we have a valid number
@@ -492,7 +487,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             
             // Only log the first few NFTs to avoid console flooding
             if (nft.id && nft.id.endsWith('0')) {
-              console.log(`NFT ${nft.id.substring(0, 10)}... value = ${value} (source: ${source})`);
+              console.log(`NFT ${nft.id?.substring(0, 10) || nft.tokenId}... value = ${value} (source: ${source})`);
             }
             
             return value;
@@ -514,30 +509,30 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             let source = 'none';
             
             // Try all possible timestamp fields in order of preference
-            if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
-              timestamp = nft.acquisitionTimestamp;
-              source = 'acquisitionTimestamp';
-            } else if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
-              timestamp = nft.latestTransferTimestamp;
-              source = 'latestTransferTimestamp';
-            } else if (nft.transfers?.edges?.length > 0) {
-              // Find the most recent transfer
-              const transfers = nft.transfers.edges
-                .filter(edge => edge.node && typeof edge.node.timestamp === 'number')
-                .map(edge => edge.node.timestamp);
-                
-              if (transfers.length > 0) {
-                timestamp = Math.max(...transfers);
-                source = 'transfers';
-              }
-            } else if (nft.ownedAt && typeof nft.ownedAt === 'number' && nft.ownedAt > 0) {
+            if (nft.ownedAt && typeof nft.ownedAt === 'number' && nft.ownedAt > 0) {
               timestamp = nft.ownedAt;
               source = 'ownedAt';
+            } 
+            else if (typeof nft.acquisitionTimestamp === 'number' && nft.acquisitionTimestamp > 0) {
+              timestamp = nft.acquisitionTimestamp;
+              source = 'acquisitionTimestamp';
+            } 
+            else if (typeof nft.latestTransferTimestamp === 'number' && nft.latestTransferTimestamp > 0) {
+              timestamp = nft.latestTransferTimestamp;
+              source = 'latestTransferTimestamp';
+            } 
+            else if (nft.balances && nft.balances.length > 0) {
+              // Try to get timestamp from balances
+              const latestBalance = nft.balances[0];
+              if (latestBalance && latestBalance.acquiredAt) {
+                timestamp = latestBalance.acquiredAt;
+                source = 'balances.acquiredAt';
+              }
             }
             
             // Only log the first few NFTs to avoid console flooding
             if (nft.id && nft.id.endsWith('0')) {
-              console.log(`NFT ${nft.id.substring(0, 10)}... timestamp = ${timestamp} (source: ${source})`);
+              console.log(`NFT ${nft.id?.substring(0, 10) || nft.tokenId}... timestamp = ${timestamp} (source: ${source})`);
               if (timestamp > 0) {
                 console.log(` - Date: ${new Date(timestamp * 1000).toISOString()}`);
               }
@@ -581,10 +576,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     
     return sortedNfts.filter(nft => {
       // Get token name, defaulting to empty string if undefined
-      const tokenName = (nft.name || nft.metadata?.name || '').toLowerCase();
+      const tokenName = (nft.name || nft.tokenId || '').toLowerCase();
       
       // Get collection name, defaulting to empty string if undefined
-      const collectionName = (nft.collection?.name || nft.contract_name || '').toLowerCase();
+      const collectionName = (nft.collection?.name || '').toLowerCase();
       
       // Return true if either token name or collection name contains the filter text
       return tokenName.includes(filterTextLower) || collectionName.includes(filterTextLower);
@@ -601,13 +596,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       for (let i = 0; i < Math.min(5, userNfts.length); i++) {
         const nft = userNfts[i];
         console.log(`NFT ${i+1}: ${nft.name} - Values:`, {
+          id: nft.id,
+          tokenId: nft.tokenId,
           valueEth: nft.valueEth,
-          estimatedValueEth: nft.estimatedValueEth,
-          value: nft.value,
-          estimatedValue: nft.estimatedValue?.value,
-          floorPrice: nft.floorPrice?.value,
-          collectionFloorPrice: nft.collection?.floorPrice?.value,
-          collectionFloorPriceEth: nft.collection?.floorPriceEth
+          collectionName: nft.collection?.name,
+          collectionFloorPriceEth: nft.collection?.floorPriceEth,
+          lastSaleValue: nft.lastSaleValue || nft.lastSale?.valueWithDenomination,
+          estimatedValue: nft.estimatedValue?.valueWithDenomination
         });
       }
     }
@@ -971,9 +966,12 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               {selectedNft.collection && (
                 <p><strong>Collection:</strong> {selectedNft.collection.name}</p>
               )}
-              <p><strong>Token ID:</strong> {selectedNft.tokenId || selectedNft.token_id}</p>
-              {selectedNft.estimatedValueEth && (
-                <p><strong>Estimated Value:</strong> {selectedNft.estimatedValueEth.toFixed(4)} ETH</p>
+              <p><strong>Token ID:</strong> {selectedNft.tokenId}</p>
+              {selectedNft.valueEth && (
+                <p><strong>Estimated Value:</strong> {parseFloat(selectedNft.valueEth).toFixed(4)} ETH</p>
+              )}
+              {selectedNft.collection?.floorPriceEth && (
+                <p><strong>Floor Price:</strong> {parseFloat(selectedNft.collection.floorPriceEth).toFixed(4)} ETH</p>
               )}
               {selectedNft.description && (
                 <div className="nft-description">
