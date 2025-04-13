@@ -4,52 +4,73 @@ import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
 import styled from 'styled-components';
 import { FaEthereum, FaUsers } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
+import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
+import { useNFT } from '../contexts/NFTContext';
+import './NftCard.css';
+import CardLoadingAnimation from './CardLoadingAnimation';
+import PriceDisplay from './PriceDisplay';
+import { formatAddress } from '../utils/format';
+import analytics from '../utils/analytics';
 
 /**
  * NftCard component for displaying a single NFT
  */
-const NftCard = ({ nft, onClick }) => {
+const NftCard = ({ nft, showCollectionName = true, showLastPrice = false }) => {
+  const { likedNFTs, toggleLike, userFid } = useNFT();
+  const navigate = useNavigate();
   const [showHolders, setShowHolders] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
   const { profile, isAuthenticated } = useAuth();
 
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
   
-  const handleClick = (e) => {
-    // This is the click handler for the whole card
-    console.log("NFT Card clicked, auth state:", { isAuthenticated, profile, fid: profile?.fid });
-    
-    // If this is coming from the holders button, don't propagate
-    if (e.currentTarget.classList.contains('holders-button')) {
-      e.stopPropagation();
-      
-      if (isAuthenticated && profile && profile.fid) {
-        console.log("Opening collection holders modal for collection address:", contractAddress);
-        
-        // Make sure we have a collection address before trying to show the modal
-        if (contractAddress) {
-          // Add more debugging for the collection address
-          console.log("Collection address details:", {
-            address: contractAddress,
-            collection: nft.collection,
-            collectionId: nft.collection?.id
-          });
-          
-          setShowHolders(true);
-        } else {
-          console.error("Cannot open modal: No collection address available for this NFT");
-        }
-      } else {
-        console.log("User not authenticated, cannot show holders");
-        // Could show a login prompt here
-      }
+  const isLiked = likedNFTs.some(
+    (likedNft) => likedNft.id === nft.id && likedNft.contractAddress === nft.contractAddress
+  );
+
+  // Card loading skeleton shown until image is loaded
+  const imageLoadingState = !imageLoaded && (
+    <div className="nft-image-loading">
+      <CardLoadingAnimation />
+    </div>
+  );
+
+  const handleCardClick = (e) => {
+    // Don't navigate if clicking on the like or holders button
+    if (
+      e.target.closest('.like-button') ||
+      e.target.closest('.holders-button')
+    ) {
       return;
     }
-    
-    // Otherwise handle regular card click
+
     if (onClick) {
       onClick(nft);
     }
+  };
+  
+  const handleHoldersClick = (e) => {
+    console.log('Holders button clicked', { contractAddress, profile });
+    e.preventDefault();
+    e.stopPropagation();
+    setShowHolders(true);
+    analytics.track('NFT Holders Viewed', {
+      collectionAddress: contractAddress
+    });
+  };
+  
+  const handleLikeClick = (e) => {
+    e.stopPropagation();
+    setIsLiked(!isLiked);
+    if (onLike) {
+      onLike(nft, !isLiked);
+    }
+  };
+  
+  const handleCloseModal = () => {
+    setShowHolders(false);
   };
 
   if (!nft) return null;
@@ -443,42 +464,78 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   return (
-    <CardContainer onClick={handleClick}>
-      <ImageContainer>
-        {imageUrl ? (
-          <NFTImage src={imageUrl} alt={name} />
-        ) : (
-          <PlaceholderImage>No Image</PlaceholderImage>
-        )}
+    <CardContainer 
+      onClick={handleCardClick} 
+      className={`nft-card ${disabled ? 'disabled' : ''}`}
+      disabled={disabled}
+    >
+      <div className="image-container">
+        {imageLoadingState}
+        <img
+          src={imageUrl}
+          alt={name}
+          className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
+          onLoad={() => setImageLoaded(true)}
+        />
         
-        {/* Collection Holders Button */}
-        <HoldersButton 
-          className="holders-button"
-          onClick={handleClick}
-          title="View collection holders"
+        <button
+          className="like-button"
+          onClick={handleLikeClick}
+          aria-label={isLiked ? "Unlike NFT" : "Like NFT"}
         >
-          <FaUsers />
-        </HoldersButton>
-      </ImageContainer>
-      
-      <CardContent>
-        <Title>{name || `#${tokenId}`}</Title>
-        <CollectionName>{collection || 'Unknown Collection'}</CollectionName>
-        
-        <EstimatedValue>
-          {valueData && (valueData.isUsd || valueData.symbol === 'USD') ? 
-            null : <FaEthereum />}
-          <span>{formatEstimatedValue(valueData)}</span>
-        </EstimatedValue>
-      </CardContent>
+          {isLiked ? <AiFillHeart color="red" /> : <AiOutlineHeart />}
+        </button>
+      </div>
 
-      {/* Collection Holders Modal */}
+      <div className="nft-details">
+        <div className="nft-info">
+          <h3 className="nft-name">{name || `#${tokenId}`}</h3>
+          {showCollectionName && (
+            <p className="collection-name">{collection || 'Unknown Collection'}</p>
+          )}
+        </div>
+
+        <div className="nft-meta">
+          <div className="nft-price">
+            {showLastPrice && nft.lastPrice ? (
+              <PriceDisplay 
+                label="Last Price" 
+                amount={nft.lastPrice} 
+                currency={nft.lastPriceCurrency} 
+              />
+            ) : (
+              <PriceDisplay 
+                label="Est. Value" 
+                amount={nft.estimatedValue} 
+                currency="USD"
+                precision={2} 
+              />
+            )}
+          </div>
+          
+          <button
+            className="holders-button"
+            onClick={handleHoldersClick}
+            aria-label="View collection holders"
+          >
+            <FaUsers />
+          </button>
+        </div>
+      </div>
+
       {showHolders && (
-        <CollectionHoldersModal 
+        <CollectionHoldersModal
           collectionAddress={contractAddress}
           userFid={profile?.fid}
-          onClose={() => setShowHolders(false)}
+          onClose={handleCloseModal}
         />
+      )}
+      {showHolders && !contractAddress && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', 
+                    backgroundColor: 'white', padding: '20px', zIndex: 1000, borderRadius: '8px' }}>
+          <p>Unable to display holders: Missing collection address</p>
+          <button onClick={() => setShowHolders(false)}>Close</button>
+        </div>
       )}
     </CardContainer>
   );
@@ -549,33 +606,36 @@ const CollectionName = styled.p`
   text-overflow: ellipsis;
 `;
 
+const CardFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+`;
+
 const EstimatedValue = styled.div`
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-bottom: 0.5rem;
   color: #4caf50;
   font-weight: 600;
   font-size: 1rem;
 `;
 
 const HoldersButton = styled.button`
-  position: absolute;
-  bottom: 0.5rem;
-  right: 0.5rem;
   background-color: rgba(0, 0, 0, 0.7);
   border: none;
   border-radius: 50%;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1rem;
   color: white;
   cursor: pointer;
   transition: background-color 0.2s, transform 0.2s;
-  z-index: 10;
+  margin-left: 0.5rem;
   
   &:hover {
     background-color: rgba(76, 175, 80, 0.8);
