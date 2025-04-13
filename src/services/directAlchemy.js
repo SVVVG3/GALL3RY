@@ -275,6 +275,148 @@ const formatNft = (nft) => {
   }
 };
 
+/**
+ * Fetch enhanced metadata for multiple NFTs in a batch
+ * @param {Array<object>} nfts - Array of NFT objects with contract and tokenId
+ * @param {string} chain - Chain name (eth, base, etc.)
+ * @param {object} options - Additional options
+ * @returns {Promise<Array<object>>} Enhanced NFT metadata
+ */
+export const getNFTMetadataBatch = async (nfts, chain = 'eth', options = {}) => {
+  if (!nfts || !nfts.length) {
+    console.warn('No NFTs provided to getNFTMetadataBatch');
+    return [];
+  }
+
+  try {
+    console.log(`Fetching enhanced metadata for ${nfts.length} NFTs using Alchemy batch API`);
+    
+    // Prepare tokens array for the batch request
+    const tokens = nfts.map(nft => {
+      const contractAddress = nft.contractAddress || nft.contract?.address;
+      const tokenId = nft.tokenId || nft.id?.tokenId;
+      
+      if (!contractAddress || !tokenId) {
+        console.warn('Missing contractAddress or tokenId for NFT', nft);
+        return null;
+      }
+      
+      return {
+        contractAddress,
+        tokenId
+      };
+    }).filter(Boolean); // Filter out any null entries
+    
+    // If we have no valid tokens, return early
+    if (!tokens.length) {
+      console.warn('No valid tokens to fetch metadata for');
+      return [];
+    }
+    
+    // Process in smaller batches to avoid exceeding API limits
+    const BATCH_SIZE = 100; // Alchemy's maximum batch size
+    const enhancedNFTs = [];
+    
+    for (let i = 0; i < tokens.length; i += BATCH_SIZE) {
+      const batchTokens = tokens.slice(i, i + BATCH_SIZE);
+      
+      // Build API URL
+      const url = `${API_BASE_URL}?endpoint=getNFTMetadataBatch&chain=${chain}`;
+      
+      // Make the batch request
+      console.log(`Making batch request for ${batchTokens.length} NFTs (batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(tokens.length/BATCH_SIZE)})`);
+      
+      const response = await alchemyClient.post(url, {
+        tokens: batchTokens,
+        refreshCache: options.refreshCache || false
+      });
+      
+      if (!response.data || !response.data.nfts) {
+        console.warn('Unexpected response from Alchemy batch API:', response.data);
+        continue;
+      }
+      
+      // Process and format the response
+      const batchResults = response.data.nfts.map(formatNft);
+      enhancedNFTs.push(...batchResults);
+      
+      // Add a small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < tokens.length) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+    
+    return enhancedNFTs;
+  } catch (error) {
+    console.error('Error fetching NFT metadata batch:', error);
+    
+    if (error.response && error.response.data) {
+      console.error('Alchemy API error details:', error.response.data);
+    }
+    
+    throw new Error(`Failed to fetch NFT metadata batch: ${error.message}`);
+  }
+};
+
+/**
+ * Enhance NFTs with additional metadata and price information
+ * @param {Array<object>} nfts - Array of NFT objects to enhance
+ * @param {string} chain - Chain name (eth, base, etc.)
+ * @param {object} options - Additional options
+ * @returns {Promise<Array<object>>} Enhanced NFTs with price data
+ */
+export const enhanceNFTsWithMetadata = async (nfts, chain = 'eth', options = {}) => {
+  if (!nfts || nfts.length === 0) {
+    return [];
+  }
+  
+  try {
+    console.log(`Enhancing ${nfts.length} NFTs with additional metadata`);
+    
+    // Get detailed metadata in batches
+    const enhancedNFTs = await getNFTMetadataBatch(nfts, chain, {
+      refreshCache: options.refreshCache || false
+    });
+    
+    // Create a map of enhanced NFTs by ID for easy lookup
+    const enhancedNFTMap = new Map();
+    enhancedNFTs.forEach(nft => {
+      const id = nft.id || `${chain}:${nft.contractAddress}-${nft.tokenId}`;
+      enhancedNFTMap.set(id, nft);
+    });
+    
+    // Merge the enhanced data with the original NFTs
+    const mergedNFTs = nfts.map(nft => {
+      const normalizedId = nft.id || `${chain}:${nft.contractAddress || nft.contract?.address}-${nft.tokenId}`;
+      const enhancedNFT = enhancedNFTMap.get(normalizedId);
+      
+      if (enhancedNFT) {
+        // Merge enhanced data with original, prioritizing enhanced data
+        return {
+          ...nft,
+          ...enhancedNFT,
+          // Preserve the original imageUrl if the enhanced one doesn't have it
+          imageUrl: enhancedNFT.imageUrl || nft.imageUrl,
+          // Ensure we have the owner address
+          ownerAddress: nft.ownerAddress || enhancedNFT.ownerAddress,
+          // If the original NFT had ownerAddresses array, preserve it
+          ownerAddresses: nft.ownerAddresses || enhancedNFT.ownerAddresses,
+          // Preserve original collection if enhanced has none
+          collection: enhancedNFT.collection || nft.collection
+        };
+      }
+      
+      return nft;
+    });
+    
+    return mergedNFTs;
+  } catch (error) {
+    console.error('Error enhancing NFTs with metadata:', error);
+    // Return original NFTs if enhancement fails
+    return nfts;
+  }
+};
+
 // Create a proper service object
 const alchemyService = {
   fetchNFTsForAddress: getNFTsForOwner,

@@ -226,19 +226,39 @@ const NFTGallery = () => {
   const renderFetchProgress = () => {
     if (Object.keys(fetchProgress).length === 0) return null;
     
+    // Check if we're in the enhancing phase
+    const isEnhancing = Object.values(fetchProgress).some(p => p.enhancing);
+    
     return (
       <FetchProgressContainer>
-        <h4>Fetching NFTs from Wallets</h4>
+        <h4>
+          {isEnhancing 
+            ? "Enhancing NFTs with metadata and price data..." 
+            : "Fetching NFTs from Wallets"}
+        </h4>
         {Object.entries(fetchProgress).map(([address, progress]) => (
           <ProgressItem key={address}>
             <ProgressLabel>{formatAddress(address)}</ProgressLabel>
             <ProgressInfo>
-              <div>{progress.completed ? 'Complete' : 'Loading...'}</div>
+              <div>
+                {progress.enhancing 
+                  ? 'Enhancing...' 
+                  : progress.completed 
+                    ? 'Complete' 
+                    : 'Loading...'}
+              </div>
               <div>{progress.totalNFTs} NFTs</div>
-              <div>Page {progress.pagesFetched}</div>
+              {!progress.enhancing && <div>Page {progress.pagesFetched}</div>}
             </ProgressInfo>
           </ProgressItem>
         ))}
+        
+        {isEnhancing && (
+          <EnhancementNote>
+            Adding price data and detailed metadata...
+            <LoadingSpinner><FaSpinner className="spinner" /></LoadingSpinner>
+          </EnhancementNote>
+        )}
       </FetchProgressContainer>
     );
   };
@@ -750,6 +770,16 @@ const ProgressLabel = styled.div`
 const ProgressInfo = styled.div`
   display: flex;
   gap: 0.5rem;
+  align-items: center;
+`;
+
+const EnhancementNote = styled.div`
+  margin-top: 1rem;
+  padding: 0.5rem;
+  background-color: #e8f5e9;
+  border-radius: 4px;
+  display: flex;
+  justify-content: space-between;
   align-items: center;
 `;
 

@@ -541,9 +541,74 @@ export const NFTProvider = ({ children }) => {
       const uniqueNFTs = Array.from(uniqueNFTMap.values());
       console.log(`Total unique NFTs fetched: ${uniqueNFTs.length}`);
       
-      // Update the main NFTs state
+      // NEW: Enhance the NFTs with additional metadata and price information
+      console.log("Enhancing NFTs with price data...");
+      setFetchProgress(prev => {
+        const enhancedProgress = {...prev};
+        Object.keys(enhancedProgress).forEach(address => {
+          enhancedProgress[address] = {
+            ...enhancedProgress[address],
+            enhancing: true,
+            completed: false
+          };
+        });
+        return enhancedProgress;
+      });
+      
+      // Process each chain separately
+      let enhancedNFTs = [...uniqueNFTs];
+      for (const chain of chains) {
+        // Get NFTs for this chain
+        const chainNFTs = enhancedNFTs.filter(nft => 
+          (nft.network || nft.chain || 'eth').toLowerCase() === chain.toLowerCase()
+        );
+        
+        if (chainNFTs.length > 0) {
+          console.log(`Enhancing ${chainNFTs.length} NFTs from ${chain} chain`);
+          
+          try {
+            // Enhance NFTs for this chain with price and metadata
+            const enhancedChainNFTs = await services.alchemy.enhanceNFTsWithMetadata(
+              chainNFTs,
+              chain,
+              { refreshCache: options.refreshCache }
+            );
+            
+            // Replace the chain NFTs with enhanced versions
+            enhancedNFTs = enhancedNFTs.map(nft => {
+              const nftChain = (nft.network || nft.chain || 'eth').toLowerCase();
+              if (nftChain === chain.toLowerCase()) {
+                const normalizedId = normalizeId(nft);
+                const enhancedNFT = enhancedChainNFTs.find(e => normalizeId(e) === normalizedId);
+                return enhancedNFT || nft;
+              }
+              return nft;
+            });
+            
+            console.log(`Enhanced ${enhancedChainNFTs.length} NFTs from ${chain} chain`);
+          } catch (error) {
+            console.error(`Error enhancing NFTs from ${chain} chain:`, error);
+            // Continue with other chains
+          }
+        }
+      }
+      
+      // Mark enhancement as complete
+      setFetchProgress(prev => {
+        const enhancedProgress = {...prev};
+        Object.keys(enhancedProgress).forEach(address => {
+          enhancedProgress[address] = {
+            ...enhancedProgress[address],
+            enhancing: false,
+            completed: true
+          };
+        });
+        return enhancedProgress;
+      });
+      
+      // Update the main NFTs state with enhanced NFTs
       setNfts(prev => {
-        const combinedNFTs = [...prev, ...uniqueNFTs];
+        const combinedNFTs = [...prev, ...enhancedNFTs];
         // Deduplicate again in case there's overlap with previous state
         const dedupMap = new Map();
         combinedNFTs.forEach(nft => {
@@ -559,7 +624,7 @@ export const NFTProvider = ({ children }) => {
       setHasMore(false);
       
       return {
-        nfts: uniqueNFTs,
+        nfts: enhancedNFTs,
         hasMore: false,
         loadedWallets: walletAddresses
       };

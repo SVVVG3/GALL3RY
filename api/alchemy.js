@@ -34,6 +34,12 @@ const ENDPOINTS = {
       ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
       : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
     return `${baseUrl}${apiKey}/getNFTMetadata`;
+  },
+  getNFTMetadataBatch: (apiKey, chain = 'eth') => {
+    const baseUrl = chain === 'eth' 
+      ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+      : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+    return `${baseUrl}${apiKey}/getNFTMetadataBatch`;
   }
 };
 
@@ -109,6 +115,44 @@ module.exports = async (req, res) => {
     
     // Log the request (without sensitive data)
     console.log(`Proxying Alchemy API request to ${endpoint} on ${chain} chain`);
+    
+    // Special handling for POST requests like getNFTMetadataBatch
+    if (endpoint === 'getNFTMetadataBatch') {
+      console.log(`Batch request to ${endpointUrl}`);
+      
+      // For POST requests, get the body from the request
+      let requestBody = {};
+      
+      // If this is actually a GET request with tokens in params, convert to proper format
+      if (req.method === 'GET' && requestParams.tokens) {
+        try {
+          requestBody.tokens = JSON.parse(requestParams.tokens);
+        } catch (e) {
+          console.error('Invalid tokens parameter:', e);
+          requestBody.tokens = [];
+        }
+        
+        // Add other params
+        if (requestParams.refreshCache) {
+          requestBody.refreshCache = requestParams.refreshCache === 'true';
+        }
+      } else {
+        // Otherwise, parse the body if available
+        if (req.body) {
+          requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        }
+      }
+      
+      // Make the POST request
+      console.log(`Making POST request with body:`, JSON.stringify(requestBody).substring(0, 100) + '...');
+      
+      const response = await axios.post(endpointUrl, requestBody);
+      
+      // Return the response
+      return res.status(200).json(response.data);
+    }
+    
+    // Regular GET request for other endpoints
     console.log(`Full URL: ${endpointUrl}?${new URLSearchParams(requestParams).toString()}`);
     
     // Call the Alchemy API
