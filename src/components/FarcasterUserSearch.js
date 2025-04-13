@@ -284,7 +284,22 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // Get the NFT service from context rather than importing directly
       if (!alchemyService) {
         console.error('Alchemy service not available');
-        throw new Error('Alchemy service not available. Please try again later.');
+        // Retry loading the service one more time
+        try {
+          console.log('Attempting to reload services...');
+          const { getFarcasterProfile, services } = useNFT();
+          if (services?.alchemy) {
+            console.log('Successfully reloaded Alchemy service');
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay
+            location.reload(); // Reload the page as a last resort
+            return;
+          } else {
+            throw new Error('Alchemy service still not available after reload attempt');
+          }
+        } catch (retryError) {
+          console.error('Service reload failed:', retryError);
+          throw new Error('Alchemy service not available. Please try refreshing the page.');
+        }
       }
       
       try {

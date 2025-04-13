@@ -8,10 +8,8 @@ import { CACHE_EXPIRATION_TIME } from '../../constants';
 
 // Constants
 // Use the API proxy endpoint instead of direct Alchemy API calls
-// Use an absolute URL that works in both development and production
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://gall3ry.vercel.app/api/alchemy'
-  : '/api/alchemy';
+// Always use relative URL to work in both development and production
+const API_BASE_URL = '/api/alchemy';
 
 const CHAIN_ENDPOINTS = {
   eth: 'eth',
@@ -160,46 +158,60 @@ const processAlchemyResponse = (response, chain) => {
     };
   }
   
+  // Log for debugging
+  console.log(`Processing ${ownedNfts.length} NFTs from Alchemy API (${chain})`);
+  console.log('Sample NFT response:', ownedNfts[0]);
+  
   // Map Alchemy NFTs to our expected format
   const processedNfts = ownedNfts.map(nft => {
-    // Extract token ID and address from v2 API format
-    const contractAddress = nft.contract?.address;
-    const tokenId = nft.id?.tokenId || nft.tokenId;
-    const metadata = nft.metadata || {};
-    const title = nft.title || metadata?.name;
-    const description = nft.description || metadata?.description;
-    const balance = nft.balance || "1";
-    
-    // Handle media from v2 API format
-    const media = extractMediaFromAlchemyNFT(nft);
-    
-    // Map to our app's expected format
-    return {
-      id: `${chain}:${contractAddress}-${tokenId}`,
-      name: title || `#${tokenId}`,
-      description: description,
-      tokenId,
-      contractAddress,
-      network: chain,
-      // Collection info
-      collection: {
-        name: metadata?.collection || nft.contract?.name || 'Unknown Collection',
-        address: contractAddress,
-        id: `${chain}:${contractAddress}`,
-        network: chain
-      },
-      // Media and images
-      imageUrl: media.imageUrl,
-      mediasV2: media.mediasV2,
-      mediasV3: media.mediasV3,
-      // Balance and ownership
-      balanceDecimal: parseFloat(balance),
-      balance: parseInt(balance, 10),
-      // Original data
-      metadata: metadata,
-      alchemyData: nft,
-    };
-  });
+    try {
+      // Extract token ID and address from v2 API format
+      const contractAddress = nft.contract?.address;
+      const tokenId = nft.id?.tokenId || nft.tokenId;
+      const metadata = nft.metadata || {};
+      const title = nft.title || metadata?.name;
+      const description = nft.description || metadata?.description;
+      const balance = nft.balance || "1";
+      
+      // Handle media from v2 API format
+      const media = extractMediaFromAlchemyNFT(nft);
+      
+      // Get contract metadata (important for floor price)
+      const contractMetadata = nft.contractMetadata || {};
+      
+      // Map to our app's expected format
+      return {
+        id: `${chain}:${contractAddress}-${tokenId}`,
+        name: title || `#${tokenId}`,
+        description: description,
+        tokenId,
+        contractAddress,
+        network: chain,
+        // Collection info
+        collection: {
+          name: metadata?.collection || nft.contract?.name || 'Unknown Collection',
+          address: contractAddress,
+          id: `${chain}:${contractAddress}`,
+          network: chain,
+          floorPrice: contractMetadata?.openSea?.floorPrice || null
+        },
+        // Media and images
+        imageUrl: media.imageUrl,
+        mediasV2: media.mediasV2,
+        mediasV3: media.mediasV3,
+        // Balance and ownership
+        balanceDecimal: parseFloat(balance),
+        balance: parseInt(balance, 10),
+        // Original data
+        metadata: metadata,
+        contractMetadata: contractMetadata,
+        alchemyData: nft,
+      };
+    } catch (err) {
+      console.error('Error processing NFT from Alchemy:', err, nft);
+      return null;
+    }
+  }).filter(Boolean); // Filter out any null values from errors
 
   return {
     nfts: processedNfts,
@@ -216,98 +228,116 @@ const processAlchemyResponse = (response, chain) => {
  * @returns {object} - Media URLs in our expected format
  */
 const extractMediaFromAlchemyNFT = (nft) => {
-  // Handle both v2 and v3 API formats
-  const metadata = nft.metadata || {};
-  // V2 API has media array, V3 has media object
-  const media = Array.isArray(nft.media) ? nft.media : [nft.media].filter(Boolean);
-  
-  // Default result object
-  const result = {
-    imageUrl: null,
-    mediasV2: [],
-    mediasV3: {
-      images: {
-        edges: []
-      },
-      animations: {
-        edges: []
-      }
-    }
-  };
-  
-  // Extract from Alchemy media array
-  if (media && media.length > 0) {
-    // Find the first valid media
-    const firstMedia = media.find(m => m && m.gateway && !m.gateway.includes('defaulticon'));
-    if (firstMedia) {
-      // Use gateway URL as it's already IPFS-resolved
-      result.imageUrl = firstMedia.gateway;
-      
-      // Also add to mediasV2 format for compatibility
-      result.mediasV2.push({
-        original: firstMedia.gateway,
-        originalUri: firstMedia.raw || firstMedia.gateway,
-        url: firstMedia.gateway,
-        mimeType: firstMedia.format || 'image/png'
-      });
-      
-      // Add to mediasV3 format
-      result.mediasV3.images.edges.push({
-        node: {
-          original: firstMedia.gateway,
-          thumbnail: firstMedia.gateway,
-          large: firstMedia.gateway
-        }
-      });
-    }
-  }
-  
-  // If no media found, try metadata.image from either format
-  if (!result.imageUrl) {
-    let imageUrl = null;
+  try {
+    // Handle both v2 and v3 API formats
+    const metadata = nft.metadata || {};
+    // V2 API has media array, V3 has media object
+    const media = Array.isArray(nft.media) ? nft.media : [nft.media].filter(Boolean);
     
-    // Check various possible image locations in the response
-    if (metadata && metadata.image) {
-      imageUrl = metadata.image;
-    } else if (nft.tokenUri && nft.tokenUri.gateway) {
-      imageUrl = nft.tokenUri.gateway;
-    } else if (nft.image && nft.image.gateway) {
-      imageUrl = nft.image.gateway;
-    }
-    
-    if (imageUrl) {
-      result.imageUrl = imageUrl;
-      
-      // Also add to mediasV2 and mediasV3
-      result.mediasV2.push({
-        original: imageUrl,
-        originalUri: imageUrl,
-        url: imageUrl,
-        mimeType: 'image/png' // Assume image/png if not specified
-      });
-      
-      result.mediasV3.images.edges.push({
-        node: {
-          original: imageUrl,
-          thumbnail: imageUrl,
-          large: imageUrl
-        }
-      });
-    }
-  }
-  
-  // Process animation_url if available
-  if (metadata && metadata.animation_url) {
-    result.mediasV3.animations.edges.push({
-      node: {
-        original: metadata.animation_url,
-        thumbnail: result.imageUrl || metadata.image, // Use image as thumbnail for animation
-        large: metadata.animation_url
-      }
+    // For debugging media data
+    console.log(`Extracting media for NFT: ${nft.title || nft.metadata?.name || nft.id?.tokenId}`, {
+      hasMedia: !!nft.media,
+      mediaArrayLength: Array.isArray(nft.media) ? nft.media.length : 'not array',
+      firstMediaItem: Array.isArray(nft.media) && nft.media.length > 0 ? nft.media[0] : nft.media,
+      metadataImage: nft.metadata?.image
     });
+    
+    // Default result object
+    const result = {
+      imageUrl: null,
+      mediasV2: [],
+      mediasV3: {
+        images: {
+          edges: []
+        },
+        animations: {
+          edges: []
+        }
+      }
+    };
+    
+    // Extract from Alchemy media array
+    if (media && media.length > 0) {
+      // Find the first valid media
+      const firstMedia = media.find(m => m && m.gateway && !m.gateway.includes('defaulticon'));
+      if (firstMedia) {
+        // Use gateway URL as it's already IPFS-resolved
+        result.imageUrl = firstMedia.gateway;
+        
+        // Also add to mediasV2 format for compatibility
+        result.mediasV2.push({
+          original: firstMedia.gateway,
+          originalUri: firstMedia.raw || firstMedia.gateway,
+          url: firstMedia.gateway,
+          mimeType: firstMedia.format || 'image/png'
+        });
+        
+        // Add to mediasV3 format
+        result.mediasV3.images.edges.push({
+          node: {
+            original: firstMedia.gateway,
+            thumbnail: firstMedia.gateway,
+            large: firstMedia.gateway
+          }
+        });
+      }
+    }
+    
+    // If no media found, try metadata.image from either format
+    if (!result.imageUrl) {
+      let imageUrl = null;
+      
+      // Check various possible image locations in the response
+      if (metadata && metadata.image) {
+        imageUrl = metadata.image;
+      } else if (nft.tokenUri && nft.tokenUri.gateway) {
+        imageUrl = nft.tokenUri.gateway;
+      } else if (nft.image && nft.image.gateway) {
+        imageUrl = nft.image.gateway;
+      }
+      
+      if (imageUrl) {
+        result.imageUrl = imageUrl;
+        
+        // Also add to mediasV2 and mediasV3
+        result.mediasV2.push({
+          original: imageUrl,
+          originalUri: imageUrl,
+          url: imageUrl,
+          mimeType: 'image/png' // Assume image/png if not specified
+        });
+        
+        result.mediasV3.images.edges.push({
+          node: {
+            original: imageUrl,
+            thumbnail: imageUrl,
+            large: imageUrl
+          }
+        });
+      }
+    }
+    
+    // Process animation_url if available
+    if (metadata && metadata.animation_url) {
+      result.mediasV3.animations.edges.push({
+        node: {
+          original: metadata.animation_url,
+          thumbnail: result.imageUrl || metadata.image, // Use image as thumbnail for animation
+          large: metadata.animation_url
+        }
+      });
+    }
+    
+    return result;
+  } catch (err) {
+    console.error('Error extracting media from NFT:', err);
+    // Return empty result on error
+    return {
+      imageUrl: null,
+      mediasV2: [],
+      mediasV3: { images: { edges: [] }, animations: { edges: [] } }
+    };
   }
-  
-  return result;
 };
 
 /**

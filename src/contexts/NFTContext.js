@@ -8,33 +8,52 @@ const isBrowser = typeof window !== 'undefined';
 // Create context BEFORE any initialization
 const NFTContext = createContext();
 
-// Define useNFT hook BEFORE using it anywhere
-export const useNFT = () => {
-  const context = useContext(NFTContext);
-  if (!context) {
-    throw new Error('useNFT must be used within an NFTProvider');
-  }
-  return context;
-};
-
-// Services will be loaded dynamically to avoid circular dependencies
+// Define the service variables but don't initialize them yet
+let serviceLoader = null;
+let servicesInitialized = false;
 let alchemyService = null;
 let zapperService = null;
 
-// Dynamic service loading function
+// Dynamic service loading function - move outside of component to prevent re-creation
 const loadServices = async () => {
+  // If services are already loaded, return them
+  if (servicesInitialized && alchemyService && zapperService) {
+    return {
+      alchemy: alchemyService,
+      zapper: zapperService
+    };
+  }
+
   try {
     // Only load in browser environment
     if (!isBrowser) return { alchemy: null, zapper: null };
     
-    if (!alchemyService) {
+    console.log('Initializing NFT services...');
+    
+    // Import services dynamically to avoid circular dependencies
+    try {
       const alchemyModule = await import('../services/alchemy');
       alchemyService = alchemyModule.default;
+      console.log('Successfully loaded Alchemy service');
+    } catch (alchemyError) {
+      console.error('Failed to load Alchemy service:', alchemyError);
+      alchemyService = null;
     }
     
-    if (!zapperService) {
+    try {
       const zapperModule = await import('../services/zapperService');
       zapperService = zapperModule;
+      console.log('Successfully loaded Zapper service');
+    } catch (zapperError) {
+      console.error('Failed to load Zapper service:', zapperError);
+      zapperService = null;
+    }
+    
+    // Mark as initialized to avoid repeated loading
+    servicesInitialized = Boolean(alchemyService || zapperService);
+    
+    if (!servicesInitialized) {
+      console.error('Failed to initialize any NFT services');
     }
     
     return {
@@ -49,6 +68,15 @@ const loadServices = async () => {
       error
     };
   }
+};
+
+// Define useNFT hook BEFORE using it anywhere
+export const useNFT = () => {
+  const context = useContext(NFTContext);
+  if (!context) {
+    throw new Error('useNFT must be used within an NFTProvider');
+  }
+  return context;
 };
 
 // NFT Provider Component
@@ -72,8 +100,8 @@ export const NFTProvider = ({ children }) => {
   const [speedMode, setSpeedMode] = useState(false);
   const [excludeSpam, setExcludeSpam] = useState(true);
   
-  // Load services on mount
-  const loadAndSetServices = async () => {
+  // Load services on mount - use the outside function to avoid recreation
+  const loadAndSetServices = useCallback(async () => {
     try {
       const loadedServices = await loadServices();
       setServices(loadedServices);
@@ -81,12 +109,12 @@ export const NFTProvider = ({ children }) => {
       console.error('Failed to load NFT services:', err);
       setError('Failed to load NFT services. Please refresh the page.');
     }
-  };
+  }, []);
   
   // Init services on first mount
   useEffect(() => {
     loadAndSetServices();
-  }, []);
+  }, [loadAndSetServices]);
   
   // Reset filters
   const resetFilters = useCallback(() => {
@@ -393,7 +421,7 @@ export const NFTProvider = ({ children }) => {
   // Filter NFTs based on current filters
   const getFilteredNfts = useMemo(() => {
     if (!nfts || nfts.length === 0) return [];
-    
+
     let filtered = [...nfts];
     
     // Filter by chain
@@ -431,7 +459,7 @@ export const NFTProvider = ({ children }) => {
     
     // Sort by the selected method
     switch (sortBy) {
-      case 'value':
+        case 'value':
         return filtered.sort((a, b) => {
           // Get values, defaulting to 0 if not available
           const aValue = a.collection?.floorPrice?.valueUsd || 0;
@@ -450,8 +478,8 @@ export const NFTProvider = ({ children }) => {
           // Sort based on order
           return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
         });
-        
-      case 'collection':
+          
+        case 'collection':
       default:
         return filtered.sort((a, b) => {
           // Get collection names, defaulting to empty string if not available
