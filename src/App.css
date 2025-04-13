@@ -1197,7 +1197,8 @@ img {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-.profile-avatar {
+/* Specific styling for the profile avatar in the header */
+.user-profile-button .profile-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1420,7 +1421,8 @@ img {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
-.profile-avatar {
+/* Specific styling for the profile avatar in the header */
+.user-profile-button .profile-avatar {
   width: 32px;
   height: 32px;
   border-radius: 50%;
@@ -1441,5 +1443,11 @@ img {
   
   .wallet-addresses {
     max-width: 100%;
+  }
+  
+  /* Make profile avatar smaller in header for mobile */
+  .user-profile-button .profile-avatar {
+    width: 28px;
+    height: 28px;
   }
 }

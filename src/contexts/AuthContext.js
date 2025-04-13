@@ -23,25 +23,45 @@ export const useAuth = () => {
   
   // Get the correct avatar URL with consistent handling
   const getAvatarUrl = () => {
-    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) return 'https://via.placeholder.com/150?text=User';
+    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) {
+      return 'https://warpcast.com/~/icon-512.png';
+    }
+    
+    // Log for improved debugging
+    console.log('Attempting to get avatar URL from profile:', {
+      metadata: farcasterAuth.profile.metadata,
+      pfp: farcasterAuth.profile.pfp,
+      displayName: farcasterAuth.profile.displayName,
+      username: farcasterAuth.profile.username
+    });
     
     // Check metadata.imageUrl which comes directly from Farcaster API
-    if (farcasterAuth.profile.metadata?.imageUrl) {
+    if (farcasterAuth.profile.metadata?.imageUrl && typeof farcasterAuth.profile.metadata.imageUrl === 'string') {
       return farcasterAuth.profile.metadata.imageUrl;
     }
     
     // Try pfp.url which is sometimes provided by Farcaster Auth Kit
-    if (farcasterAuth.profile.pfp?.url) {
+    if (farcasterAuth.profile.pfp?.url && typeof farcasterAuth.profile.pfp.url === 'string') {
       return farcasterAuth.profile.pfp.url;
     }
     
     // Try the pfp itself which might be a string URL
-    if (typeof farcasterAuth.profile.pfp === 'string') {
+    if (typeof farcasterAuth.profile.pfp === 'string' && farcasterAuth.profile.pfp.startsWith('http')) {
       return farcasterAuth.profile.pfp;
     }
     
-    // Finally fall back to the avatar placeholder
-    return 'https://via.placeholder.com/150?text=User';
+    // Try avatar property
+    if (farcasterAuth.profile.avatar && typeof farcasterAuth.profile.avatar === 'string') {
+      return farcasterAuth.profile.avatar;
+    }
+    
+    // Construct a Warpcast profile image URL as a fallback
+    if (farcasterAuth.profile.username) {
+      return `https://warpcast.com/${farcasterAuth.profile.username}/pfp`;
+    }
+    
+    // Finally fall back to the Farcaster default avatar
+    return 'https://warpcast.com/~/icon-512.png';
   };
   
   // Merge our context with Farcaster Auth Kit data for backward compatibility

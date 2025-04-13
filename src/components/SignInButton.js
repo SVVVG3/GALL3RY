@@ -110,6 +110,12 @@ const SignInButton = ({ onSuccess }) => {
   
   // If authenticated, show user profile with dropdown
   if (isAuthenticated && profile) {
+    console.log('Rendering authenticated user profile:', {
+      username: profile.username,
+      avatarUrl: profile.avatarUrl,
+      isLoggedIn: isAuthenticated
+    });
+    
     return (
       <div className="user-profile-dropdown">
         <div 
@@ -117,12 +123,18 @@ const SignInButton = ({ onSuccess }) => {
           onClick={() => setDropdownOpen(!dropdownOpen)}
         >
           <img 
-            src={profile.avatarUrl || "/placeholder.png"} 
+            src={profile.avatarUrl || "https://warpcast.com/~/icon-512.png"} 
             alt={profile.username || "User"} 
             className="profile-avatar"
             onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = "/placeholder.png";
+              console.error('Profile avatar load error in header:', e);
+              // Try Warpcast URL as fallback
+              if (profile.username && e.target.src !== `https://warpcast.com/${profile.username}/pfp`) {
+                e.target.src = `https://warpcast.com/${profile.username}/pfp`;
+              } else {
+                // Final fallback
+                e.target.src = "https://warpcast.com/~/icon-512.png";
+              }
             }}
           />
           <span className="profile-username">@{profile.username}</span>
