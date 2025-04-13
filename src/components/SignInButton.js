@@ -1,10 +1,10 @@
 import React, { useState, useEffect, Suspense } from 'react';
 // Import the hook directly to avoid initialization issues
 import { useAuth } from '../contexts/AuthContext';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 // We won't dynamically import the Farcaster components to avoid initialization issues
-import { SignInButton as FarcasterSignInButton } from '@farcaster/auth-kit';
+import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
 
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
@@ -18,9 +18,28 @@ const SignInButton = ({ onSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [redirected, setRedirected] = useState(false);
   
   // Use our AuthContext instead of direct Farcaster auth
   const { isAuthenticated, logout, profile } = useAuth();
+  // Direct access to Farcaster auth kit for sign-in events
+  const farcasterProfile = useProfile();
+  
+  const navigate = useNavigate();
+  
+  // Auto-redirect to profile page after sign-in
+  useEffect(() => {
+    if (isAuthenticated && profile && profile.username && !redirected) {
+      console.log('User authenticated, redirecting to profile page:', profile.username);
+      setRedirected(true);
+      navigate(`/user/${profile.username}`);
+    }
+    
+    // Reset redirected state if user logs out
+    if (!isAuthenticated) {
+      setRedirected(false);
+    }
+  }, [isAuthenticated, profile, navigate, redirected]);
   
   // Handle sign out with extra error protection
   const handleSignOut = async () => {
@@ -45,6 +64,8 @@ const SignInButton = ({ onSuccess }) => {
     } finally {
       setIsLoading(false);
       setDropdownOpen(false);
+      // Reset redirect flag
+      setRedirected(false);
     }
   };
 
@@ -145,7 +166,15 @@ const SignInButton = ({ onSuccess }) => {
   // If not authenticated, use the Farcaster auth button directly
   return (
     <ErrorBoundaryWrapper>
-      <FarcasterSignInButton onSuccess={onSuccess} />
+      <FarcasterSignInButton 
+        onSuccess={(result) => {
+          console.log('Farcaster sign-in success:', result);
+          // onSuccess callback will be handled by the useEffect hook
+          if (onSuccess && typeof onSuccess === 'function') {
+            onSuccess(result);
+          }
+        }} 
+      />
     </ErrorBoundaryWrapper>
   );
 };

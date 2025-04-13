@@ -688,21 +688,35 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       pfpUrl: profile?.pfp?.url
     });
     
-    // Try different sources for the profile image
-    if (profile?.metadata?.imageUrl) {
+    // Try different sources for the profile image in order of preference
+    
+    // 1. First try metadata.imageUrl from Farcaster API (most reliable source)
+    if (profile?.metadata?.imageUrl && typeof profile.metadata.imageUrl === 'string') {
       return profile.metadata.imageUrl;
     }
     
-    if (profile?.pfp?.url) {
+    // 2. Then try the pfp.url object format
+    if (profile?.pfp?.url && typeof profile.pfp.url === 'string') {
       return profile.pfp.url;
     }
     
-    if (typeof profile?.pfp === 'string') {
+    // 3. Try the pfp as a direct string
+    if (typeof profile?.pfp === 'string' && profile.pfp.startsWith('http')) {
       return profile.pfp;
     }
     
-    // Default placeholder
-    return '/placeholder.png';
+    // 4. Try the avatarUrl property if available
+    if (profile?.avatarUrl && typeof profile.avatarUrl === 'string') {
+      return profile.avatarUrl;
+    }
+    
+    // 5. Try the displayImageUrl if available
+    if (profile?.displayImageUrl && typeof profile.displayImageUrl === 'string') {
+      return profile.displayImageUrl;
+    }
+    
+    // Default placeholder for Farcaster users
+    return 'https://warpcast.com/~/icon-512.png';
   };
 
   const onProfileSelected = async (profile) => {

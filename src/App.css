@@ -1277,6 +1277,9 @@ img {
   border-radius: 16px;
   overflow: hidden;
   box-shadow: var(--shadow-md);
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .profile-content {
@@ -1287,8 +1290,8 @@ img {
 }
 
 .profile-image {
-  width: 120px;
-  height: 120px;
+  width: 90px;
+  height: 90px;
   border-radius: 50%;
   overflow: hidden;
   margin-bottom: 1.5rem;
@@ -1384,11 +1387,52 @@ img {
   border-bottom: none;
 }
 
+/* Center the search container and user profile */
+.farcaster-search-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.user-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+/* User Profile Dropdown Styling */
+.user-profile-dropdown {
+  position: relative;
+}
+
+.user-profile-button {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 20px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.user-profile-button:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 8px;
+}
+
 /* Responsive adjustments */
 @media (max-width: 640px) {
   .profile-image {
-    width: 90px;
-    height: 90px;
+    width: 80px;
+    height: 80px;
   }
   
   .profile-display-name {
