@@ -37,13 +37,13 @@ module.exports = async (req, res) => {
       });
     }
     
-    // Map chain names to base URLs
+    // Map chain names to base URLs - Using v2 NFT API endpoints as per documentation
     const chainBaseUrls = {
-      eth: 'https://eth-mainnet.g.alchemy.com',
-      base: 'https://base-mainnet.g.alchemy.com',
-      polygon: 'https://polygon-mainnet.g.alchemy.com',
-      arbitrum: 'https://arb-mainnet.g.alchemy.com',
-      optimism: 'https://opt-mainnet.g.alchemy.com',
+      eth: 'https://eth-mainnet.g.alchemy.com/nft/v2',
+      base: 'https://base-mainnet.g.alchemy.com/nft/v2',
+      polygon: 'https://polygon-mainnet.g.alchemy.com/nft/v2',
+      arbitrum: 'https://arb-mainnet.g.alchemy.com/nft/v2',
+      optimism: 'https://opt-mainnet.g.alchemy.com/nft/v2',
     };
     
     // Get the base URL for the requested chain
@@ -55,8 +55,8 @@ module.exports = async (req, res) => {
       });
     }
     
-    // Build the Alchemy API URL
-    let alchemyUrl = `${baseUrl}/nft/v3/${ALCHEMY_API_KEY}/${endpoint}`;
+    // Build the Alchemy API URL according to documentation
+    let alchemyUrl = `${baseUrl}/${ALCHEMY_API_KEY}/${endpoint}`;
     
     // Add query parameters
     const queryString = Object.entries(params)
@@ -73,8 +73,6 @@ module.exports = async (req, res) => {
     const response = await fetch(alchemyUrl, {
       headers: {
         'Accept': 'application/json',
-        // Don't set User-Agent header in browser environment
-        // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
       }
     });
     
