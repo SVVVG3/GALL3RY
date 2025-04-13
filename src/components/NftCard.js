@@ -22,6 +22,7 @@ const NftCard = ({
   showLastPrice = false, 
   showCollectionName = true,
   showLikeButton = false,
+  onLike = null,
 }) => {
   // Early return with a simpler placeholder if nft is null or undefined
   if (!nft) {
@@ -151,112 +152,159 @@ const NftCard = ({
   // Check if we can extract a valid contract address WITHOUT actually extracting it yet
   // This is just to determine if we should show the holders button
   const hasValidContractAddress = () => {
-    if (nft.collection?.address) return true;
-    if (nft.contractAddress) return true;
-    if (nft.contract?.address) return true;
-    if (nft.token?.collection?.address) return true;
+    // Check for direct contract address
+    if (nft.collection?.address && typeof nft.collection.address === 'string' && nft.collection.address.length > 0) {
+      return true;
+    }
     
-    // Try to extract from collection ID only if it exists
-    if (nft.collection?.id) return true;
+    if (nft.contractAddress && typeof nft.contractAddress === 'string' && nft.contractAddress.length > 0) {
+      return true;
+    }
     
-    // Try to extract from NFT ID if it contains a colon (common format)
-    if (nft.id && typeof nft.id === 'string' && nft.id.includes(':')) return true;
+    if (nft.contract?.address && typeof nft.contract.address === 'string' && nft.contract.address.length > 0) {
+      return true;
+    }
+    
+    if (nft.token?.collection?.address && typeof nft.token.collection.address === 'string' && nft.token.collection.address.length > 0) {
+      return true;
+    }
+    
+    // Try to extract from collection ID only if it exists and appears to be a valid format
+    if (nft.collection?.id && typeof nft.collection.id === 'string') {
+      // Check if it looks like a base64 encoded ID or contains expected separators
+      if (nft.collection.id.match(/^[A-Za-z0-9+/=]+$/) || nft.collection.id.includes('-')) {
+        return true;
+      }
+    }
+    
+    // Try to extract from NFT ID if it contains a colon and appears to be a valid format
+    if (nft.id && typeof nft.id === 'string' && nft.id.includes(':')) {
+      const parts = nft.id.split(':');
+      if (parts.length >= 2 && parts[1] && parts[1].length > 0) {
+        return true;
+      }
+    }
     
     return false;
   };
   
   // Extract collection address and network - Only called when needed, not during initial render
   const getContractAddress = () => {
-    // Default network to ethereum mainnet if not specified
-    let network = 'ETHEREUM_MAINNET';
-    let contractAddress = null;
-    
-    // First try direct access to address property
-    if (nft.collection?.address) {
-      contractAddress = nft.collection.address;
-      // Update network if available
-      if (nft.collection.network) {
-        // Format properly for GraphQL query - all caps with _MAINNET suffix
-        network = formatNetworkForGraphQL(nft.collection.network);
-      } else if (nft.network) {
-        network = formatNetworkForGraphQL(nft.network);
-      }
-    } 
-    // Then try to extract from collection ID (which is base64 encoded)
-    else if (nft.collection?.id) {
-      try {
-        const collectionId = nft.collection.id;
-        console.log("Collection ID:", collectionId);
-        
-        // If it's a base64 encoded string, decode it
-        if (collectionId.match(/^[A-Za-z0-9+/=]+$/)) {
-          try {
-            const decoded = atob(collectionId);
-            console.log("Decoded collection ID:", decoded);
-            
-            // If the decoded ID contains a hyphen, extract the second part as the collection ID
-            if (decoded.includes('-')) {
-              const parts = decoded.split('-');
-              if (parts.length > 1) {
-                contractAddress = parts[1];
-                console.log("Successfully extracted collection ID:", contractAddress);
-                
-                // Try to extract network from the first part if possible
-                if (parts[0]) {
-                  network = formatNetworkForGraphQL(parts[0]);
+    try {
+      // Default network to ethereum mainnet if not specified
+      let network = 'ETHEREUM_MAINNET';
+      let contractAddress = null;
+      
+      // First try direct access to address property
+      if (nft.collection?.address && typeof nft.collection.address === 'string' && nft.collection.address.length > 0) {
+        contractAddress = nft.collection.address;
+        // Update network if available
+        if (nft.collection.network) {
+          // Format properly for GraphQL query - all caps with _MAINNET suffix
+          network = formatNetworkForGraphQL(nft.collection.network);
+        } else if (nft.network) {
+          network = formatNetworkForGraphQL(nft.network);
+        }
+      } 
+      // Then try to extract from collection ID (which is base64 encoded)
+      else if (nft.collection?.id && typeof nft.collection.id === 'string') {
+        try {
+          const collectionId = nft.collection.id;
+          console.log("Collection ID:", collectionId);
+          
+          // If it's a base64 encoded string, decode it
+          if (collectionId.match(/^[A-Za-z0-9+/=]+$/)) {
+            try {
+              const decoded = atob(collectionId);
+              console.log("Decoded collection ID:", decoded);
+              
+              // If the decoded ID contains a hyphen, extract the second part as the collection ID
+              if (decoded.includes('-')) {
+                const parts = decoded.split('-');
+                if (parts.length > 1 && parts[1] && parts[1].length > 0) {
+                  contractAddress = parts[1];
+                  console.log("Successfully extracted collection ID:", contractAddress);
+                  
+                  // Try to extract network from the first part if possible
+                  if (parts[0]) {
+                    network = formatNetworkForGraphQL(parts[0]);
+                  }
                 }
               }
+            } catch (e) {
+              console.error("Error decoding collection ID:", e);
             }
-          } catch (e) {
-            console.error("Error decoding collection ID:", e);
+          } 
+          // If it's already in the format of a collection ID, use it directly
+          else if (collectionId.includes('-')) {
+            const parts = collectionId.split('-');
+            if (parts.length > 1 && parts[1] && parts[1].length > 0) {
+              contractAddress = parts[1];
+              console.log("Using collection ID directly:", collectionId);
+              
+              // Try to extract network from the first part if possible
+              if (parts[0]) {
+                network = formatNetworkForGraphQL(parts[0]);
+              }
+            }
           }
-        } 
-        // If it's already in the format of a collection ID, use it directly
-        else {
-          console.log("Using collection ID directly:", collectionId);
-          contractAddress = collectionId;
+        } catch (e) {
+          console.error("Error processing collection ID:", e);
         }
-      } catch (e) {
-        console.error("Error processing collection ID:", e);
       }
-    }
-    
-    // Fallback to other potential sources
-    if (!contractAddress) {
-      contractAddress = (
-        nft.contractAddress || 
-        nft.contract?.address ||
-        nft.token?.collection?.address
-      );
       
-      // Update network if available
-      if (nft.network) {
-        network = formatNetworkForGraphQL(nft.network);
-      } else if (nft.token?.collection?.network) {
-        network = formatNetworkForGraphQL(nft.token.collection.network);
-      }
-    }
-    
-    // Try one more approach if we still don't have a contract address
-    if (!contractAddress && nft.id) {
-      // NFT IDs often include collection info
-      const idParts = nft.id.split(':');
-      if (idParts.length >= 2) {
-        contractAddress = idParts[1];
-        
-        // If we can extract network from the ID, update it
-        if (idParts[0]) {
-          network = formatNetworkForGraphQL(idParts[0]);
+      // Fallback to other potential sources
+      if (!contractAddress) {
+        // Check each potential source and ensure it's a string with content
+        if (nft.contractAddress && typeof nft.contractAddress === 'string' && nft.contractAddress.length > 0) {
+          contractAddress = nft.contractAddress;
+        } else if (nft.contract?.address && typeof nft.contract.address === 'string' && nft.contract.address.length > 0) {
+          contractAddress = nft.contract.address;
+        } else if (nft.token?.collection?.address && typeof nft.token.collection.address === 'string' && 
+                  nft.token.collection.address.length > 0) {
+          contractAddress = nft.token.collection.address;
         }
         
-        console.log("Extracted contract address from NFT ID:", contractAddress);
+        // Update network if available
+        if (nft.network) {
+          network = formatNetworkForGraphQL(nft.network);
+        } else if (nft.token?.collection?.network) {
+          network = formatNetworkForGraphQL(nft.token.collection.network);
+        }
       }
+      
+      // Try one more approach if we still don't have a contract address
+      if (!contractAddress && nft.id && typeof nft.id === 'string' && nft.id.includes(':')) {
+        // NFT IDs often include collection info
+        const idParts = nft.id.split(':');
+        if (idParts.length >= 2 && idParts[1] && idParts[1].length > 0) {
+          contractAddress = idParts[1];
+          
+          // If we can extract network from the ID, update it
+          if (idParts[0]) {
+            network = formatNetworkForGraphQL(idParts[0]);
+          }
+          
+          console.log("Extracted contract address from NFT ID:", contractAddress);
+        }
+      }
+      
+      // Validate the contract address format - simple check for hex format with 0x prefix
+      if (contractAddress && (!contractAddress.startsWith('0x') || !contractAddress.match(/^0x[a-fA-F0-9]+$/))) {
+        console.warn("Contract address doesn't match expected format:", contractAddress);
+        
+        // Continue using it, but log the concern
+        // This is needed because some Zapper data uses non-standard address formats
+      }
+      
+      // Store the network for later use
+      setCurrentNetwork(network);
+      
+      return contractAddress;
+    } catch (error) {
+      console.error("Error extracting contract address:", error);
+      return null;
     }
-    
-    // Store the network for later use
-    setCurrentNetwork(network);
-    
-    return contractAddress;
   };
   
   // Helper to format network name for GraphQL
@@ -305,8 +353,8 @@ const NftCard = ({
   );
 
   const handleCardClick = (e) => {
-    // Don't navigate if clicking on holders button
-    if (e.target.closest('.holders-button')) {
+    // Don't navigate if clicking on holders button or like button
+    if (e.target.closest('.holders-button') || e.target.closest('.like-button')) {
       return;
     }
 
@@ -341,6 +389,24 @@ const NftCard = ({
   
   const handleCloseModal = () => {
     setShowHolders(false);
+  };
+
+  const handleLikeClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    console.log('Like button clicked for NFT:', nft.id);
+    
+    // If an onLike callback was provided, call it with this NFT
+    if (onLike) {
+      onLike(nft);
+    }
+    
+    // Track the like action
+    analytics.track('NFT Liked', {
+      nftId: nft.id,
+      collection: collection
+    });
   };
 
   const getValue = () => {
@@ -614,7 +680,10 @@ const NftCard = ({
           
           {/* Only render like button if showLikeButton prop is true */}
           {showLikeButton && (
-            <button className="like-button" aria-label="Like NFT">
+            <button 
+              className="like-button" 
+              aria-label="Like NFT" 
+              onClick={handleLikeClick}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
               </svg>

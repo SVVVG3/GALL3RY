@@ -158,6 +158,13 @@ const NFTGallery = () => {
     }
   };
 
+  // Handle liking an NFT
+  const handleLike = (nft) => {
+    console.log('NFT liked from gallery:', nft.id);
+    // In a full implementation, this would update some state or call an API
+    // Since the toggleLikeNFT function is not implemented, we'll just log this
+  };
+
   return (
     <GalleryContainer>
       <GalleryHeader>
@@ -285,6 +292,7 @@ const NFTGallery = () => {
               key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} 
               nft={nft} 
               showLikeButton={true}
+              onLike={handleLike}
             />
           ))}
         </NFTGrid>
