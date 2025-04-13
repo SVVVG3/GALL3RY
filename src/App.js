@@ -6,6 +6,7 @@ import './styles/folder.css';
 import './styles/errors.css'; // Import our new error styles
 // Import Farcaster Auth Kit styles
 import '@farcaster/auth-kit/styles.css';
+import { AuthKitProvider } from '@farcaster/auth-kit';
 
 // Import all components directly to avoid lazy loading issues
 import { AuthProvider } from './contexts/AuthContext';
@@ -50,11 +51,11 @@ const safeStorage = {
 };
 
 // Configure Farcaster Auth Kit
-const getFarcasterConfig = () => ({
+const farcasterConfig = {
   rpcUrl: process.env.REACT_APP_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
   domain: process.env.REACT_APP_FARCASTER_DOMAIN || 'gall3ry.vercel.app',
   siweUri: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
-});
+};
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -162,45 +163,48 @@ function App() {
     return <LoadingScreen />;
   }
   
-  // Return the app with a simplified provider hierarchy
+  // Return the app with a proper provider hierarchy
   return (
     <ErrorBoundary onError={(error) => setAppError(error)}>
-      <AuthProvider>
-        <WalletProvider>
-          <Router>
-            <div className="app">
-              <header className="app-header">
-                <Link to="/" className="logo-link">GALL3RY</Link>
-                <div className="auth-container">
-                  <SignInButton />
-                </div>
-              </header>
-              
-              <main className="app-content">
-                <Routes>
-                  <Route path="/" element={<HomePage />} />
-                  <Route path="/user/:username" element={
-                    <NFTProvider>
-                      <UserProfilePage />
-                    </NFTProvider>
-                  } />
-                </Routes>
-              </main>
-              
-              <footer className="app-footer">
-                <a 
-                  href="https://github.com/SVVVG3/GALL3RY"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="footer-link"
-                >
-                  vibe coded with 💜 by @svvvg3.eth
-                </a>
-              </footer>
-            </div>
-          </Router>
-        </WalletProvider>
-      </AuthProvider>
+      <AuthKitProvider config={farcasterConfig}>
+        <AuthProvider>
+          <WalletProvider>
+            <Router>
+              <div className="app">
+                <header className="app-header">
+                  <Link to="/" className="logo-link">GALL3RY</Link>
+                  <div className="auth-container">
+                    <SignInButton />
+                  </div>
+                </header>
+                
+                <main className="app-content">
+                  <Routes>
+                    <Route path="/" element={<HomePage />} />
+                    <Route path="/user/:username" element={
+                      <NFTProvider>
+                        <UserProfilePage />
+                      </NFTProvider>
+                    } />
+                  </Routes>
+                </main>
+                
+                <footer className="app-footer">
+                  vibe coded with 💜 by 
+                  <a 
+                    href="https://warpcast.com/svvvg3.eth" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="footer-link"
+                  >
+                    @svvvg3.eth
+                  </a>
+                </footer>
+              </div>
+            </Router>
+          </WalletProvider>
+        </AuthProvider>
+      </AuthKitProvider>
     </ErrorBoundary>
   );
 }

@@ -836,4 +836,33 @@
   .profile-header {
     justify-content: center;
   }
+}
+
+/* Fix spacing between search title and input */
+.home-container h2 {
+  margin-bottom: 2rem;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--color-gray-800);
+  text-align: center;
+}
+
+/* Footer styling */
+.app-footer {
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--color-gray-600);
+}
+
+.footer-link {
+  margin-left: 0.5rem;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+.footer-link:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
 } 
