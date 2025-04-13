@@ -26,8 +26,9 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false }) => {
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
   
-  const isLiked = likedNFTs.some(
-    (likedNft) => likedNft.id === nft.id && likedNft.contractAddress === nft.contractAddress
+  // Fix: Add defensive check for likedNFTs before using .some()
+  const isLiked = Array.isArray(likedNFTs) && likedNFTs.some(
+    (likedNft) => likedNft.id === nft?.id && likedNft.contractAddress === nft?.contractAddress
   );
 
   // Card loading skeleton shown until image is loaded
@@ -63,9 +64,10 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false }) => {
   
   const handleLikeClick = (e) => {
     e.stopPropagation();
-    setIsLiked(!isLiked);
-    if (onLike) {
-      onLike(nft, !isLiked);
+    
+    // Use toggleLike from context directly
+    if (typeof toggleLike === 'function' && nft) {
+      toggleLike(nft);
     }
   };
   

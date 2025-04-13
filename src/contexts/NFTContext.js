@@ -38,6 +38,7 @@ export const NFTProvider = ({ children }) => {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [cachingStatus, setCachingStatus] = useState({ status: 'idle', progress: 0 });
+  const [likedNFTs, setLikedNFTs] = useState([]);
 
   const { profile } = useAuth();
   const { connectedWallets, ensNames } = useWallet();
@@ -988,6 +989,28 @@ export const NFTProvider = ({ children }) => {
     }
   }, [endCursor, updateFiltersFromNFTs, deduplicateNftsArray, PAGE_SIZE, updateCache, isBrowser]);
 
+  // Function to toggle like status of an NFT
+  const toggleLike = useCallback((nft) => {
+    if (!nft) return;
+    
+    setLikedNFTs(prevLikedNFTs => {
+      // Check if this NFT is already liked
+      const isLiked = Array.isArray(prevLikedNFTs) && prevLikedNFTs.some(
+        likedNft => likedNft.id === nft.id && likedNft.contractAddress === nft.contractAddress
+      );
+      
+      // If liked, remove it
+      if (isLiked) {
+        return prevLikedNFTs.filter(
+          likedNft => !(likedNft.id === nft.id && likedNft.contractAddress === nft.contractAddress)
+        );
+      }
+      
+      // If not liked, add it
+      return [...prevLikedNFTs, nft];
+    });
+  }, []);
+
   const value = {
     nfts,
     filteredNFTs,
@@ -1020,6 +1043,8 @@ export const NFTProvider = ({ children }) => {
     collectionHolders,
     setCollectionHolders,
     loadingCollectionHolders,
+    likedNFTs,
+    toggleLike,
     resetFilters: () => {
       setSelectedChains(['all']);
       setSelectedWallets([]);
