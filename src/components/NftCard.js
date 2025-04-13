@@ -200,9 +200,51 @@ const NftCard = ({
     if (nft.contractMetadata?.openSea?.imageUrl && nft.contractMetadata.openSea.imageUrl.startsWith('http')) {
       return nft.contractMetadata.openSea.imageUrl;
     }
+    
+    // Fallback to placeholder if no image found
+    return '/assets/placeholder-nft.svg';
+  };
 
-    // If no valid image URL was found
-    return '/placeholder.png';
+  // Get raw image URL to use as fallback
+  const getRawImageUrl = () => {
+    if (!nft) return '';
+    
+    // Try to get the raw URL from various sources
+    // First check for rawImageUrl if available from our service
+    if (nft.rawImageUrl && nft.rawImageUrl.startsWith('http')) {
+      return nft.rawImageUrl;
+    }
+    
+    // For Alchemy format, try original URLs
+    if (nft.image && nft.image.originalUrl && nft.image.originalUrl.startsWith('http')) {
+      return nft.image.originalUrl;
+    }
+    
+    if (nft.image && nft.image.raw && nft.image.raw.startsWith('http')) {
+      return nft.image.raw;
+    }
+
+    // Try media.raw from the media array
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      for (const media of nft.media) {
+        if (media?.raw && media.raw.startsWith('http')) {
+          return media.raw;
+        }
+      }
+    }
+    
+    // Try metadata.image if available
+    if (nft.metadata?.image && nft.metadata.image.startsWith('http')) {
+      return nft.metadata.image;
+    }
+    
+    // Try image_url if exists
+    if (nft.metadata?.image_url && nft.metadata.image_url.startsWith('http')) {
+      return nft.metadata.image_url;
+    }
+    
+    // Return empty string if no raw URL found
+    return '';
   };
   
   // Pre-compute these values
@@ -780,6 +822,7 @@ const NftCard = ({
         
         <NFTImage 
           src={imageUrl} 
+          rawSrc={getRawImageUrl()}
           alt={name} 
           onLoad={() => setImageLoaded(true)} 
           onError={handleImageError}

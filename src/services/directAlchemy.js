@@ -212,22 +212,38 @@ const formatNft = (nft) => {
     const description = nft.description || metadata?.description || '';
     const chain = nft.chain || 'eth';
     
-    // Extract media from v3 structure with fallbacks
+    // Extract media from v3 structure with enhanced fallbacks
     let imageUrl = '';
-    
-    // First check for image object
-    if (nft.image) {
-      imageUrl = typeof nft.image === 'object' ? nft.image.gateway || nft.image.url : nft.image;
+    let rawImageUrl = '';
+
+    // First check for Alchemy's optimized gateway URLs
+    if (nft.image && nft.image.gateway) {
+      imageUrl = nft.image.gateway; // Alchemy's optimized and cached URL
+      rawImageUrl = nft.image.originalUrl || nft.image.raw || nft.image.url || '';
     } 
-    // Then check media array
+    // Then check image as a string
+    else if (nft.image && typeof nft.image === 'string') {
+      imageUrl = nft.image;
+      rawImageUrl = nft.image;
+    }
+    // Then check media array from Alchemy
     else if (nft.media && nft.media.length > 0) {
-      imageUrl = nft.media[0]?.gateway || '';
+      // Prefer gateway URLs from Alchemy as they're optimized and cached
+      imageUrl = nft.media[0]?.gateway || nft.media[0]?.raw || nft.media[0]?.uri || '';
+      rawImageUrl = nft.media[0]?.raw || nft.media[0]?.uri || imageUrl;
     } 
     // Finally check metadata
     else if (metadata?.image) {
       imageUrl = metadata.image;
+      rawImageUrl = metadata.image;
     }
-    
+
+    // If no image URL found, try to extract from metadata.image_url
+    if (!imageUrl && metadata?.image_url) {
+      imageUrl = metadata.image_url;
+      rawImageUrl = metadata.image_url;
+    }
+
     // Extract contract metadata
     const contractMetadata = nft.contractMetadata || {};
     
@@ -246,6 +262,7 @@ const formatNft = (nft) => {
         floorPrice: contractMetadata?.openSea?.floorPrice || null
       },
       imageUrl,
+      rawImageUrl, // Include the raw URL as well
       // Include metadata for completeness
       metadata,
       contractMetadata,

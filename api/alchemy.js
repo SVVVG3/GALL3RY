@@ -84,6 +84,18 @@ module.exports = async (req, res) => {
     // Prepare request parameters
     const requestParams = { ...params };
     
+    // Ensure we always get complete metadata for better image handling
+    if (endpoint === 'getNFTsForOwner') {
+      // Make sure these parameters are explicitly set for best results
+      requestParams.withMetadata = true;
+      requestParams.pageSize = requestParams.pageSize || 100;
+      
+      // Exclude spam by default unless explicitly set to false
+      if (requestParams.excludeSpam !== 'false') {
+        requestParams.excludeFilters = 'SPAM';
+      }
+    }
+    
     // Handle array parameters
     Object.keys(requestParams).forEach(key => {
       if (key.endsWith('[]')) {
