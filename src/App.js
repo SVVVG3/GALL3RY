@@ -82,7 +82,12 @@ const HomePage = () => {
         {/* NFT UI with error boundary */}
         <Suspense fallback={<LoadingScreen />}>
           <ErrorBoundary>
-            <NFTContent />
+            {/* Wrap NFTContent with NFTProvider */}
+            <Suspense fallback={<div>Loading NFT context...</div>}>
+              <NFTProvider>
+                <NFTContent />
+              </NFTProvider>
+            </Suspense>
           </ErrorBoundary>
         </Suspense>
       </div>
@@ -211,7 +216,12 @@ function App() {
                 <Route path="/" element={<HomePage />} />
                 <Route path="/user/:username" element={
                   <Suspense fallback={<LoadingScreen />}>
-                    <UserProfilePage />
+                    {/* Wrap UserProfilePage with NFTProvider */}
+                    <Suspense fallback={<div>Loading NFT context...</div>}>
+                      <NFTProvider>
+                        <UserProfilePage />
+                      </NFTProvider>
+                    </Suspense>
                   </Suspense>
                 } />
               </Routes>
