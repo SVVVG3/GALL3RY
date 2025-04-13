@@ -96,6 +96,7 @@ module.exports = async (req, res) => {
     let apiPath;
     switch (endpoint) {
       case 'getNFTsForOwner':
+      case 'getNFTs':
         apiPath = 'getNFTs';
         break;
       case 'getNftsForCollection':
@@ -103,6 +104,9 @@ module.exports = async (req, res) => {
         break;
       case 'getContractMetadata':
         apiPath = 'getContractMetadata';
+        break;
+      case 'getNFTMetadata':
+        apiPath = 'getNFTMetadata';
         break;
       default:
         apiPath = endpoint;

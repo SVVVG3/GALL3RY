@@ -94,9 +94,9 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     }
 
     // Construct the URL with query parameters for the v2 API format
-    let url = `${API_BASE_URL}?chain=${chainValue}&endpoint=getNFTsForOwner&owner=${normalizedAddress}`;
+    let url = `${API_BASE_URL}?chain=${chainValue}&endpoint=getNFTs&owner=${normalizedAddress}`;
     
-    // Add parameters with correct names for v2 API
+    // Add parameters with correct names for v2 API - EXACTLY as specified in Alchemy docs
     if (includeMetadata) {
       url += `&withMetadata=true`;
     }

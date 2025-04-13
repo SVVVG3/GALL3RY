@@ -14,6 +14,24 @@ let servicesInitialized = false;
 let alchemyService = null;
 let zapperService = null;
 
+// Add utility function to retry imports with exponential backoff
+const retryImport = async (importFn, maxRetries = 3) => {
+  let lastError;
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Wait with exponential backoff before retrying
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, Math.pow(2, i) * 100));
+      }
+      return await importFn();
+    } catch (error) {
+      console.warn(`Import attempt ${i + 1} failed:`, error);
+      lastError = error;
+    }
+  }
+  throw lastError;
+};
+
 // Dynamic service loading function - move outside of component to prevent re-creation
 const loadServices = async () => {
   // If services are already loaded, return them
@@ -32,27 +50,47 @@ const loadServices = async () => {
     
     // Import services dynamically to avoid circular dependencies
     try {
+      // Use retry pattern for more reliable imports
       // Import functions directly instead of the default export
-      const alchemyModule = await import('../services/alchemy');
+      const alchemyModule = await retryImport(() => import('../services/alchemy'));
       
-      // Check if we have individual functions or just the default export
-      if (alchemyModule.fetchNFTsForAddress && alchemyModule.batchFetchNFTs) {
-        alchemyService = {
-          fetchNFTsForAddress: alchemyModule.fetchNFTsForAddress,
-          batchFetchNFTs: alchemyModule.batchFetchNFTs
-        };
-      } else if (alchemyModule.default) {
+      // Check if we have the default export (preferred method)
+      if (alchemyModule.default && 
+         typeof alchemyModule.default.fetchNFTsForAddress === 'function' && 
+         typeof alchemyModule.default.batchFetchNFTs === 'function') {
+        
         alchemyService = alchemyModule.default;
+        console.log('Successfully loaded Alchemy service via default export');
+      } 
+      // Check if we have individual exports as fallback
+      else if (typeof alchemyModule.fetchNFTsForAddress === 'function' || 
+              typeof alchemyModule.batchFetchNFTs === 'function') {
+        
+        // Create a service object with available functions
+        alchemyService = {};
+        
+        if (typeof alchemyModule.fetchNFTsForAddress === 'function') {
+          alchemyService.fetchNFTsForAddress = alchemyModule.fetchNFTsForAddress;
+        }
+        
+        if (typeof alchemyModule.batchFetchNFTs === 'function') {
+          alchemyService.batchFetchNFTs = alchemyModule.batchFetchNFTs;
+        }
+        
+        console.log('Successfully loaded Alchemy service via named exports');
       } else {
         throw new Error('Alchemy module has invalid structure');
       }
       
       // Validate alchemy service by checking required methods
-      if (!alchemyService || typeof alchemyService.fetchNFTsForAddress !== 'function' || typeof alchemyService.batchFetchNFTs !== 'function') {
+      if (!alchemyService || 
+         typeof alchemyService.fetchNFTsForAddress !== 'function' || 
+         typeof alchemyService.batchFetchNFTs !== 'function') {
         throw new Error('Alchemy service module is missing required methods');
       }
       
-      console.log('Successfully loaded Alchemy service:', alchemyService);
+      console.log('Successfully loaded Alchemy service:', 
+        Object.keys(alchemyService).join(', '));
     } catch (alchemyError) {
       console.error('Failed to load Alchemy service:', alchemyError);
       alchemyService = null;
