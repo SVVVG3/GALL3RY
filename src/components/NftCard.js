@@ -644,77 +644,81 @@ const NftCard = ({
   const estimatedValue = formatEstimatedValue(valueData);
 
   return (
-    <CardContainer $disabled={disabled}>
-      <div onClick={handleCardClick}>
-        <ImageContainer>
-          {!imageLoaded && !imageError && <CardLoadingAnimation />}
-          
-          {imageUrl && (
-            <CardImage
-              src={imageUrl}
-              alt={name || 'NFT'}
-              onLoad={() => setImageLoaded(true)}
-              onError={handleImageError}
-              className={imageLoaded ? 'loaded' : ''}
-            />
-          )}
-          
-          {imageError && (
-            <FallbackImage>
-              <CollectionInitial>{getCollection()?.name?.[0] || '?'}</CollectionInitial>
-              <TokenIdDisplay>#{getTokenId()}</TokenIdDisplay>
-            </FallbackImage>
-          )}
-          
-          {showLikeButton && onLike && (
-            <LikeButton onClick={handleLikeClick}>
-              <FaHeart color={nft.isLiked ? '#ff4757' : '#fff'} />
-            </LikeButton>
-          )}
-        </ImageContainer>
-
-        <CardDetails>
-          <CardInfo>
-            <CardName>{getName()}</CardName>
-            {showCollectionName && (
-              <CollectionName>{getCollection()?.name || 'Unknown Collection'}</CollectionName>
-            )}
-          </CardInfo>
-          
-          <CardMeta>
-            <PriceSection>
+    <CardContainer 
+      onClick={handleCardClick} 
+      className={`nft-card ${disabled ? 'disabled' : ''}`}
+      disabled={disabled}
+    >
+      <ImageContainer>
+        {showLikeButton && (
+          <LikeButton 
+            onClick={handleLikeClick}
+            className="like-button"
+            liked={nft.isLiked}
+          >
+            <FaHeart />
+          </LikeButton>
+        )}
+        
+        {imageLoadingState}
+        
+        <NFTImage 
+          src={imageUrl} 
+          alt={name} 
+          onLoad={() => setImageLoaded(true)} 
+          onError={handleImageError}
+          className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
+        />
+      </ImageContainer>
+      
+      <CardContent>
+        <CardTitle title={name}>{name}</CardTitle>
+        
+        {showCollectionName && collection && (
+          <CollectionName>{collection}</CollectionName>
+        )}
+        
+        <CardFooter>
+          <PriceContainer>
+            {getValue() > 0 ? (
               <PriceDisplay 
-                amount={estimatedValue} 
-                currency="USD" 
-                precision={2}
+                label="Est. Value"
+                amount={getValue()}
+                currency="USD"
               />
-            </PriceSection>
-            
-            <HoldersButton onClick={handleHoldersClick}>
+            ) : showLastPrice && getPriceInfo() ? (
+              <PriceDisplay 
+                label="Last Price"
+                amount={getPriceInfo().amount}
+                currency={getPriceInfo().currency}
+              />
+            ) : (
+              <PriceDisplay 
+                label="Floor Price"
+                amount={getFloorPrice()}
+                currency="ETH"
+              />
+            )}
+          </PriceContainer>
+          
+          {hasCollectionAddress && (
+            <HoldersButton 
+              onClick={handleHoldersClick}
+              className="holders-button"
+              title="View Collection Holders"
+            >
               <FaUsers />
             </HoldersButton>
-          </CardMeta>
-        </CardDetails>
-      </div>
+          )}
+        </CardFooter>
+      </CardContent>
       
       {showHolders && (
-        currentContractAddress ? (
-          <CollectionHoldersModal
-            collectionAddress={currentContractAddress}
-            network={currentNetwork}
-            tokenId={tokenId}
-            userFid={null}
-            onClose={handleCloseModal}
-          />
-        ) : (
-          <div className="modal error-modal">
-            <div className="modal-content">
-              <h3>Error</h3>
-              <p>Could not extract a valid contract address for this NFT.</p>
-              <button onClick={handleCloseModal}>Close</button>
-            </div>
-          </div>
-        )
+        <CollectionHoldersModal 
+          collectionAddress={currentContractAddress}
+          userFid={userFid}
+          onClose={handleCloseModal}
+        />
       )}
     </CardContainer>
   );
@@ -860,6 +864,29 @@ const HoldersButton = styled.button`
     transform: scale(1.1);
     color: #4CAF50;
   }
+`;
+
+const CardContent = styled.div`
+  padding: 1rem;
+`;
+
+const CardTitle = styled.h3`
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const CardFooter = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const PriceContainer = styled.div`
+  font-size: 0.9rem;
 `;
 
 export default NftCard; 

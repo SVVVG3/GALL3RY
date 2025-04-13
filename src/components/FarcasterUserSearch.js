@@ -792,13 +792,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         {/* Display user profile */}
         {userProfile && (
           <div className="user-profile">
-            <div className="profile-header">
+            <div className="profile-section">
               <div className="profile-image">
-                {userProfile.metadata && userProfile.metadata.imageUrl ? (
-                  <img 
-                    src={userProfile.metadata.imageUrl} 
+                {userProfile.metadata?.imageUrl ? (
+                  <img
+                    src={userProfile.metadata.imageUrl}
                     alt={`${userProfile.username}'s profile`}
                     onError={(e) => {
+                      console.log('Profile image failed to load:', e);
                       e.target.onerror = null;
                       e.target.src = 'https://via.placeholder.com/100?text=FC';
                     }}
@@ -810,11 +811,21 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 )}
               </div>
               <div className="profile-info">
-                <h3>{userProfile.metadata?.displayName || userProfile.username}</h3>
-                <p className="username">@{userProfile.username}</p>
-                {userProfile.fid && (
-                  <p className="fid">FID: {userProfile.fid}</p>
-                )}
+                <div className="profile-header">
+                  <h3>{userProfile.metadata?.displayName || userProfile.username}</h3>
+                  <a 
+                    href={`https://warpcast.com/${userProfile.username}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="username-link"
+                  >
+                    @{userProfile.username}
+                  </a>
+                  {userProfile.fid && (
+                    <span className="fid-badge">FID: {userProfile.fid}</span>
+                  )}
+                </div>
+                
                 {userProfile.metadata?.description && (
                   <p className="bio">{userProfile.metadata.description}</p>
                 )}
@@ -848,14 +859,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               <div className="nft-controls">
                 <div className="sort-controls">
                   <label>Sort by:</label>
-                  <select 
-                    value={sortMethod} 
-                    onChange={(e) => handleSortChange(e.target.value)}
-                  >
-                    <option value="value">Estimated Value</option>
-                    <option value="recent">Recently Acquired</option>
-                    <option value="collection">Collection</option>
-                  </select>
+                  <div className="sort-buttons">
+                    <button 
+                      className={`sort-button ${sortMethod === 'value' ? 'active' : ''}`}
+                      onClick={() => handleSortChange('value')}
+                    >
+                      Estimated Value
+                    </button>
+                    <button 
+                      className={`sort-button ${sortMethod === 'recent' ? 'active' : ''}`}
+                      onClick={() => handleSortChange('recent')}
+                    >
+                      Recently Acquired
+                    </button>
+                    <button 
+                      className={`sort-button ${sortMethod === 'collection' ? 'active' : ''}`}
+                      onClick={() => handleSortChange('collection')}
+                    >
+                      Collection
+                    </button>
+                  </div>
                 </div>
                 
                 <div className="filter-controls">
