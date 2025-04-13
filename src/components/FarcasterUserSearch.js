@@ -272,8 +272,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const fetchUserNfts = async (username, profile) => {
     try {
       setIsLoadingNfts(true);
-      setUserNfts([]);
       setFetchNftsError(null);
+      // Don't reset the NFTs array here - it's causing the flickering empty state
+      // setUserNfts([]);
 
       // Extract ETH addresses from the profile
       const addresses = extractWalletAddresses(profile);
@@ -319,7 +320,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           console.warn(`Filtered out ${(batchResults.nfts?.length || 0) - validNfts.length} invalid NFTs`);
         }
         
-        setUserNfts(validNfts);
+        // Only update state if we have valid NFTs to avoid flickering
+        if (validNfts.length > 0) {
+          setUserNfts(validNfts);
+          console.log(`Updated state with ${validNfts.length} NFTs`);
+        } else if (batchResults.nfts?.length === 0) {
+          // Only set empty array if we actually got zero NFTs from API
+          setUserNfts([]);
+        }
+        
         setHasMoreNfts(!!batchResults.pageKey);
         setEndCursor(batchResults.pageKey || null);
         
@@ -334,7 +343,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     } catch (error) {
       console.error('Error fetching user NFTs:', error);
       setFetchNftsError(`Failed to fetch NFTs: ${error.message}`);
-      setUserNfts([]);
+      // Don't reset NFTs array on error - this preserves previously loaded NFTs
+      // setUserNfts([]);
       setHasMoreNfts(false);
     } finally {
       setIsLoadingNfts(false);
