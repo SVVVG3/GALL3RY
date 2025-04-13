@@ -9,35 +9,45 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   const [error, setError] = useState(null);
 
   // Debug props
-  console.log("CollectionHoldersModal mounted with:", { collectionAddress, userFid });
+  console.log("🚀 CollectionHoldersModal MOUNTED with:", { collectionAddress, userFid });
+  
+  // Log when the component renders
+  console.log("🚀 CollectionHoldersModal RENDERING");
 
   useEffect(() => {
-    console.log("CollectionHoldersModal useEffect running with:", { collectionAddress, userFid });
+    // Add a log to console to help debug
+    console.log("🚀 CollectionHoldersModal useEffect RUNNING with:", { 
+      collectionAddress, 
+      userFid,
+      isAddressValid: !!collectionAddress
+    });
+    
     if (collectionAddress) {
       try {
         // Ensure collection address is a string and clean it
         const cleanAddress = collectionAddress.toString().toLowerCase().trim();
-        console.log("Fetching holders with cleaned address:", cleanAddress);
+        console.log("🚀 Fetching holders with cleaned address:", cleanAddress);
         
         // Check if we already have the data for this collection
         if (!collectionHolders[cleanAddress]) {
+          console.log("🚀 No cached data found, fetching from API");
           fetchCollectionHolders(cleanAddress)
             .then(result => {
-              console.log("Fetch collection holders result:", result);
+              console.log("🚀 Fetch collection holders result:", result);
             })
             .catch(err => {
-              console.error("Error fetching collection holders:", err);
+              console.error("❌ Error fetching collection holders:", err);
               setError(err.message || "Failed to fetch collection holders");
             });
         } else {
-          console.log("Using cached collection holders data");
+          console.log("🚀 Using cached collection holders data:", collectionHolders[cleanAddress]);
         }
       } catch (err) {
-        console.error("Error in fetchCollectionHolders:", err);
+        console.error("❌ Error in fetchCollectionHolders:", err);
         setError(err.message || "Failed to fetch collection holders");
       }
     } else {
-      console.error("Missing required props:", { collectionAddress });
+      console.error("❌ Missing required props:", { collectionAddress });
       setError("Missing collection address");
     }
   }, [collectionAddress, fetchCollectionHolders, collectionHolders]);
@@ -79,7 +89,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 collection-holders-modal">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] collection-holders-modal" style={{ zIndex: 9999 }}>
       <div className="bg-[#1c1c1c] rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-white">Collection Holders</h2>
