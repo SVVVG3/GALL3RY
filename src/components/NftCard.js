@@ -444,7 +444,13 @@ const NftCard = ({
     if (contractAddress) {
       setShowHolders(true);
       
-      analytics.track('NFT Holders Viewed', {
+      // Track event with a safer approach - remove analytics reference if it's causing circular dependency
+      // analytics.track('NFT Holders Viewed', {
+      //   collectionAddress: contractAddress,
+      //   network: currentNetwork
+      // });
+      // Use console.log instead temporarily
+      console.log('NFT Holders viewed:', {
         collectionAddress: contractAddress,
         network: currentNetwork
       });
@@ -470,8 +476,12 @@ const NftCard = ({
       onLike(nft);
     }
     
-    // Track the like action
-    analytics.track('NFT Liked', {
+    // Track the like action - replaced with console.log to avoid circular dependency
+    // analytics.track('NFT Liked', {
+    //   nftId: nft.id,
+    //   collection: collection
+    // });
+    console.log('NFT Liked:', {
       nftId: nft.id,
       collection: collection
     });
