@@ -5,7 +5,6 @@ import NFTImage from './NFTImage';
 import styled from 'styled-components';
 import { FaEthereum, FaUsers } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
-import { AiOutlineHeart, AiFillHeart } from 'react-icons/ai';
 import { useNFT } from '../contexts/NFTContext';
 import './NftCard.css';
 import CardLoadingAnimation from './CardLoadingAnimation';
@@ -16,7 +15,13 @@ import analytics from '../utils/analytics';
 /**
  * NftCard component for displaying a single NFT
  */
-const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabled = false, onClick }) => {
+const NftCard = ({ 
+  nft, 
+  onClick, 
+  disabled, 
+  showLastPrice = false, 
+  showCollectionName = true,
+}) => {
   // Early return with a simpler placeholder if nft is null or undefined
   if (!nft) {
     console.warn('Attempted to render NftCard with null or undefined nft object');
@@ -36,7 +41,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
     );
   }
 
-  const { likedNFTs, toggleLike, userFid } = useNFT();
+  const { userFid } = useNFT();
   const navigate = useNavigate();
   const [showHolders, setShowHolders] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -45,11 +50,6 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
   
-  // Fix: Add defensive check for likedNFTs before using .some()
-  const isLiked = Array.isArray(likedNFTs) && likedNFTs.some(
-    (likedNft) => likedNft.id === nft?.id && likedNft.contractAddress === nft?.contractAddress
-  );
-
   // Card loading skeleton shown until image is loaded
   const imageLoadingState = !imageLoaded && (
     <div className="nft-image-loading">
@@ -58,11 +58,8 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
   );
 
   const handleCardClick = (e) => {
-    // Don't navigate if clicking on the like or holders button
-    if (
-      e.target.closest('.like-button') ||
-      e.target.closest('.holders-button')
-    ) {
+    // Don't navigate if clicking on holders button
+    if (e.target.closest('.holders-button')) {
       return;
     }
 
@@ -79,15 +76,6 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
     analytics.track('NFT Holders Viewed', {
       collectionAddress: contractAddress
     });
-  };
-  
-  const handleLikeClick = (e) => {
-    e.stopPropagation();
-    
-    // Use toggleLike from context directly
-    if (typeof toggleLike === 'function' && nft) {
-      toggleLike(nft);
-    }
   };
   
   const handleCloseModal = () => {
@@ -183,6 +171,8 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       id: nft.id,
       collection: nft.collection?.name,
       estimatedValue: nft.estimatedValue,
+      balanceUSD: nft.balanceUSD,
+      valueUsd: nft.valueUsd
     });
     
     // Use a consistent ETH to USD conversion factor
@@ -240,8 +230,17 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
         };
       }
     }
+
+    // 4. Check balanceUSD which is commonly returned in portfolio endpoints
+    if (nft.balanceUSD !== undefined && nft.balanceUSD !== null) {
+      return {
+        value: nft.balanceUSD,
+        symbol: 'USD',
+        isUsd: true
+      };
+    }
     
-    // 4. Check collection floor price in USD
+    // 5. Check collection floor price in USD
     if (nft.collection?.floorPrice?.valueUsd !== undefined && 
         nft.collection.floorPrice.valueUsd !== null) {
       return {
@@ -251,7 +250,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       };
     }
     
-    // 5. valueEth (converted to USD)
+    // 6. valueEth (converted to USD)
     if (nft.valueEth !== undefined && nft.valueEth !== null) {
       return {
         value: nft.valueEth * ETH_USD_ESTIMATE,
@@ -262,7 +261,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       };
     }
     
-    // 6. Estimated value with denomination
+    // 7. Estimated value with denomination
     if (nft.estimatedValue?.valueWithDenomination !== undefined && 
         nft.estimatedValue.valueWithDenomination !== null) {
       const denomination = nft.estimatedValue.denomination?.symbol || 'ETH';
@@ -283,7 +282,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       }
     }
     
-    // 7. Legacy estimated value format
+    // 8. Legacy estimated value format
     if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
       const symbol = nft.estimatedValue.token?.symbol || 'ETH';
       if (symbol === 'ETH') {
@@ -303,7 +302,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       }
     }
     
-    // 8. Direct estimatedValue as a number (assume ETH)
+    // 9. Direct estimatedValue as a number (assume ETH)
     if (typeof nft.estimatedValue === 'number' && !isNaN(nft.estimatedValue)) {
       return {
         value: nft.estimatedValue * ETH_USD_ESTIMATE,
@@ -314,7 +313,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       };
     }
     
-    // 9. Collection floor price 
+    // 10. Collection floor price 
     if (nft.collection?.floorPrice !== undefined) {
       if (typeof nft.collection.floorPrice === 'number') {
         return {
@@ -344,7 +343,7 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
       }
     }
     
-    // 10. Legacy collection floor price
+    // 11. Legacy collection floor price
     if (nft.collection?.floorPriceEth !== undefined && nft.collection.floorPriceEth !== null) {
       return {
         value: nft.collection.floorPriceEth * ETH_USD_ESTIMATE,
@@ -498,14 +497,6 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
           className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
           onLoad={() => setImageLoaded(true)}
         />
-        
-        <button
-          className="like-button"
-          onClick={handleLikeClick}
-          aria-label={isLiked ? "Unlike NFT" : "Like NFT"}
-        >
-          {isLiked ? <AiFillHeart color="red" /> : <AiOutlineHeart />}
-        </button>
       </div>
 
       <div className="nft-details">
@@ -527,24 +518,27 @@ const NftCard = ({ nft, showCollectionName = true, showLastPrice = false, disabl
             ) : (
               <PriceDisplay 
                 label="Est. Value" 
-                amount={nft.estimatedValue} 
-                currency="USD"
+                amount={valueData.value} 
+                currency={valueData.symbol}
                 precision={2} 
+                isUsd={valueData.isUsd}
               />
             )}
           </div>
           
-          <button
-            className="holders-button"
-            onClick={handleHoldersClick}
-            aria-label="View collection holders"
-          >
-            <FaUsers />
-          </button>
+          {isAuthenticated && profile?.fid && contractAddress && (
+            <button
+              className="holders-button"
+              onClick={handleHoldersClick}
+              aria-label="View collection holders"
+            >
+              <FaUsers />
+            </button>
+          )}
         </div>
       </div>
 
-      {showHolders && (
+      {showHolders && contractAddress && (
         <CollectionHoldersModal
           collectionAddress={contractAddress}
           userFid={profile?.fid}

@@ -309,7 +309,8 @@ export const NFTProvider = ({ children }) => {
         limit: options.batchSize || PAGE_SIZE,
         cursor: isLoadingMore ? endCursor : null,
         prioritizeSpeed: isLoadingMore ? false : prioritizeSpeed, // Always use complete mode for loading more
-        includeValue: true,
+        includeValue: options.includeValue !== false, // Always include values unless explicitly disabled
+        includeBalanceUSD: options.includeBalanceUSD !== false, // Always include balanceUSD unless explicitly disabled
         includeMetadata: true,
         bypassHidden: true,
         bypassCache: bypassCache || false,
@@ -353,6 +354,17 @@ export const NFTProvider = ({ children }) => {
       // Log full pagination info if available
       if (result?.pageInfo) {
         console.log('Full pagination info:', result.pageInfo);
+      }
+      
+      // Log sample NFT data to debug values
+      if (nftsData.length > 0) {
+        console.log('Sample NFT Value Data:', {
+          name: nftsData[0].name,
+          collection: nftsData[0].collection?.name,
+          estimatedValue: nftsData[0].estimatedValue,
+          balanceUSD: nftsData[0].balanceUSD,
+          valueUsd: nftsData[0].valueUsd
+        });
       }
       
       if (isLoadingMore) {
@@ -411,7 +423,7 @@ export const NFTProvider = ({ children }) => {
       setLoadingMore(false);
       setIsRefreshing(false);
     }
-  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, walletLoadingStatus, PAGE_SIZE]);
+  }, [wallets, selectedWallets, endCursor, getCachedNFTs, updateCache, prioritizeSpeed, walletLoadingStatus, PAGE_SIZE, updateFiltersFromNFTs]);
 
   // Extract filter data from NFTs
   const updateFiltersFromNFTs = useCallback((nftsData) => {

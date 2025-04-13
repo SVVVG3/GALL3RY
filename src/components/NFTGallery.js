@@ -43,7 +43,11 @@ const NFTGallery = () => {
   // Initial load of NFTs when wallets are connected
   useEffect(() => {
     if (connectedWallets && connectedWallets.length > 0 && initialLoad) {
-      fetchNFTs();
+      // Make sure to set includeValue to true to fetch estimated values
+      fetchNFTs({
+        includeValue: true,
+        includeBalanceUSD: true
+      });
       setInitialLoad(false);
     }
   }, [connectedWallets, fetchNFTs, initialLoad]);
@@ -147,7 +151,9 @@ const NFTGallery = () => {
       fetchNFTs({
         loadMore: true,
         batchSize: 24, // Exactly match Zapper's default page size
-        bypassCache: true // Ensure we're getting fresh data
+        bypassCache: true, // Ensure we're getting fresh data
+        includeValue: true,
+        includeBalanceUSD: true
       });
     }
   };

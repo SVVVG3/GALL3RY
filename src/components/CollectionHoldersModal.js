@@ -53,8 +53,26 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
   }, [collectionAddress, fetchCollectionHolders, collectionHolders]);
 
   // Get the holders for this collection
-  const holders = collectionHolders[collectionAddress?.toLowerCase()] || [];
-  console.log("Holders for collection:", { collectionAddress, holdersCount: holders.length, holders });
+  const allHolders = collectionHolders[collectionAddress?.toLowerCase()] || [];
+  
+  // Filter holders to show:
+  // 1. The current user (if they hold this NFT)
+  // 2. Users that the current user follows
+  const filteredHolders = allHolders.filter(holder => {
+    // Include the current user
+    if (userFid && holder.fid === userFid) {
+      return true;
+    }
+    
+    // Include users that the current user follows
+    return holder.relationship === 'following' || holder.relationship === 'mutual';
+  });
+  
+  console.log("Filtered holders for collection:", { 
+    collectionAddress, 
+    totalHolders: allHolders.length, 
+    filteredHolders: filteredHolders.length 
+  });
 
   // Get relationship badge styles and text
   const getRelationshipBadge = (relationship) => {
@@ -92,7 +110,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] collection-holders-modal" style={{ zIndex: 9999 }}>
       <div className="bg-[#1c1c1c] rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Collection Holders</h2>
+          <h2 className="text-2xl font-bold text-white">Collection Holders You Follow</h2>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-white transition-colors"
@@ -109,9 +127,9 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           <div className="flex justify-center items-center py-8">
             <LoadingSpinner size="small" />
           </div>
-        ) : holders.length > 0 ? (
+        ) : filteredHolders.length > 0 ? (
           <div className="space-y-4">
-            {holders.map(holder => (
+            {filteredHolders.map(holder => (
               <Link
                 to={`/user/${holder.username}`}
                 key={holder.fid}
@@ -129,7 +147,11 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
                 <div className="flex-1">
                   <div className="font-medium text-white flex items-center">
                     {holder.username}
-                    {getRelationshipBadge(holder.relationship)}
+                    {userFid === holder.fid ? (
+                      <span className="holder-badge badge-self">You</span>
+                    ) : (
+                      getRelationshipBadge(holder.relationship)
+                    )}
                   </div>
                   {holder.displayName && (
                     <div className="text-sm text-gray-400">{holder.displayName}</div>
@@ -148,7 +170,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
-            No Farcaster users found holding NFTs from this collection
+            None of the people you follow own NFTs from this collection
           </div>
         )}
       </div>

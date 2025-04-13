@@ -606,10 +606,12 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
                 }
               }
 
-              # Value and pricing information
+              # Value and pricing information - explicitly include all value fields
               estimatedValue {
                 valueUsd
                 valueWithDenomination
+                amount
+                currency
                 denomination {
                   symbol
                   network
@@ -725,10 +727,19 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
           thumbnailUrl = item.collection.medias.logo.thumbnail;
         }
         
-        // Get value information
+        // Get value information - extract all possible value formats
         const valueUsd = item.estimatedValue?.valueUsd || 0;
         const valueEth = item.estimatedValue?.valueWithDenomination || 0;
         const valueCurrency = item.estimatedValue?.denomination?.symbol || 'ETH';
+        
+        // Extract any new format estimatedValue properties
+        const estimatedValue = {
+          valueUsd: valueUsd,
+          valueWithDenomination: valueEth,
+          amount: item.estimatedValue?.amount || 0,
+          currency: item.estimatedValue?.currency || 'ETH',
+          denomination: item.estimatedValue?.denomination || { symbol: 'ETH' }
+        };
         
         // Get last sale information if available
         const lastSaleUsd = item.lastSale?.valueUsd || 0;
@@ -773,6 +784,7 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
           valueUsd,
           valueEth,
           valueCurrency,
+          estimatedValue, // Added explicit estimatedValue object
           lastSaleUsd,
           lastSaleValue,
           lastSaleCurrency,
@@ -788,6 +800,17 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
       
       // Enhanced logging for pagination debugging
       console.log(`Page Results: items=${processedNfts.length}, hasMore=${pageInfo.hasNextPage}, endCursor=${pageInfo.endCursor || 'null'}`);
+      
+      // Log value data from a sample NFT to debug
+      if (processedNfts.length > 0) {
+        console.log('Sample NFT Value Data:', {
+          name: processedNfts[0].name,
+          collection: processedNfts[0].collection?.name,
+          valueUsd: processedNfts[0].valueUsd,
+          estimatedValue: processedNfts[0].estimatedValue,
+          balanceUSD: processedNfts[0].balanceUSD
+        });
+      }
       
       const result = {
         // Provide both formats for backward compatibility
