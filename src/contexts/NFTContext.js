@@ -32,6 +32,7 @@ export const NFTProvider = ({ children }) => {
   const [prioritizeSpeed, setPrioritizeSpeed] = useState(true);
   const [page, setPage] = useState(1);
   const [collectionHolders, setCollectionHolders] = useState({});
+  const [loadingCollectionHolders, setLoadingCollectionHolders] = useState(false);
   const [wallets, setWallets] = useState([]);
   const [isCached, setIsCached] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
@@ -547,19 +548,45 @@ export const NFTProvider = ({ children }) => {
   }, []);
 
   const fetchCollectionHolders = useCallback(async (collectionAddress, chain = 'ethereum') => {
+    if (!collectionAddress) {
+      throw new Error('Collection address is required');
+    }
+    
+    // Normalize the collection address
+    const normalizedAddress = collectionAddress.toString().toLowerCase().trim();
+    console.log(`Fetching holders for collection: ${normalizedAddress} on chain: ${chain}`);
+    
+    // Set loading state
+    setLoadingCollectionHolders(true);
+    
     try {
+      // Define the GraphQL query based on the Zapper API docs
       const query = `
         query GetCollectionHolders($collectionAddress: Address!, $network: Network!) {
           nftCollection(address: $collectionAddress, network: $network) {
-                id
-                name
+            id
+            name
+            address
+            network
+            supply
+            holdersCount
             holders {
               address
-              farcasterUser {
-                fid
-                username
-                displayName
-                pfpUrl
+              holdCount
+              holdTotalCount
+              account {
+                address
+                displayName {
+                  value
+                }
+                farcasterProfile {
+                  fid
+                  username
+                  displayName
+                  pfpUrl
+                  followerCount
+                  followingCount
+                }
               }
             }
           }
@@ -567,33 +594,69 @@ export const NFTProvider = ({ children }) => {
       `;
 
       const variables = {
-        collectionAddress,
-        network: chain
+        collectionAddress: normalizedAddress,
+        network: chain.toUpperCase()
       };
+      
+      console.log('Sending GraphQL query for collection holders:', variables);
       
       const response = await axios.post(ZAPPER_PROXY_URL, {
         query,
         variables
       });
       
+      // Check for GraphQL errors
       if (response.data.errors) {
+        console.error('GraphQL errors:', response.data.errors);
         throw new Error(response.data.errors.map(e => e.message).join(', '));
       }
       
-      const holdersData = response.data.data?.nftCollection?.holders || [];
+      // Extract the collection data
+      const collectionData = response.data.data?.nftCollection;
       
-      return holdersData.map(holder => ({
-        address: holder.address,
-        farcasterUser: holder.farcasterUser ? {
-          fid: holder.farcasterUser.fid,
-          username: holder.farcasterUser.username,
-          displayName: holder.farcasterUser.displayName,
-          pfpUrl: holder.farcasterUser.pfpUrl
-        } : null
+      if (!collectionData) {
+        console.warn('No collection data found');
+        return [];
+      }
+      
+      console.log(`Found collection: ${collectionData.name} with ${collectionData.holders?.length || 0} holders`);
+      
+      // Extract and process holders data
+      const holdersData = collectionData.holders || [];
+      
+      // Process the holders to extract Farcaster user info
+      const processedHolders = holdersData
+        .filter(holder => holder.account?.farcasterProfile) // Only include holders with Farcaster profiles
+        .map(holder => ({
+          address: holder.address,
+          holdingCount: holder.holdCount || 1,
+          fid: holder.account.farcasterProfile?.fid,
+          username: holder.account.farcasterProfile?.username || 'unknown',
+          displayName: holder.account.farcasterProfile?.displayName,
+          imageUrl: holder.account.farcasterProfile?.pfpUrl,
+          followersCount: holder.account.farcasterProfile?.followerCount || 0,
+          followingCount: holder.account.farcasterProfile?.followingCount || 0,
+          // We can add relationship info later if needed
+          relationship: null
+        }))
+        .filter(holder => holder.fid); // Ensure we have a valid FID
+      
+      console.log(`Processed ${processedHolders.length} holders with Farcaster profiles`);
+      
+      // Update the collectionHolders state with this new data
+      setCollectionHolders(prev => ({
+        ...prev,
+        [normalizedAddress]: processedHolders
       }));
+      
+      // Return the processed holders for convenience
+      return processedHolders;
     } catch (error) {
       console.error('Error fetching collection holders:', error);
       throw error;
+    } finally {
+      // Clear loading state
+      setLoadingCollectionHolders(false);
     }
   }, []);
 
@@ -956,6 +1019,7 @@ export const NFTProvider = ({ children }) => {
     getSortedNFTs,
     collectionHolders,
     setCollectionHolders,
+    loadingCollectionHolders,
     resetFilters: () => {
       setSelectedChains(['all']);
       setSelectedWallets([]);

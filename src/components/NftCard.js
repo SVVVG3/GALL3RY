@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CollectionHoldersModal from './CollectionHoldersModal';
 import NFTImage from './NFTImage';
 import styled from 'styled-components';
-import { FaEthereum } from 'react-icons/fa';
+import { FaEthereum, FaUsers } from 'react-icons/fa';
 
 /**
  * NftCard component for displaying a single NFT
@@ -15,30 +15,39 @@ const NftCard = ({ nft, onClick }) => {
   // Add debugging
   console.log("NFT Card Auth State:", { isAuthenticated, profile, fid: profile?.fid });
   
-  const handleClick = () => {
+  const handleClick = (e) => {
+    // This is the click handler for the whole card
     console.log("NFT Card clicked, auth state:", { isAuthenticated, profile, fid: profile?.fid });
     
-    if (isAuthenticated && profile && profile.fid) {
-      console.log("Opening collection holders modal for collection address:", contractAddress);
+    // If this is coming from the holders button, don't propagate
+    if (e.currentTarget.classList.contains('holders-button')) {
+      e.stopPropagation();
       
-      // Make sure we have a collection address before trying to show the modal
-      if (contractAddress) {
-        // Add more debugging for the collection address
-        console.log("Collection address details:", {
-          address: contractAddress,
-          collection: nft.collection,
-          collectionId: nft.collection?.id
-        });
+      if (isAuthenticated && profile && profile.fid) {
+        console.log("Opening collection holders modal for collection address:", contractAddress);
         
-        setShowHolders(true);
-      } else {
-        console.error("Cannot open modal: No collection address available for this NFT");
-        // Could show a toast or alert here
-        if (onClick) {
-          onClick(nft);
+        // Make sure we have a collection address before trying to show the modal
+        if (contractAddress) {
+          // Add more debugging for the collection address
+          console.log("Collection address details:", {
+            address: contractAddress,
+            collection: nft.collection,
+            collectionId: nft.collection?.id
+          });
+          
+          setShowHolders(true);
+        } else {
+          console.error("Cannot open modal: No collection address available for this NFT");
         }
+      } else {
+        console.log("User not authenticated, cannot show holders");
+        // Could show a login prompt here
       }
-    } else if (onClick) {
+      return;
+    }
+    
+    // Otherwise handle regular card click
+    if (onClick) {
       onClick(nft);
     }
   };
@@ -434,13 +443,22 @@ const NftCard = ({ nft, onClick }) => {
   };
 
   return (
-    <CardContainer>
+    <CardContainer onClick={handleClick}>
       <ImageContainer>
         {imageUrl ? (
           <NFTImage src={imageUrl} alt={name} />
         ) : (
           <PlaceholderImage>No Image</PlaceholderImage>
         )}
+        
+        {/* Collection Holders Button */}
+        <HoldersButton 
+          className="holders-button"
+          onClick={handleClick}
+          title="View collection holders"
+        >
+          <FaUsers />
+        </HoldersButton>
       </ImageContainer>
       
       <CardContent>
@@ -453,6 +471,15 @@ const NftCard = ({ nft, onClick }) => {
           <span>{formatEstimatedValue(valueData)}</span>
         </EstimatedValue>
       </CardContent>
+
+      {/* Collection Holders Modal */}
+      {showHolders && (
+        <CollectionHoldersModal 
+          collectionAddress={contractAddress}
+          userFid={profile?.fid}
+          onClose={() => setShowHolders(false)}
+        />
+      )}
     </CardContainer>
   );
 };
@@ -530,6 +557,30 @@ const EstimatedValue = styled.div`
   color: #4caf50;
   font-weight: 600;
   font-size: 1rem;
+`;
+
+const HoldersButton = styled.button`
+  position: absolute;
+  bottom: 0.5rem;
+  right: 0.5rem;
+  background-color: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 50%;
+  width: 2.5rem;
+  height: 2.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+  z-index: 10;
+  
+  &:hover {
+    background-color: rgba(76, 175, 80, 0.8);
+    transform: scale(1.1);
+  }
 `;
 
 export default NftCard; 

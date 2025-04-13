@@ -5,7 +5,7 @@ import LoadingSpinner from './LoadingSpinner';
 import './CollectionHoldersModal.css';
 
 const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
-  const { loading, collectionHolders, fetchCollectionHolders } = useNFT();
+  const { loadingCollectionHolders, collectionHolders, fetchCollectionHolders } = useNFT();
   const [error, setError] = useState(null);
 
   // Debug props
@@ -13,35 +13,43 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
 
   useEffect(() => {
     console.log("CollectionHoldersModal useEffect running with:", { collectionAddress, userFid });
-    if (collectionAddress && userFid) {
+    if (collectionAddress) {
       try {
         // Ensure collection address is a string and clean it
         const cleanAddress = collectionAddress.toString().toLowerCase().trim();
         console.log("Fetching holders with cleaned address:", cleanAddress);
         
-        fetchCollectionHolders(cleanAddress, userFid)
-          .then(result => {
-            console.log("Fetch collection holders result:", result);
-          })
-          .catch(err => {
-            console.error("Error fetching collection holders:", err);
-            setError(err.message || "Failed to fetch collection holders");
-          });
+        // Check if we already have the data for this collection
+        if (!collectionHolders[cleanAddress]) {
+          fetchCollectionHolders(cleanAddress)
+            .then(result => {
+              console.log("Fetch collection holders result:", result);
+            })
+            .catch(err => {
+              console.error("Error fetching collection holders:", err);
+              setError(err.message || "Failed to fetch collection holders");
+            });
+        } else {
+          console.log("Using cached collection holders data");
+        }
       } catch (err) {
         console.error("Error in fetchCollectionHolders:", err);
         setError(err.message || "Failed to fetch collection holders");
       }
     } else {
-      console.error("Missing required props:", { collectionAddress, userFid });
-      setError("Missing collection address or user FID");
+      console.error("Missing required props:", { collectionAddress });
+      setError("Missing collection address");
     }
-  }, [collectionAddress, userFid, fetchCollectionHolders]);
+  }, [collectionAddress, fetchCollectionHolders, collectionHolders]);
 
-  const holders = collectionHolders[collectionAddress] || [];
+  // Get the holders for this collection
+  const holders = collectionHolders[collectionAddress?.toLowerCase()] || [];
   console.log("Holders for collection:", { collectionAddress, holdersCount: holders.length, holders });
 
   // Get relationship badge styles and text
   const getRelationshipBadge = (relationship) => {
+    if (!relationship) return null;
+    
     switch(relationship) {
       case 'following':
         return (
@@ -87,7 +95,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           <div className="text-center py-8 text-red-400">
             {error}
           </div>
-        ) : loading ? (
+        ) : loadingCollectionHolders ? (
           <div className="flex justify-center items-center py-8">
             <LoadingSpinner size="small" />
           </div>
@@ -130,7 +138,7 @@ const CollectionHoldersModal = ({ collectionAddress, userFid, onClose }) => {
           </div>
         ) : (
           <div className="text-center py-8 text-gray-400">
-            None of your connections hold NFTs from this collection
+            No Farcaster users found holding NFTs from this collection
           </div>
         )}
       </div>
