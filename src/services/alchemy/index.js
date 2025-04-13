@@ -8,7 +8,11 @@ import { CACHE_EXPIRATION_TIME } from '../../constants';
 
 // Constants
 // Use the API proxy endpoint instead of direct Alchemy API calls
-const API_BASE_URL = '/api/alchemy';
+// Use an absolute URL that works in both development and production
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://gall3ry.vercel.app/api/alchemy'
+  : '/api/alchemy';
+
 const CHAIN_ENDPOINTS = {
   eth: 'eth',
   base: 'base',
@@ -83,6 +87,7 @@ export const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) 
 
   try {
     console.log(`Fetching NFTs for ${normalizedAddress} on ${chain} from Alchemy`);
+    console.log(`Using API base URL: ${API_BASE_URL}`);
     
     // Get the appropriate chain value
     const chainValue = CHAIN_ENDPOINTS[chain];

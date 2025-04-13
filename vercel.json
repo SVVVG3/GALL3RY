@@ -8,6 +8,7 @@
     { "src": "/api/v2/graphql", "dest": "/api/v2/graphql.js" },
     { "src": "/v2/graphql", "dest": "/api/v2/graphql.js" },
     { "src": "/api/zapper", "dest": "/api/zapper.js" },
+    { "src": "/api/alchemy", "dest": "/api/alchemy.js" },
     { "src": "/api/farcaster-user", "dest": "/api/farcaster-user.js" },
     { "src": "/api/nfts", "dest": "/api/nfts.js" },
     { "src": "/(.*\\.(js|json|css|ico|png|jpg|svg))", "dest": "/$1" },
