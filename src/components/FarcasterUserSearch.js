@@ -37,7 +37,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   
   // Sorting state
-  const [sortMethod, setSortMethod] = useState('recent'); // Default sort by most recent
+  const [sortMethod, setSortMethod] = useState('value'); // Change default sort to value
+  const [sortOrder, setSortOrder] = useState('desc'); // Default to descending order (highest first)
   
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');

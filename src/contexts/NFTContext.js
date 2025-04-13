@@ -589,9 +589,29 @@ export const NFTProvider = ({ children }) => {
     // Pre-calculate all values before sorting to improve performance
     const valueLookup = new Map();
     
+    console.log("DEBUG: Value extraction starting...");
+    
+    // Log a few sample NFTs to debug the structure
+    if (nftsToSort.length > 0) {
+      console.log("DEBUG: Sample NFT structure:", JSON.stringify(nftsToSort[0], null, 2).substring(0, 500) + "...");
+    }
+    
     nftsToSort.forEach(nft => {
       const value = getEstimatedValue(nft);
-      valueLookup.set(nft.id || `${nft.collection?.address}-${nft.tokenId}`, value);
+      const nftId = nft.id || `${nft.collection?.address}-${nft.tokenId}`;
+      valueLookup.set(nftId, value);
+      
+      // Debug log for very high or zero values
+      if (value > 5000 || value === 0) {
+        console.log(`DEBUG: Unusual value for NFT ${nft.name || nft.tokenId}: $${value.toFixed(2)}`);
+        console.log(`DEBUG: Value sources:`, {
+          balanceUSD: nft.balanceUSD,
+          valueUsd: nft.valueUsd,
+          estimatedValueUsd: nft.estimatedValue?.valueUsd,
+          estimatedValueAmount: nft.estimatedValue?.amount,
+          estimatedValueCurrency: nft.estimatedValue?.currency,
+        });
+      }
     });
     
     // Log the top 5 NFTs by value to verify if values are calculated correctly
@@ -728,6 +748,8 @@ export const NFTProvider = ({ children }) => {
         includeValue: true,
         includeMetadata: true,
         usePortfolioV2: true, // Use the recommended portfolioV2 endpoint
+        useNftUsersTokens: true, // Explicitly use nftUsersTokens query for better data
+        includeBalanceUSD: true, // Make sure we get balance in USD for sorting
         maxRetries: 3
       };
       
@@ -742,6 +764,29 @@ export const NFTProvider = ({ children }) => {
       const cursorData = result?.cursor || null;
       
       console.log(`Fetched ${nftsData.length} NFTs for Farcaster user${hasMoreData ? ' (more available)' : ''}`);
+      
+      // Debug log some NFT values to verify data structure
+      if (nftsData.length > 0) {
+        console.log("DEBUG: Sample NFT data structure:", {
+          balanceUSD: nftsData[0].balanceUSD,
+          valueUsd: nftsData[0].valueUsd,
+          estimatedValue: nftsData[0].estimatedValue,
+        });
+        
+        // Log the top 5 NFTs by value
+        console.log("DEBUG: Top 5 NFTs by value:");
+        const sortedByValue = [...nftsData]
+          .sort((a, b) => {
+            const valueA = getEstimatedValue(a);
+            const valueB = getEstimatedValue(b);
+            return valueB - valueA;
+          })
+          .slice(0, 5);
+        
+        sortedByValue.forEach(nft => {
+          console.log(`${nft.name || nft.tokenId} (${nft.collection?.name || 'Unknown'}): $${getEstimatedValue(nft).toFixed(2)}`);
+        });
+      }
       
       if (loadMore) {
         // Append to existing NFTs

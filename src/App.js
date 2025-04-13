@@ -105,7 +105,7 @@ const NFTContent = () => {
   
   return (
     <div className="nft-container">
-      <h3>Search Farcaster users to explore their NFT collections</h3>
+      <h3 style={{ marginBottom: '1.5rem' }}>Search Farcaster users to explore their NFT collections</h3>
       <Suspense fallback={<div>Loading user search...</div>}>
         <FarcasterUserSearch />
       </Suspense>
@@ -161,12 +161,12 @@ function App() {
   const [appError, setAppError] = useState(null);
   const [isClient, setIsClient] = useState(false);
   
-  // Initialize app on mount
+  // Initialize app on mount - reduced timer for faster loading
   useEffect(() => {
     const timer = setTimeout(() => {
       setLoading(false);
       setIsClient(true);
-    }, 1000);
+    }, 100); // Reduced from 1000ms to 100ms
     
     return () => clearTimeout(timer);
   }, []);
