@@ -143,6 +143,11 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
   throw lastError;
 };
 
+// Define constants for API URLs
+const API_URL = process.env.REACT_APP_API_URL || '';
+const ZAPPER_ENDPOINT = `${window.location.origin}/api/zapper`;
+const FARCASTER_PROFILE_ENDPOINT = `${window.location.origin}/api/farcaster-profile`;
+
 /**
  * Get a Farcaster profile by username or FID
  * @param {string|number} usernameOrFid - Farcaster username or FID
@@ -159,136 +164,80 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // Determine if input is a FID (number) or username (string)
   const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
   
-  // For ENS names, we'll try both with and without .eth suffix as fallbacks
-  let isEnsName = false;
-  let alternativeUsername = null;
-  
-  if (!isFid && cleanInput.toLowerCase().endsWith('.eth')) {
-    isEnsName = true;
-    // Get the username without .eth
-    alternativeUsername = cleanInput.substring(0, cleanInput.length - 4);
-    console.log(`Input appears to be ENS name: ${cleanInput}, will also try: ${alternativeUsername}`);
-  }
-  
-  // Construct the query variables based on input type
-  const variables = isFid 
-    ? { fid: parseInt(cleanInput, 10) }
-    : { username: cleanInput };
-  
   console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   
-  // GraphQL query based on Zapper API documentation
-  const query = `
-    query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
-      farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
-        username
-        fid
-        metadata {
-          displayName
-          description
-          imageUrl
-          warpcast
-        }
-        custodyAddress
-        connectedAddresses
-      }
-    }
-  `;
-  
   try {
-    // Try Zapper API endpoints first
-    const endpoints = [
-      // First try our app's proxied endpoint
-      `${window.location.origin}/api/zapper`,
-      // Then try direct Zapper GraphQL endpoints
-      'https://api.zapper.xyz/v2/graphql',
-      'https://api.zapper.fi/v2/graphql',
-      'https://public.zapper.xyz/graphql'
-    ];
-    
-    let profileData = null;
-    let lastError = null;
-    
-    // Try each Zapper endpoint
-    for (const endpoint of endpoints) {
-      try {
-        console.log(`Trying endpoint: ${endpoint}`);
+    // First try the dedicated GET endpoint
+    try {
+      console.log(`Trying dedicated endpoint: ${FARCASTER_PROFILE_ENDPOINT}`);
+      
+      const params = isFid 
+        ? { fid: parseInt(cleanInput, 10) }
+        : { username: cleanInput };
         
-        const headers = {
+      const response = await axios.get(FARCASTER_PROFILE_ENDPOINT, { params });
+      
+      if (response.data) {
+        console.log('Found Farcaster profile via dedicated endpoint:', response.data);
+        return response.data;
+      }
+    } catch (dedicatedEndpointError) {
+      console.error('Dedicated endpoint failed:', dedicatedEndpointError.message);
+      // Continue to try the GraphQL endpoint
+    }
+    
+    // If dedicated endpoint fails, try the GraphQL endpoint
+    console.log(`Trying GraphQL endpoint: ${ZAPPER_ENDPOINT}`);
+    
+    // GraphQL query based on Zapper API documentation
+    const query = `
+      query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
+        farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
+          username
+          fid
+          metadata {
+            displayName
+            description
+            imageUrl
+            warpcast
+          }
+          custodyAddress
+          connectedAddresses
+        }
+      }
+    `;
+    
+    // Build variables based on input type
+    const variables = isFid 
+      ? { fid: parseInt(cleanInput, 10) }
+      : { username: cleanInput };
+    
+    const graphqlResponse = await axios.post(
+      ZAPPER_ENDPOINT,
+      { query, variables },
+      { 
+        headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json'
-        };
-        
-        // Add API key if available for direct Zapper endpoints
-        if (endpoint.includes('zapper.') && ZAPPER_API_KEY) {
-          headers['X-API-KEY'] = ZAPPER_API_KEY;
         }
-        
-        const response = await axios.post(
-          endpoint,
-          { query, variables },
-          { headers }
-        );
-        
-        // Check for GraphQL errors
-        if (response.data?.errors) {
-          console.error('GraphQL errors:', response.data.errors);
-          throw new Error(response.data.errors[0]?.message || 'GraphQL error');
-        }
-        
-        // Try to find profile data in various possible response formats
-        if (response.data?.data?.farcasterProfile) {
-          profileData = response.data.data.farcasterProfile;
-        } else if (response.data?.farcasterProfile) {
-          profileData = response.data.farcasterProfile;
-        }
-        
-        if (profileData) {
-          console.log('Found Farcaster profile via Zapper API:', profileData);
-          return profileData;
-        }
-        
-        console.log('No profile data found in the response');
-      } catch (error) {
-        console.error(`Error with Zapper endpoint ${endpoint}:`, error.message);
-        lastError = error;
       }
+    );
+    
+    // Check for GraphQL errors
+    if (graphqlResponse.data?.errors) {
+      console.error('GraphQL errors:', graphqlResponse.data.errors);
+      throw new Error(graphqlResponse.data.errors[0]?.message || 'GraphQL error');
     }
     
-    // If ENS name and all Zapper endpoints failed, try alternative username
-    if (isEnsName && alternativeUsername) {
-      console.log(`Trying alternative username (without .eth): ${alternativeUsername}`);
-      try {
-        return await getFarcasterProfile(alternativeUsername);
-      } catch (altError) {
-        console.error('Alternative username also failed:', altError.message);
-      }
-    }
+    // Find profile data in the response
+    const profileData = graphqlResponse.data?.data?.farcasterProfile;
     
-    // All Zapper endpoints failed, try our Neynar-based proxy as fallback
-    console.log('All Zapper endpoints failed, trying Neynar-based proxy endpoint as fallback');
-    
-    const proxyEndpoint = `${window.location.origin}/api/farcaster-profile`;
-    console.log(`Fetching profile via proxy endpoint: ${proxyEndpoint}`);
-    
-    const proxyResponse = await axios.get(proxyEndpoint, {
-      params: {
-        ...(isFid ? { fid: variables.fid } : { username: variables.username })
-      }
-    });
-    
-    if (proxyResponse.data && proxyResponse.data.success === false) {
-      throw new Error(proxyResponse.data.message || 'Failed to fetch profile via proxy');
-    }
-    
-    const proxyProfileData = proxyResponse.data?.profile || proxyResponse.data;
-    
-    if (!proxyProfileData) {
+    if (!profileData) {
       throw new Error(`Farcaster profile not found for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
     }
     
-    console.log('Found Farcaster profile via proxy:', proxyProfileData);
-    return proxyProfileData;
+    console.log('Found Farcaster profile via GraphQL endpoint:', profileData);
+    return profileData;
   } catch (error) {
     console.error('Error in getFarcasterProfile:', error);
     throw new Error(`Failed to find Farcaster profile for ${cleanInput}: ${error.message}`);

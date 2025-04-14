@@ -94,6 +94,113 @@ app.post('/zapper', async (req, res) => {
   }
 });
 
+// FARCASTER PROFILE API - Dedicated endpoint for Farcaster profile data
+app.get('/farcaster-profile', async (req, res) => {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+  // Zapper GraphQL API URL
+  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+
+  try {
+    // Get Zapper API key from environment variables
+    const apiKey = process.env.ZAPPER_API_KEY || '';
+    
+    if (!apiKey) {
+      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
+      return res.status(500).json({
+        error: 'API Configuration Error',
+        message: 'Zapper API key is missing. Please check server configuration.'
+      });
+    }
+
+    // Get username or FID from query parameters
+    const { username, fid } = req.query;
+    
+    if (!username && !fid) {
+      return res.status(400).json({
+        error: 'Invalid Request',
+        message: 'Either username or fid parameter is required'
+      });
+    }
+
+    console.log(`Farcaster profile request via dedicated endpoint for: ${username || fid}`);
+    
+    // Build the GraphQL query based on what was provided
+    const query = `
+      query GetFarcasterProfile(${fid ? '$fid: Int' : '$username: String'}) {
+        farcasterProfile(${fid ? 'fid: $fid' : 'username: $username'}) {
+          username
+          fid
+          metadata {
+            displayName
+            description
+            imageUrl
+            warpcast
+          }
+          custodyAddress
+          connectedAddresses
+        }
+      }
+    `;
+
+    // Build variables based on what was provided
+    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
+
+    // Set up headers with API key
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-zapper-api-key': apiKey,
+      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+    };
+    
+    // Make the GraphQL request to Zapper
+    const response = await axios({
+      method: 'post',
+      url: ZAPPER_API_URL,
+      headers: headers,
+      data: {
+        query,
+        variables
+      },
+      timeout: 10000 // 10 second timeout
+    });
+    
+    // Check for GraphQL errors
+    if (response.data?.errors) {
+      return res.status(400).json({
+        error: 'GraphQL Error',
+        message: response.data.errors[0]?.message || 'Unknown GraphQL error',
+        details: response.data.errors
+      });
+    }
+    
+    // Return the profile data
+    if (response.data?.data?.farcasterProfile) {
+      return res.status(200).json(response.data.data.farcasterProfile);
+    } else {
+      return res.status(404).json({
+        error: 'Profile Not Found',
+        message: `No Farcaster profile found for ${username || fid}`
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error fetching Farcaster profile:', error.message);
+    
+    // Return an appropriate error response
+    return res.status(error.response?.status || 500).json({
+      error: 'Error fetching Farcaster profile',
+      message: error.message,
+      details: error.response?.data
+    });
+  }
+});
+
 // ALCHEMY API - Used for all NFT data
 app.all('/alchemy', async (req, res) => {
   // CORS headers for local development
