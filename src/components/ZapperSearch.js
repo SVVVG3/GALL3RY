@@ -5,6 +5,7 @@ import { useInView } from 'react-intersection-observer';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { API_URL } from '../config';
+import alchemyService from '../services/alchemyService';
 
 const ZapperSearch = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -22,85 +23,37 @@ const ZapperSearch = () => {
     isError,
     error
   } = useInfiniteQuery({
-    queryKey: ['zapper', debouncedSearchTerm, selectedChain],
-    queryFn: async ({ pageParam = 1 }) => {
-      const response = await fetch(`${API_URL}/api/zapper`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          query: `
-            query GetNFTs($owners: [Address!]!, $first: Int) {
-              nftUsersTokens(
-                owners: $owners
-                first: $first
-                withOverrides: true
-              ) {
-                edges {
-                  node {
-                    id
-                    name
-                    tokenId
-                    description
-                    mediasV2 {
-                      ... on Image {
-                        url
-                      }
-                      ... on Animation {
-                        url
-                      }
-                    }
-                    collection {
-                      id
-                      name
-                      floorPriceEth
-                      floorPrice {
-                        valueUsd
-                      }
-                    }
-                    estimatedValue {
-                      valueUsd
-                    }
-                    estimatedValueEth
-                  }
-                }
-              }
-            }
-          `,
-          variables: {
-            owners: [debouncedSearchTerm],
-            first: 24
-          }
-        }),
-      });
+    queryKey: ['nfts', debouncedSearchTerm, selectedChain],
+    queryFn: async ({ pageParam = null }) => {
+      try {
+        // Use Alchemy API (via our service) to fetch NFTs
+        const network = selectedChain === 'all' ? 'ethereum' : selectedChain;
+        const result = await alchemyService.getNftsForOwner(debouncedSearchTerm, {
+          network,
+          pageKey: pageParam,
+          pageSize: 24
+        });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.errors?.[0]?.message || 'Failed to fetch data');
+        // Transform the data to match our component's expectations
+        return {
+          items: (result.ownedNfts || []).map(nft => ({
+            id: `${nft.contract.address}-${nft.tokenId}`,
+            name: nft.title || `#${nft.tokenId}`,
+            description: nft.description,
+            imageUrl: nft.media[0]?.gateway || nft.media[0]?.raw,
+            collection: nft.contract.name || 'Unknown Collection',
+            value: nft.price?.floorPrice ? (nft.price.floorPrice.amount * nft.price.floorPrice.ethUsd) : null,
+            valueEth: nft.price?.floorPrice?.amount
+          })),
+          nextPage: result.pageKey
+        };
+      } catch (err) {
+        console.error('Error fetching NFTs:', err);
+        throw new Error(err.message || 'Failed to fetch NFTs');
       }
-
-      const result = await response.json();
-      
-      if (result.errors) {
-        throw new Error(result.errors[0].message);
-      }
-
-      return {
-        items: result.data.nftUsersTokens.edges.map(edge => ({
-          id: edge.node.id,
-          name: edge.node.name,
-          description: edge.node.description,
-          imageUrl: edge.node.mediasV2[0]?.url,
-          collection: edge.node.collection.name,
-          value: edge.node.estimatedValue?.valueUsd,
-          valueEth: edge.node.estimatedValueEth
-        })),
-        nextPage: result.data.nftUsersTokens.edges.length === 24 ? pageParam + 1 : undefined
-      };
     },
     getNextPageParam: (lastPage) => lastPage.nextPage,
-    enabled: debouncedSearchTerm.length >= 3,
+    enabled: debouncedSearchTerm.length >= 42, // Only enable for Ethereum addresses (0x + 40 chars)
   });
 
   React.useEffect(() => {

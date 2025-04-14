@@ -1,75 +1,73 @@
 import axios from 'axios';
 
-// Server base URL
-const SERVER_URL = 'http://localhost:3001';
+// Get server URL from env vars or use a default
+const SERVER_URL = process.env.REACT_APP_API_URL || '';
 
 /**
- * Service for interacting with the Alchemy API
+ * Service for interacting with Alchemy NFT APIs
  */
 const alchemyService = {
-  apiKeys: {
-    ethereum: process.env.REACT_APP_ALCHEMY_ETH_API_KEY,
-    base: process.env.REACT_APP_ALCHEMY_BASE_API_KEY,
-  },
-  
   /**
-   * Get the base URL for a specific network
+   * Helper to get the proper Alchemy URL for a given network
    */
   getBaseUrl(network) {
     const networkMap = {
-      'ethereum': 'eth-mainnet',
-      'base': 'base-mainnet',
-      'ETHEREUM_MAINNET': 'eth-mainnet',
-      'BASE_MAINNET': 'base-mainnet',
+      ethereum: 'eth',
+      polygon: 'polygon',
+      optimism: 'opt',
+      arbitrum: 'arb',
+      base: 'base'
     };
     
-    const mappedNetwork = networkMap[network] || 'eth-mainnet';
-    return `https://${mappedNetwork}.g.alchemy.com/v2/${this.apiKeys[network.toLowerCase()] || this.apiKeys.ethereum}`;
+    const chainId = networkMap[network.toLowerCase()] || 'eth';
+    return `${SERVER_URL}/api/alchemy?chain=${chainId}`;
   },
   
   /**
-   * Get NFTs for a specific address on a network
+   * Get NFTs owned by an address
    */
   async getNftsForOwner(ownerAddress, options = {}) {
-    const { network = 'ethereum', pageKey, pageSize = 100 } = options;
+    const { 
+      network = 'ethereum', 
+      pageKey, 
+      pageSize = 100,
+      excludeSpam = true
+    } = options;
     
     try {
-      const baseUrl = this.getBaseUrl(network);
-      const url = `${baseUrl}/getNFTs`;
-      
       const params = {
+        endpoint: 'getNFTsForOwner',
         owner: ownerAddress,
         pageSize,
-        withMetadata: true,
+        excludeSpam
       };
       
       if (pageKey) {
         params.pageKey = pageKey;
       }
       
-      const response = await axios.get(url, { params });
+      const response = await axios.get(this.getBaseUrl(network), { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching NFTs from Alchemy:', error.message);
+      console.error('Error fetching NFTs for owner from Alchemy:', error.message);
       throw error;
     }
   },
   
   /**
-   * Get a specific NFT by contract address and token ID
+   * Get metadata for a specific NFT
    */
   async getNftMetadata(contractAddress, tokenId, options = {}) {
     const { network = 'ethereum' } = options;
     
     try {
-      const response = await axios.get(`${SERVER_URL}/api/alchemy/nft`, {
-        params: {
-          contractAddress,
-          tokenId,
-          network,
-        },
-      });
+      const params = {
+        endpoint: 'getNFTMetadata',
+        contractAddress,
+        tokenId
+      };
       
+      const response = await axios.get(this.getBaseUrl(network), { params });
       return response.data;
     } catch (error) {
       console.error('Error fetching NFT metadata from Alchemy:', error.message);
@@ -113,20 +111,18 @@ const alchemyService = {
     const { network = 'ethereum', pageKey, pageSize = 100 } = options;
     
     try {
-      const baseUrl = this.getBaseUrl(network);
-      const url = `${baseUrl}/getNFTsForCollection`;
-      
       const params = {
+        endpoint: 'getNFTsForCollection',
         contractAddress,
         withMetadata: true,
-        pageSize,
+        pageSize
       };
       
       if (pageKey) {
         params.pageKey = pageKey;
       }
       
-      const response = await axios.get(url, { params });
+      const response = await axios.get(this.getBaseUrl(network), { params });
       return response.data;
     } catch (error) {
       console.error('Error fetching NFTs for collection from Alchemy:', error.message);
@@ -144,11 +140,11 @@ const alchemyService = {
     }
     
     try {
-      // Use server endpoint for batch fetching
-      const response = await axios.post(`${SERVER_URL}/api/alchemy/batch-nfts`, {
-        addresses,
-        network,
-        options
+      const url = this.getBaseUrl(network);
+      
+      const response = await axios.post(url, {
+        endpoint: 'getNFTMetadataBatch',
+        tokens: addresses.map(address => ({ address }))
       });
       
       return {
