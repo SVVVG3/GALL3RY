@@ -38,7 +38,7 @@ apiRouter.post('/zapper', async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
   
   try {
     // Get Zapper API key from environment variables
@@ -47,8 +47,12 @@ apiRouter.post('/zapper', async (req, res) => {
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
-        error: 'API Configuration Error',
-        message: 'Zapper API key is missing. Please check server configuration.'
+        errors: [{
+          message: 'Zapper API key is missing. Please check server configuration.',
+          extensions: {
+            error: 'API Configuration Error'
+          }
+        }]
       });
     }
     
@@ -70,8 +74,12 @@ apiRouter.post('/zapper', async (req, res) => {
       // If not a Farcaster request, don't process it through Zapper
       console.warn('Non-Farcaster request attempted on Zapper endpoint');
       return res.status(400).json({
-        error: 'Invalid request',
-        message: 'The Zapper endpoint is only for Farcaster profile requests'
+        errors: [{
+          message: 'The Zapper endpoint is only for Farcaster profile requests',
+          extensions: {
+            error: 'Invalid request'
+          }
+        }]
       });
     }
     
@@ -99,10 +107,13 @@ apiRouter.post('/zapper', async (req, res) => {
     console.error('Error proxying to Zapper:', error.message);
     
     // Return an appropriate error response
-    return res.status(error.response?.status || 500).json({
-      error: 'Error from Zapper API',
-      message: error.message,
-      details: error.response?.data
+    return res.status(error.response?.status || 502).json({
+      errors: [{
+        message: error.message || 'Error from Zapper API',
+        extensions: {
+          details: error.response?.data
+        }
+      }]
     });
   }
 });
@@ -116,7 +127,7 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
 
   try {
     // Get Zapper API key from environment variables
@@ -125,8 +136,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
-        error: 'API Configuration Error',
-        message: 'Zapper API key is missing. Please check server configuration.'
+        errors: [{
+          message: 'Zapper API key is missing. Please check server configuration.',
+          extensions: {
+            error: 'API Configuration Error'
+          }
+        }]
       });
     }
 
@@ -135,8 +150,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     
     if (!username && !fid) {
       return res.status(400).json({
-        error: 'Invalid Request',
-        message: 'Either username or fid parameter is required'
+        errors: [{
+          message: 'Either username or fid parameter is required',
+          extensions: {
+            error: 'Invalid Request'
+          }
+        }]
       });
     }
 
@@ -197,9 +216,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     if (response.data?.errors) {
       console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
       return res.status(400).json({
-        error: 'GraphQL Error',
-        message: response.data.errors[0]?.message || 'Unknown GraphQL error',
-        details: response.data.errors
+        errors: [{
+          message: response.data.errors[0]?.message || 'Unknown GraphQL error',
+          extensions: {
+            details: response.data.errors
+          }
+        }]
       });
     }
     
@@ -210,8 +232,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     } else {
       console.log('No profile found in response:', JSON.stringify(response.data));
       return res.status(404).json({
-        error: 'Profile Not Found',
-        message: `No Farcaster profile found for ${username || fid}`
+        errors: [{
+          message: `No Farcaster profile found for ${username || fid}`,
+          extensions: {
+            error: 'Profile Not Found'
+          }
+        }]
       });
     }
     
@@ -227,9 +253,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
-      error: 'Error fetching Farcaster profile',
-      message: error.message,
-      details: error.response?.data
+      errors: [{
+        message: error.message || 'Error fetching Farcaster profile',
+        extensions: {
+          details: error.response?.data
+        }
+      }]
     });
   }
 });

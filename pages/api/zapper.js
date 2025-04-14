@@ -10,9 +10,7 @@ import axios from 'axios';
 
 // Constants
 const ZAPPER_API_ENDPOINTS = [
-  'https://api.zapper.fi/v2/graphql',
-  'https://public.zapper.xyz/graphql',
-  'https://api.zapper.xyz/v2/graphql'
+  'https://public.zapper.xyz/graphql'
 ];
 
 const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY || process.env.REACT_APP_ZAPPER_API_KEY || 'zapper-gallery';
@@ -55,18 +53,21 @@ export default async function handler(req, res) {
         console.log(`Trying Zapper endpoint: ${endpoint}`);
         
         // Make request to Zapper API
-        const response = await axios.post(endpoint, 
-          { query, variables },
-          { 
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'X-API-KEY': ZAPPER_API_KEY,
-              'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
-            },
-            timeout: 10000 // 10 second timeout
-          }
-        );
+        const response = await axios({
+          method: 'post',
+          url: endpoint,
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'x-zapper-api-key': ZAPPER_API_KEY,
+            'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+          },
+          data: {
+            query,
+            variables
+          },
+          timeout: 10000 // 10 second timeout
+        });
         
         // Check for GraphQL errors and data existence
         if (response.data?.errors && !response.data?.data) {

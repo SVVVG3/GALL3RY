@@ -8,9 +8,7 @@ import axios from 'axios';
 
 // Constants
 const ZAPPER_API_ENDPOINTS = [
-  'https://api.zapper.fi/v2/graphql',
-  'https://public.zapper.xyz/graphql',
-  'https://api.zapper.xyz/v2/graphql'
+  'https://public.zapper.xyz/graphql'
 ];
 
 const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY || process.env.REACT_APP_ZAPPER_API_KEY || 'zapper-gallery';
@@ -94,7 +92,7 @@ export default async function handler(req, res) {
           headers: {
             'Content-Type': 'application/json',
             'Accept': 'application/json',
-            'X-API-KEY': ZAPPER_API_KEY,
+            'x-zapper-api-key': ZAPPER_API_KEY,
             'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
           },
           data: {
@@ -143,25 +141,29 @@ export default async function handler(req, res) {
     console.error('All Zapper endpoints failed for Farcaster profile');
     
     if (lastError?.response?.data?.errors) {
-      return res.status(400).json({
-        error: 'GraphQL Error',
-        message: lastError.message,
-        details: lastError.response.data.errors
+      return res.status(500).json({ 
+        errors: lastError.response.data.errors
       });
     }
     
-    return res.status(lastError?.response?.status || 500).json({
-      error: 'Error fetching Farcaster profile',
-      message: lastError?.message || 'Failed to fetch profile from all Zapper endpoints',
-      details: lastError?.response?.data
+    return res.status(lastError?.response?.status || 502).json({ 
+      errors: [{
+        message: `All Zapper API endpoints failed: ${lastError?.message || 'Failed to fetch profile from all Zapper endpoints'}`,
+        extensions: {
+          details: lastError?.response?.data
+        }
+      }]
     });
   } catch (error) {
     console.error('Unexpected error in Farcaster profile API:', error.message);
     
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: error.message,
-      details: error.stack
+    return res.status(500).json({ 
+      errors: [{
+        message: error.message || 'Internal server error',
+        extensions: {
+          details: error.response?.data || error.toString()
+        }
+      }]
     });
   }
 } 

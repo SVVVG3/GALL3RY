@@ -44,8 +44,12 @@ export default async function handler(req, res) {
     
     if (!profile) {
       return res.status(404).json({
-        error: 'User not found',
-        username
+        errors: [{
+          message: 'User not found',
+          extensions: {
+            username
+          }
+        }]
       });
     }
     
@@ -57,14 +61,22 @@ export default async function handler(req, res) {
     // Handle timeout errors
     if (error.name === 'AbortError') {
       return res.status(504).json({
-        error: 'Request timed out',
-        message: 'Farcaster API request timed out'
+        errors: [{
+          message: 'Farcaster API request timed out',
+          extensions: {
+            error: 'Request timed out'
+          }
+        }]
       });
     }
     
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message || 'An unknown error occurred'
+      errors: [{
+        message: error.message || 'An unknown error occurred',
+        extensions: {
+          error: 'Internal server error'
+        }
+      }]
     });
   }
 }

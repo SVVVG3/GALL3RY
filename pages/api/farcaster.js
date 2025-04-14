@@ -9,7 +9,14 @@ export default async function handler(req, res) {
   const { endpoint } = req.query;
   
   if (!endpoint) {
-    return res.status(400).json({ error: 'Missing endpoint parameter' });
+    return res.status(400).json({ 
+      errors: [{
+        message: 'Missing endpoint parameter',
+        extensions: {
+          error: 'Bad Request'
+        }
+      }]
+    });
   }
   
   // Farcaster API endpoint
@@ -72,8 +79,12 @@ export default async function handler(req, res) {
       console.error('Error parsing JSON response:', parseError);
       // If we can't parse JSON, return the text as is in an error object
       return res.status(response.status).json({
-        error: 'Invalid JSON response from Farcaster API',
-        rawResponse: responseText.substring(0, 1000) // Limit size of response
+        errors: [{
+          message: 'Invalid JSON response from Farcaster API',
+          extensions: {
+            rawResponse: responseText.substring(0, 1000) // Limit size of response
+          }
+        }]
       });
     }
     
@@ -81,8 +92,12 @@ export default async function handler(req, res) {
     if (!response.ok) {
       console.error(`Farcaster API error (${response.status}):`, responseData);
       return res.status(response.status).json({
-        error: 'Farcaster API error',
-        details: responseData
+        errors: [{
+          message: 'Farcaster API error',
+          extensions: {
+            details: responseData
+          }
+        }]
       });
     }
     
@@ -95,22 +110,34 @@ export default async function handler(req, res) {
     // Handle different types of errors
     if (error.name === 'AbortError') {
       return res.status(504).json({
-        error: 'Gateway timeout',
-        message: 'Request to Farcaster API timed out'
+        errors: [{
+          message: 'Request to Farcaster API timed out',
+          extensions: {
+            error: 'Gateway timeout'
+          }
+        }]
       });
     }
     
     if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
       return res.status(502).json({
-        error: 'Bad gateway',
-        message: 'Could not connect to Farcaster API'
+        errors: [{
+          message: 'Could not connect to Farcaster API',
+          extensions: {
+            error: 'Bad gateway'
+          }
+        }]
       });
     }
     
     // For other types of errors
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message || 'Unknown error occurred'
+      errors: [{
+        message: error.message || 'Unknown error occurred',
+        extensions: {
+          error: 'Internal server error'
+        }
+      }]
     });
   }
 } 
