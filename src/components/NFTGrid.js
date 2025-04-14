@@ -24,6 +24,45 @@ const NFTGrid = ({ nfts = [] }) => {
       }
     }));
     
+    // Special handling for Zora IPFS URLs which are commonly failing
+    if (currentSrc.includes('api.zora.co') && currentSrc.includes('ipfs')) {
+      console.log('Detected Zora IPFS URL, extracting IPFS hash for alternatives');
+      
+      // Try to extract the IPFS hash from the URL
+      const ipfsMatch = currentSrc.match(/ipfs(?:%3a|:)%2f%2f([a-zA-Z0-9]+)/i);
+      if (ipfsMatch && ipfsMatch[1]) {
+        const ipfsHash = ipfsMatch[1];
+        console.log(`Trying alternative IPFS gateway for hash: ${ipfsHash}`);
+        
+        // Try multiple gateways in sequence
+        img.onerror = handleImageError; // Keep the error handler for the next attempt
+        img.src = `https://ipfs.io/ipfs/${ipfsHash}`;
+        return;
+      }
+      
+      // If the regex didn't match, try to extract from the images parameter
+      const imagesParam = currentSrc.match(/images=([^&]+)/);
+      if (imagesParam && imagesParam[1]) {
+        try {
+          // Decode the URL-encoded images parameter
+          const decodedParam = decodeURIComponent(imagesParam[1]);
+          // Look for ipfs:// pattern
+          const ipfsPattern = decodedParam.match(/ipfs:\/\/([a-zA-Z0-9]+)/i);
+          if (ipfsPattern && ipfsPattern[1]) {
+            const ipfsHash = ipfsPattern[1];
+            console.log(`Extracted IPFS hash from images parameter: ${ipfsHash}`);
+            
+            // Try alternative gateway
+            img.onerror = handleImageError; // Keep the error handler for the next attempt
+            img.src = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+            return;
+          }
+        } catch (error) {
+          console.error('Error parsing IPFS URL:', error);
+        }
+      }
+    }
+    
     // Try proxy if not already proxied
     if (!currentSrc.includes('/api/image-proxy') && 
         !currentSrc.includes('/assets/placeholder-nft.svg')) {

@@ -5,13 +5,23 @@ const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
 const { parse } = require('url');
+const fs = require('fs');
+const compression = require('compression');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(compression());
 app.use(express.json());
+
+// Configure CORS - more permissive for development
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 
 // API Routes
 const apiRouter = express.Router();
@@ -312,11 +322,11 @@ apiRouter.all('/alchemy', async (req, res) => {
         : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
       return `${baseUrl}${apiKey}/getNFTMetadata`;
     },
-    getNFTMetadataBatch: (apiKey, chain = 'eth') => {
+    getNFTsForCollection: (apiKey, chain = 'eth') => {
       const baseUrl = chain === 'eth' 
         ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
         : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
-      return `${baseUrl}${apiKey}/getNFTMetadataBatch`;
+      return `${baseUrl}${apiKey}/getNFTsForCollection`;
     }
   };
   
@@ -352,11 +362,91 @@ apiRouter.all('/alchemy', async (req, res) => {
       requestParams.pageSize = requestParams.pageSize || 100;
       requestParams.tokenUriTimeoutInMs = 5000;
       requestParams.includeContract = true;
-      requestParams.excludeFilters = requestParams.excludeSpam === 'true' ? ['SPAM'] : [];
-      requestParams.includePrice = true;
-      requestParams.floorPrice = true;
+      
+      // Convert excludeFilters from string to array if needed
+      if (requestParams.excludeSpam === 'true') {
+        requestParams.excludeFilters = ['SPAM'];
+      } else {
+        // Make sure excludeFilters is an array, not a string
+        requestParams.excludeFilters = Array.isArray(requestParams.excludeFilters) 
+          ? requestParams.excludeFilters 
+          : (requestParams.excludeFilters ? [requestParams.excludeFilters] : []);
+      }
+      
+      // Make sure boolean parameters are correctly set
+      const boolParams = ['withMetadata', 'includeContract', 'includePrice', 'floorPrice'];
+      boolParams.forEach(param => {
+        if (param in requestParams) {
+          requestParams[param] = requestParams[param] === 'true';
+        }
+      });
       
       console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
+      
+      // Handle requests with multiple owners (batch processing)
+      if (requestParams.owners) {
+        // If owners is provided as an array (multiple addresses)
+        try {
+          // Parse owners parameter if it's a string
+          let ownerAddresses;
+          if (typeof requestParams.owners === 'string') {
+            try {
+              // Try to parse as JSON
+              ownerAddresses = JSON.parse(requestParams.owners);
+            } catch (e) {
+              // If not valid JSON, split by comma
+              ownerAddresses = requestParams.owners.split(',');
+            }
+          } else {
+            ownerAddresses = requestParams.owners;
+          }
+          
+          // Ensure it's an array
+          if (!Array.isArray(ownerAddresses)) {
+            ownerAddresses = [ownerAddresses];
+          }
+          
+          // Filter out empty or invalid addresses
+          ownerAddresses = ownerAddresses.filter(addr => addr && typeof addr === 'string');
+          
+          if (ownerAddresses.length > 0) {
+            console.log(`Processing batch request for ${ownerAddresses.length} owners`);
+            
+            // Make separate requests for each owner
+            const promises = ownerAddresses.map(owner => {
+              const ownerParams = { ...requestParams, owner };
+              delete ownerParams.owners; // Remove the 'owners' param
+              
+              return axios.get(endpointUrl, { params: ownerParams })
+                .then(resp => resp.data)
+                .catch(err => {
+                  console.error(`Error fetching NFTs for owner ${owner}:`, err.message);
+                  return { owner, error: err.message, ownedNfts: [] };
+                });
+            });
+            
+            // Wait for all requests to complete
+            const results = await Promise.all(promises);
+            
+            // Combine results (note: pagination won't work well in batch mode)
+            const combinedResult = {
+              ownedNfts: results.flatMap(r => Array.isArray(r.ownedNfts) ? r.ownedNfts : []),
+              totalCount: results.reduce((sum, r) => sum + (r.totalCount || 0), 0),
+              blockHash: results[0]?.blockHash,
+              batchResults: results.map(r => ({ 
+                owner: r.owner || r.ownerAddress,
+                count: r.ownedNfts?.length || 0,
+                error: r.error
+              }))
+            };
+            
+            return res.status(200).json(combinedResult);
+          }
+        } catch (batchError) {
+          console.error('Error processing batch owners request:', batchError.message);
+          // Fall back to standard processing if batch processing fails
+        }
+      }
     }
     
     // Special handling for POST requests like getNFTMetadataBatch
@@ -390,15 +480,187 @@ apiRouter.all('/alchemy', async (req, res) => {
   }
 });
 
+// Proxy endpoint for CORS-protected images
+apiRouter.get('/image-proxy', async (req, res) => {
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter is required' });
+  }
+  
+  try {
+    let proxyUrl = url;
+    
+    // Special handling for IPFS URLs
+    if (url.includes('ipfs') || url.includes('ipfs:')) {
+      console.log('Detected potential IPFS URL in proxy request:', url);
+      
+      // Handle api.zora.co renderer URLs that include ipfs content
+      if (url.includes('api.zora.co') && url.includes('ipfs')) {
+        // Try to extract the ipfs hash from various formats
+        let ipfsHash = null;
+        
+        // Common patterns seen in the Zora URLs
+        const ipfsPatterns = [
+          /ipfs(?:%3a|:)%2f%2f([a-zA-Z0-9]+)/i, // URL encoded ipfs://hash
+          /ipfs:\/\/([a-zA-Z0-9]+)/i,           // Direct ipfs://hash
+          /ipfs\/([a-zA-Z0-9]+)/i               // /ipfs/hash format
+        ];
+        
+        // Try each pattern
+        for (const pattern of ipfsPatterns) {
+          const match = url.match(pattern);
+          if (match && match[1]) {
+            ipfsHash = match[1];
+            console.log(`Extracted IPFS hash ${ipfsHash} from Zora URL`);
+            break;
+          }
+        }
+        
+        // If we found a hash, use a more reliable IPFS gateway
+        if (ipfsHash) {
+          // Try multiple gateways in order of reliability
+          const gateways = [
+            `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
+            `https://ipfs.io/ipfs/${ipfsHash}`,
+            `https://gateway.pinata.cloud/ipfs/${ipfsHash}`
+          ];
+          
+          // Use the first gateway in the list
+          proxyUrl = gateways[0];
+          console.log(`Using alternative IPFS gateway: ${proxyUrl}`);
+        }
+      }
+      // Direct IPFS URLs without gateway
+      else if (url.startsWith('ipfs://')) {
+        const ipfsHash = url.replace('ipfs://', '');
+        proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+        console.log(`Converted direct IPFS URL to gateway URL: ${proxyUrl}`);
+      }
+    }
+    
+    // Attempt to proxy the image
+    const response = await axios({
+      method: 'get',
+      url: proxyUrl,
+      responseType: 'stream',
+      timeout: 5000,
+      headers: {
+        'Referer': 'https://gall3ry.vercel.app/',
+        'User-Agent': 'Mozilla/5.0 (compatible; GALL3RY/1.0)'
+      }
+    });
+    
+    // Forward content type
+    if (response.headers['content-type']) {
+      res.setHeader('Content-Type', response.headers['content-type']);
+    }
+    
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    
+    // Pipe the image data to the response
+    response.data.pipe(res);
+  } catch (error) {
+    console.error(`Error proxying image ${url}:`, error.message);
+    return res.status(404).sendFile(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
+  }
+});
+
+// Image proxy endpoint to handle CORS issues with NFT images
+app.get('/api/image-proxy', async (req, res) => {
+  const imageUrl = req.query.url;
+  
+  if (!imageUrl) {
+    return res.status(400).send('Missing url parameter');
+  }
+  
+  try {
+    // Fetch the image with proper headers
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': 'https://gall3ry.xyz/'
+      },
+      timeout: 5000, // 5 second timeout to avoid hanging
+      validateStatus: false // Accept any response
+    });
+    
+    // Determine content type based on response headers or URL extension
+    let contentType = response.headers['content-type'];
+    
+    if (!contentType) {
+      // Try to guess content type from URL
+      if (imageUrl.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
+      else if (imageUrl.match(/\.png$/i)) contentType = 'image/png';
+      else if (imageUrl.match(/\.gif$/i)) contentType = 'image/gif';
+      else if (imageUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
+      else if (imageUrl.match(/\.webp$/i)) contentType = 'image/webp';
+      else if (imageUrl.match(/\.mp4$/i)) contentType = 'video/mp4';
+      else if (imageUrl.match(/\.webm$/i)) contentType = 'video/webm';
+      else contentType = 'application/octet-stream';
+    }
+    
+    // Set appropriate cache headers
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    res.setHeader('Content-Type', contentType);
+    
+    // If response was not successful, return placeholder
+    if (response.status >= 400) {
+      const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
+      res.setHeader('Content-Type', 'image/svg+xml');
+      return res.send(placeholder);
+    }
+    
+    return res.send(response.data);
+  } catch (error) {
+    console.error('Image proxy error:', error.message);
+    
+    // Return placeholder image on error
+    try {
+      const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
+      res.setHeader('Content-Type', 'image/svg+xml');
+      return res.send(placeholder);
+    } catch (readError) {
+      return res.status(500).send('Error loading image and placeholder');
+    }
+  }
+});
+
 // Mount API routes
 app.use('/api', apiRouter);
 
+// Serve static files from the public directory with appropriate headers
+app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
+  maxAge: '1d',
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+}));
+
 // Serve static files from the public directory (for both development and production)
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: '1d',
+  setHeaders: (res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+}));
 
 // Serve static files from the build directory in production
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, 'build')));
+  app.use(express.static(path.join(__dirname, 'build'), {
+    maxAge: '1d',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+    }
+  }));
   
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'build', 'index.html'));
