@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import directAlchemyService from '../services/directAlchemy';
+import alchemyService from '../services/alchemyService';
+
 // Define constants locally instead of importing them
 const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
 const NFT_PAGE_SIZE = 24; // Matching Zapper's default exactly
-
-// Import only the alchemy service - remove all zapperService imports
-import directAlchemyService from '../services/directAlchemy';
-import alchemyService from '../services/alchemyService';
 
 // Create context
 const NFTContext = createContext();
