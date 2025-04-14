@@ -1,10 +1,20 @@
 {
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "/api/:path*"
+  "version": 2,
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "build",
+  "routes": [
+    { 
+      "src": "/api/(.*)", 
+      "dest": "/api/$1" 
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    { 
+      "src": "/(.*\\.(js|json|css|ico|png|jpg|svg))", 
+      "dest": "/$1" 
+    },
+    { 
+      "src": "/(.*)", 
+      "dest": "/index.html" 
+    }
   ],
   "functions": {
     "api/**/*.js": {

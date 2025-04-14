@@ -31,12 +31,12 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', version: '1.0.0' });
 });
 
 // API endpoint for testing MongoDB connection
-app.get('/api/db-status', async (req, res) => {
+app.get('/db-status', async (req, res) => {
   try {
     await connectToMongoDB();
     res.status(200).json({ status: 'Database connected' });
@@ -46,16 +46,15 @@ app.get('/api/db-status', async (req, res) => {
   }
 });
 
-// Default handler for all serverless API routes
-module.exports = async (req, res) => {
+// Handler for serverless API routes on Vercel
+module.exports = (req, res) => {
   // Log request for debugging
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   
-  try {
-    // Return response from Express app
-    return app(req, res);
-  } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({ error: 'Internal Server Error' });
-  }
+  // Extract path from URL for correct routing
+  const url = new URL(req.url, `https://${req.headers.host}`);
+  req.url = url.pathname;
+  
+  // Process the request with Express
+  return app(req, res);
 }; 
