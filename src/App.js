@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
@@ -13,7 +13,12 @@ import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { NFTProvider } from './contexts/NFTContext';
 import SignInButton from './components/SignInButton';
-import FarcasterUserSearch from './components/FarcasterUserSearch';
+import { WithNav } from './components/Nav';
+import HomePage from './pages/HomePage';
+import NFTPage from './pages/NFTPage';
+import PoapPage from './pages/PoapPage';
+import SettingsPage from './pages/SettingsPage';
+import AppPage from './pages/AppPage';
 import UserProfilePage from './components/UserProfilePage';
 
 // Check if we're in a browser environment with a robust check
@@ -73,24 +78,6 @@ const ErrorDisplay = ({ error, onRetry }) => (
     <button onClick={onRetry} className="retry-button">Try Again</button>
   </div>
 );
-
-// Home page component with proper error boundaries
-const HomePage = () => {
-  return (
-    <div className="home-container">
-      <div className="content-wrapper">
-        <h2>Search Farcaster users to explore their NFT collections</h2>
-        
-        {/* We're simplifying the component hierarchy for better error isolation */}
-        <ErrorBoundary>
-          <NFTProvider>
-            <FarcasterUserSearch />
-          </NFTProvider>
-        </ErrorBoundary>
-      </div>
-    </div>
-  );
-};
 
 // Error boundary component
 class ErrorBoundary extends React.Component {
