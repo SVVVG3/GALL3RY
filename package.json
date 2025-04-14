@@ -33,7 +33,7 @@
   "scripts": {
     "start": "react-app-rewired start",
     "build": "react-app-rewired build",
-    "vercel-build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
+    "vercel-build": "npm install process && NODE_ENV=production CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "dev": "concurrently \"npm run start\" \"npm run server\"",
