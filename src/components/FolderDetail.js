@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useAuth } from '../contexts/AuthContext';
 import folderService from '../services/folderService';
-import NFTGrid from './NFTGrid';
+import SimpleNFTGrid from './SimpleNFTGrid';
 import config from '../config';
 import '../styles/folder.css';
 
@@ -275,42 +275,26 @@ const FolderDetail = ({
         </div>
       )}
       
-      <div className="nft-grid">
+      <div className="folder-nfts">
         {folder.nfts && folder.nfts.length > 0 ? (
-          folder.nfts.map(nft => (
-            <div key={nft._id} className="nft-card">
-              <div className="nft-image-container">
-                <img 
-                  src={nft.imageUrl} 
-                  alt={nft.name || `NFT ${nft.tokenId}`}
-                  className="nft-image"
-                  onError={(e) => {
-                    e.target.src = '/assets/placeholder-nft.jpg';
-                  }}
-                />
-              </div>
-              <div className="nft-details">
-                <h3 className="nft-name">{nft.name || `#${nft.tokenId}`}</h3>
-                {nft.collection?.name && (
-                  <p className="nft-collection">{nft.collection.name}</p>
-                )}
-                <div className="nft-meta">
-                  <span className="nft-chain">{nft.chain || 'ethereum'}</span>
-                </div>
-                
-                {!isReadOnly && (
-                  <button 
-                    onClick={() => handleRemoveNft(nft._id)}
-                    className="remove-nft-button"
-                  >
-                    Remove
-                  </button>
-                )}
+          <>
+            <div className="folder-controls">
+              <div className="sort-controls">
+                <label htmlFor="sort">Sort by:</label>
+                <select id="sort" value={sortOption} onChange={handleSortChange}>
+                  <option value="default">Default</option>
+                  <option value="name-asc">Name (A-Z)</option>
+                  <option value="name-desc">Name (Z-A)</option>
+                  <option value="collection">Collection</option>
+                  <option value="price-high">Price (High to Low)</option>
+                  <option value="price-low">Price (Low to High)</option>
+                </select>
               </div>
             </div>
-          ))
+            <SimpleNFTGrid nfts={sortedNfts} />
+          </>
         ) : (
-          <div className="empty-nft-grid">
+          <div className="empty-folder">
             <p>This folder is empty</p>
           </div>
         )}

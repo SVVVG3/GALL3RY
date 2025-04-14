@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import NftCard from './NftCard';
-import NFTGrid from './NFTGrid';
+import SimpleNFTGrid from './SimpleNFTGrid';
 import { useNFT } from '../contexts/NFTContext';
 import { useWallet } from '../contexts/WalletContext';
 import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock, FaShieldAlt } from 'react-icons/fa';
@@ -480,24 +479,7 @@ const NFTGallery = () => {
       ) : (
         <>
           <NFTGridContainer>
-            {/* Add debugging just before rendering NFTGrid */}
-            {console.log(`About to render NFTGrid with ${safeFilteredNfts.length} NFTs`, 
-              safeFilteredNfts.length > 0 
-                ? `First NFT: ${safeFilteredNfts[0].id}` 
-                : 'No NFTs available')}
-            {console.log(`NFT data from NFTContext:`, { 
-              isLoading, 
-              hasMore, 
-              filteredNfts: filteredNfts ? {
-                length: filteredNfts.length,
-                isArray: Array.isArray(filteredNfts)
-              } : 'undefined',
-              safeFilteredNfts: {
-                length: safeFilteredNfts.length,
-                isArray: Array.isArray(safeFilteredNfts)
-              }
-            })}
-            <NFTGrid nfts={safeFilteredNfts} />
+            <SimpleNFTGrid nfts={safeFilteredNfts} />
           </NFTGridContainer>
           
           {hasMore && (
