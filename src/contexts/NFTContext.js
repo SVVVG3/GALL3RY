@@ -740,105 +740,102 @@ export const NFTProvider = ({ children }) => {
     }
   }, [processNFTs]);
   
-  // Filter NFTs based on current filters
-  const getFilteredNfts = useMemo(() => {
-    if (!nfts || nfts.length === 0) return [];
-
-    console.log(`Filtering ${nfts.length} NFTs with filters:`, { 
-      selectedChains, 
-      selectedWallets, 
-      searchQuery,
-      excludeSpam
-    });
-
-    // Log some sample NFT data to help debug
-    if (nfts.length > 0) {
-      console.log('Sample NFT for debugging:', {
-        id: nfts[0].id,
-        network: nfts[0].network,
-        chain: nfts[0].chain,
-        ownerAddress: nfts[0].ownerAddress,
-        collection: nfts[0].collection?.name
-      });
-      
-      // Check how many NFTs have empty ownerAddress
-      const emptyOwnerCount = nfts.filter(nft => !nft.ownerAddress).length;
-      if (emptyOwnerCount > 0) {
-        console.warn(`Warning: ${emptyOwnerCount} NFTs have empty ownerAddress`);
-      }
+  // Filtered NFTs memoized with the current filters applied
+  const filteredNfts = useMemo(() => {
+    // Return empty array if no NFTs are loaded
+    if (!nfts || nfts.length === 0) {
+      return [];
     }
-
+    
     let filtered = [...nfts];
     
-    // Filter by chain - ONLY if 'all' is not selected
-    if (selectedChains.length > 0 && !selectedChains.includes('all')) {
-      console.log('Applying chain filter - NOT selecting all chains');
-      
-      filtered = filtered.filter(nft => {
-        // More flexible network matching - handle both network and chain properties
-        // Also normalize different chain names (eth = ethereum, etc)
-        const nftNetwork = (nft.network || nft.chain || '').toLowerCase();
-        const normalizedNetwork = nftNetwork === 'eth' ? 'ethereum' : 
-                                 nftNetwork === 'opt' ? 'optimism' : 
-                                 nftNetwork === 'arb' ? 'arbitrum' : 
-                                 nftNetwork;
-                                  
-        // Check for direct match or normalized match
-        const matches = selectedChains.some(chain => {
-          const normalizedChain = chain === 'ethereum' ? 'eth' :
-                                 chain === 'optimism' ? 'opt' :
-                                 chain === 'arbitrum' ? 'arb' : 
-                                 chain;
-          return normalizedNetwork === chain || normalizedNetwork === normalizedChain || 
-                nftNetwork === chain || nftNetwork === normalizedChain;
-        });
-        
-        // Debug the first few NFTs to see why they're being filtered
-        if (nft.id === nfts[0].id || nft.id === nfts[1]?.id || nft.id === nfts[2]?.id) {
-          console.log(`Chain filter for NFT ${nft.id}: network=${nftNetwork}, normalizedNetwork=${normalizedNetwork}, matches=${matches}`);
-        }
-        
-        return matches;
-      });
-    } else {
-      console.log('Skipping chain filter - "all" chains selected');
+    // Filter by selected chain
+    if (selectedChains.length > 0) {
+      filtered = filtered.filter(nft => selectedChains.includes(nft.network || nft.chain || 'eth'));
     }
     
-    console.log(`After chain filtering: ${filtered.length} NFTs`);
-    
-    // Filter by wallet - ONLY if selectedWallets isn't empty
+    // Filter by selected collections
     if (selectedWallets.length > 0) {
-      console.log('Applying wallet filter');
       filtered = filtered.filter(nft => {
-        // First ensure we have a valid ownerAddress
         const ownerAddress = nft.ownerAddress ? nft.ownerAddress.toLowerCase() : null;
         return ownerAddress && selectedWallets.includes(ownerAddress);
       });
-      console.log(`After wallet filtering: ${filtered.length} NFTs`);
-    } else {
-      console.log('Skipping wallet filter - no wallets selected');
     }
     
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(nft => 
-        (nft.name && nft.name.toLowerCase().includes(query)) ||
-        (nft.collection?.name && nft.collection.name.toLowerCase().includes(query)) ||
-        (nft.description && nft.description.toLowerCase().includes(query))
-      );
-      console.log(`After search filtering: ${filtered.length} NFTs`);
+      filtered = filtered.filter(nft => {
+        // Search in title, description, contract, token ID
+        return (
+          (nft.name && nft.name.toLowerCase().includes(query)) ||
+          (nft.description && nft.description.toLowerCase().includes(query)) ||
+          (nft.contract?.name && nft.contract.name.toLowerCase().includes(query)) ||
+          (nft.tokenId && nft.tokenId.toLowerCase().includes(query))
+        );
+      });
     }
     
-    console.log(`Returning ${filtered.length} filtered NFTs for display`);
+    // Filter out spam NFTs if enabled
+    if (excludeSpam) {
+      filtered = filtered.filter(nft => !nft.isSpam);
+    }
+    
+    // Sort NFTs
+    filtered.sort((a, b) => {
+      let comparison = 0;
+      
+      // Sort by the appropriate field
+      switch (sortBy) {
+        case 'name':
+          comparison = (a.name || '').localeCompare(b.name || '');
+          break;
+        case 'date':
+          // Try to use lastTransferTimestamp or default to 0 for comparison
+          const aTime = a.lastTransferTimestamp 
+            ? parseInt(a.lastTransferTimestamp, 10) || 0 
+            : 0;
+          const bTime = b.lastTransferTimestamp 
+            ? parseInt(b.lastTransferTimestamp, 10) || 0 
+            : 0;
+          comparison = bTime - aTime; // Newest first by default
+          break;
+        case 'price':
+          const aPrice = a.estimatedValue?.amount || 0;
+          const bPrice = b.estimatedValue?.amount || 0;
+          comparison = bPrice - aPrice; // Highest first by default
+          break;
+        default:
+          comparison = 0;
+      }
+      
+      // Apply sort order
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+    
     return filtered;
-  }, [nfts, selectedChains, selectedWallets, searchQuery]);
+  }, [nfts, selectedChains, selectedWallets, searchQuery, sortBy, sortOrder, excludeSpam]);
+  
+  // Clean up filtered NFTs to ensure we don't have any undefined values
+  const safeFilteredNfts = useMemo(() => {
+    // If we have no filtered NFTs, return empty array
+    if (!filteredNfts || !Array.isArray(filteredNfts)) {
+      return [];
+    }
+    
+    // Filter out any null or undefined NFTs
+    return filteredNfts.filter(nft => 
+      nft && 
+      typeof nft === 'object' && 
+      (!excludeSpam || !nft.isSpam)
+    );
+  }, [filteredNfts, excludeSpam]);
   
   // Sort NFTs based on current sort settings
   const getSortedNfts = useMemo(() => {
-    if (!getFilteredNfts || getFilteredNfts.length === 0) return [];
+    if (!filteredNfts || filteredNfts.length === 0) return [];
     
-    const filtered = [...getFilteredNfts];
+    const filtered = [...filteredNfts];
     
     // Sort by the selected method
     switch (sortBy) {
@@ -889,7 +886,7 @@ export const NFTProvider = ({ children }) => {
           return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
         });
     }
-  }, [getFilteredNfts, sortBy, sortOrder]);
+  }, [filteredNfts, sortBy, sortOrder]);
   
   // Provide context values
   const contextValue = {
@@ -911,7 +908,7 @@ export const NFTProvider = ({ children }) => {
     collectionHolders,
     
     // Filtered and sorted NFTs - ensure these are always arrays
-    filteredNfts: getFilteredNfts || [],
+    filteredNfts: filteredNfts || [],
     sortedNfts: getSortedNfts || [],
     
     // Actions

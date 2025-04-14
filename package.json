@@ -26,10 +26,12 @@
     "stream-browserify": "^3.0.0",
     "styled-components": "^6.1.1",
     "viem": "^1.21.4",
+    "vm-browserify": "^1.1.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
     "start": "react-app-rewired start",
+    "dev": "node -r dotenv/config server.js",
     "build": "react-app-rewired build",
     "vercel-build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
     "test": "react-app-rewired test",

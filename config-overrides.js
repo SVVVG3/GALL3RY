@@ -11,6 +11,7 @@ module.exports = function override(config) {
     "buffer": require.resolve("buffer"),
     "os": require.resolve("os-browserify/browser"),
     "path": require.resolve("path-browserify"),
+    "vm": require.resolve("vm-browserify"),
     "fs": false,
     "http": false,
     "https": false,

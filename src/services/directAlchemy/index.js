@@ -215,11 +215,40 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         // Safely fetch NFTs for this address
         return fetchNFTsForAddress(address, chain, options)
           .then(result => {
-            // Ensure we have a valid result object
+            // Ensure we have a valid result object with all required properties
             if (!result) {
               console.warn(`No result returned for address ${address}`);
               return { address, result: { nfts: [], pageKey: null, hasMore: false } };
             }
+            
+            // Ensure nfts is always an array
+            if (!result.nfts || !Array.isArray(result.nfts)) {
+              console.warn(`Invalid nfts array for address ${address}, replacing with empty array`);
+              result.nfts = [];
+            }
+            
+            // Ensure each NFT has the expected properties
+            result.nfts = result.nfts.map(nft => {
+              if (!nft) return null;
+              
+              // Ensure media property exists
+              if (!nft.media) {
+                nft.media = [];
+              }
+              
+              // Ensure contract property exists
+              if (!nft.contract) {
+                nft.contract = {};
+              }
+              
+              // Add owner address if not present
+              if (!nft.ownerAddress) {
+                nft.ownerAddress = address;
+              }
+              
+              return nft;
+            }).filter(Boolean); // Remove any null entries
+            
             return { address, result };
           })
           .catch(error => {
