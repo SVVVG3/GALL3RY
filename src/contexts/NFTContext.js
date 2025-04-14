@@ -213,202 +213,8 @@ export const NFTProvider = ({ children }) => {
     }
   }, [collectionHolders]);
   
-  // Fetch NFTs using Alchemy service or fallback to other services
-  const fetchNfts = useCallback(async (query, options = {}) => {
-    // Skip if query is empty
-    if (!query || ((!query.address || query.address === '') && (!query.addresses || query.addresses.length === 0))) {
-      console.warn('Invalid query for fetchNfts:', query);
-      return { nfts: [], pageKey: null, hasMore: false };
-    }
-
-    try {
-      // Set loading state at the start of the fetch
-      setIsLoading(true);
-
-      // Determine which function to use based on query
-      let result;
-      if (query.addresses && query.addresses.length > 0) {
-        console.log(`Fetching NFTs for ${query.addresses.length} addresses on ${query.chain || 'eth'} chain`);
-        result = await fetchNftsForAddresses(query.addresses, query.chain, {
-          pageKey: options.loadMore ? pageKey : null,
-          excludeSpam,
-          ...options
-        });
-      } else {
-        console.log(`Fetching NFTs for address ${query.address} on ${query.chain || 'eth'} chain`);
-        result = await fetchNftsForAddress(query.address, query.chain, {
-          pageKey: options.loadMore ? pageKey : null,
-          excludeSpam,
-          ...options
-        });
-      }
-
-      // Set pagination state
-      setPageKey(result.pageKey || null);
-      setHasMore(!!result.pageKey);
-
-      // Process NFTs to enhance metadata and images
-      const processedNFTs = await processNFTs(result.nfts, options);
-      
-      // Update NFT state based on loadMore option
-      if (options.loadMore) {
-        // If loading more, append to existing NFTs
-        const combinedNFTs = [...nfts, ...processedNFTs];
-        
-        // Deduplicate by ID
-        const uniqueNFTs = Array.from(
-          new Map(combinedNFTs.map(nft => [normalizeId(nft), nft])).values()
-        );
-        
-        setNfts(uniqueNFTs);
-        console.log(`Loaded ${processedNFTs.length} more NFTs, total: ${uniqueNFTs.length}`);
-      } else {
-        // If not loading more, replace existing NFTs
-        setNfts(processedNFTs);
-        console.log(`Loaded ${processedNFTs.length} NFTs (fresh load)`);
-      }
-
-      return {
-        nfts: result.nfts,
-        pageKey: result.pageKey,
-        hasMore: !!result.pageKey
-      };
-    } catch (error) {
-      console.error('Error in fetchNfts:', error);
-      setPageKey(null);
-      setHasMore(false);
-      return { nfts: [], pageKey: null, hasMore: false };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [nfts, pageKey, excludeSpam, fetchNftsForAddress, fetchNftsForAddresses, normalizeId, processNFTs]);
-  
-  // Filter NFTs based on current filters
-  const getFilteredNfts = useMemo(() => {
-    if (!nfts || nfts.length === 0) return [];
-
-    let filtered = [...nfts];
-    
-    // Filter by chain
-    if (selectedChains.length > 0 && !selectedChains.includes('all')) {
-      filtered = filtered.filter(nft => 
-        nft.network && selectedChains.includes(nft.network.toLowerCase())
-      );
-    }
-    
-    // Filter by wallet
-    if (selectedWallets.length > 0) {
-      filtered = filtered.filter(nft => 
-        nft.ownerAddress && selectedWallets.includes(nft.ownerAddress.toLowerCase())
-      );
-    }
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(nft => 
-        (nft.name && nft.name.toLowerCase().includes(query)) ||
-        (nft.collection?.name && nft.collection.name.toLowerCase().includes(query)) ||
-        (nft.description && nft.description.toLowerCase().includes(query))
-      );
-    }
-    
-    return filtered;
-  }, [nfts, selectedChains, selectedWallets, searchQuery]);
-  
-  // Sort NFTs based on current sort settings
-  const getSortedNfts = useMemo(() => {
-    if (!getFilteredNfts || getFilteredNfts.length === 0) return [];
-    
-    const filtered = [...getFilteredNfts];
-    
-    // Sort by the selected method
-    switch (sortBy) {
-      case 'value':
-        return filtered.sort((a, b) => {
-          // Get values, defaulting to 0 if not available
-          const aValue = a.collection?.floorPrice?.valueUsd || 0;
-          const bValue = b.collection?.floorPrice?.valueUsd || 0;
-          
-          // Sort based on order
-          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
-        });
-        
-      case 'recent':
-        return filtered.sort((a, b) => {
-          // Get timestamps, defaulting to 0 if not available
-          const aTime = a.lastActivityTimestamp || a.acquiredAt || 0;
-          const bTime = b.lastActivityTimestamp || b.acquiredAt || 0;
-          
-          // Sort based on order
-          return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
-        });
-          
-      case 'collection':
-      default:
-        return filtered.sort((a, b) => {
-          // Get collection names, defaulting to empty string if not available
-          const aName = (a.collection?.name || '').toLowerCase();
-          const bName = (b.collection?.name || '').toLowerCase();
-          
-          // For collections, sort by collection name then token ID
-          if (aName === bName) {
-            const aId = a.tokenId || '';
-            const bId = b.tokenId || '';
-            const aIdNum = parseInt(aId, 10);
-            const bIdNum = parseInt(bId, 10);
-            
-            // If both can be parsed as numbers, compare numerically
-            if (!isNaN(aIdNum) && !isNaN(bIdNum)) {
-              return sortOrder === 'asc' ? aIdNum - bIdNum : bIdNum - aIdNum;
-            }
-            
-            // Otherwise, sort lexicographically
-            return sortOrder === 'asc' ? aId.localeCompare(bId) : bId.localeCompare(aId);
-          }
-          
-          // Sort by collection name
-          return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
-        });
-    }
-  }, [getFilteredNfts, sortBy, sortOrder]);
-  
-  // New function: Fetch all NFTs for multiple wallets
-  const fetchAllNFTsForWallets = useCallback(async (addresses, options = {}) => {
-    if (!addresses || addresses.length === 0) {
-      console.error('No addresses provided to fetchAllNFTsForWallets');
-      return { nfts: [], hasMore: false };
-    }
-    
-    setIsLoading(true);
-    setError(null);
-    
-    try {
-      console.log(`Fetching NFTs for ${addresses.length} addresses using Alchemy`);
-      
-      // Use the existing Alchemy service
-      const result = await alchemyService.batchFetchNFTs(addresses, 'eth', {
-        withMetadata: true,
-        excludeSpam: true,
-        pageSize: 50
-      });
-      
-      setNfts(result.nfts || []);
-      return {
-        nfts: result.nfts || [],
-        hasMore: !!result.pageKey
-      };
-    } catch (error) {
-      console.error('Error fetching NFTs in NFTContext:', error);
-      setError(error.message || 'Failed to fetch NFTs');
-      return { nfts: [], hasMore: false };
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-  
   // When processing NFTs, make sure to extract all image and price data
-  const processNFTs = async (nfts, options = {}) => {
+  const processNFTs = useCallback(async (nfts, options = {}) => {
     // Skip if no NFTs
     if (!nfts || nfts.length === 0) {
       return [];
@@ -566,7 +372,201 @@ export const NFTProvider = ({ children }) => {
       console.error('Error processing NFTs:', error);
       return nfts; // Return original NFTs if processing fails
     }
-  };
+  }, []);
+  
+  // Fetch NFTs using Alchemy service or fallback to other services
+  const fetchNfts = useCallback(async (query, options = {}) => {
+    // Skip if query is empty
+    if (!query || ((!query.address || query.address === '') && (!query.addresses || query.addresses.length === 0))) {
+      console.warn('Invalid query for fetchNfts:', query);
+      return { nfts: [], pageKey: null, hasMore: false };
+    }
+
+    try {
+      // Set loading state at the start of the fetch
+      setIsLoading(true);
+
+      // Determine which function to use based on query
+      let result;
+      if (query.addresses && query.addresses.length > 0) {
+        console.log(`Fetching NFTs for ${query.addresses.length} addresses on ${query.chain || 'eth'} chain`);
+        result = await fetchNftsForAddresses(query.addresses, query.chain, {
+          pageKey: options.loadMore ? pageKey : null,
+          excludeSpam,
+          ...options
+        });
+      } else {
+        console.log(`Fetching NFTs for address ${query.address} on ${query.chain || 'eth'} chain`);
+        result = await fetchNftsForAddress(query.address, query.chain, {
+          pageKey: options.loadMore ? pageKey : null,
+          excludeSpam,
+          ...options
+        });
+      }
+
+      // Set pagination state
+      setPageKey(result.pageKey || null);
+      setHasMore(!!result.pageKey);
+
+      // Process NFTs to enhance metadata and images
+      const processedNFTs = await processNFTs(result.nfts, options);
+      
+      // Update NFT state based on loadMore option
+      if (options.loadMore) {
+        // If loading more, append to existing NFTs
+        const combinedNFTs = [...nfts, ...processedNFTs];
+        
+        // Deduplicate by ID
+        const uniqueNFTs = Array.from(
+          new Map(combinedNFTs.map(nft => [normalizeId(nft), nft])).values()
+        );
+        
+        setNfts(uniqueNFTs);
+        console.log(`Loaded ${processedNFTs.length} more NFTs, total: ${uniqueNFTs.length}`);
+      } else {
+        // If not loading more, replace existing NFTs
+        setNfts(processedNFTs);
+        console.log(`Loaded ${processedNFTs.length} NFTs (fresh load)`);
+      }
+
+      return {
+        nfts: result.nfts,
+        pageKey: result.pageKey,
+        hasMore: !!result.pageKey
+      };
+    } catch (error) {
+      console.error('Error in fetchNfts:', error);
+      setPageKey(null);
+      setHasMore(false);
+      return { nfts: [], pageKey: null, hasMore: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, [nfts, pageKey, excludeSpam, fetchNftsForAddress, fetchNftsForAddresses, normalizeId, processNFTs]);
+  
+  // New function: Fetch all NFTs for multiple wallets
+  const fetchAllNFTsForWallets = useCallback(async (addresses, options = {}) => {
+    if (!addresses || addresses.length === 0) {
+      console.error('No addresses provided to fetchAllNFTsForWallets');
+      return { nfts: [], hasMore: false };
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    
+    try {
+      console.log(`Fetching NFTs for ${addresses.length} addresses using Alchemy`);
+      
+      // Use the existing Alchemy service
+      const result = await alchemyService.batchFetchNFTs(addresses, 'eth', {
+        withMetadata: true,
+        excludeSpam: true,
+        pageSize: 50
+      });
+      
+      setNfts(result.nfts || []);
+      return {
+        nfts: result.nfts || [],
+        hasMore: !!result.pageKey
+      };
+    } catch (error) {
+      console.error('Error fetching NFTs in NFTContext:', error);
+      setError(error.message || 'Failed to fetch NFTs');
+      return { nfts: [], hasMore: false };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+  
+  // Filter NFTs based on current filters
+  const getFilteredNfts = useMemo(() => {
+    if (!nfts || nfts.length === 0) return [];
+
+    let filtered = [...nfts];
+    
+    // Filter by chain
+    if (selectedChains.length > 0 && !selectedChains.includes('all')) {
+      filtered = filtered.filter(nft => 
+        nft.network && selectedChains.includes(nft.network.toLowerCase())
+      );
+    }
+    
+    // Filter by wallet
+    if (selectedWallets.length > 0) {
+      filtered = filtered.filter(nft => 
+        nft.ownerAddress && selectedWallets.includes(nft.ownerAddress.toLowerCase())
+      );
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(nft => 
+        (nft.name && nft.name.toLowerCase().includes(query)) ||
+        (nft.collection?.name && nft.collection.name.toLowerCase().includes(query)) ||
+        (nft.description && nft.description.toLowerCase().includes(query))
+      );
+    }
+    
+    return filtered;
+  }, [nfts, selectedChains, selectedWallets, searchQuery]);
+  
+  // Sort NFTs based on current sort settings
+  const getSortedNfts = useMemo(() => {
+    if (!getFilteredNfts || getFilteredNfts.length === 0) return [];
+    
+    const filtered = [...getFilteredNfts];
+    
+    // Sort by the selected method
+    switch (sortBy) {
+      case 'value':
+        return filtered.sort((a, b) => {
+          // Get values, defaulting to 0 if not available
+          const aValue = a.collection?.floorPrice?.valueUsd || 0;
+          const bValue = b.collection?.floorPrice?.valueUsd || 0;
+          
+          // Sort based on order
+          return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
+        });
+        
+      case 'recent':
+        return filtered.sort((a, b) => {
+          // Get timestamps, defaulting to 0 if not available
+          const aTime = a.lastActivityTimestamp || a.acquiredAt || 0;
+          const bTime = b.lastActivityTimestamp || b.acquiredAt || 0;
+          
+          // Sort based on order
+          return sortOrder === 'asc' ? aTime - bTime : bTime - aTime;
+        });
+          
+      case 'collection':
+      default:
+        return filtered.sort((a, b) => {
+          // Get collection names, defaulting to empty string if not available
+          const aName = (a.collection?.name || '').toLowerCase();
+          const bName = (b.collection?.name || '').toLowerCase();
+          
+          // For collections, sort by collection name then token ID
+          if (aName === bName) {
+            const aId = a.tokenId || '';
+            const bId = b.tokenId || '';
+            const aIdNum = parseInt(aId, 10);
+            const bIdNum = parseInt(bId, 10);
+            
+            // If both can be parsed as numbers, compare numerically
+            if (!isNaN(aIdNum) && !isNaN(bIdNum)) {
+              return sortOrder === 'asc' ? aIdNum - bIdNum : bIdNum - aIdNum;
+            }
+            
+            // Otherwise, sort lexicographically
+            return sortOrder === 'asc' ? aId.localeCompare(bId) : bId.localeCompare(aId);
+          }
+          
+          // Sort by collection name
+          return sortOrder === 'asc' ? aName.localeCompare(bName) : bName.localeCompare(aName);
+        });
+    }
+  }, [getFilteredNfts, sortBy, sortOrder]);
   
   // Provide context values
   const contextValue = {
