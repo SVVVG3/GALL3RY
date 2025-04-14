@@ -12,6 +12,11 @@ module.exports = function override(config) {
     "os": require.resolve("os-browserify/browser"),
     "path": require.resolve("path-browserify"),
     "fs": false,
+    "http": false,
+    "https": false,
+    "zlib": false,
+    "assert": false,
+    "url": false,
     "process": require.resolve("process/browser")
   };
   

@@ -24,6 +24,7 @@
     "react-scripts": "5.0.1",
     "stream-browserify": "^3.0.0",
     "styled-components": "^6.1.1",
+    "viem": "^1.21.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
