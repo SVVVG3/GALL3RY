@@ -266,21 +266,64 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
     const ENDPOINTS = {
       // Use consistent lowercase keys for the endpoints
       getnftsforowner: (apiKey, chain = 'eth') => {
-        const baseUrl = chain === 'eth' 
-          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        // Map chain IDs to their correct Alchemy URL formats
+        const chainUrlMap = {
+          'eth': 'eth-mainnet',
+          'ethereum': 'eth-mainnet',
+          'polygon': 'polygon-mainnet',
+          'arbitrum': 'arb-mainnet',
+          'optimism': 'opt-mainnet',
+          'base': 'base-mainnet',
+          'zora': 'zora-mainnet'
+        };
+        
+        // Get the correct chain URL or default to eth-mainnet
+        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
+        
+        // Build the full URL with the correct format
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        console.log(`Using Alchemy URL for ${chain}: ${baseUrl}${apiKey}/getNFTsForOwner`);
+        
         return `${baseUrl}${apiKey}/getNFTsForOwner`;
       },
       getnftmetadata: (apiKey, chain = 'eth') => {
-        const baseUrl = chain === 'eth' 
-          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        // Map chain IDs to their correct Alchemy URL formats
+        const chainUrlMap = {
+          'eth': 'eth-mainnet',
+          'ethereum': 'eth-mainnet',
+          'polygon': 'polygon-mainnet',
+          'arbitrum': 'arb-mainnet',
+          'optimism': 'opt-mainnet',
+          'base': 'base-mainnet',
+          'zora': 'zora-mainnet'
+        };
+        
+        // Get the correct chain URL or default to eth-mainnet
+        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
+        
+        // Build the full URL with the correct format
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        
         return `${baseUrl}${apiKey}/getNFTMetadata`;
       },
       getnftsforcollection: (apiKey, chain = 'eth') => {
-        const baseUrl = chain === 'eth' 
-          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        // Map chain IDs to their correct Alchemy URL formats
+        const chainUrlMap = {
+          'eth': 'eth-mainnet',
+          'ethereum': 'eth-mainnet',
+          'polygon': 'polygon-mainnet',
+          'arbitrum': 'arb-mainnet',
+          'optimism': 'opt-mainnet',
+          'base': 'base-mainnet',
+          'zora': 'zora-mainnet'
+        };
+        
+        // Get the correct chain URL or default to eth-mainnet
+        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
+        
+        // Build the full URL with the correct format
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        
         return `${baseUrl}${apiKey}/getNFTsForCollection`;
       }
     };

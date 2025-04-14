@@ -141,34 +141,51 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     
     // Map the response to our expected format
     const result = {
-      nfts: (response.data.ownedNfts || []).map(nft => {
-        // Safely extract media data with fallbacks
-        const mediaArray = Array.isArray(nft.media) ? nft.media : [];
-        const firstMedia = mediaArray[0] || {};
-        
-        return {
-          id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
-          tokenId: nft.tokenId || '0',
-          contractAddress: nft.contract?.address || 'unknown',
-          name: nft.title || `#${nft.tokenId || '0'}`,
-          description: nft.description || '',
-          network: chain,
-          ownerAddress: normalizedAddress,
-          collection: {
-            name: nft.contract?.name || 'Unknown Collection',
-            symbol: nft.contract?.symbol || '',
-            tokenType: nft.contract?.tokenType || 'ERC721',
-          },
-          metadata: nft.metadata || {},
-          media: {
-            original: firstMedia.raw || firstMedia.gateway || '',
-            gateway: firstMedia.gateway || '',
-            thumbnail: firstMedia.thumbnail || '',
-            format: firstMedia.format || '',
-          },
-          timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
-        };
-      }),
+      nfts: Array.isArray(response.data.ownedNfts) ? response.data.ownedNfts.map(nft => {
+        try {
+          // Safely extract media data with fallbacks
+          const mediaArray = Array.isArray(nft.media) ? nft.media : [];
+          const firstMedia = mediaArray[0] || {};
+          
+          return {
+            id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
+            tokenId: nft.tokenId || '0',
+            contractAddress: nft.contract?.address || 'unknown',
+            name: nft.title || `#${nft.tokenId || '0'}`,
+            description: nft.description || '',
+            network: chain,
+            ownerAddress: normalizedAddress,
+            collection: {
+              name: nft.contract?.name || 'Unknown Collection',
+              symbol: nft.contract?.symbol || '',
+              tokenType: nft.contract?.tokenType || 'ERC721',
+            },
+            metadata: nft.metadata || {},
+            media: {
+              original: firstMedia.raw || firstMedia.gateway || '',
+              gateway: firstMedia.gateway || '',
+              thumbnail: firstMedia.thumbnail || '',
+              format: firstMedia.format || '',
+            },
+            timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
+          };
+        } catch (err) {
+          console.error('Error processing NFT:', err);
+          // Return a minimal valid NFT object on error
+          return {
+            id: `${chain}:unknown-0`,
+            tokenId: '0',
+            contractAddress: 'unknown',
+            name: 'Error Processing NFT',
+            description: '',
+            network: chain,
+            ownerAddress: normalizedAddress,
+            collection: { name: 'Unknown', symbol: '', tokenType: 'UNKNOWN' },
+            metadata: {},
+            media: { original: '', gateway: '', thumbnail: '', format: '' },
+          };
+        }
+      }) : [],
       pageKey: response.data.pageKey || null,
       hasMore: !!response.data.pageKey,
     };
@@ -197,14 +214,17 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   }
   
   try {
+    console.log(`Starting batch fetch for ${addresses.length} addresses on chain ${chain}`);
+    
     // Process addresses in parallel with limit
     const results = {};
-    const batchSize = 5; // Process 5 addresses at a time
+    const batchSize = 3; // Process 3 addresses at a time (reduced from 5 to prevent rate limiting)
     
     for (let i = 0; i < addresses.length; i += batchSize) {
       const batch = addresses.slice(i, i + batchSize);
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(addresses.length/batchSize)}: ${batch.join(', ')}`);
       
-      // Improved error handling for each address in the batch
+      // Create promises for each address, with robust error handling
       const batchPromises = batch.map(address => {
         // Ensure address is valid
         if (!address) {
@@ -212,50 +232,72 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
           return Promise.resolve({ address: 'unknown', result: { nfts: [], pageKey: null, hasMore: false } });
         }
         
-        // Safely fetch NFTs for this address
-        return fetchNFTsForAddress(address, chain, options)
-          .then(result => {
-            // Ensure we have a valid result object with all required properties
-            if (!result) {
-              console.warn(`No result returned for address ${address}`);
-              return { address, result: { nfts: [], pageKey: null, hasMore: false } };
-            }
-            
-            // Ensure nfts is always an array
-            if (!result.nfts || !Array.isArray(result.nfts)) {
-              console.warn(`Invalid nfts array for address ${address}, replacing with empty array`);
-              result.nfts = [];
-            }
-            
-            // Ensure each NFT has the expected properties
-            result.nfts = result.nfts.map(nft => {
-              if (!nft) return null;
-              
-              // Ensure media property exists
-              if (!nft.media) {
-                nft.media = [];
+        // Return a promise that won't reject
+        return new Promise(resolve => {
+          // Safely fetch NFTs for this address
+          fetchNFTsForAddress(address, chain, options)
+            .then(result => {
+              // Ensure we have a valid result object with all required properties
+              if (!result) {
+                console.warn(`No result returned for address ${address} on chain ${chain}`);
+                return resolve({ address, result: { nfts: [], pageKey: null, hasMore: false } });
               }
               
-              // Ensure contract property exists
-              if (!nft.contract) {
-                nft.contract = {};
+              // Ensure nfts is always an array
+              if (!result.nfts || !Array.isArray(result.nfts)) {
+                console.warn(`Invalid nfts array for address ${address} on chain ${chain}, replacing with empty array`);
+                result.nfts = [];
               }
               
-              // Add owner address if not present
-              if (!nft.ownerAddress) {
-                nft.ownerAddress = address;
-              }
+              // Ensure each NFT has the expected properties
+              result.nfts = result.nfts.map(nft => {
+                if (!nft) return null;
+                
+                // Create a safe NFT object with all required properties
+                const safeNft = {
+                  id: nft.id || `${chain}:unknown-${Date.now()}`,
+                  tokenId: nft.tokenId || '0',
+                  contractAddress: nft.contractAddress || nft.contract?.address || 'unknown',
+                  name: nft.name || `NFT ${nft.tokenId || 'Unknown'}`,
+                  description: nft.description || '',
+                  network: nft.network || chain,
+                  ownerAddress: nft.ownerAddress || address,
+                  
+                  // Ensure these object properties exist
+                  collection: nft.collection || { 
+                    name: nft.contract?.name || 'Unknown Collection',
+                    symbol: nft.contract?.symbol || '',
+                    tokenType: nft.contract?.tokenType || 'ERC721'
+                  },
+                  
+                  metadata: nft.metadata || {},
+                  
+                  // Handle media data safely
+                  media: nft.media || {}
+                };
+                
+                // Ensure media properties are objects not arrays
+                if (Array.isArray(safeNft.media)) {
+                  const firstMedia = safeNft.media[0] || {};
+                  safeNft.media = {
+                    original: firstMedia.raw || firstMedia.gateway || '',
+                    gateway: firstMedia.gateway || '',
+                    thumbnail: firstMedia.thumbnail || '',
+                    format: firstMedia.format || ''
+                  };
+                }
+                
+                return safeNft;
+              }).filter(Boolean); // Remove any null entries
               
-              return nft;
-            }).filter(Boolean); // Remove any null entries
-            
-            return { address, result };
-          })
-          .catch(error => {
-            // Don't let one failure fail the entire batch
-            console.error(`Error in batch fetch for ${address}:`, error.message);
-            return { address, result: { nfts: [], pageKey: null, hasMore: false } };
-          });
+              resolve({ address, result });
+            })
+            .catch(error => {
+              // Don't let one failure fail the entire batch
+              console.error(`Error in batch fetch for ${address} on chain ${chain}:`, error.message);
+              resolve({ address, result: { nfts: [], pageKey: null, hasMore: false } });
+            });
+        });
       });
       
       // Wait for all promises in this batch
@@ -267,11 +309,16 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
           results[address] = result;
         }
       });
+      
+      // Add a small delay between batches to avoid rate limiting
+      if (i + batchSize < addresses.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
     }
     
     return results;
   } catch (error) {
-    console.error('Error in batch fetching NFTs:', error);
+    console.error(`Error in batch fetching NFTs on chain ${chain}:`, error);
     return {};
   }
 };
