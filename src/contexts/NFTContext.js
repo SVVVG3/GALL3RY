@@ -574,7 +574,25 @@ export const NFTProvider = ({ children }) => {
       );
       
       // Combine NFTs from all chains
-      const allNfts = chainResults.flatMap(result => result.nfts || []);
+      const allNfts = chainResults.flatMap(result => {
+        const nftsWithOwners = result.nfts.map(nft => {
+          // Make sure owner address is preserved
+          if (!nft.ownerAddress && addresses.length === 1) {
+            // If we're fetching for a single wallet and NFT has no owner, use the wallet address
+            console.log(`Adding missing ownerAddress ${addresses[0]} to NFT ${nft.id}`);
+            return { ...nft, ownerAddress: addresses[0] };
+          }
+          return nft;
+        });
+        return nftsWithOwners;
+      });
+      
+      // Log stats about missing ownerAddress
+      const nftsWithoutOwner = allNfts.filter(nft => !nft.ownerAddress).length;
+      if (nftsWithoutOwner > 0) {
+        console.warn(`Warning: ${nftsWithoutOwner}/${allNfts.length} NFTs missing ownerAddress after chain combination`);
+      }
+      
       console.log(`Combined NFTs from all chains: ${allNfts.length} total NFTs`);
       
       // Set enhancing status for processing
@@ -648,6 +666,12 @@ export const NFTProvider = ({ children }) => {
         ownerAddress: nfts[0].ownerAddress,
         collection: nfts[0].collection?.name
       });
+      
+      // Check how many NFTs have empty ownerAddress
+      const emptyOwnerCount = nfts.filter(nft => !nft.ownerAddress).length;
+      if (emptyOwnerCount > 0) {
+        console.warn(`Warning: ${emptyOwnerCount} NFTs have empty ownerAddress`);
+      }
     }
 
     let filtered = [...nfts];
@@ -688,12 +712,17 @@ export const NFTProvider = ({ children }) => {
     
     console.log(`After chain filtering: ${filtered.length} NFTs`);
     
-    // Filter by wallet
+    // Filter by wallet - ONLY if selectedWallets isn't empty
     if (selectedWallets.length > 0) {
-      filtered = filtered.filter(nft => 
-        nft.ownerAddress && selectedWallets.includes(nft.ownerAddress.toLowerCase())
-      );
+      console.log('Applying wallet filter');
+      filtered = filtered.filter(nft => {
+        // First ensure we have a valid ownerAddress
+        const ownerAddress = nft.ownerAddress ? nft.ownerAddress.toLowerCase() : null;
+        return ownerAddress && selectedWallets.includes(ownerAddress);
+      });
       console.log(`After wallet filtering: ${filtered.length} NFTs`);
+    } else {
+      console.log('Skipping wallet filter - no wallets selected');
     }
     
     // Filter by search query
@@ -707,6 +736,7 @@ export const NFTProvider = ({ children }) => {
       console.log(`After search filtering: ${filtered.length} NFTs`);
     }
     
+    console.log(`Returning ${filtered.length} filtered NFTs for display`);
     return filtered;
   }, [nfts, selectedChains, selectedWallets, searchQuery]);
   
@@ -786,9 +816,9 @@ export const NFTProvider = ({ children }) => {
     loadingCollectionHolders,
     collectionHolders,
     
-    // Filtered and sorted NFTs
-    filteredNfts: getFilteredNfts,
-    sortedNfts: getSortedNfts,
+    // Filtered and sorted NFTs - ensure these are always arrays
+    filteredNfts: getFilteredNfts || [],
+    sortedNfts: getSortedNfts || [],
     
     // Actions
     setNfts,

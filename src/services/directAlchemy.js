@@ -164,7 +164,16 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
         console.log(`Batch request successful! Received ${response.data.ownedNfts.length} NFTs`);
         
         // Format NFTs using our helper function
-        const formattedNfts = response.data.ownedNfts.map(formatNft).filter(Boolean);
+        const formattedNfts = response.data.ownedNfts.map(nft => {
+          // Make sure we attach the owner address to each NFT
+          // This is critical for filtering by wallet later
+          const ownerNft = {
+            ...nft,
+            // Take owner from nft if available, otherwise try to assign from API owners list
+            ownerAddress: nft.ownerAddress || nft.owner
+          };
+          return formatNft(ownerNft);
+        }).filter(Boolean);
         
         return {
           nfts: formattedNfts,
@@ -197,6 +206,16 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
       const chunk = addresses.slice(i, i + batchSize);
       const chunkPromises = chunk.map(address => 
         getNFTsForOwner(address, chain, requestOptions)
+          .then(result => {
+            // Assign owner address to each NFT
+            if (result.nfts && result.nfts.length > 0) {
+              result.nfts = result.nfts.map(nft => ({
+                ...nft,
+                ownerAddress: nft.ownerAddress || address // Use existing or set the current address
+              }));
+            }
+            return result;
+          })
           .catch(error => {
             console.error(`Error fetching NFTs for address ${address}:`, error);
             // Continue with other addresses even if one fails

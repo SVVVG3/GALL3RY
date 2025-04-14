@@ -46,7 +46,12 @@ const NFTGallery = () => {
   const safeFilteredNFTs = Array.isArray(filteredNFTs) ? filteredNFTs : [];
   
   console.log(`NFTGallery rendering with ${safeFilteredNFTs.length} NFTs to display:`, 
-    safeFilteredNFTs.length > 0 ? safeFilteredNFTs[0] : 'No NFTs');
+    safeFilteredNFTs.length > 0 ? {
+      id: safeFilteredNFTs[0].id,
+      name: safeFilteredNFTs[0].name,
+      imageUrl: safeFilteredNFTs[0].imageUrl,
+      ownerAddress: safeFilteredNFTs[0].ownerAddress
+    } : 'No NFTs');
     
   const { connectedWallets } = useWallet();
   const [showFilters, setShowFilters] = useState(false);
@@ -231,13 +236,17 @@ const NFTGallery = () => {
       console.log("Clearing existing NFTs for fresh load");
       setNfts([]);
       
+      // Force reset the chain filter to 'all' to ensure all NFTs are shown
+      if (!selectedChains.includes('all')) {
+        console.log("Resetting chain filter to 'all'");
+        setSelectedChains(['all']);
+      }
+      
       fetchAllNFTsForWallets(walletAddresses, {
         includeValue: true, 
         includeBalanceUSD: true,
         bypassCache: true,
-        chains: selectedChains.includes('all') ? 
-          ['eth', 'base', 'polygon', 'arbitrum', 'optimism'] : 
-          selectedChains,
+        chains: ['eth', 'base', 'polygon', 'arbitrum', 'optimism'], // Always fetch all chains
         excludeSpam: excludeSpam
       }).finally(() => {
         setFetchingAllWallets(false);
@@ -476,6 +485,18 @@ const NFTGallery = () => {
               safeFilteredNFTs.length > 0 
                 ? `First NFT: ${safeFilteredNFTs[0].id}` 
                 : 'No NFTs available')}
+            {console.log(`NFT data from NFTContext:`, { 
+              isLoading, 
+              hasMore, 
+              filteredNFTs: filteredNFTs ? {
+                length: filteredNFTs.length,
+                isArray: Array.isArray(filteredNFTs)
+              } : 'undefined',
+              safeFilteredNFTs: {
+                length: safeFilteredNFTs.length,
+                isArray: Array.isArray(safeFilteredNFTs)
+              }
+            })}
             <NFTGrid nfts={safeFilteredNFTs} />
           </NFTGridContainer>
           
