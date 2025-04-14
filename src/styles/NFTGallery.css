@@ -2,6 +2,10 @@
   display: flex;
   flex-direction: column;
   gap: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: Arial, sans-serif;
 }
 
 .nft-gallery {
@@ -179,4 +183,119 @@
     font-size: 14px;
     padding-top: 4px;
   }
+}
+
+.gallery-header {
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.gallery-header h1 {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.wallet-input-section {
+  margin-bottom: 20px;
+}
+
+.wallet-input-section form {
+  display: flex;
+  gap: 10px;
+}
+
+.wallet-input {
+  flex: 1;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.add-wallet-button {
+  padding: 10px 20px;
+  background-color: #3498db;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.add-wallet-button:hover {
+  background-color: #2980b9;
+}
+
+.wallets-list {
+  margin-bottom: 20px;
+}
+
+.wallets-list h3 {
+  margin-bottom: 10px;
+}
+
+.wallets-list ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  list-style: none;
+  padding: 0;
+}
+
+.wallet-tag {
+  display: flex;
+  align-items: center;
+  background-color: #f0f0f0;
+  padding: 5px 10px;
+  border-radius: 4px;
+}
+
+.remove-wallet-button {
+  margin-left: 8px;
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.search-section {
+  margin-bottom: 20px;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 16px;
+}
+
+.nft-count {
+  margin-bottom: 20px;
+  text-align: right;
+  font-size: 14px;
+  color: #777;
+}
+
+.error-message {
+  background-color: #ffebee;
+  color: #c62828;
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.loading-indicator {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+}
+
+.load-more {
+  text-align: center;
+  padding: 20px;
+  margin-top: 20px;
+  color: #666;
+  font-style: italic;
 } 

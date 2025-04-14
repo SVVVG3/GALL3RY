@@ -17,6 +17,11 @@ import UserProfilePage from './components/UserProfilePage';
 import HomePage from './pages/HomePage'; // Import HomePage from the correct location
 import safeStorage from './utils/storage';
 
+// Import our new components
+import { SimpleNFTProvider } from './contexts/SimpleNFTContext';
+import SimpleNFTGallery from './components/SimpleNFTGallery';
+import SimpleGalleryPage from './pages/SimpleGalleryPage';
+
 // Loading component for suspense fallback
 const LoadingScreen = () => (
   <div className="loading-container">
@@ -127,6 +132,7 @@ function App() {
                 <main className="app-content">
                   <Routes>
                     <Route path="/" element={<HomePage />} />
+                    <Route path="/simple" element={<SimpleGalleryPage />} />
                     <Route path="/user/:username" element={
                       <NFTProvider>
                         <UserProfilePage />
