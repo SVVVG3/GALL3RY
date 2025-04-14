@@ -1,21 +1,29 @@
 const webpack = require('webpack');
 
-module.exports = function override(config) {
+module.exports = function override(config, env) {
   // Add polyfills for Node.js core modules
   config.resolve.fallback = {
     ...config.resolve.fallback,
-    "buffer": require.resolve("buffer/"),
-    "stream": require.resolve("stream-browserify"),
-    "util": require.resolve("util/"),
+    "path": require.resolve("path-browserify"),
     "crypto": require.resolve("crypto-browserify"),
+    "stream": require.resolve("stream-browserify"),
+    "fs": false,
+    "os": require.resolve("os-browserify"),
+    "http": require.resolve("stream-http"),
+    "https": require.resolve("https-browserify"),
+    "buffer": require.resolve("buffer/"),
+    "url": require.resolve("url/"),
+    "util": require.resolve("util/"),
+    "assert": require.resolve("assert/"),
+    "process": require.resolve("process/browser"),
   };
 
-  // Add the necessary plugins
+  // Add plugins
   config.plugins = [
     ...config.plugins,
     new webpack.ProvidePlugin({
-      Buffer: ['buffer', 'Buffer'],
       process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
     }),
   ];
 
