@@ -3,7 +3,7 @@ import axios from 'axios';
 
 // Define constants locally rather than importing them
 // This helps break potential circular dependencies
-const ZAPPER_API_URL = process.env.REACT_APP_ZAPPER_API_URL || 'https://api.zapper.xyz/v2';
+const ZAPPER_API_URL = process.env.REACT_APP_ZAPPER_API_URL || 'https://public.zapper.xyz/graphql';
 const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
 const FALLBACK_ZAPPER_URL = 'https://api.zapper.fi/v2';
 
