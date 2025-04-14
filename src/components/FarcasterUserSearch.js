@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-// Remove the direct import which causes initialization order issues
-// import zapperService from '../services/zapperService';
+// Import getFarcasterProfile directly from zapperService
+import { getFarcasterProfile } from '../services/zapperService';
 import { useNFT } from '../contexts/NFTContext';
 import NftGrid from './NFTGrid';
 import '../styles/FarcasterUserSearch.css';
@@ -65,8 +65,8 @@ class APIErrorBoundary extends React.Component {
  * @param {string} props.initialUsername - Optional initial username to search for
  */
 const FarcasterUserSearch = ({ initialUsername }) => {
-  // Get NFT context functions and services
-  const { getFarcasterProfile, services } = useNFT();
+  // Get NFT context functions and services - remove getFarcasterProfile from destructuring
+  const { services } = useNFT();
   const alchemyService = services?.alchemy;
   
   // Search state
@@ -213,12 +213,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         return;
       }
       
-      // Use context method instead of direct zapperService call
-      // Add safety check for getFarcasterProfile availability
-      if (!getFarcasterProfile || typeof getFarcasterProfile !== 'function') {
-        throw new Error('Farcaster profile service unavailable. Please try refreshing the page.');
-      }
-      
+      // Now using the directly imported function instead of from context
       const profile = await getFarcasterProfile(cleanQuery);
       
       // Extract wallet addresses using our helper method
