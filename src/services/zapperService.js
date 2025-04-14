@@ -98,12 +98,17 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
           throw new Error('Empty response from server');
         }
         
-        // Log response details for debugging
+        // Enhanced response logging for easier debugging
         console.log('Response status:', response.status);
         console.log('Response shape:', {
           hasData: !!response.data,
-          hasErrors: !!response.data.errors,
+          hasErrors: !!(response.data && response.data.errors),
           dataKeys: response.data ? Object.keys(response.data) : [],
+          data: response.data ? (
+            typeof response.data.data === 'object' ? 
+              Object.keys(response.data.data || {}) : 
+              (response.data.data ? 'primitive value' : 'null')
+          ) : 'no data'
         });
         
         // Check if response has errors
@@ -113,32 +118,11 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
           throw new Error(errorMsg);
         }
         
-        // If we're looking for a specific entity that doesn't exist,
-        // handle that case without retrying
-        if (response.data.data && 
-            variables.username && 
-            query.includes('farcasterProfile') && 
-            !response.data.data.farcasterProfile) {
-          console.log(`Farcaster profile not found for username: ${variables.username}`);
-          
-          // Create a custom error with a more descriptive message
-          const notFoundError = new Error(`Could not find Farcaster profile for username: ${variables.username}`);
-          notFoundError.code = 'PROFILE_NOT_FOUND';
-          notFoundError.response = response;
-          throw notFoundError;
-        }
-        
         // Return either response.data.data (standard GraphQL format) or response.data (direct format)
         // This handles different API formats that might be returned
         return response.data.data || response.data;
     } catch (error) {
         lastError = error;
-        
-        // If it's a known "not found" error, don't retry
-        if (error.code === 'PROFILE_NOT_FOUND') {
-          console.log('Not retrying for not found profile');
-          throw error;
-        }
         
         retryCount++;
         
@@ -186,17 +170,17 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     console.log(`Input appears to be ENS name: ${cleanInput}, will also try: ${alternativeUsername}`);
   }
   
-  // Construct the query variables based on input type - exactly matching Zapper API docs
+  // Construct the query variables based on input type
   const variables = isFid 
     ? { fid: parseInt(cleanInput, 10) }
     : { username: cleanInput };
   
   console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   
-  // GraphQL query - exact match with Zapper API docs
+  // GraphQL query based on Zapper API documentation
   const query = `
-    query GetFarcasterProfile($username: String, $fid: Int) {
-      farcasterProfile(username: $username, fid: $fid) {
+    query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
+      farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
         username
         fid
         metadata {
@@ -212,34 +196,102 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   `;
   
   try {
-    // Log the request for debugging
-    console.log('Fetching Farcaster profile for:', { username: variables.username, fid: variables.fid });
+    // Try Zapper API endpoints first
+    const endpoints = [
+      // First try our app's proxied endpoint
+      `${window.location.origin}/api/zapper`,
+      // Then try direct Zapper GraphQL endpoints
+      'https://api.zapper.xyz/v2/graphql',
+      'https://api.zapper.fi/v2/graphql',
+      'https://public.zapper.xyz/graphql'
+    ];
     
-    const response = await makeGraphQLRequest(query, variables);
+    let profileData = null;
+    let lastError = null;
     
-    // Log response details for debugging
-    console.log('Response status:', response.status);
-    
-    // Check if response has GraphQL errors
-    if (response.errors) {
-      console.error('GraphQL errors:', response.errors);
-      throw new Error(response.errors[0]?.message || 'Error fetching Farcaster profile');
+    // Try each Zapper endpoint
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying endpoint: ${endpoint}`);
+        
+        const headers = {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        };
+        
+        // Add API key if available for direct Zapper endpoints
+        if (endpoint.includes('zapper.') && ZAPPER_API_KEY) {
+          headers['X-API-KEY'] = ZAPPER_API_KEY;
+        }
+        
+        const response = await axios.post(
+          endpoint,
+          { query, variables },
+          { headers }
+        );
+        
+        // Check for GraphQL errors
+        if (response.data?.errors) {
+          console.error('GraphQL errors:', response.data.errors);
+          throw new Error(response.data.errors[0]?.message || 'GraphQL error');
+        }
+        
+        // Try to find profile data in various possible response formats
+        if (response.data?.data?.farcasterProfile) {
+          profileData = response.data.data.farcasterProfile;
+        } else if (response.data?.farcasterProfile) {
+          profileData = response.data.farcasterProfile;
+        }
+        
+        if (profileData) {
+          console.log('Found Farcaster profile via Zapper API:', profileData);
+          return profileData;
+        }
+        
+        console.log('No profile data found in the response');
+      } catch (error) {
+        console.error(`Error with Zapper endpoint ${endpoint}:`, error.message);
+        lastError = error;
+      }
     }
     
-    // Check for data existence - data might be directly in response or in response.data
-    const data = response.data || response;
-    
-    // Now check if the profile data is missing
-    if (!data || !data.farcasterProfile) {
-      console.error('Missing profile data in response:', response);
-      throw new Error('Farcaster profile not found');
+    // If ENS name and all Zapper endpoints failed, try alternative username
+    if (isEnsName && alternativeUsername) {
+      console.log(`Trying alternative username (without .eth): ${alternativeUsername}`);
+      try {
+        return await getFarcasterProfile(alternativeUsername);
+      } catch (altError) {
+        console.error('Alternative username also failed:', altError.message);
+      }
     }
     
-    console.log('Found Farcaster profile:', data.farcasterProfile);
-    return data.farcasterProfile;
+    // All Zapper endpoints failed, try our Neynar-based proxy as fallback
+    console.log('All Zapper endpoints failed, trying Neynar-based proxy endpoint as fallback');
+    
+    const proxyEndpoint = `${window.location.origin}/api/farcaster-profile`;
+    console.log(`Fetching profile via proxy endpoint: ${proxyEndpoint}`);
+    
+    const proxyResponse = await axios.get(proxyEndpoint, {
+      params: {
+        ...(isFid ? { fid: variables.fid } : { username: variables.username })
+      }
+    });
+    
+    if (proxyResponse.data && proxyResponse.data.success === false) {
+      throw new Error(proxyResponse.data.message || 'Failed to fetch profile via proxy');
+    }
+    
+    const proxyProfileData = proxyResponse.data?.profile || proxyResponse.data;
+    
+    if (!proxyProfileData) {
+      throw new Error(`Farcaster profile not found for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
+    }
+    
+    console.log('Found Farcaster profile via proxy:', proxyProfileData);
+    return proxyProfileData;
   } catch (error) {
     console.error('Error in getFarcasterProfile:', error);
-    throw error;
+    throw new Error(`Failed to find Farcaster profile for ${cleanInput}: ${error.message}`);
   }
 };
 
