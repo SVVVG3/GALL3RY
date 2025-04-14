@@ -1,6 +1,13 @@
 import axios from 'axios';
-import { ZAPPER_PROXY_URL } from '../constants';
-import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
+// Don't directly import from constants.js
+// import { ZAPPER_PROXY_URL } from '../constants';
+// Don't directly import from config/constants
+// import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
+
+// Instead, access environment variables and define constants locally
+const ZAPPER_PROXY_URL = '/api/zapper';
+const ZAPPER_SERVER_URL = 'https://api.zapper.fi/v2';
+const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
 
 // Create a custom axios instance specifically for Zapper API calls
 const zapperAxios = axios.create({
