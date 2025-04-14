@@ -1,7 +1,9 @@
+// Simple webpack configuration overrides for polyfills
 const webpack = require('webpack');
+const path = require('path');
 
 module.exports = function override(config) {
-  // Add polyfills for Node.js core modules
+  // Add fallbacks for Node.js core modules
   config.resolve.fallback = {
     ...config.resolve.fallback,
     "crypto": require.resolve("crypto-browserify"),
@@ -10,15 +12,16 @@ module.exports = function override(config) {
     "os": require.resolve("os-browserify/browser"),
     "path": require.resolve("path-browserify"),
     "fs": false,
-    "http": require.resolve("stream-http"),
-    "https": require.resolve("https-browserify"),
-    "assert": require.resolve("assert/"),
-    "url": require.resolve("url/"),
-    "util": require.resolve("util/"),
-    "process": require.resolve("process/browser"),
+    "process": require.resolve("process/browser")
   };
   
-  // Add plugins for polyfills
+  // Add alias for process/browser to handle process in ESM
+  config.resolve.alias = {
+    ...config.resolve.alias,
+    "process/browser": require.resolve("process/browser")
+  };
+  
+  // Add plugins for global polyfills
   config.plugins.push(
     new webpack.ProvidePlugin({
       process: 'process/browser',

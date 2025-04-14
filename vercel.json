@@ -1,6 +1,7 @@
 {
   "version": 2,
   "framework": "create-react-app",
+  "buildCommand": "npm run vercel-build",
   "routes": [
     { 
       "src": "/api/(.*)", 
