@@ -204,50 +204,151 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
  */
 const formatNft = (nft) => {
   try {
-    // v3 API has different structure
+    // Debug the incoming NFT data
+    console.log(`Formatting NFT data for: ${nft.contract?.address}-${nft.tokenId}`, 
+                JSON.stringify(nft).substring(0, 200) + '...');
+    
+    // Extract basic data
     const contractAddress = nft.contract?.address;
     const tokenId = nft.tokenId;
+    const chain = nft.chain || 'eth';
+    
+    // Extract metadata from different possible sources in the API response
     const metadata = nft.tokenMetadata || nft.metadata || {};
     const title = nft.name || metadata?.name || `#${tokenId}`;
     const description = nft.description || metadata?.description || '';
-    const chain = nft.chain || 'eth';
     
-    // Extract media from v3 structure with enhanced fallbacks
+    // Extract images with extensive fallbacks
     let imageUrl = '';
     let rawImageUrl = '';
+    
+    // Debug image extraction
+    console.log(`Image extraction for ${contractAddress}-${tokenId}:`, {
+      hasImage: !!nft.image,
+      hasMedia: !!nft.media,
+      mediaLength: nft.media?.length,
+      gatewayImage: nft.image?.gateway,
+      originalUrl: nft.image?.originalUrl,
+      tokenUriGateway: nft.tokenUri?.gateway,
+      metadataImage: metadata?.image
+    });
 
-    // First check for Alchemy's optimized gateway URLs
+    // First check if we have a direct image object with gateway URL (Alchemy v3 format)
     if (nft.image && nft.image.gateway) {
       imageUrl = nft.image.gateway; // Alchemy's optimized and cached URL
       rawImageUrl = nft.image.originalUrl || nft.image.raw || nft.image.url || '';
+      console.log(`Using image.gateway URL: ${imageUrl}`);
     } 
-    // Then check image as a string
+    // Then check if image is a direct string
     else if (nft.image && typeof nft.image === 'string') {
       imageUrl = nft.image;
       rawImageUrl = nft.image;
+      console.log(`Using direct image string: ${imageUrl}`);
     }
     // Then check media array from Alchemy
     else if (nft.media && nft.media.length > 0) {
       // Prefer gateway URLs from Alchemy as they're optimized and cached
       imageUrl = nft.media[0]?.gateway || nft.media[0]?.raw || nft.media[0]?.uri || '';
       rawImageUrl = nft.media[0]?.raw || nft.media[0]?.uri || imageUrl;
+      console.log(`Using media[0] URL: ${imageUrl}`);
     } 
-    // Finally check metadata
+    // Check token URI from OpenSea or metadata
+    else if (nft.tokenUri?.gateway) {
+      imageUrl = nft.tokenUri.gateway;
+      rawImageUrl = nft.tokenUri.raw || imageUrl;
+      console.log(`Using tokenUri.gateway: ${imageUrl}`);
+    }
+    // Check raw metadata image field
     else if (metadata?.image) {
       imageUrl = metadata.image;
       rawImageUrl = metadata.image;
+      console.log(`Using metadata.image: ${imageUrl}`);
     }
-
-    // If no image URL found, try to extract from metadata.image_url
-    if (!imageUrl && metadata?.image_url) {
-      imageUrl = metadata.image_url;
-      rawImageUrl = metadata.image_url;
-    }
-
-    // Extract contract metadata
-    const contractMetadata = nft.contractMetadata || {};
     
-    return {
+    // If no image URL found, check all other possible locations
+    if (!imageUrl || imageUrl.includes('placeholder') || imageUrl.startsWith('data:')) {
+      if (metadata?.image_url) {
+        imageUrl = metadata.image_url;
+        rawImageUrl = metadata.image_url;
+        console.log(`Using metadata.image_url fallback: ${imageUrl}`);
+      } else if (nft.contractMetadata?.openSea?.imageUrl) {
+        // Use collection image as last resort
+        imageUrl = nft.contractMetadata.openSea.imageUrl;
+        rawImageUrl = imageUrl;
+        console.log(`Using contractMetadata.openSea.imageUrl fallback: ${imageUrl}`);
+      } else {
+        // Default placeholder
+        imageUrl = '/assets/placeholder-nft.svg';
+        rawImageUrl = imageUrl;
+        console.log(`No image found, using placeholder`);
+      }
+    }
+
+    // Fix IPFS and Arweave URLs if needed
+    if (imageUrl && imageUrl.startsWith('ipfs://')) {
+      imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      console.log(`Fixed IPFS URL: ${imageUrl}`);
+    } else if (imageUrl && imageUrl.startsWith('ar://')) {
+      imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Fixed Arweave URL: ${imageUrl}`);
+    }
+
+    // Do the same for rawImageUrl
+    if (rawImageUrl && rawImageUrl.startsWith('ipfs://')) {
+      rawImageUrl = rawImageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    } else if (rawImageUrl && rawImageUrl.startsWith('ar://')) {
+      rawImageUrl = rawImageUrl.replace('ar://', 'https://arweave.net/');
+    }
+
+    // Extract price and value data
+    let estimatedValue = null;
+    let floorPrice = null;
+
+    // PRICE DATA EXTRACTION - Check all possible price sources
+    
+    // 1. Check Contract Metadata OpenSea
+    if (nft.contractMetadata?.openSea?.floorPrice) {
+      floorPrice = {
+        value: nft.contractMetadata.openSea.floorPrice,
+        currency: 'ETH',
+        valueUsd: nft.contractMetadata.openSea.floorPrice * 3000 // Rough ETH price estimate
+      };
+      console.log(`Found OpenSea floor price: ${floorPrice.value} ETH`);
+    }
+
+    // 2. Check for floorPrice in the root
+    if (nft.floorPrice && !floorPrice) {
+      floorPrice = {
+        value: nft.floorPrice,
+        currency: 'ETH',
+        valueUsd: nft.floorPrice * 3000 // Rough ETH price estimate
+      };
+      console.log(`Found root floor price: ${floorPrice.value} ETH`);
+    }
+
+    // 3. Check for contract.openSea directly
+    if (nft.contract?.openSea?.floorPrice && !floorPrice) {
+      floorPrice = {
+        value: nft.contract.openSea.floorPrice,
+        currency: 'ETH',
+        valueUsd: nft.contract.openSea.floorPrice * 3000
+      };
+      console.log(`Found contract.openSea floor price: ${floorPrice.value} ETH`);
+    }
+    
+    // Create estimated value object if we have floor price
+    if (floorPrice) {
+      estimatedValue = {
+        value: floorPrice.value,
+        valueUsd: floorPrice.valueUsd,
+        denomination: {
+          symbol: 'ETH'
+        }
+      };
+    }
+    
+    // Format the final object
+    const formattedNft = {
       id: `${chain}:${contractAddress}-${tokenId}`,
       name: title,
       description,
@@ -255,20 +356,34 @@ const formatNft = (nft) => {
       contractAddress,
       network: chain,
       collection: {
-        name: nft.contract?.name || contractMetadata?.name || metadata?.collection || 'Unknown Collection',
+        name: nft.contract?.name || nft.contractMetadata?.name || 'Unknown Collection',
         address: contractAddress,
         id: `${chain}:${contractAddress}`,
         network: chain,
-        floorPrice: contractMetadata?.openSea?.floorPrice || null
+        floorPrice: floorPrice
       },
       imageUrl,
-      rawImageUrl, // Include the raw URL as well
+      rawImageUrl,
+      // Price data
+      estimatedValue,
+      valueUsd: estimatedValue?.valueUsd,
       // Include metadata for completeness
       metadata,
-      contractMetadata,
-      // Original data for debugging
+      contractMetadata: nft.contractMetadata || {},
+      // Keep original data for debug purposes
       alchemyData: process.env.NODE_ENV === 'development' ? nft : undefined
     };
+    
+    // Log the formatted NFT for debugging
+    console.log(`Formatted NFT ${formattedNft.id}:`, {
+      name: formattedNft.name,
+      hasImage: !!formattedNft.imageUrl,
+      imageUrl: formattedNft.imageUrl?.substring(0, 50) + '...',
+      estimatedValue: formattedNft.estimatedValue,
+      floorPrice: formattedNft.collection?.floorPrice
+    });
+    
+    return formattedNft;
   } catch (error) {
     console.error('Error formatting NFT:', error);
     return null;

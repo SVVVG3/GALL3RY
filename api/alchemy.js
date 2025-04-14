@@ -90,16 +90,32 @@ module.exports = async (req, res) => {
     // Prepare request parameters
     const requestParams = { ...params };
     
-    // Ensure we always get complete metadata for better image handling
+    // Enhanced handling for getNFTsForOwner
     if (endpoint === 'getNFTsForOwner') {
-      // Make sure these parameters are explicitly set for best results
+      // Make sure all vital parameters are explicitly set for better results
       requestParams.withMetadata = true;
-      requestParams.pageSize = requestParams.pageSize || 100;
       
-      // Exclude spam by default unless explicitly set to false
-      if (requestParams.excludeSpam !== 'false') {
-        requestParams.excludeFilters = 'SPAM';
+      // Set default pageSize if not already defined
+      if (!requestParams.pageSize) {
+        requestParams.pageSize = 100;
       }
+      
+      // Important: Include token price and floor price data
+      requestParams.tokenUriTimeoutInMs = 5000; // 5 seconds timeout for token URIs
+      
+      // Always include contract metadata
+      requestParams.includeContract = true;
+      
+      // Include OpenSea metadata to get floor prices
+      requestParams.excludeFilters = requestParams.excludeSpam === 'true' ? ['SPAM'] : [];
+      
+      // Always include Floor Price data in the response - vital
+      requestParams.includePrice = true;
+
+      // Set flag to get floor price data from OpenSea
+      requestParams.floorPrice = true;
+      
+      console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
     }
     
     // Handle array parameters
@@ -113,8 +129,8 @@ module.exports = async (req, res) => {
       }
     });
     
-    // Log the request (without sensitive data)
-    console.log(`Proxying Alchemy API request to ${endpoint} on ${chain} chain`);
+    // Log the full request for debugging
+    console.log(`${endpoint} request for ${chain}`, requestParams);
     
     // Special handling for POST requests like getNFTMetadataBatch
     if (endpoint === 'getNFTMetadataBatch') {
