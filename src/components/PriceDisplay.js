@@ -53,17 +53,35 @@ const PriceDisplay = ({
     return '';
   };
   
-  // Handle objects with amount and currency properties
+  // Handle different input formats
   let displayCurrency = currency;
   let displayAmount = amount;
   
-  if (typeof amount === 'object') {
-    if (amount?.currency) displayCurrency = amount.currency;
-    if (amount?.amount !== undefined) displayAmount = amount.amount;
+  // Debug logging
+  console.log('PriceDisplay input:', { amount, currency, type: typeof amount });
+  
+  // Handle case where amount is an object with amount/currency
+  if (amount && typeof amount === 'object') {
+    // New format from getValue
+    if (amount.amount !== undefined) {
+      displayAmount = amount.amount;
+      if (amount.currency) displayCurrency = amount.currency;
+    } 
+    // Legacy format
+    else if (amount.value !== undefined) {
+      displayAmount = amount.value;
+      if (amount.symbol) displayCurrency = amount.symbol;
+    }
   }
   
+  // Format the amount for display
   const formattedAmount = formatAmount(displayAmount);
   const symbol = getCurrencySymbol(displayCurrency);
+  
+  // If we have no valid amount to display, return null
+  if (formattedAmount === 'N/A' || displayAmount === 0) {
+    return null;
+  }
   
   return (
     <Container>

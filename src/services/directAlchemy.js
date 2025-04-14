@@ -230,7 +230,8 @@ const formatNft = (nft) => {
       gatewayImage: nft.image?.gateway,
       originalUrl: nft.image?.originalUrl,
       tokenUriGateway: nft.tokenUri?.gateway,
-      metadataImage: metadata?.image
+      metadataImage: metadata?.image,
+      hasOpenSeaMetadata: !!nft.contractMetadata?.openSea
     });
 
     // First check if we have a direct image object with gateway URL (Alchemy v3 format)
@@ -286,6 +287,7 @@ const formatNft = (nft) => {
 
     // Fix IPFS and Arweave URLs if needed
     if (imageUrl && imageUrl.startsWith('ipfs://')) {
+      // Try multiple IPFS gateways
       imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
       console.log(`Fixed IPFS URL: ${imageUrl}`);
     } else if (imageUrl && imageUrl.startsWith('ar://')) {
@@ -303,37 +305,76 @@ const formatNft = (nft) => {
     // Extract price and value data
     let estimatedValue = null;
     let floorPrice = null;
+    let valueUsd = null;
 
     // PRICE DATA EXTRACTION - Check all possible price sources
+    // Log entire pricing data structure for debugging
+    console.log(`Price data debug for ${contractAddress}-${tokenId}:`, {
+      hasSpamInfo: !!nft.spamInfo,
+      hasContractMetadata: !!nft.contractMetadata,
+      hasOpenSea: !!nft.contractMetadata?.openSea,
+      floorPrice: nft.contractMetadata?.openSea?.floorPrice,
+      hasPrice: !!nft.price,
+      priceValue: nft.price?.value,
+      hasCollection: !!nft.collection,
+      collectionFloorPrice: nft.collection?.floorPrice?.value,
+      directFloorPrice: nft.floorPrice
+    });
     
     // 1. Check Contract Metadata OpenSea
     if (nft.contractMetadata?.openSea?.floorPrice) {
       floorPrice = {
         value: nft.contractMetadata.openSea.floorPrice,
         currency: 'ETH',
-        valueUsd: nft.contractMetadata.openSea.floorPrice * 3000 // Rough ETH price estimate
+        valueUsd: nft.contractMetadata.openSea.floorPrice * 1600 // Updated ETH price estimate
       };
       console.log(`Found OpenSea floor price: ${floorPrice.value} ETH`);
+      valueUsd = floorPrice.valueUsd;
     }
 
-    // 2. Check for floorPrice in the root
-    if (nft.floorPrice && !floorPrice) {
+    // 2. Check for price object directly in the NFT
+    if (nft.price && !floorPrice) {
       floorPrice = {
-        value: nft.floorPrice,
+        value: nft.price.value || nft.price.amount,
+        currency: nft.price.currency || 'ETH',
+        valueUsd: nft.price.valueUsd || (nft.price.value * 1600)
+      };
+      console.log(`Found direct price: ${floorPrice.value} ${floorPrice.currency}`);
+      valueUsd = floorPrice.valueUsd;
+    }
+    
+    // 3. Check for collection floor price
+    if (nft.collection?.floorPrice && !floorPrice) {
+      floorPrice = {
+        value: nft.collection.floorPrice.value,
+        currency: nft.collection.floorPrice.currency || 'ETH',
+        valueUsd: nft.collection.floorPrice.valueUsd || (nft.collection.floorPrice.value * 1600)
+      };
+      console.log(`Found collection floor price: ${floorPrice.value} ${floorPrice.currency}`);
+      valueUsd = floorPrice.valueUsd;
+    }
+
+    // 4. Check for floorPrice in the root
+    if (nft.floorPrice && !floorPrice) {
+      const floorValue = typeof nft.floorPrice === 'object' ? nft.floorPrice.value : nft.floorPrice;
+      floorPrice = {
+        value: floorValue,
         currency: 'ETH',
-        valueUsd: nft.floorPrice * 3000 // Rough ETH price estimate
+        valueUsd: floorValue * 1600 // Updated ETH price estimate
       };
       console.log(`Found root floor price: ${floorPrice.value} ETH`);
+      valueUsd = floorPrice.valueUsd;
     }
 
-    // 3. Check for contract.openSea directly
+    // 5. Check for contract.openSea directly
     if (nft.contract?.openSea?.floorPrice && !floorPrice) {
       floorPrice = {
         value: nft.contract.openSea.floorPrice,
         currency: 'ETH',
-        valueUsd: nft.contract.openSea.floorPrice * 3000
+        valueUsd: nft.contract.openSea.floorPrice * 1600
       };
       console.log(`Found contract.openSea floor price: ${floorPrice.value} ETH`);
+      valueUsd = floorPrice.valueUsd;
     }
     
     // Create estimated value object if we have floor price
@@ -342,7 +383,7 @@ const formatNft = (nft) => {
         value: floorPrice.value,
         valueUsd: floorPrice.valueUsd,
         denomination: {
-          symbol: 'ETH'
+          symbol: floorPrice.currency || 'ETH'
         }
       };
     }
@@ -366,7 +407,7 @@ const formatNft = (nft) => {
       rawImageUrl,
       // Price data
       estimatedValue,
-      valueUsd: estimatedValue?.valueUsd,
+      valueUsd: valueUsd || estimatedValue?.valueUsd,
       // Include metadata for completeness
       metadata,
       contractMetadata: nft.contractMetadata || {},
@@ -380,7 +421,8 @@ const formatNft = (nft) => {
       hasImage: !!formattedNft.imageUrl,
       imageUrl: formattedNft.imageUrl?.substring(0, 50) + '...',
       estimatedValue: formattedNft.estimatedValue,
-      floorPrice: formattedNft.collection?.floorPrice
+      floorPrice: formattedNft.collection?.floorPrice,
+      valueUsd: formattedNft.valueUsd
     });
     
     return formattedNft;

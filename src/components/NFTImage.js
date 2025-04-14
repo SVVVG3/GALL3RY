@@ -14,6 +14,14 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
   const [attemptCount, setAttemptCount] = useState(0);
   const [urlsAttempted, setUrlsAttempted] = useState([]);
 
+  // Define IPFS gateways to try in sequence
+  const IPFS_GATEWAYS = [
+    'https://ipfs.io/ipfs/',
+    'https://cloudflare-ipfs.com/ipfs/',
+    'https://ipfs.infura.io/ipfs/',
+    'https://gateway.pinata.cloud/ipfs/'
+  ];
+
   // When src or rawSrc change, reset state and try loading again
   useEffect(() => {
     if (!src && !rawSrc) {
@@ -48,7 +56,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     
     if (urlsAttempted.includes(originalSrc)) {
       console.log(`Already attempted this URL, skipping to next fallback`);
-      if (attempt < 2) {
+      if (attempt < 3) { // Increased max attempts to 4
         processImageUrl(rawSrc, null, attempt + 1);
       } else {
         useDefaultPlaceholder();
@@ -72,7 +80,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
       // Handle IPFS/AR URLs
       else if (originalSrc && originalSrc.startsWith('ipfs://')) {
         console.log(`Converting IPFS URL: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.io/ipfs/');
+        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[0]);
       } else if (originalSrc && originalSrc.startsWith('ar://')) {
         console.log(`Converting Arweave URL: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc.replace('ar://', 'https://arweave.net/');
@@ -102,10 +110,10 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
       // Second attempt: try with alternative gateways
       if (originalSrc && originalSrc.startsWith('ipfs://')) {
         console.log(`Trying alternative IPFS gateway for: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.infura.io/ipfs/');
+        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[1]);
       } else if (originalSrc && originalSrc.includes('ipfs.io')) {
-        console.log(`Switching IPFS gateway from ipfs.io to Infura: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs.io', 'ipfs.infura.io');
+        console.log(`Switching IPFS gateway from ipfs.io to Cloudflare: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc.replace('https://ipfs.io/ipfs/', IPFS_GATEWAYS[1]);
       } else if (rawSrc && !urlsAttempted.includes(rawSrc)) {
         console.log(`Trying rawSrc as fallback: ${rawSrc.substring(0, 50)}...`);
         processedSrc = rawSrc;
@@ -116,9 +124,44 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
         shouldSkip = true;
         processImageUrl(null, null, 2);
       }
+    } else if (attempt === 2) {
+      // Third attempt: try another IPFS gateway or alternative
+      if (originalSrc && originalSrc.startsWith('ipfs://')) {
+        console.log(`Trying another IPFS gateway: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[2]);
+      } else if (originalSrc && (originalSrc.includes('ipfs.io') || originalSrc.includes('cloudflare-ipfs'))) {
+        console.log(`Trying Infura IPFS gateway: ${originalSrc.substring(0, 50)}...`);
+        const ipfsHash = originalSrc.split('/ipfs/')[1];
+        if (ipfsHash) {
+          processedSrc = `${IPFS_GATEWAYS[2]}${ipfsHash}`;
+        } else {
+          processedSrc = originalSrc;
+        }
+      } else if (originalSrc && !originalSrc.startsWith('data:')) {
+        // For non-IPFS URLs, try adding a cache-busting query param
+        console.log(`Adding cache-buster to URL: ${originalSrc.substring(0, 50)}...`);
+        const separator = originalSrc.includes('?') ? '&' : '?';
+        processedSrc = `${originalSrc}${separator}cacheBuster=${Date.now()}`;
+      } else {
+        shouldSkip = true;
+        processImageUrl(null, null, 3);
+      }
     } else {
-      // Final attempt - try direct URL or use placeholder
-      if (originalSrc && !originalSrc.startsWith('data:') && !urlsAttempted.includes(originalSrc)) {
+      // Final attempt - try last IPFS gateway or use placeholder
+      if (originalSrc && originalSrc.startsWith('ipfs://')) {
+        console.log(`Trying final IPFS gateway: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[3]);
+      } else if (originalSrc && (originalSrc.includes('/ipfs/'))) {
+        // Try one last IPFS gateway
+        const ipfsHash = originalSrc.split('/ipfs/')[1];
+        if (ipfsHash) {
+          processedSrc = `${IPFS_GATEWAYS[3]}${ipfsHash}`;
+          console.log(`Final IPFS attempt with Pinata gateway: ${processedSrc.substring(0, 50)}...`);
+        } else {
+          useDefaultPlaceholder();
+          return;
+        }
+      } else if (originalSrc && !originalSrc.startsWith('data:') && !urlsAttempted.includes(originalSrc)) {
         console.log(`Last attempt with original URL: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc;
       } else {
@@ -136,7 +179,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
   const attemptLoading = (url, attempt) => {
     if (!url) {
       console.warn('Empty URL provided to attemptLoading');
-      if (attempt < 2) {
+      if (attempt < 3) {
         processImageUrl(null, null, attempt + 1);
       } else {
         useDefaultPlaceholder();
@@ -161,6 +204,8 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     console.warn('Using default placeholder after all attempts failed');
     setMediaSrc('/assets/placeholder-nft.svg');
     setIsVideo(false);
+    // Set loading to false since we're using the placeholder
+    setLoading(false);
   };
 
   const handleMediaLoad = () => {
@@ -174,10 +219,10 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     console.warn(`Error loading media (attempt ${attemptCount + 1}): ${mediaSrc}`);
     
     // Try next fallback strategy if we haven't exhausted them
-    if (attemptCount < 2) {
+    if (attemptCount < 3) {
       processImageUrl(attemptCount === 0 ? rawSrc : null, null, attemptCount + 1);
     } else {
-      // Give up after 3 attempts
+      // Give up after multiple attempts
       console.error(`Failed to load image after ${attemptCount + 1} attempts, using placeholder`);
       useDefaultPlaceholder();
       setError(true);
@@ -197,6 +242,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           onError={handleMediaError}
           style={{ visibility: loading ? 'hidden' : 'visible' }}
           loading="lazy"
+          crossOrigin="anonymous"
         />
       )}
 
@@ -212,6 +258,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           muted
           playsInline
           controlsList="nodownload"
+          crossOrigin="anonymous"
         />
       )}
 

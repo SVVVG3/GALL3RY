@@ -230,67 +230,75 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
   
-  // Fetch NFTs using the best available method
+  // Fetch NFTs using Alchemy service or fallback to other services
   const fetchNfts = useCallback(async (query, options = {}) => {
-    // Reset state if not loading more
-    if (!options.loadMore) {
-      setNfts([]);
-      setPageKey(null);
-      setHasMore(false);
+    // Skip if query is empty
+    if (!query || ((!query.address || query.address === '') && (!query.addresses || query.addresses.length === 0))) {
+      console.warn('Invalid query for fetchNfts:', query);
+      return { nfts: [], pageKey: null, hasMore: false };
     }
-    
+
     try {
+      // Set loading state at the start of the fetch
       setIsLoading(true);
-      setError(null);
-      
-      // Choose which service to use based on query type and availability
+
+      // Determine which function to use based on query
       let result;
-      
-      if (query.addresses) {
-        // Fetch by addresses
+      if (query.addresses && query.addresses.length > 0) {
+        console.log(`Fetching NFTs for ${query.addresses.length} addresses on ${query.chain || 'eth'} chain`);
         result = await fetchNftsForAddresses(query.addresses, query.chain, {
           pageKey: options.loadMore ? pageKey : null,
-          pageSize: options.pageSize || NFT_PAGE_SIZE,
-          excludeSpam: excludeSpam
-        });
-      } else if (query.address) {
-        // Fetch by single address
-        result = await fetchNftsForAddress(query.address, query.chain, {
-          pageKey: options.loadMore ? pageKey : null,
-          pageSize: options.pageSize || NFT_PAGE_SIZE,
-          excludeSpam: excludeSpam
+          excludeSpam,
+          ...options
         });
       } else {
-        throw new Error('Invalid query - must provide addresses or address');
+        console.log(`Fetching NFTs for address ${query.address} on ${query.chain || 'eth'} chain`);
+        result = await fetchNftsForAddress(query.address, query.chain, {
+          pageKey: options.loadMore ? pageKey : null,
+          excludeSpam,
+          ...options
+        });
       }
+
+      // Set pagination state
+      setPageKey(result.pageKey || null);
+      setHasMore(!!result.pageKey);
+
+      // Process NFTs to enhance metadata and images
+      const processedNFTs = await processNFTs(result.nfts, options);
       
-      // Update state based on results
-      if (result) {
-        // If loading more, append to existing NFTs, otherwise replace
-        const newNfts = options.loadMore ? [...nfts, ...result.nfts] : result.nfts;
+      // Update NFT state based on loadMore option
+      if (options.loadMore) {
+        // If loading more, append to existing NFTs
+        const combinedNFTs = [...nfts, ...processedNFTs];
         
-        // Add normalized IDs to NFTs if they don't have them
-        const normalizedNfts = newNfts.map(nft => {
-          if (!nft.id || !nft.id.includes(':')) {
-            return { ...nft, id: normalizeId(nft) };
-          }
-          return nft;
-        }).filter(Boolean); // Remove any that couldn't be normalized
+        // Deduplicate by ID
+        const uniqueNFTs = Array.from(
+          new Map(combinedNFTs.map(nft => [normalizeId(nft), nft])).values()
+        );
         
-        setNfts(normalizedNfts);
-        setPageKey(result.pageKey);
-        setHasMore(!!result.hasMore);
+        setNfts(uniqueNFTs);
+        console.log(`Loaded ${processedNFTs.length} more NFTs, total: ${uniqueNFTs.length}`);
+      } else {
+        // If not loading more, replace existing NFTs
+        setNfts(processedNFTs);
+        console.log(`Loaded ${processedNFTs.length} NFTs (fresh load)`);
       }
-      
-      return result;
-    } catch (err) {
-      console.error('Error fetching NFTs:', err);
-      setError(err.message || 'Failed to fetch NFTs');
+
+      return {
+        nfts: result.nfts,
+        pageKey: result.pageKey,
+        hasMore: !!result.pageKey
+      };
+    } catch (error) {
+      console.error('Error in fetchNfts:', error);
+      setPageKey(null);
+      setHasMore(false);
       return { nfts: [], pageKey: null, hasMore: false };
     } finally {
       setIsLoading(false);
     }
-  }, [nfts, pageKey, excludeSpam, fetchNftsForAddress, fetchNftsForAddresses, normalizeId]);
+  }, [nfts, pageKey, excludeSpam, fetchNftsForAddress, fetchNftsForAddresses, normalizeId, processNFTs]);
   
   // Filter NFTs based on current filters
   const getFilteredNfts = useMemo(() => {
@@ -637,6 +645,167 @@ export const NFTProvider = ({ children }) => {
     }
   }, [normalizeId, services.alchemy]);
   
+  // When processing NFTs, make sure to extract all image and price data
+  const processNFTs = async (nfts, options = {}) => {
+    // Skip if no NFTs
+    if (!nfts || nfts.length === 0) {
+      return [];
+    }
+    
+    try {
+      console.log(`Processing ${nfts.length} NFTs with options:`, options);
+      
+      // Enhance the NFTs with metadata for pricing/images if available
+      const enhancedNFTs = nfts.map(nft => {
+        // Create a unique id if not present
+        if (!nft.id) {
+          const chain = nft.chain || nft.network || 'eth';
+          const contractAddress = nft.contractAddress || nft.contract?.address;
+          const tokenId = nft.tokenId;
+          nft.id = `${chain}:${contractAddress}-${tokenId}`;
+        }
+        
+        // Make sure we have image URLs
+        if (!nft.imageUrl) {
+          const media = nft.media || [];
+          if (media.length > 0) {
+            nft.imageUrl = media[0].gateway || media[0].raw || media[0].uri;
+          } else if (nft.image) {
+            if (typeof nft.image === 'string') {
+              nft.imageUrl = nft.image;
+            } else if (nft.image.gateway) {
+              nft.imageUrl = nft.image.gateway;
+            }
+          } else if (nft.metadata && nft.metadata.image) {
+            nft.imageUrl = nft.metadata.image;
+          }
+        }
+        
+        // Log price data fields for debugging
+        console.log(`Price data fields for NFT ${nft.id}:`, {
+          hasEstimatedValue: !!nft.estimatedValue,
+          estimatedValueType: nft.estimatedValue ? typeof nft.estimatedValue : 'none',
+          hasValueUsd: nft.valueUsd !== undefined,
+          valueUsd: nft.valueUsd,
+          hasFloorPrice: !!(nft.collection?.floorPrice),
+          floorPriceValue: nft.collection?.floorPrice?.value,
+          hasContractMetadata: !!nft.contractMetadata,
+          hasOpenSeaData: !!(nft.contractMetadata?.openSea),
+          openSeaFloorPrice: nft.contractMetadata?.openSea?.floorPrice
+        });
+        
+        // Enhance with price data if available
+        let valueUsd = null;
+        
+        // Check all possible sources for price data
+        if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
+          valueUsd = parseFloat(nft.valueUsd);
+          console.log(`Using direct valueUsd: ${valueUsd}`);
+        } else if (nft.estimatedValue?.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
+          valueUsd = parseFloat(nft.estimatedValue.valueUsd);
+          console.log(`Using estimatedValue.valueUsd: ${valueUsd}`);
+        } else if (nft.estimatedValue?.value !== undefined && nft.estimatedValue.value !== null) {
+          // Convert ETH to USD using an approximate rate
+          const value = parseFloat(nft.estimatedValue.value);
+          const currency = nft.estimatedValue.denomination?.symbol || 'ETH';
+          const rate = currency === 'ETH' ? 1600 : 1; // Basic conversion rate
+          valueUsd = value * rate;
+          console.log(`Calculated valueUsd from ${currency}: ${valueUsd}`);
+        } else if (nft.collection?.floorPrice?.valueUsd !== undefined && nft.collection.floorPrice.valueUsd !== null) {
+          valueUsd = parseFloat(nft.collection.floorPrice.valueUsd);
+          console.log(`Using collection.floorPrice.valueUsd: ${valueUsd}`);
+        } else if (nft.collection?.floorPrice?.value !== undefined && nft.collection.floorPrice.value !== null) {
+          // Convert collection floor price to USD
+          const value = parseFloat(nft.collection.floorPrice.value);
+          const currency = nft.collection.floorPrice.currency || 'ETH';
+          const rate = currency === 'ETH' ? 1600 : 1;
+          valueUsd = value * rate;
+          console.log(`Calculated valueUsd from collection floor price: ${valueUsd}`);
+        } else if (nft.contractMetadata?.openSea?.floorPrice !== undefined && nft.contractMetadata.openSea.floorPrice !== null) {
+          const value = parseFloat(nft.contractMetadata.openSea.floorPrice);
+          valueUsd = value * 1600; // Convert ETH to USD
+          console.log(`Calculated valueUsd from OpenSea floor price: ${valueUsd}`);
+          
+          // Also create an estimatedValue object if not present
+          if (!nft.estimatedValue) {
+            nft.estimatedValue = {
+              value: value,
+              valueUsd: valueUsd,
+              denomination: {
+                symbol: 'ETH'
+              }
+            };
+          }
+          
+          // Add to collection object if not present
+          if (!nft.collection) {
+            nft.collection = {
+              name: nft.contractMetadata?.name || 'Unknown Collection',
+              address: nft.contractAddress || nft.contract?.address,
+              floorPrice: {
+                value: value,
+                valueUsd: valueUsd,
+                currency: 'ETH'
+              }
+            };
+          } else if (!nft.collection.floorPrice) {
+            nft.collection.floorPrice = {
+              value: value,
+              valueUsd: valueUsd,
+              currency: 'ETH'
+            };
+          }
+        }
+        
+        // If we found a USD value, make sure it's set in all relevant places
+        if (valueUsd !== null && !isNaN(valueUsd)) {
+          nft.valueUsd = valueUsd;
+          
+          // Update or create estimatedValue object
+          if (!nft.estimatedValue) {
+            nft.estimatedValue = {
+              value: valueUsd / 1600, // Convert back to ETH for display
+              valueUsd: valueUsd,
+              denomination: {
+                symbol: 'ETH'
+              }
+            };
+          } else if (nft.estimatedValue.valueUsd === undefined || nft.estimatedValue.valueUsd === null) {
+            nft.estimatedValue.valueUsd = valueUsd;
+          }
+          
+          // Update collection floor price if present
+          if (nft.collection?.floorPrice) {
+            if (nft.collection.floorPrice.valueUsd === undefined || nft.collection.floorPrice.valueUsd === null) {
+              nft.collection.floorPrice.valueUsd = valueUsd;
+            }
+          }
+        }
+        
+        return nft;
+      });
+      
+      // For testing, log a sample NFT with image and price data
+      if (enhancedNFTs.length > 0) {
+        console.log('Sample processed NFT:', {
+          id: enhancedNFTs[0].id,
+          name: enhancedNFTs[0].name,
+          hasImage: !!enhancedNFTs[0].imageUrl,
+          imageUrl: enhancedNFTs[0].imageUrl,
+          hasEstimatedValue: !!enhancedNFTs[0].estimatedValue,
+          estimatedValue: enhancedNFTs[0].estimatedValue,
+          valueUsd: enhancedNFTs[0].valueUsd,
+          collectionFloorPrice: enhancedNFTs[0].collection?.floorPrice
+        });
+      }
+      
+      return enhancedNFTs;
+    } catch (error) {
+      console.error('Error processing NFTs:', error);
+      return nfts; // Return original NFTs if processing fails
+    }
+  };
+  
   // Provide context values
   const contextValue = {
     // State
@@ -685,7 +854,8 @@ export const NFTProvider = ({ children }) => {
     // Helper methods
     normalizeId,
     loadedWallets,
-    fetchProgress
+    fetchProgress,
+    processNFTs
   };
   
   return (
