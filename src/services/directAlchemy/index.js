@@ -6,21 +6,24 @@
 const config = require('../../config');
 const axios = require('axios');
 
+const DEMO_KEY = 'demo';
+const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || DEMO_KEY;
+
 // API key handling - prioritize direct key or fallback to proxy
-const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY;
 const ALCHEMY_BASE_URL = config.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/';
 const ALCHEMY_PROXY_URL = config.ALCHEMY_PROXY_URL || '/api/alchemy';
 
-// ALWAYS use the proxy API to ensure we use the server's API key
+// Force using the proxy to ensure server API key is used
+// This prevents using the demo key directly from the client
 const USE_PROXY = true;
 
 // NFT API endpoints
 const NFT_ENDPOINTS = {
-  getNftsForOwner: 'getNftsForOwner',
-  getNftMetadata: 'getNftMetadata',
-  getContractMetadata: 'getContractMetadata',
-  getOwnersForToken: 'getOwnersForToken',
-  getOwnersForCollection: 'getOwnersForCollection'
+  getNftsForOwner: 'getnftsforowner',
+  getNftMetadata: 'getnftmetadata',
+  getContractMetadata: 'getcontractmetadata',
+  getOwnersForToken: 'getownersfortoken',
+  getOwnersForCollection: 'getownersforcollection'
 };
 
 // Helper to get the base URL for a chain

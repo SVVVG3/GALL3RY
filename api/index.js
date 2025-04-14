@@ -1,15 +1,23 @@
-// Consolidated API handler for Vercel deployment
+/**
+ * API routes for the application
+ */
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { parse } = require('url');
+const { URL, parse } = require('url');
 
-// Create Express app
+// Create router
 const app = express();
 
-// Configure middleware
-app.use(cors());
+// Middleware
 app.use(express.json());
+
+// CORS options for all routes
+const corsOptions = {
+  origin: '*',
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -212,146 +220,141 @@ app.get('/farcaster-profile', async (req, res) => {
 });
 
 // ALCHEMY API - Used for all NFT data
-app.all('/alchemy', async (req, res) => {
-  console.log(`Alchemy API request received: ${req.method} ${req.url}`);
-  
-  // CORS headers for local development
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
-  // Handle OPTIONS requests (pre-flight)
+app.all('/alchemy', cors(corsOptions), async (req, res) => {
+  // Add CORS headers for pre-flight requests
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(200).send('OK');
   }
   
-  // Get Alchemy API keys from environment variables
-  const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY || '';
+  // Get Alchemy API key
+  const apiKey = process.env.ALCHEMY_API_KEY;
   
-  // Debug logging for API key - only showing first 4 chars for security
-  console.log(`Alchemy API Key: ${ALCHEMY_API_KEY ? `${ALCHEMY_API_KEY.substring(0, 4)}...` : 'NOT FOUND'}`);
+  // Debug: Log API key (redacted) to verify it's set
+  console.log('Alchemy API Key:', apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : 'NOT SET');
   
-  // Define Alchemy V3 NFT endpoints
-  const ENDPOINTS = {
-    getNFTsForOwner: (apiKey, chain = 'eth') => {
-      const baseUrl = chain === 'eth' 
-        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
-      return `${baseUrl}${apiKey}/getNFTsForOwner`;
-    },
-    getNFTMetadata: (apiKey, chain = 'eth') => {
-      const baseUrl = chain === 'eth' 
-        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
-      return `${baseUrl}${apiKey}/getNFTMetadata`;
-    },
-    getNFTsForCollection: (apiKey, chain = 'eth') => {
-      const baseUrl = chain === 'eth' 
-        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
-        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
-      return `${baseUrl}${apiKey}/getNFTsForCollection`;
-    }
-  };
-  
-  // Parse query parameters
-  const { query } = parse(req.url, true);
-  const { endpoint = 'getNFTsForOwner', chain = 'eth', ...params } = query;
-  
-  // Validate API key
-  if (!ALCHEMY_API_KEY) {
-    console.error('Alchemy API key not configured');
-    return res.status(401).json({ 
-      error: 'API key not configured',
-      message: 'Please set your ALCHEMY_API_KEY in environment variables'
-    });
-  }
-  
-  // Validate endpoint
-  if (!ENDPOINTS[endpoint]) {
-    return res.status(400).json({ error: `Invalid endpoint: ${endpoint}` });
+  if (!apiKey) {
+    return res.status(500).json({ error: 'Alchemy API key not configured' });
   }
   
   try {
-    // Build the request URL
-    const endpointUrl = ENDPOINTS[endpoint](ALCHEMY_API_KEY, chain);
+    // Get endpoint from query params
+    const endpoint = req.query.endpoint;
+    const chain = req.query.chain || 'eth';
+    
+    // Debug: Log request details
+    console.log('Alchemy request:', { 
+      endpoint, 
+      chain, 
+      method: req.method,
+      params: req.method === 'GET' ? req.query : req.body,
+      url: req.url,
+      originalUrl: req.originalUrl
+    });
+    
+    if (!endpoint) {
+      return res.status(400).json({ error: 'Missing endpoint parameter' });
+    }
+    
+    // Define Alchemy V3 NFT endpoints
+    const ENDPOINTS = {
+      // Use consistent lowercase keys for the endpoints
+      getnftsforowner: (apiKey, chain = 'eth') => {
+        const baseUrl = chain === 'eth' 
+          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getNFTsForOwner`;
+      },
+      getnftmetadata: (apiKey, chain = 'eth') => {
+        const baseUrl = chain === 'eth' 
+          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getNFTMetadata`;
+      },
+      getnftsforcollection: (apiKey, chain = 'eth') => {
+        const baseUrl = chain === 'eth' 
+          ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+          : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getNFTsForCollection`;
+      }
+    };
+    
+    // Normalize the endpoint name to lowercase for case-insensitive comparison
+    const normalizedEndpoint = endpoint.toLowerCase();
+    console.log('Normalized endpoint:', normalizedEndpoint);
+    
+    // Validate endpoint
+    if (!ENDPOINTS[normalizedEndpoint]) {
+      return res.status(400).json({ 
+        error: `Invalid endpoint: ${endpoint}`,
+        validEndpoints: Object.keys(ENDPOINTS).join(', ')
+      });
+    }
+    
+    // Build the request URL using the normalized endpoint
+    const endpointUrl = ENDPOINTS[normalizedEndpoint](apiKey, chain);
     
     // Prepare request parameters according to Alchemy v3 API format
-    const requestParams = { ...params };
+    const requestParams = { ...req.query };
     
     // Enhanced handling for getNFTsForOwner
-    if (endpoint === 'getNFTsForOwner') {
+    if (normalizedEndpoint === 'getnftsforowner') {
       // Process parameters to match Alchemy v3 API expectations
-      if (params.excludeFilters) {
+      if (requestParams.excludeFilters) {
         // Handle excludeFilters array format conversion from string to array
         try {
-          if (typeof params.excludeFilters === 'string') {
-            requestParams.excludeFilters = [params.excludeFilters];
+          if (typeof requestParams.excludeFilters === 'string') {
+            requestParams.excludeFilters = [requestParams.excludeFilters];
           }
         } catch (e) {
           console.error('Error processing excludeFilters:', e);
         }
-      } else if (params.excludeSpam === 'true') {
+      } else if (requestParams.excludeSpam === 'true') {
         // Convert excludeSpam parameter to the correct excludeFilters format
         requestParams.excludeFilters = ['SPAM'];
       }
       
       // Ensure proper boolean parameters
-      requestParams.withMetadata = params.withMetadata !== 'false';
-      requestParams.includeContract = params.includeContract !== 'false';
+      requestParams.withMetadata = requestParams.withMetadata !== 'false';
+      requestParams.includeContract = requestParams.includeContract !== 'false';
       
       // Alchemy V3 image params - ensure these are set to get full image URLs
       requestParams.includeMedia = true;
       
       // Set page size with default
-      requestParams.pageSize = parseInt(params.pageSize || '100', 10);
+      requestParams.pageSize = parseInt(requestParams.pageSize || '100', 10);
       
       console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
     }
     
-    // Handle different request methods appropriately
-    if (req.method === 'POST') {
-      console.log(`POST request to ${endpointUrl}`);
-      
-      // Get the request body
-      const requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+    // Make the API request
+    let response;
+    if (req.method === 'GET') {
+      console.log(`GET request to ${endpointUrl}`, { params: requestParams });
+      response = await axios.get(endpointUrl, { params: requestParams });
+    } else if (req.method === 'POST') {
+      console.log(`POST request to ${endpointUrl}`, { body: req.body });
       
       // Handle special case for batch owners request
-      if (endpoint === 'getNFTsForOwner' && requestBody.owners && Array.isArray(requestBody.owners)) {
-        console.log(`Batch request for multiple owners: ${requestBody.owners.length} addresses`);
+      if (normalizedEndpoint === 'getnftsforowner' && req.body.owners && Array.isArray(req.body.owners)) {
+        console.log(`Batch request for multiple owners: ${req.body.owners.length} addresses`);
         
         // For multiple owners, we need to make separate requests
         const allNfts = [];
         let totalCount = 0;
         
         // Process each owner address
-        for (const owner of requestBody.owners) {
+        for (const owner of req.body.owners) {
           try {
-            const ownerResponse = await axios.get(endpointUrl, { 
-              params: { 
-                ...requestParams, 
-                owner,
-                withMetadata: requestBody.withMetadata !== false,
-                excludeFilters: requestBody.excludeFilters || ['SPAM'],
-                includeMedia: true // Ensure we get media/image data
-              } 
-            });
+            const ownerParams = { 
+              ...requestParams, 
+              owner,
+              withMetadata: req.body.withMetadata !== false,
+              excludeFilters: req.body.excludeFilters || ['SPAM'],
+              includeMedia: true // Ensure we get media/image data
+            };
             
-            // Debug logging - print the first NFT's structure
-            if (ownerResponse.data?.ownedNfts && ownerResponse.data.ownedNfts.length > 0) {
-              console.log('Sample NFT data from Alchemy:', 
-                JSON.stringify({
-                  id: ownerResponse.data.ownedNfts[0].id,
-                  contract: ownerResponse.data.ownedNfts[0].contract,
-                  tokenId: ownerResponse.data.ownedNfts[0].tokenId,
-                  hasImage: !!ownerResponse.data.ownedNfts[0].image,
-                  imageFields: ownerResponse.data.ownedNfts[0].image,
-                  hasMedia: !!ownerResponse.data.ownedNfts[0].media,
-                  mediaFields: ownerResponse.data.ownedNfts[0].media && ownerResponse.data.ownedNfts[0].media.length > 0 ? 
-                    ownerResponse.data.ownedNfts[0].media[0] : null,
-                  hasTokenUri: !!ownerResponse.data.ownedNfts[0].tokenUri
-                }, null, 2)
-              );
-            }
+            console.log(`Fetching NFTs for owner: ${owner}`);
+            const ownerResponse = await axios.get(endpointUrl, { params: ownerParams });
             
             if (ownerResponse.data?.ownedNfts) {
               // Add owner address to each NFT before adding to results
@@ -377,30 +380,24 @@ app.all('/alchemy', async (req, res) => {
       }
       
       // Regular POST request
-      const response = await axios.post(endpointUrl, requestBody);
-      return res.status(200).json(response.data);
+      response = await axios.post(endpointUrl, req.body);
     } else {
-      // Regular GET request
-      console.log(`GET request to ${endpointUrl}`);
-      
-      // Ensure we're requesting media/image data
-      if (endpoint === 'getNFTsForOwner') {
-        requestParams.includeMedia = true;
-      }
-      
-      const response = await axios.get(endpointUrl, { params: requestParams });
-      
-      // If this is a getNFTsForOwner request, ensure ownerAddress is set on each NFT
-      if (endpoint === 'getNFTsForOwner' && response.data?.ownedNfts && params.owner) {
-        // Add owner address to each NFT
-        response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
-          ...nft,
-          ownerAddress: params.owner // Explicitly add the owner address
-        }));
-      }
-      
-      return res.status(200).json(response.data);
+      return res.status(405).json({ error: 'Method not allowed' });
     }
+    
+    // Debug: Log the response structure (not the full data)
+    console.log(`Alchemy response status: ${response.status}, data keys: ${Object.keys(response.data || {})}`);
+    
+    // If this is a getNftsForOwner request, ensure ownerAddress is set on each NFT
+    if (normalizedEndpoint === 'getnftsforowner' && response.data?.ownedNfts && requestParams.owner) {
+      // Add owner address to each NFT
+      response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
+        ...nft,
+        ownerAddress: requestParams.owner // Explicitly add the owner address
+      }));
+    }
+    
+    return res.status(200).json(response.data);
   } catch (error) {
     console.error('Alchemy API error:', error.message);
     

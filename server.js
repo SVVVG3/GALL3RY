@@ -10,6 +10,7 @@ const { parse } = require('url');
 const fs = require('fs');
 const compression = require('compression');
 const { createProxyMiddleware } = require('http-proxy-middleware');
+const apiRoutes = require('./api/index.js'); // Import API routes from api/index.js
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -296,6 +297,7 @@ apiRouter.all('/farcaster-profile', async (req, res) => {
 });
 
 // ALCHEMY API - Used for all NFT data
+/*
 apiRouter.all('/alchemy', async (req, res) => {
   // CORS headers for local development
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -423,6 +425,7 @@ apiRouter.all('/alchemy', async (req, res) => {
     });
   }
 });
+*/
 
 // Proxy endpoint for CORS-protected images
 apiRouter.get('/image-proxy', async (req, res) => {
@@ -577,6 +580,9 @@ app.get('/api/image-proxy', async (req, res) => {
 
 // Mount API routes
 app.use('/api', apiRouter);
+
+// Mount API routes from the imported module (replaces the apiRouter)
+app.use('/api', apiRoutes);
 
 // Serve static files from the public directory with appropriate headers
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
