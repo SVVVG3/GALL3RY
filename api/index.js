@@ -25,7 +25,7 @@ app.post('/zapper', async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
   
   try {
     // Get Zapper API key from environment variables
@@ -103,7 +103,7 @@ app.get('/farcaster-profile', async (req, res) => {
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
 
   try {
     // Get Zapper API key from environment variables

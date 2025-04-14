@@ -39,8 +39,7 @@ axios.interceptors.request.use(
 const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
 const ZAPPER_API_ENDPOINTS = [
-  `${window.location.origin}/api/zapper`, // Use absolute URL with origin to ensure it works in all environments
-  `${SERVER_URL}/api/zapper`,             // Fallback to SERVER_URL based endpoint
+  `${SERVER_URL}/api/zapper`,             // Environment-specific endpoint (localhost in dev, relative in prod)
   'https://public.zapper.xyz/graphql'     // Direct Zapper API endpoint as last resort
 ];
 // Direct endpoint is removed to prevent 404s - all requests should go through our proxy
@@ -146,8 +145,9 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
 
 // Define constants for API URLs
 const API_URL = process.env.REACT_APP_API_URL || '';
-const ZAPPER_ENDPOINT = `${window.location.origin}/api/zapper`;
-const FARCASTER_PROFILE_ENDPOINT = `${window.location.origin}/api/farcaster-profile`;
+// Use SERVER_URL to ensure consistency between local dev and production
+const ZAPPER_ENDPOINT = `${SERVER_URL}/api/zapper`;
+const FARCASTER_PROFILE_ENDPOINT = `${SERVER_URL}/api/farcaster-profile`;
 
 /**
  * Get a Farcaster profile by username or FID
