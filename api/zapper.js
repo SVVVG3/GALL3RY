@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
   }
 
   // CORRECT API URL FROM DOCUMENTATION
-  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
   
   try {
     // Get Zapper API key from environment variables
@@ -192,245 +192,45 @@ module.exports = async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      // User-Agent should only be set server-side, not from client requests
-      // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      // Use a proper User-Agent as required by Zapper API
+      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
     };
     
-    // FIX FOR ZAPPER API SCHEMA CHANGES
-    let updatedQuery = req.body.query;
-    let { variables } = req.body;
-
-    // Check if this is an NFT query that needs fixing
-    if (isNftQuery) {
-      console.log('Processing NFT query for field updates...');
-
-      // APPROACH 1: If it's the old portfolioItems structure, completely replace
-      if (updatedQuery.includes('portfolioItems') && updatedQuery.includes('filter: { excludeSpam: true, types: [NFT] }')) {
-        console.log('Replacing outdated portfolioItems query with nftUsersTokens structure');
-        
-        // Completely replace with new structure
-        updatedQuery = `
-query GetNFTsForAddresses($owners: [Address!]!, $first: Int = 50, $after: String, $bypassHidden: Boolean = true) {
-  nftUsersTokens(
-    owners: $owners,
-    first: $first,
-    after: $after,
-    bypassHidden: $bypassHidden
-  ) {
-    edges {
-      node {
-        id
-        tokenId
-        name
-        description
-        collection {
-          id
-          name
-          address
-          network
-          nftStandard
-          type
-          medias {
-            logo {
-              thumbnail
-            }
-          }
-        }
-        mediasV3 {
-          images(first: 1) {
-            edges {
-              node {
-                original
-                thumbnail
-                large
-              }
-            }
-          }
-          animations(first: 1) {
-            edges {
-              node {
-                original
-                thumbnail
-                large
-              }
-            }
-          }
-        }
-        estimatedValue {
-          valueUsd
-          valueWithDenomination
-          denomination {
-            symbol
-            network
-          }
-        }
-      }
-      balance
-      balanceUSD
-    }
-    pageInfo {
-      hasNextPage
-      endCursor
-    }
-  }
-}`;
-      }
-      // APPROACH 2: If it's using nftUsersTokens but with wrong field names - more precise replacements
-      else if (updatedQuery.includes('nftUsersTokens') || updatedQuery.includes('UserNftTokens')) {
-        console.log('Fixing field names in nftUsersTokens query');
-        
-        // Update the mediasV3 field names
-        updatedQuery = updatedQuery
-          .replace(/url(\s*):/g, 'original$1:')
-          .replace(/previewUrl(\s*):/g, 'thumbnail$1:')
-          .replace(/largeUrl(\s*):/g, 'large$1:')
-          .replace(/cardImageUrl(\s*):/g, 'cardImage$1:');
-        
-        // Replace any other known problematic fields
-        updatedQuery = updatedQuery
-          .replace(/valueEth/g, 'estimatedValue { valueWithDenomination }')
-          .replace(/lastSaleValue/g, 'lastSale { valueWithDenomination }');
-        
-        // If query contains UserNftTokens, replace with correct type name
-        if (updatedQuery.includes('UserNftTokens')) {
-          updatedQuery = updatedQuery.replace(/UserNftTokens/g, 'nftUsersTokens');
-        }
-        
-        console.log('Query transformed successfully');
-      }
-    }
+    // Log request details
+    console.log('Request headers:', JSON.stringify(headers));
+    console.log('Request body:', JSON.stringify(req.body));
     
-    // Make the updated request to Zapper API
-    console.log(`Making request to Zapper API: ${ZAPPER_API_URL}`);
+    // Make the request
+    const zapperResponse = await fetch(ZAPPER_API_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(req.body),
+    });
     
-    try {
-      // Use the updated query but keep the original variables
-      const requestBody = JSON.stringify({
-        query: updatedQuery,
-        variables
-      });
+    if (!zapperResponse.ok) {
+      console.error(`Zapper API error: ${zapperResponse.status} ${zapperResponse.statusText}`);
       
-      // For debugging purposes
-      if (isNftQuery) {
-        console.log('Sending transformed query structure');
-        // Log first 100 chars of both original and updated queries for comparison
-        console.log(`Original query preview: ${req.body.query.substring(0, 100)}...`);
-        console.log(`Updated query preview: ${updatedQuery.substring(0, 100)}...`);
-      }
-      
-      const response = await fetch(ZAPPER_API_URL, {
-        method: 'POST',
-        headers: headers,
-        body: requestBody,
-        timeout: 15000 // 15 second timeout
-      });
-      
-      console.log(`Zapper API response status: ${response.status}`);
-      
-      // Get response data
-      const responseText = await response.text();
-      
-      // For debugging, log a sample of the response
-      console.log(`Response preview: ${responseText.substring(0, 100)}...`);
-      
-      // Try to parse as JSON
       try {
-        const data = JSON.parse(responseText);
-        
-        // If we have specific GraphQL errors, handle them
-        if (data.errors) {
-          console.error('GraphQL errors:', data.errors);
-          
-          // If it's specifically about not finding a profile, and we've tried all URLs/formats
-          if (isFarcasterRequest && data.errors.some(err => 
-              err.message && (
-                err.message.includes('not found') || 
-                err.message.includes('No profile found')
-              )
-          )) {
-            console.log(`Farcaster profile not found for ${username || fid}`);
-            
-            // Special handling for ENS names
-            if (username && username.includes('.eth')) {
-              return res.status(404).json({
-                error: 'Farcaster profile not found',
-                message: `Could not find a Farcaster profile for ${username}. Try searching without the .eth suffix.`
-              });
-            }
-            
-            return res.status(404).json({
-              error: 'Farcaster profile not found',
-              message: `Could not find a Farcaster profile for ${username || fid}`
-            });
-          }
-          
-          // Check if it's a field error - indicate our fix failed
-          if (data.errors.some(err => 
-            err.message && (
-              err.message.includes('Cannot query field') ||
-              err.message.includes('Unknown field')
-            ))) {
-            console.error('Error: GraphQL field errors detected. Our field mapping fix failed!');
-            
-            // Extract exact field names that are causing problems
-            const fieldErrors = data.errors
-              .filter(e => e.message && (e.message.includes('Cannot query field') || e.message.includes('Unknown field')))
-              .map(e => {
-                const fieldMatch = e.message.match(/field ["']([^"']+)["']/);
-                return fieldMatch ? fieldMatch[1] : e.message;
-              });
-            
-            console.error('Problematic fields:', fieldErrors.join(', '));
-            console.error('Query after fix attempt:', updatedQuery);
-            
-            // Critical debugging - log the final transformed query
-            if (isNftQuery) {
-              console.error('CRITICAL DEBUG - Transformed query structure that failed:');
-              console.error(updatedQuery);
-            }
-            
-            // Return detailed error to help diagnose
-            return res.status(400).json({
-              error: 'GraphQL schema error',
-              message: 'The GraphQL schema has changed and our mapping could not fix it',
-              details: data.errors.map(e => e.message),
-              problematicFields: fieldErrors,
-              suggestion: 'Check the server logs for more details and update the field mappings'
-            });
-          }
-          
-          // Other GraphQL errors
-          return res.status(400).json({
-            errors: data.errors,
-            message: data.errors[0]?.message || 'GraphQL error'
-          });
-        }
-        
-        // Return successful response to client
-        return res.status(200).json(data);
-      } catch (parseError) {
-        console.error('Failed to parse response as JSON:', parseError);
-        
-        // Log more of the response for debugging purposes
-        console.error(`Response (first 500 chars): ${responseText.substring(0, 500)}`);
-        
-        return res.status(500).json({
-          error: 'Invalid JSON response from API',
-          responsePreview: responseText.substring(0, 500) // First 500 chars for debugging
+        const errorText = await zapperResponse.text();
+        console.error('Error response body:', errorText);
+        return res.status(zapperResponse.status).json({
+          error: 'Zapper API Error',
+          status: zapperResponse.status,
+          message: errorText
+        });
+      } catch (readError) {
+        return res.status(zapperResponse.status).json({
+          error: 'Zapper API Error',
+          status: zapperResponse.status,
+          message: zapperResponse.statusText
         });
       }
-    } catch (fetchError) {
-      console.error('Fetch error:', fetchError);
-      
-      if (fetchError && fetchError.name === 'AbortError') {
-        return res.status(504).json({
-          error: 'Request timeout',
-          message: 'The request to the Zapper API timed out'
-        });
-      }
-      
-      throw fetchError; // Re-throw for the outer catch block
     }
+    
+    const data = await zapperResponse.json();
+    console.log('Zapper API response:', JSON.stringify(data).substring(0, 500) + '...');
+    
+    return res.status(200).json(data);
   } catch (error) {
     console.error('Error proxying to Zapper API:', error);
     

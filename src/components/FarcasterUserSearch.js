@@ -119,51 +119,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   };
 
   // Handle form submission
-  const handleSearch = (e) => {
+  const handleSearch = async (e) => {
     e.preventDefault();
-    performSearch(searchQuery);
-  };
-
-  // Add this method to better debug and handle wallet addresses
-  const extractWalletAddresses = (profile) => {
-    const addresses = [];
-    
-    // Log the full profile for debugging
-    console.log('Raw profile data:', profile);
-    
-    // First check custody address - this should be a main address
-    if (profile.custodyAddress) {
-      console.log('Found custody address:', profile.custodyAddress);
-      if (typeof profile.custodyAddress === 'string' && 
-          profile.custodyAddress.startsWith('0x') && 
-          profile.custodyAddress.length === 42) {
-        addresses.push(profile.custodyAddress);
-      }
-    }
-    
-    // Then check connected addresses - this is the main array from Zapper API
-    if (Array.isArray(profile.connectedAddresses)) {
-      console.log(`Found ${profile.connectedAddresses.length} connected addresses:`, profile.connectedAddresses);
-      
-      // Filter out any non-ethereum addresses
-      const ethAddresses = profile.connectedAddresses.filter(addr => 
-        typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
-      );
-      
-      addresses.push(...ethAddresses);
-    }
-    
-    // Remove duplicates and convert to lowercase
-    const uniqueAddresses = [...new Set(addresses.map(addr => addr.toLowerCase()))];
-    console.log(`Extracted ${uniqueAddresses.length} unique Ethereum addresses`);
-    
-    return uniqueAddresses;
-  };
-
-  // Shared search logic extracted to a function
-  const performSearch = async (query) => {
-    if (!query.trim()) return;
-
     setIsSearching(true);
     setSearchError(null);
     setUserProfile(null);
@@ -177,62 +134,50 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setHasEstimatedCount(false);
 
     try {
-      console.log(`Searching for Farcaster user: ${query}`);
+      console.log(`Searching for Farcaster user: ${searchQuery}`);
       
-      // Clean username input by removing @ symbol if present and trim whitespace
-      const cleanQuery = query.trim().replace(/^@/, '');
+      // Clear the NFT cache when a new search is performed
+      setUserNfts([]);
+      setWalletAddresses([]);
+      setHasMoreNfts(true);
+      setEndCursor(null);
       
-      // Add a slight delay to prevent rapid clicking issues on mobile
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Try to find the Farcaster profile
+      const profile = await getFarcasterProfile(searchQuery);
+      console.log('Farcaster profile:', profile);
       
-      // Show mobile-friendly error for empty searches
-      if (!cleanQuery) {
-        setSearchError('Please enter a Farcaster username');
-        setIsSearching(false);
-        return;
+      if (!profile) {
+        throw new Error('Profile not found');
       }
       
-      // Now using the directly imported function instead of from context
-      const profile = await getFarcasterProfile(cleanQuery);
+      // Handle different profile data structures correctly
+      let addresses = [];
       
-      // Extract wallet addresses using our helper method
-      const uniqueAddresses = extractWalletAddresses(profile);
+      // Add custody address if it exists
+      if (profile.custodyAddress) {
+        addresses.push(profile.custodyAddress);
+      }
       
-      // Add addresses property to profile to work with loadAllNfts
-      profile.addresses = uniqueAddresses;
+      // Add connected addresses if they exist
+      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+        addresses = [...addresses, ...profile.connectedAddresses];
+      }
       
-      // Set profile data in state when received
+      // Filter out duplicates
+      addresses = [...new Set(addresses)];
+      
       setUserProfile(profile);
-      console.log('Profile found:', profile);
+      setWalletAddresses(addresses);
       
-      console.log(`Total unique addresses for ${profile.username}: ${uniqueAddresses.length}`);
-      
-      // If we have valid addresses, fetch NFTs
-      if (uniqueAddresses.length > 0) {
-        setWalletAddresses(uniqueAddresses);
-        await fetchUserNfts(cleanQuery, profile);
-        
-        // After initial fetch, start the aggressive loader to get all NFTs
-        setTimeout(() => {
-          loadAllNfts(cleanQuery, profile);
-        }, 1000); // Slight delay to let UI update first
+      // Set wallets to check for NFTs
+      if (addresses.length > 0) {
+        await fetchUserNfts(searchQuery, profile);
       } else {
-        console.log('No addresses found for this user to fetch NFTs');
-        setFetchNftsError('No wallet addresses found for this Farcaster user.');
+        setFetchNftsError('No wallet addresses found for this user');
       }
     } catch (error) {
-      console.error('Error searching for user:', error);
-      
-      // Provide more specific error messages to help users
-      if (error.message.includes('Could not find Farcaster profile') || error.message.includes('User not found')) {
-        setSearchError(`Could not find a Farcaster profile for "${query}". Please check the username and try again.`);
-      } else if (error.message.includes('Failed to fetch') || error.message.includes('Network request failed') || error.message.includes('Network error')) {
-        setSearchError('Network error. Please check your internet connection and try again.');
-      } else if (error.message.includes('timeout') || error.message.includes('Timeout')) {
-        setSearchError('Request timed out. The server might be busy, please try again later.');
-      } else {
-        setSearchError(error.message || 'Failed to find Farcaster user. Please try again.');
-      }
+      console.error('Search error:', error);
+      setSearchError(error.message || 'Failed to find user');
     } finally {
       setIsSearching(false);
     }
@@ -251,7 +196,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // setUserNfts([]);
 
       // Extract ETH addresses from the profile
-      const addresses = extractWalletAddresses(profile);
+      const addresses = walletAddresses || [];
       if (!addresses || addresses.length === 0) {
         console.error(`No Ethereum addresses found for ${username}`);
         setFetchNftsError(`No Ethereum addresses found for ${username}`);
@@ -371,7 +316,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       setIsLoadingMoreNfts(true);
       
       // Get the addresses from the user profile
-      const addresses = userProfile.addresses || [];
+      const addresses = walletAddresses || [];
       if (addresses.length === 0 && userProfile.connectedAddresses) {
         addresses.push(...userProfile.connectedAddresses);
       }

@@ -198,6 +198,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         username
         fid
         metadata {
+          name
           displayName
           bio
           avatar
@@ -217,29 +218,30 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   `;
   
   try {
+    // Log the request for debugging
+    console.log('Fetching Farcaster profile for:', { username: variables.username, fid: variables.fid });
+    
     const response = await makeGraphQLRequest(query, variables);
     
-    if (!response.data || !response.data.farcasterProfile) {
-      // If we tried an ENS name and got nothing, try without .eth suffix
-      if (isEnsName && alternativeUsername) {
-        console.log(`Retrying without .eth suffix: ${alternativeUsername}`);
-        return getFarcasterProfile(alternativeUsername);
-      }
-      
-      throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
+    // Log response details for debugging
+    console.log('Response status:', response.status);
+    
+    // Check if response has errors
+    if (response.data.errors) {
+      console.error('GraphQL errors:', response.data.errors);
+      throw new Error(response.data.errors[0]?.message || 'Error fetching Farcaster profile');
+    }
+    
+    // Check if the data is missing
+    if (!response.data.data || !response.data.data.farcasterProfile) {
+      console.error('Missing profile data in response:', response.data);
+      throw new Error('Farcaster profile not found');
     }
     
     console.log('Found Farcaster profile:', response.data.farcasterProfile);
     return response.data.farcasterProfile;
   } catch (error) {
-    console.error('Error fetching Farcaster profile:', error);
-    
-    // If we tried with an ENS name and got an error, try without .eth
-    if (isEnsName && alternativeUsername) {
-      console.log(`Error with ENS name, retrying without .eth suffix: ${alternativeUsername}`);
-      return getFarcasterProfile(alternativeUsername);
-    }
-    
+    console.error('Error in getFarcasterProfile:', error);
     throw error;
   }
 };
