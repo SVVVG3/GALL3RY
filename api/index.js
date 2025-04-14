@@ -328,7 +328,13 @@ app.all('/alchemy', async (req, res) => {
             });
             
             if (ownerResponse.data?.ownedNfts) {
-              allNfts.push(...ownerResponse.data.ownedNfts);
+              // Add owner address to each NFT before adding to results
+              const nftsWithOwner = ownerResponse.data.ownedNfts.map(nft => ({
+                ...nft,
+                ownerAddress: owner  // Explicitly add the owner address
+              }));
+              
+              allNfts.push(...nftsWithOwner);
               totalCount += ownerResponse.data.totalCount || 0;
             }
           } catch (e) {
@@ -351,6 +357,16 @@ app.all('/alchemy', async (req, res) => {
       // Regular GET request
       console.log(`GET request to ${endpointUrl}`);
       const response = await axios.get(endpointUrl, { params: requestParams });
+      
+      // If this is a getNFTsForOwner request, ensure ownerAddress is set on each NFT
+      if (endpoint === 'getNFTsForOwner' && response.data?.ownedNfts && params.owner) {
+        // Add owner address to each NFT
+        response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
+          ...nft,
+          ownerAddress: params.owner // Explicitly add the owner address
+        }));
+      }
+      
       return res.status(200).json(response.data);
     }
   } catch (error) {
