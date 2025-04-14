@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import NftCard from './NftCard';
+import NFTGrid from './NFTGrid';
 import { useNFT } from '../contexts/NFTContext';
 import { useWallet } from '../contexts/WalletContext';
 import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock, FaShieldAlt } from 'react-icons/fa';
@@ -37,12 +38,16 @@ const NFTGallery = () => {
     endCursor,
     fetchAllNFTsForWallets,
     fetchProgress,
-    loadedWallets
+    loadedWallets,
+    setNfts
   } = useNFT();
   
   // Safely get filteredNFTs with null check
   const safeFilteredNFTs = Array.isArray(filteredNFTs) ? filteredNFTs : [];
   
+  console.log(`NFTGallery rendering with ${safeFilteredNFTs.length} NFTs to display:`, 
+    safeFilteredNFTs.length > 0 ? safeFilteredNFTs[0] : 'No NFTs');
+    
   const { connectedWallets } = useWallet();
   const [showFilters, setShowFilters] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -456,18 +461,7 @@ const NFTGallery = () => {
         </EmptyState>
       ) : (
         <>
-          <NFTGrid>
-            {safeFilteredNFTs.map(nft => (
-              <NftCard 
-                key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} 
-                nft={nft} 
-                onClick={() => console.log('NFT clicked:', nft.id)}
-                showLastPrice={false}
-                showLikeButton={true}
-                onLike={handleLike}
-              />
-            ))}
-          </NFTGrid>
+          <NFTGrid nfts={safeFilteredNFTs} />
           
           {hasMore && (
             <ManualLoadContainer>

@@ -632,6 +632,13 @@ export const NFTProvider = ({ children }) => {
   const getFilteredNfts = useMemo(() => {
     if (!nfts || nfts.length === 0) return [];
 
+    console.log(`Filtering ${nfts.length} NFTs with filters:`, { 
+      selectedChains, 
+      selectedWallets, 
+      searchQuery,
+      excludeSpam
+    });
+
     let filtered = [...nfts];
     
     // Filter by chain
@@ -639,6 +646,7 @@ export const NFTProvider = ({ children }) => {
       filtered = filtered.filter(nft => 
         nft.network && selectedChains.includes(nft.network.toLowerCase())
       );
+      console.log(`After chain filtering: ${filtered.length} NFTs`);
     }
     
     // Filter by wallet
@@ -646,6 +654,7 @@ export const NFTProvider = ({ children }) => {
       filtered = filtered.filter(nft => 
         nft.ownerAddress && selectedWallets.includes(nft.ownerAddress.toLowerCase())
       );
+      console.log(`After wallet filtering: ${filtered.length} NFTs`);
     }
     
     // Filter by search query
@@ -656,6 +665,7 @@ export const NFTProvider = ({ children }) => {
         (nft.collection?.name && nft.collection.name.toLowerCase().includes(query)) ||
         (nft.description && nft.description.toLowerCase().includes(query))
       );
+      console.log(`After search filtering: ${filtered.length} NFTs`);
     }
     
     return filtered;
