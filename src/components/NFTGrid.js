@@ -264,6 +264,14 @@ const NFTGrid = ({ nfts = [] }) => {
           const imageUrl = getImageUrl(nft);
           console.log(`Rendering NFT ${index}: ${getNftName(nft) || nft.id} with image: ${imageUrl}`);
           
+          // Check if URL is accessible by attempting a HEAD request (debug logging only)
+          if (imageUrl && imageUrl !== '/assets/placeholder-nft.svg') {
+            const img = new Image();
+            img.onload = () => console.log(`✅ Image loaded successfully: ${imageUrl}`);
+            img.onerror = () => console.error(`❌ Image failed to load: ${imageUrl}`);
+            img.src = imageUrl;
+          }
+          
           return (
             <div key={`${nft.id || nft.tokenId || index}`} className="nft-item">
               <div className="nft-card">
@@ -274,7 +282,8 @@ const NFTGrid = ({ nfts = [] }) => {
                     onError={handleImageError}
                     data-nftid={nft.id || nft.tokenId || index}
                     loading="lazy"
-                    style={{ maxWidth: '100%', maxHeight: '100%' }}
+                    style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'cover' }}
+                    referrerPolicy="no-referrer"
                   />
                 </div>
                 <div className="nft-info">

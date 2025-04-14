@@ -393,13 +393,20 @@ apiRouter.all('/alchemy', async (req, res) => {
 // Mount API routes
 app.use('/api', apiRouter);
 
-// Serve static files in production
+// Serve static files from the public directory (for both development and production)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Serve static files from the build directory in production
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, 'build')));
   
   app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'build', 'index.html'));
   });
+} else {
+  // In development, allow React's dev server to handle routes
+  // But serve our static assets from public directory
+  console.log('Running in development mode - serving static assets from /public');
 }
 
 // Start server
