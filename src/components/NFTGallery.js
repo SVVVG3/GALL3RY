@@ -732,8 +732,22 @@ const SortOrderOption = styled(SortOption)`
 
 const NFTGridContainer = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  }
+  
+  @media (max-width: 768px) {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+  }
+  
+  @media (max-width: 480px) {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
 `;
 
 const LoadingContainer = styled.div`

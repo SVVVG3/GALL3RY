@@ -59,6 +59,9 @@ const NFTGrid = ({ nfts = [] }) => {
       hasImage: !!nft.image,
       imageType: nft.image ? typeof nft.image : 'none',
       imageGateway: nft.image?.gateway,
+      cachedUrl: nft.image?.cachedUrl,
+      pngUrl: nft.image?.pngUrl,
+      thumbnailUrl: nft.image?.thumbnailUrl,
       hasImageUrl: !!nft.imageUrl,
       rawImageUrl: nft.rawImageUrl,
       hasMedia: !!nft.media,
@@ -98,9 +101,25 @@ const NFTGrid = ({ nfts = [] }) => {
     
     // 3. Try Alchemy V3 image format
     if (nft.image) {
+      // Try various image URL properties from Alchemy v3 format
       if (nft.image.gateway) {
         console.log(`Using image.gateway: ${nft.image.gateway}`);
         return nft.image.gateway;
+      }
+      
+      if (nft.image.thumbnailUrl) {
+        console.log(`Using image.thumbnailUrl: ${nft.image.thumbnailUrl}`);
+        return nft.image.thumbnailUrl;
+      }
+      
+      if (nft.image.cachedUrl) {
+        console.log(`Using image.cachedUrl: ${nft.image.cachedUrl}`);
+        return nft.image.cachedUrl;
+      }
+      
+      if (nft.image.pngUrl) {
+        console.log(`Using image.pngUrl: ${nft.image.pngUrl}`);
+        return nft.image.pngUrl;
       }
       
       if (typeof nft.image === 'string') {
@@ -119,6 +138,16 @@ const NFTGrid = ({ nfts = [] }) => {
         if (mediaItem.gateway) {
           console.log(`Using media item gateway: ${mediaItem.gateway}`);
           return mediaItem.gateway;
+        }
+
+        if (mediaItem.thumbnailUrl) {
+          console.log(`Using media item thumbnailUrl: ${mediaItem.thumbnailUrl}`);
+          return mediaItem.thumbnailUrl;
+        }
+        
+        if (mediaItem.cachedUrl) {
+          console.log(`Using media item cachedUrl: ${mediaItem.cachedUrl}`);
+          return mediaItem.cachedUrl;
         }
         
         if (mediaItem.raw) {

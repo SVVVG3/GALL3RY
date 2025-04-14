@@ -290,6 +290,9 @@ const formatNft = (nft) => {
       hasMedia: !!nft.media,
       mediaLength: nft.media?.length,
       gatewayImage: nft.image?.gateway,
+      cachedUrl: nft.image?.cachedUrl,
+      pngUrl: nft.image?.pngUrl,
+      thumbnailUrl: nft.image?.thumbnailUrl,
       originalUrl: nft.image?.originalUrl,
       tokenUriGateway: nft.tokenUri?.gateway,
       metadataImage: metadata?.image,
@@ -301,7 +304,25 @@ const formatNft = (nft) => {
       imageUrl = nft.image.gateway; // Alchemy's optimized and cached URL
       rawImageUrl = nft.image.originalUrl || nft.image.raw || nft.image.url || '';
       console.log(`Using image.gateway URL: ${imageUrl}`);
-    } 
+    }
+    // Try thumbnailUrl (Alchemy v3 format)
+    else if (nft.image && nft.image.thumbnailUrl) {
+      imageUrl = nft.image.thumbnailUrl;
+      rawImageUrl = nft.image.originalUrl || nft.image.raw || '';
+      console.log(`Using image.thumbnailUrl: ${imageUrl}`);
+    }
+    // Try cachedUrl (Alchemy v3 format)
+    else if (nft.image && nft.image.cachedUrl) {
+      imageUrl = nft.image.cachedUrl;
+      rawImageUrl = nft.image.originalUrl || '';
+      console.log(`Using image.cachedUrl: ${imageUrl}`);
+    }
+    // Try pngUrl (Alchemy v3 format for SVGs converted to PNG)
+    else if (nft.image && nft.image.pngUrl) {
+      imageUrl = nft.image.pngUrl;
+      rawImageUrl = nft.image.originalUrl || '';
+      console.log(`Using image.pngUrl: ${imageUrl}`);
+    }
     // Then check if image is a direct string
     else if (nft.image && typeof nft.image === 'string') {
       imageUrl = nft.image;

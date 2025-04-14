@@ -294,6 +294,9 @@ app.all('/alchemy', async (req, res) => {
       requestParams.withMetadata = params.withMetadata !== 'false';
       requestParams.includeContract = params.includeContract !== 'false';
       
+      // Alchemy V3 image params - ensure these are set to get full image URLs
+      requestParams.includeMedia = true;
+      
       // Set page size with default
       requestParams.pageSize = parseInt(params.pageSize || '100', 10);
       
@@ -323,7 +326,8 @@ app.all('/alchemy', async (req, res) => {
                 ...requestParams, 
                 owner,
                 withMetadata: requestBody.withMetadata !== false,
-                excludeFilters: requestBody.excludeFilters || ['SPAM']
+                excludeFilters: requestBody.excludeFilters || ['SPAM'],
+                includeMedia: true // Ensure we get media/image data
               } 
             });
             
@@ -373,6 +377,12 @@ app.all('/alchemy', async (req, res) => {
     } else {
       // Regular GET request
       console.log(`GET request to ${endpointUrl}`);
+      
+      // Ensure we're requesting media/image data
+      if (endpoint === 'getNFTsForOwner') {
+        requestParams.includeMedia = true;
+      }
+      
       const response = await axios.get(endpointUrl, { params: requestParams });
       
       // If this is a getNFTsForOwner request, ensure ownerAddress is set on each NFT
