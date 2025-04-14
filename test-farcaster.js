@@ -84,8 +84,9 @@ async function testZapperAPI() {
   // Try multiple different Zapper endpoints to see which might work
   const zapperEndpoints = [
     'https://api.zapper.xyz/v2/graphql',
-    'https://api.zapper.fi/v2/graphql',
-    'https://public.zapper.xyz/graphql'
+    'https://api.zapper.fi/v2/graphql', 
+    'https://public.zapper.xyz/graphql',
+    'https://protocol.zapper.xyz/graphql' // Updated endpoint based on agents.txt
   ];
   
   for (const endpoint of zapperEndpoints) {
@@ -98,7 +99,9 @@ async function testZapperAPI() {
         {
           headers: {
             'Content-Type': 'application/json',
-            'X-API-KEY': ZAPPER_API_KEY || 'zapper-gallery'
+            'X-API-KEY': ZAPPER_API_KEY || 'zapper-gallery',
+            'x-zapper-api-key': ZAPPER_API_KEY || 'zapper-gallery', // Try both header formats
+            'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
           }
         }
       );

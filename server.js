@@ -29,13 +29,51 @@ apiRouter.get('/db-status', (req, res) => {
   });
 });
 
-// ZAPPER API - Used only for Farcaster profile data and connected wallets
-apiRouter.post('/zapper', async (req, res) => {
-  // Enable CORS
+// Create a CORS middleware function for consistent application
+const corsMiddleware = (req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', true);
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+};
+
+// Apply CORS middleware to all API routes
+apiRouter.use(corsMiddleware);
+
+// ZAPPER API - Used only for Farcaster profile data and connected wallets
+apiRouter.post('/zapper', async (req, res) => {
+  // Check if this is a Farcaster profile request
+  let isFarcasterRequest = false;
+  let username = null;
+  let fid = null;
+  
+  if (req.body?.query && req.body.query.includes('farcasterProfile')) {
+    isFarcasterRequest = true;
+    
+    if (req.body.variables) {
+      username = req.body.variables.username;
+      fid = req.body.variables.fid;
+    }
+    
+    console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
+  } else {
+    // If not a Farcaster request, don't process it through Zapper
+    console.warn('Non-Farcaster request attempted on Zapper endpoint');
+    return res.status(400).json({
+      errors: [{
+        message: 'The Zapper endpoint is only for Farcaster profile requests',
+        extensions: {
+          error: 'Invalid request'
+        }
+      }]
+    });
+  }
 
   // Zapper GraphQL API URL
   const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
@@ -51,33 +89,6 @@ apiRouter.post('/zapper', async (req, res) => {
           message: 'Zapper API key is missing. Please check server configuration.',
           extensions: {
             error: 'API Configuration Error'
-          }
-        }]
-      });
-    }
-    
-    // Check if this is a Farcaster profile request
-    let isFarcasterRequest = false;
-    let username = null;
-    let fid = null;
-    
-    if (req.body?.query && req.body.query.includes('farcasterProfile')) {
-      isFarcasterRequest = true;
-      
-      if (req.body.variables) {
-        username = req.body.variables.username;
-        fid = req.body.variables.fid;
-      }
-      
-      console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
-    } else {
-      // If not a Farcaster request, don't process it through Zapper
-      console.warn('Non-Farcaster request attempted on Zapper endpoint');
-      return res.status(400).json({
-        errors: [{
-          message: 'The Zapper endpoint is only for Farcaster profile requests',
-          extensions: {
-            error: 'Invalid request'
           }
         }]
       });
@@ -119,12 +130,21 @@ apiRouter.post('/zapper', async (req, res) => {
 });
 
 // FARCASTER PROFILE API - Dedicated endpoint for Farcaster profile data
-apiRouter.get('/farcaster-profile', async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+apiRouter.all('/farcaster-profile', async (req, res) => {
+  // If it's not a GET or OPTIONS request, return method not allowed
+  if (req.method !== 'GET' && req.method !== 'OPTIONS') {
+    return res.status(405).json({ 
+      errors: [{ 
+        message: 'Method not allowed. Use GET request.', 
+        extensions: { error: 'Method Not Allowed' } 
+      }]
+    });
+  }
+  
+  // Handle OPTIONS separately (though our middleware should catch this)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   // Zapper GraphQL API URL
   const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
