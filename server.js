@@ -3,6 +3,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const axios = require('axios');
+const { parse } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +27,191 @@ apiRouter.get('/db-status', (req, res) => {
     status: 'Database check bypassed for testing',
     message: 'Database connection disabled during core functionality testing'
   });
+});
+
+// ZAPPER API - Used only for Farcaster profile data and connected wallets
+apiRouter.post('/zapper', async (req, res) => {
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+  // Zapper GraphQL API URL
+  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  
+  try {
+    // Get Zapper API key from environment variables
+    const apiKey = process.env.ZAPPER_API_KEY || '';
+    
+    if (!apiKey) {
+      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
+      return res.status(500).json({
+        error: 'API Configuration Error',
+        message: 'Zapper API key is missing. Please check server configuration.'
+      });
+    }
+    
+    // Check if this is a Farcaster profile request
+    let isFarcasterRequest = false;
+    let username = null;
+    let fid = null;
+    
+    if (req.body?.query && req.body.query.includes('farcasterProfile')) {
+      isFarcasterRequest = true;
+      
+      if (req.body.variables) {
+        username = req.body.variables.username;
+        fid = req.body.variables.fid;
+      }
+      
+      console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
+    } else {
+      // If not a Farcaster request, don't process it through Zapper
+      console.warn('Non-Farcaster request attempted on Zapper endpoint');
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'The Zapper endpoint is only for Farcaster profile requests'
+      });
+    }
+    
+    // Set up headers with API key
+    const headers = {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'x-zapper-api-key': apiKey,
+      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+    };
+    
+    // Forward the request to Zapper
+    const response = await axios({
+      method: 'post',
+      url: ZAPPER_API_URL,
+      headers: headers,
+      data: req.body,
+      timeout: 10000 // 10 second timeout
+    });
+    
+    // Return the response from Zapper
+    return res.status(response.status).json(response.data);
+    
+  } catch (error) {
+    console.error('Error proxying to Zapper:', error.message);
+    
+    // Return an appropriate error response
+    return res.status(error.response?.status || 500).json({
+      error: 'Error from Zapper API',
+      message: error.message,
+      details: error.response?.data
+    });
+  }
+});
+
+// ALCHEMY API - Used for all NFT data
+apiRouter.all('/alchemy', async (req, res) => {
+  // CORS headers for local development
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle OPTIONS requests (pre-flight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  // Get Alchemy API keys from environment variables
+  const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY || '';
+  
+  // Define Alchemy V3 NFT endpoints
+  const ENDPOINTS = {
+    getNFTsForOwner: (apiKey, chain = 'eth') => {
+      const baseUrl = chain === 'eth' 
+        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+      return `${baseUrl}${apiKey}/getNFTsForOwner`;
+    },
+    getNFTMetadata: (apiKey, chain = 'eth') => {
+      const baseUrl = chain === 'eth' 
+        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+      return `${baseUrl}${apiKey}/getNFTMetadata`;
+    },
+    getNFTMetadataBatch: (apiKey, chain = 'eth') => {
+      const baseUrl = chain === 'eth' 
+        ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
+        : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
+      return `${baseUrl}${apiKey}/getNFTMetadataBatch`;
+    }
+  };
+  
+  // Parse query parameters
+  const { query } = parse(req.url, true);
+  const { endpoint = 'getNFTsForOwner', chain = 'eth', ...params } = query;
+  
+  // Validate API key
+  if (!ALCHEMY_API_KEY) {
+    console.error('Alchemy API key not configured');
+    return res.status(401).json({ 
+      error: 'API key not configured',
+      message: 'Please set your ALCHEMY_API_KEY in environment variables'
+    });
+  }
+  
+  // Validate endpoint
+  if (!ENDPOINTS[endpoint]) {
+    return res.status(400).json({ error: `Invalid endpoint: ${endpoint}` });
+  }
+  
+  try {
+    // Build the request URL
+    const endpointUrl = ENDPOINTS[endpoint](ALCHEMY_API_KEY, chain);
+    
+    // Prepare request parameters
+    const requestParams = { ...params };
+    
+    // Enhanced handling for getNFTsForOwner
+    if (endpoint === 'getNFTsForOwner') {
+      // Make sure all vital parameters are explicitly set for better results
+      requestParams.withMetadata = true;
+      requestParams.pageSize = requestParams.pageSize || 100;
+      requestParams.tokenUriTimeoutInMs = 5000;
+      requestParams.includeContract = true;
+      requestParams.excludeFilters = requestParams.excludeSpam === 'true' ? ['SPAM'] : [];
+      requestParams.includePrice = true;
+      requestParams.floorPrice = true;
+      
+      console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
+    }
+    
+    // Special handling for POST requests like getNFTMetadataBatch
+    if (endpoint === 'getNFTMetadataBatch' && req.method === 'POST') {
+      console.log(`Batch request to ${endpointUrl}`);
+      
+      // Get the request body
+      const requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      
+      if (!requestBody.tokens || !Array.isArray(requestBody.tokens)) {
+        return res.status(400).json({ error: 'Tokens must be an array of contractAddress and tokenId objects' });
+      }
+      
+      // Make the POST request
+      const response = await axios.post(endpointUrl, requestBody);
+      return res.status(200).json(response.data);
+    } else {
+      // Regular GET request
+      console.log(`GET request to ${endpointUrl}`);
+      const response = await axios.get(endpointUrl, { params: requestParams });
+      return res.status(200).json(response.data);
+    }
+  } catch (error) {
+    console.error('Alchemy API error:', error.message);
+    
+    return res.status(error.response?.status || 500).json({
+      error: 'Error from Alchemy API',
+      message: error.message,
+      details: error.response?.data
+    });
+  }
 });
 
 // Mount API routes
