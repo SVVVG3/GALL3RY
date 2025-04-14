@@ -15,8 +15,9 @@ const CACHE_TTL = 15 * 60 * 1000; // 15 minutes cache
 const zapperAxios = axios.create({
   headers: {
     'Content-Type': 'application/json',
-    // Don't set User-Agent in browser environment
-    // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+    'Accept': 'application/json',
+    // Important: Always include a User-Agent that identifies your app
+    'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
   }
 });
 
@@ -175,7 +176,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         ? { fid: parseInt(cleanInput, 10) }
         : { username: cleanInput };
         
-      const response = await axios.get(FARCASTER_PROFILE_ENDPOINT, { params });
+      const response = await zapperAxios.get(FARCASTER_PROFILE_ENDPOINT, { params });
       
       if (response.data) {
         console.log('Found Farcaster profile via dedicated endpoint:', response.data);
@@ -212,15 +213,9 @@ export const getFarcasterProfile = async (usernameOrFid) => {
       ? { fid: parseInt(cleanInput, 10) }
       : { username: cleanInput };
     
-    const graphqlResponse = await axios.post(
+    const graphqlResponse = await zapperAxios.post(
       ZAPPER_ENDPOINT,
-      { query, variables },
-      { 
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        }
-      }
+      { query, variables }
     );
     
     // Check for GraphQL errors

@@ -67,7 +67,7 @@ app.post('/zapper', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
     
     // Forward the request to Zapper
@@ -155,7 +155,7 @@ app.get('/farcaster-profile', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
     
     // Make the GraphQL request to Zapper
@@ -172,6 +172,7 @@ app.get('/farcaster-profile', async (req, res) => {
     
     // Check for GraphQL errors
     if (response.data?.errors) {
+      console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
       return res.status(400).json({
         error: 'GraphQL Error',
         message: response.data.errors[0]?.message || 'Unknown GraphQL error',
@@ -181,8 +182,10 @@ app.get('/farcaster-profile', async (req, res) => {
     
     // Return the profile data
     if (response.data?.data?.farcasterProfile) {
+      console.log('Profile found:', JSON.stringify(response.data.data.farcasterProfile, null, 2));
       return res.status(200).json(response.data.data.farcasterProfile);
     } else {
+      console.log('No profile found in response:', JSON.stringify(response.data));
       return res.status(404).json({
         error: 'Profile Not Found',
         message: `No Farcaster profile found for ${username || fid}`
@@ -191,6 +194,13 @@ app.get('/farcaster-profile', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching Farcaster profile:', error.message);
+    
+    // Log the full error for debugging
+    if (error.response) {
+      console.error('Error response data:', JSON.stringify(error.response.data));
+      console.error('Error response status:', error.response.status);
+      console.error('Error response headers:', JSON.stringify(error.response.headers));
+    }
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({

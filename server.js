@@ -80,7 +80,7 @@ apiRouter.post('/zapper', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
     
     // Forward the request to Zapper
@@ -168,8 +168,15 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
+      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
+    
+    // Print API key for debugging (first 4 chars)
+    if (apiKey) {
+      console.log(`Using API key: ${apiKey.substring(0, 4)}...`);
+    }
+
+    console.log(`Sending request to ${ZAPPER_API_URL} with variables:`, variables);
     
     // Make the GraphQL request to Zapper
     const response = await axios({
@@ -183,8 +190,12 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
       timeout: 10000 // 10 second timeout
     });
     
+    // Log successful response for debugging
+    console.log(`Received response with status ${response.status}`);
+    
     // Check for GraphQL errors
     if (response.data?.errors) {
+      console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
       return res.status(400).json({
         error: 'GraphQL Error',
         message: response.data.errors[0]?.message || 'Unknown GraphQL error',
@@ -194,8 +205,10 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     
     // Return the profile data
     if (response.data?.data?.farcasterProfile) {
+      console.log('Profile found:', JSON.stringify(response.data.data.farcasterProfile, null, 2));
       return res.status(200).json(response.data.data.farcasterProfile);
     } else {
+      console.log('No profile found in response:', JSON.stringify(response.data));
       return res.status(404).json({
         error: 'Profile Not Found',
         message: `No Farcaster profile found for ${username || fid}`
@@ -204,6 +217,13 @@ apiRouter.get('/farcaster-profile', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching Farcaster profile:', error.message);
+    
+    // Log the full error for debugging
+    if (error.response) {
+      console.error('Error response data:', JSON.stringify(error.response.data));
+      console.error('Error response status:', error.response.status);
+      console.error('Error response headers:', JSON.stringify(error.response.headers));
+    }
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
