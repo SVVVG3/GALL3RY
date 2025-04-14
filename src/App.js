@@ -13,13 +13,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { NFTProvider } from './contexts/NFTContext';
 import SignInButton from './components/SignInButton';
-import { WithNav } from './components/Nav';
-import HomePage from './pages/HomePage';
-import NFTPage from './pages/NFTPage';
-import PoapPage from './pages/PoapPage';
-import SettingsPage from './pages/SettingsPage';
-import AppPage from './pages/AppPage';
 import UserProfilePage from './components/UserProfilePage';
+import HomePage from './pages/HomePage'; // Import HomePage from the correct location
 
 // Check if we're in a browser environment with a robust check
 const isBrowser = typeof window !== 'undefined' && 
