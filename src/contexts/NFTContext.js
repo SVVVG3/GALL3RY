@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
-import { CACHE_EXPIRATION_TIME, NFT_PAGE_SIZE } from '../constants';
+// Define constants locally instead of importing them
+const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes in milliseconds
+const NFT_PAGE_SIZE = 24; // Matching Zapper's default exactly
 
-// Import services
+// Import services - but only import the specific functions we need from zapperService
 import directAlchemyService from '../services/directAlchemy';
-import * as zapperService from '../services/zapperService';
+// Instead of * import, let's only import the specific functions we need
+import { getFarcasterProfile } from '../services/zapperService';
 
 // Create context
 const NFTContext = createContext();
@@ -26,8 +29,7 @@ export const NFTProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [services] = useState({ 
     // Use directAlchemy directly to avoid dynamic loading issues
-    alchemy: directAlchemyService,
-    zapper: zapperService
+    alchemy: directAlchemyService
   });
   const [pageKey, setPageKey] = useState(null);
   const [hasMore, setHasMore] = useState(false);
@@ -222,7 +224,7 @@ export const NFTProvider = ({ children }) => {
     try {
       console.log(`Fetching Farcaster profile for ${usernameOrFid}`);
       // Use the imported zapperService to get real profile data
-      const profile = await zapperService.getFarcasterProfile(usernameOrFid);
+      const profile = await getFarcasterProfile(usernameOrFid);
       return profile;
     } catch (err) {
       console.error(`Error fetching Farcaster profile:`, err);
