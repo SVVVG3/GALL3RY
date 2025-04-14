@@ -1,26 +1,14 @@
 {
   "version": 2,
-  "installCommand": "npm install --save-dev crypto-browserify process buffer stream-browserify path-browserify os-browserify url util assert stream-http https-browserify",
-  "buildCommand": "node build-for-vercel.js",
-  "outputDirectory": "build",
+  "framework": "create-react-app",
   "routes": [
     { 
       "src": "/api/(.*)", 
       "dest": "/api/$1" 
     },
     { 
-      "src": "/(.*\\.(js|json|css|ico|png|jpg|svg))", 
-      "dest": "/$1" 
-    },
-    { 
       "src": "/(.*)", 
       "dest": "/index.html" 
     }
-  ],
-  "functions": {
-    "api/**/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  }
+  ]
 }
