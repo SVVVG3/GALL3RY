@@ -330,17 +330,29 @@ const formatNft = (nft) => {
 
     // Fix IPFS and Arweave URLs if needed
     if (imageUrl && imageUrl.startsWith('ipfs://')) {
-      // Try multiple IPFS gateways
-      imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      // Try multiple IPFS gateways - use more reliable IPFS gateways
+      imageUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
       console.log(`Fixed IPFS URL: ${imageUrl}`);
     } else if (imageUrl && imageUrl.startsWith('ar://')) {
       imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
       console.log(`Fixed Arweave URL: ${imageUrl}`);
     }
+    
+    // Fix data URLs - convert to placeholder
+    if (imageUrl && imageUrl.startsWith('data:')) {
+      console.log(`Converting data URL to placeholder`);
+      imageUrl = '/assets/placeholder-nft.svg';
+    }
+    
+    // Handle empty or invalid URLs
+    if (!imageUrl || imageUrl === 'null' || imageUrl === 'undefined' || imageUrl === '') {
+      console.log(`Empty image URL detected, using placeholder`);
+      imageUrl = '/assets/placeholder-nft.svg';
+    }
 
     // Do the same for rawImageUrl
     if (rawImageUrl && rawImageUrl.startsWith('ipfs://')) {
-      rawImageUrl = rawImageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      rawImageUrl = rawImageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
     } else if (rawImageUrl && rawImageUrl.startsWith('ar://')) {
       rawImageUrl = rawImageUrl.replace('ar://', 'https://arweave.net/');
     }
@@ -438,7 +450,12 @@ const formatNft = (nft) => {
       description,
       tokenId,
       contractAddress,
+      ownerAddress: nft.ownerAddress || nft.owner || '',
       network: chain,
+      chain: chain,
+      imageUrl: imageUrl,
+      rawImageUrl: rawImageUrl,
+      hasImage: !!imageUrl && imageUrl !== '/assets/placeholder-nft.svg',
       collection: {
         name: nft.contract?.name || nft.contractMetadata?.name || 'Unknown Collection',
         address: contractAddress,
@@ -446,16 +463,25 @@ const formatNft = (nft) => {
         network: chain,
         floorPrice: floorPrice
       },
-      imageUrl,
-      rawImageUrl,
-      // Price data
-      estimatedValue,
-      valueUsd: valueUsd || estimatedValue?.valueUsd,
-      // Include metadata for completeness
-      metadata,
-      contractMetadata: nft.contractMetadata || {},
-      // Keep original data for debug purposes
-      alchemyData: process.env.NODE_ENV === 'development' ? nft : undefined
+      contract: nft.contract || {
+        address: contractAddress,
+        name: nft.contractMetadata?.name || 'Unknown Contract',
+        network: chain
+      },
+      metadata: metadata,
+      estimatedValue: estimatedValue,
+      valueUsd: valueUsd,
+      acquiredAt: nft.acquiredAt || nft.lastActivityTimestamp || Date.now(),
+      media: nft.media || [],
+      spam: nft.spamInfo?.isSpam || false,
+      // Add extra info for rendering on frontend
+      displayProps: {
+        chain: chain,
+        contractName: nft.contract?.name || nft.contractMetadata?.name,
+        hasValue: !!valueUsd,
+        valueFormatted: valueUsd ? `$${valueUsd.toFixed(2)}` : null,
+        tokenIdFormatted: tokenId.length > 8 ? `${tokenId.substring(0, 6)}...` : tokenId
+      }
     };
     
     // Log the formatted NFT for debugging

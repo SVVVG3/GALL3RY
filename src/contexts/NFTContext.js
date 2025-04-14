@@ -468,29 +468,137 @@ export const NFTProvider = ({ children }) => {
         return newWallets;
       });
       
-      // Use the direct Alchemy service for batch fetching
-      const result = await directAlchemyService.batchFetchNFTs(addresses, 'eth', {
-        withMetadata: true,
-        excludeSpam: options.excludeSpam !== false,
-        pageSize: options.pageSize || 50
+      // Define chains to fetch from
+      const chains = options.chains || ['eth', 'base', 'polygon', 'arbitrum', 'optimism'];
+      console.log(`Fetching NFTs across ${chains.length} chains: ${chains.join(', ')}`);
+      
+      // Create a record of fetch progress for UI updates
+      chains.forEach(chain => {
+        addresses.forEach(address => {
+          setFetchProgress(prev => ({
+            ...prev,
+            [address]: {
+              ...prev[address],
+              [chain]: {
+                status: 'loading',
+                chain,
+                totalNFTs: 0,
+                pagesFetched: 0,
+                completed: false
+              }
+            }
+          }));
+        });
+      });
+      
+      // Fetch NFTs from all specified chains in parallel
+      const chainResults = await Promise.all(
+        chains.map(async (chain) => {
+          try {
+            console.log(`Fetching NFTs from chain: ${chain}`);
+            const result = await directAlchemyService.batchFetchNFTs(addresses, chain, {
+              withMetadata: true,
+              excludeSpam: options.excludeSpam !== false,
+              pageSize: options.pageSize || 50
+            });
+            
+            // Update progress for this chain
+            addresses.forEach(address => {
+              setFetchProgress(prev => ({
+                ...prev,
+                [address]: {
+                  ...prev[address],
+                  [chain]: {
+                    ...prev[address]?.[chain],
+                    status: 'completed',
+                    totalNFTs: result.nfts.filter(nft => 
+                      nft.ownerAddress?.toLowerCase() === address.toLowerCase()
+                    ).length,
+                    completed: true
+                  }
+                }
+              }));
+            });
+            
+            return {
+              chain,
+              ...result
+            };
+          } catch (error) {
+            console.error(`Error fetching NFTs from ${chain}:`, error);
+            
+            // Update progress to show error
+            addresses.forEach(address => {
+              setFetchProgress(prev => ({
+                ...prev,
+                [address]: {
+                  ...prev[address],
+                  [chain]: {
+                    ...prev[address]?.[chain],
+                    status: 'error',
+                    error: error.message,
+                    completed: true
+                  }
+                }
+              }));
+            });
+            
+            // Return empty result for this chain
+            return {
+              chain,
+              nfts: [],
+              hasMore: false,
+              totalCount: 0
+            };
+          }
+        })
+      );
+      
+      // Combine NFTs from all chains
+      const allNfts = chainResults.flatMap(result => result.nfts || []);
+      console.log(`Combined NFTs from all chains: ${allNfts.length} total NFTs`);
+      
+      // Set enhancing status for processing
+      addresses.forEach(address => {
+        setFetchProgress(prev => ({
+          ...prev,
+          [address]: {
+            ...prev[address],
+            enhancing: true,
+            totalNFTs: allNfts.filter(nft => 
+              nft.ownerAddress?.toLowerCase() === address.toLowerCase()
+            ).length
+          }
+        }));
       });
       
       // Process the NFTs to enhance metadata
-      const processedNFTs = await processNFTs(result.nfts || [], options);
+      const processedNFTs = await processNFTs(allNfts, options);
+      
+      // Clear enhancing status
+      addresses.forEach(address => {
+        setFetchProgress(prev => ({
+          ...prev,
+          [address]: {
+            ...prev[address],
+            enhancing: false
+          }
+        }));
+      });
       
       // Update the NFT state
       setNfts(processedNFTs);
       
-      // Set pagination state
-      setPageKey(result.pageKey || null);
-      setHasMore(!!result.pageKey);
+      // Determine if any chain has more NFTs to load
+      const hasMore = chainResults.some(result => result.hasMore);
+      setHasMore(hasMore);
       
-      console.log(`Successfully loaded ${processedNFTs.length} NFTs from ${addresses.length} wallets`);
+      console.log(`Successfully loaded ${processedNFTs.length} NFTs from ${addresses.length} wallets across ${chains.length} chains`);
       
       return {
         nfts: processedNFTs,
-        hasMore: !!result.pageKey,
-        pageKey: result.pageKey
+        hasMore,
+        pageKey: null // No pageKey for combined results
       };
     } catch (error) {
       console.error('Error fetching NFTs in NFTContext:', error);
