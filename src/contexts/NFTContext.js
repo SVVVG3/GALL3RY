@@ -233,38 +233,95 @@ export const NFTProvider = ({ children }) => {
           nft.id = `${chain}:${contractAddress}-${tokenId}`;
         }
         
-        // Make sure we have image URLs
-        if (!nft.imageUrl) {
-          const media = nft.media || [];
-          if (media.length > 0) {
-            nft.imageUrl = media[0].gateway || media[0].raw || media[0].uri;
-            console.log(`Set imageUrl from media: ${nft.imageUrl}`);
-          } else if (nft.image) {
+        // Improved image URL handling
+        if (!nft.imageUrl || nft.imageUrl === '/assets/placeholder-nft.svg') {
+          // Log available image fields for debugging
+          console.log(`Looking for image for NFT ${nft.id}:`, {
+            hasImage: !!nft.image,
+            imageType: nft.image ? typeof nft.image : 'none',
+            hasMedia: !!nft.media,
+            mediaCount: nft.media?.length || 0,
+            hasMetadata: !!nft.metadata,
+            metadataImage: nft.metadata?.image,
+            tokenUri: nft.tokenUri
+          });
+          
+          // Try to find the best image URL from various sources
+          let imageUrl = null;
+          
+          // 1. Try Alchemy v3 image object format
+          if (nft.image) {
             if (typeof nft.image === 'string') {
-              nft.imageUrl = nft.image;
-              console.log(`Set imageUrl from string image: ${nft.imageUrl}`);
+              imageUrl = nft.image;
+              console.log(`Set imageUrl from string image: ${imageUrl}`);
             } else if (nft.image.gateway) {
-              nft.imageUrl = nft.image.gateway;
-              console.log(`Set imageUrl from image.gateway: ${nft.imageUrl}`);
+              imageUrl = nft.image.gateway;
+              console.log(`Set imageUrl from image.gateway: ${imageUrl}`);
+            } else if (nft.image.url) {
+              imageUrl = nft.image.url;
+              console.log(`Set imageUrl from image.url: ${imageUrl}`);
+            } else if (nft.image.originalUrl) {
+              imageUrl = nft.image.originalUrl;
+              console.log(`Set imageUrl from image.originalUrl: ${imageUrl}`);
             }
-          } else if (nft.metadata && nft.metadata.image) {
-            nft.imageUrl = nft.metadata.image;
-            console.log(`Set imageUrl from metadata.image: ${nft.imageUrl}`);
+          }
+          
+          // 2. Try media array
+          if (!imageUrl && nft.media && nft.media.length > 0) {
+            const mediaItem = nft.media[0];
+            imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri;
+            console.log(`Set imageUrl from media: ${imageUrl}`);
+          }
+          
+          // 3. Try metadata
+          if (!imageUrl && nft.metadata) {
+            if (nft.metadata.image) {
+              imageUrl = nft.metadata.image;
+              console.log(`Set imageUrl from metadata.image: ${imageUrl}`);
+            } else if (nft.metadata.image_url) {
+              imageUrl = nft.metadata.image_url;
+              console.log(`Set imageUrl from metadata.image_url: ${imageUrl}`);
+            }
+          }
+          
+          // 4. Try tokenUri
+          if (!imageUrl && nft.tokenUri) {
+            if (nft.tokenUri.gateway) {
+              imageUrl = nft.tokenUri.gateway;
+              console.log(`Set imageUrl from tokenUri.gateway: ${imageUrl}`);
+            } else if (nft.tokenUri.raw) {
+              imageUrl = nft.tokenUri.raw;
+              console.log(`Set imageUrl from tokenUri.raw: ${imageUrl}`);
+            }
+          }
+          
+          // 5. Try collection image as last resort
+          if (!imageUrl && nft.contractMetadata?.openSea?.imageUrl) {
+            imageUrl = nft.contractMetadata.openSea.imageUrl;
+            console.log(`Set imageUrl from contractMetadata.openSea.imageUrl: ${imageUrl}`);
           }
           
           // Fix IPFS and Arweave URLs
-          if (nft.imageUrl && nft.imageUrl.startsWith('ipfs://')) {
-            nft.imageUrl = nft.imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
-            console.log(`Fixed IPFS URL: ${nft.imageUrl}`);
-          } else if (nft.imageUrl && nft.imageUrl.startsWith('ar://')) {
-            nft.imageUrl = nft.imageUrl.replace('ar://', 'https://arweave.net/');
-            console.log(`Fixed Arweave URL: ${nft.imageUrl}`);
+          if (imageUrl && imageUrl.startsWith('ipfs://')) {
+            imageUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+            console.log(`Fixed IPFS URL: ${imageUrl}`);
+          } else if (imageUrl && imageUrl.startsWith('ar://')) {
+            imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+            console.log(`Fixed Arweave URL: ${imageUrl}`);
           }
           
-          // If still no image, use placeholder
-          if (!nft.imageUrl) {
-            nft.imageUrl = '/assets/placeholder-nft.svg';
-            console.log(`No image found, using placeholder`);
+          // If still no image, use placeholder only as a last resort
+          if (!imageUrl) {
+            imageUrl = '/assets/placeholder-nft.svg';
+            console.log(`No image found for NFT ${nft.id}, using placeholder`);
+          }
+          
+          // Set the image URL
+          nft.imageUrl = imageUrl;
+          
+          // Also set rawImageUrl for backup
+          if (imageUrl !== '/assets/placeholder-nft.svg') {
+            nft.rawImageUrl = imageUrl;
           }
         }
         
