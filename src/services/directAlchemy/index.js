@@ -244,121 +244,157 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
 const getNFTsForOwner = fetchNFTsForAddress;
 
 /**
- * Batch fetch NFTs for multiple addresses
+ * Fetch NFTs for multiple addresses simultaneously
+ * Enhanced with better error handling and retry logic
  */
 const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
-  if (!addresses || addresses.length === 0) {
-    console.log('No addresses provided to batchFetchNFTs');
-    return {};
+  if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+    console.error('Invalid addresses array provided to batchFetchNFTs');
+    return { nfts: [], totalCount: 0, pageKey: null, hasMore: false };
   }
-  
+
+  // Create an object to track retry attempts for each address
+  const retryTracker = {};
+  addresses.forEach(addr => {
+    retryTracker[addr.toLowerCase()] = 0;
+  });
+
   try {
-    console.log(`Starting batch fetch for ${addresses.length} addresses on chain ${chain}`);
+    console.log(`Batch fetching NFTs for ${addresses.length} addresses on ${chain}`);
     
-    // Process addresses in parallel with limit
-    const results = {};
-    const batchSize = 3; // Process 3 addresses at a time (reduced from 5 to prevent rate limiting)
-    
-    for (let i = 0; i < addresses.length; i += batchSize) {
-      const batch = addresses.slice(i, i + batchSize);
-      console.log(`Processing batch ${Math.floor(i/batchSize) + 1} of ${Math.ceil(addresses.length/batchSize)}: ${batch.join(', ')}`);
-      
-      // Create promises for each address, with robust error handling
-      const batchPromises = batch.map(address => {
-        // Ensure address is valid
-        if (!address) {
-          console.warn('Skipping empty address in batch fetch');
-          return Promise.resolve({ address: 'unknown', result: { nfts: [], pageKey: null, hasMore: false } });
-        }
-        
-        // Return a promise that won't reject
-        return new Promise(resolve => {
-          // Safely fetch NFTs for this address
-          fetchNFTsForAddress(address, chain, options)
-            .then(result => {
-              // Ensure we have a valid result object with all required properties
-              if (!result) {
-                console.warn(`No result returned for address ${address} on chain ${chain}`);
-                return resolve({ address, result: { nfts: [], pageKey: null, hasMore: false } });
-              }
-              
-              // Ensure nfts is always an array
-              if (!result.nfts || !Array.isArray(result.nfts)) {
-                console.warn(`Invalid nfts array for address ${address} on chain ${chain}, replacing with empty array`);
-                result.nfts = [];
-              }
-              
-              // Ensure each NFT has the expected properties
-              result.nfts = result.nfts.map(nft => {
-                if (!nft) return null;
-                
-                // Create a safe NFT object with all required properties
-                const safeNft = {
-                  id: nft.id || `${chain}:unknown-${Date.now()}`,
-                  tokenId: nft.tokenId || '0',
-                  contractAddress: nft.contractAddress || nft.contract?.address || 'unknown',
-                  name: nft.name || `NFT ${nft.tokenId || 'Unknown'}`,
-                  description: nft.description || '',
-                  network: nft.network || chain,
-                  ownerAddress: nft.ownerAddress || address,
-                  
-                  // Ensure these object properties exist
-                  collection: nft.collection || { 
-                    name: nft.contract?.name || 'Unknown Collection',
-                    symbol: nft.contract?.symbol || '',
-                    tokenType: nft.contract?.tokenType || 'ERC721'
-                  },
-                  
-                  metadata: nft.metadata || {},
-                  
-                  // Handle media data safely
-                  media: nft.media || {}
-                };
-                
-                // Ensure media properties are objects not arrays
-                if (Array.isArray(safeNft.media)) {
-                  const firstMedia = safeNft.media[0] || {};
-                  safeNft.media = {
-                    original: firstMedia.raw || firstMedia.gateway || '',
-                    gateway: firstMedia.gateway || '',
-                    thumbnail: firstMedia.thumbnail || '',
-                    format: firstMedia.format || ''
-                  };
-                }
-                
-                return safeNft;
-              }).filter(Boolean); // Remove any null entries
-              
-              resolve({ address, result });
-            })
-            .catch(error => {
-              // Don't let one failure fail the entire batch
-              console.error(`Error in batch fetch for ${address} on chain ${chain}:`, error.message);
-              resolve({ address, result: { nfts: [], pageKey: null, hasMore: false } });
-            });
+    // If we're using the proxy API, we can try to use its batch capability
+    if (USE_PROXY) {
+      try {
+        console.log('Using proxy batch API endpoint');
+        const response = await axios({
+          method: 'post',
+          url: `${PROXY_BASE_URL}?endpoint=getnftsforowner&chain=${chain}`,
+          data: {
+            owners: addresses,
+            chain: chain,
+            pageSize: options.pageSize || 100,
+            withMetadata: options.withMetadata !== false,
+            excludeFilters: options.excludeSpam !== false ? ['SPAM'] : [],
+            includeMedia: true
+          },
+          timeout: 30000 // 30 second timeout
         });
-      });
-      
-      // Wait for all promises in this batch
-      const batchResults = await Promise.all(batchPromises);
-      
-      // Add results to the collection
-      batchResults.forEach(({ address, result }) => {
-        if (address && result) {
-          results[address] = result;
+        
+        // Verify the response structure and return if valid
+        if (response.data && Array.isArray(response.data.ownedNfts)) {
+          return {
+            nfts: response.data.ownedNfts,
+            totalCount: response.data.totalCount || response.data.ownedNfts.length,
+            pageKey: response.data.pageKey || null,
+            hasMore: !!response.data.pageKey
+          };
         }
-      });
-      
-      // Add a small delay between batches to avoid rate limiting
-      if (i + batchSize < addresses.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.warn('Batch API request failed, falling back to individual requests:', error.message);
+        // Continue to individual requests fallback
       }
     }
     
-    return results;
+    // Fallback: fetch NFTs for each address individually with retry logic
+    console.log('Using individual requests for each address with retry logic');
+    
+    const allNfts = [];
+    let totalCount = 0;
+    
+    // Maximum number of concurrent requests
+    const MAX_CONCURRENT = 3;
+    
+    // Process addresses in batches to avoid too many concurrent requests
+    for (let i = 0; i < addresses.length; i += MAX_CONCURRENT) {
+      const batch = addresses.slice(i, i + MAX_CONCURRENT);
+      
+      // Execute requests for this batch concurrently
+      const results = await Promise.all(
+        batch.map(async (address) => {
+          const normalizedAddress = address.toLowerCase().trim();
+          
+          // Try up to 3 times for each address
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              retryTracker[normalizedAddress] = attempt;
+              
+              // Add small delay between retries
+              if (attempt > 0) {
+                await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+                console.log(`Retry #${attempt} for ${normalizedAddress}`);
+              }
+              
+              const result = await fetchNFTsForAddress(
+                normalizedAddress,
+                chain,
+                {
+                  pageSize: options.pageSize || 100,
+                  withMetadata: options.withMetadata !== false,
+                  excludeSpam: options.excludeSpam !== false,
+                  timeout: 20000 + (attempt * 5000) // Increase timeout with each retry
+                }
+              );
+              
+              // Return successful result
+              return {
+                success: true,
+                address: normalizedAddress,
+                nfts: result.nfts || [],
+                count: result.nfts ? result.nfts.length : 0
+              };
+            } catch (error) {
+              console.error(`Attempt ${attempt + 1} failed for ${normalizedAddress}:`, error.message);
+              
+              // If this is the last attempt, return error result
+              if (attempt === 2) {
+                return {
+                  success: false,
+                  address: normalizedAddress,
+                  error: error.message,
+                  nfts: [],
+                  count: 0
+                };
+              }
+              // Otherwise continue to next retry attempt
+            }
+          }
+        })
+      );
+      
+      // Process results from this batch
+      results.forEach(result => {
+        if (result && result.success && Array.isArray(result.nfts)) {
+          // Add owner address to each NFT
+          const nftsWithOwner = result.nfts.map(nft => ({
+            ...nft,
+            ownerAddress: result.address
+          }));
+          
+          allNfts.push(...nftsWithOwner);
+          totalCount += result.count;
+        } else if (result) {
+          console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
+        }
+      });
+    }
+    
+    console.log(`Successfully processed ${allNfts.length} NFTs from ${addresses.length} addresses`);
+    
+    return {
+      nfts: allNfts,
+      totalCount: totalCount,
+      pageKey: null, // No pagination for batch requests
+      hasMore: false
+    };
   } catch (error) {
-    console.error(`Error in batch fetching NFTs on chain ${chain}:`, error);
-    return {};
+    console.error('Error in batchFetchNFTs:', error);
+    return {
+      nfts: [],
+      totalCount: 0,
+      pageKey: null,
+      hasMore: false,
+      error: error.message
+    };
   }
 };
 

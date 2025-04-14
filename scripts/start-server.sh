@@ -26,6 +26,15 @@ if [ -n "$RUNNING_SERVERS" ]; then
       kill -9 $PID 2>/dev/null || true
       echo "  - Sent SIGKILL to process $PID"
     done
+    
+    # Double-check that everything is actually dead
+    sleep 1
+    FINAL_CHECK=$(lsof -i:3001 -t)
+    if [ -n "$FINAL_CHECK" ]; then
+      echo "❌ ERROR: Unable to kill all processes. Please manually terminate them:"
+      ps -f $FINAL_CHECK
+      exit 1
+    fi
   fi
 else
   echo "✅ No existing server processes found."
@@ -37,6 +46,20 @@ if lsof -i:3001 -t >/dev/null; then
   exit 1
 fi
 
-# Start the server with proper environment variables
+# Create a log file
+LOG_FILE="server.log"
+echo "$(date): Starting server" > $LOG_FILE
+
+# Verify environment variables
+if [ -z "$ALCHEMY_API_KEY" ] && [ -f .env ]; then
+  echo "ℹ️ ALCHEMY_API_KEY not set in environment, attempting to load from .env file"
+  source .env 2>/dev/null || true
+fi
+
 echo "🚀 Starting server..."
-exec node -r dotenv/config server.js 
+exec node -r dotenv/config server.js 2>&1 | tee -a $LOG_FILE
+
+# Note: exec replaces the current process, so we won't actually reach this point
+# The following is only reached if exec fails
+echo "❌ Failed to start server" >> $LOG_FILE
+exit 1 

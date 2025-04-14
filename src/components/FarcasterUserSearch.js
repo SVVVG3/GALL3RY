@@ -133,6 +133,109 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   }, [initialUsername, handleSearch]);
 
+  const fetchUserNfts = async (profile) => {
+    setIsSearching(true);
+    setSearchError(null);
+    
+    try {
+      if (!profile || !profile.custodyAddress) {
+        setSearchError('No wallet address found for this Farcaster user');
+        setUserNfts([]);
+        return;
+      }
+      
+      // Get all connected addresses
+      let addresses = [];
+      
+      // Primary custody address
+      if (profile.custodyAddress) {
+        addresses.push(profile.custodyAddress);
+      }
+      
+      // Connected wallets (if any)
+      if (profile.connectedAddresses && Array.isArray(profile.connectedAddresses)) {
+        addresses = [...addresses, ...profile.connectedAddresses];
+      }
+      
+      // Filter out any duplicates or invalid addresses
+      addresses = addresses
+        .filter(Boolean) // Remove null/undefined
+        .filter(addr => addr.startsWith('0x') && addr.length === 42) // Ensure valid format
+        .filter((addr, index, self) => self.indexOf(addr) === index); // Remove duplicates
+      
+      if (addresses.length === 0) {
+        console.warn('No valid addresses found for user');
+        setSearchError('No valid wallet addresses found for this user');
+        setUserNfts([]);
+        return;
+      }
+      
+      console.log(`Fetching NFTs for ${addresses.length} addresses:`, addresses);
+      
+      // Attempt to fetch NFTs with retry mechanism
+      let attempt = 0;
+      let result = null;
+      let success = false;
+      
+      while (attempt < 3 && !success) {
+        try {
+          // Add small delay between retries
+          if (attempt > 0) {
+            console.log(`Retry attempt ${attempt} for fetchAllNFTsForWallets`);
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+          
+          result = await fetchAllNFTsForWallets(addresses);
+          
+          // Verify the result structure
+          if (result && Array.isArray(result.nfts)) {
+            success = true;
+          } else {
+            console.error('Invalid result format:', result);
+            throw new Error('Received invalid data format from NFT service');
+          }
+        } catch (err) {
+          console.error(`Attempt ${attempt + 1} failed:`, err);
+          attempt++;
+          
+          // If this is the last attempt, propagate the error
+          if (attempt >= 3) {
+            throw err;
+          }
+        }
+      }
+      
+      // Ensure we have a valid result with nfts array
+      if (!result || !Array.isArray(result.nfts)) {
+        console.error('Failed to get valid NFT data after retries');
+        setSearchError('Could not fetch NFTs. Please try again later.');
+        setUserNfts([]);
+        return;
+      }
+      
+      console.log(`Successfully fetched ${result.nfts.length} NFTs for ${profile.username}`);
+      
+      // Process and update the UI
+      setUserNfts(result.nfts || []);
+      
+      // Track for analytics
+      if (typeof window !== 'undefined') {
+        window.plausible && window.plausible('Farcaster User NFTs Viewed', {
+          props: { 
+            username: profile.username,
+            nft_count: result.nfts.length
+          }
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching user NFTs:', error);
+      setSearchError(`Failed to load NFTs: ${error.message || 'Unknown error'}`);
+      setUserNfts([]); // Set empty array to avoid null/undefined issues
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   return (
     <div className="farcaster-search-container">
       <div className="search-header">
