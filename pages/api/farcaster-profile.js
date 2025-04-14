@@ -1,15 +1,19 @@
 /**
  * API route for fetching Farcaster profiles
  * 
- * This endpoint acts as a proxy to the Neynar API, but preserves the format that
- * our frontend expects from the original Zapper API.
+ * This endpoint uses the Zapper API to retrieve Farcaster profile data.
  */
 
 import axios from 'axios';
 
 // Constants
-const NEYNAR_API_URL = 'https://api.neynar.com/v2/farcaster';
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY;
+const ZAPPER_API_ENDPOINTS = [
+  'https://api.zapper.fi/v2/graphql',
+  'https://public.zapper.xyz/graphql',
+  'https://api.zapper.xyz/v2/graphql'
+];
+
+const ZAPPER_API_KEY = process.env.ZAPPER_API_KEY || process.env.REACT_APP_ZAPPER_API_KEY || 'zapper-gallery';
 
 // In-memory cache with 15-minute expiration
 const cache = new Map();
@@ -20,6 +24,12 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
+  
+  // Enable CORS
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
   
   try {
     // Extract query parameters
@@ -47,112 +57,111 @@ export default async function handler(req, res) {
       }
     }
     
-    // If no NEYNAR_API_KEY is provided, return a helpful error
-    if (!NEYNAR_API_KEY) {
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Missing Neynar API key. Please add NEYNAR_API_KEY to your environment variables.' 
-      });
-    }
-    
-    console.log(`Requesting Farcaster profile for ${username ? `username: ${username}` : `fid: ${fid}`}`);
-    
-    // Determine the API endpoint based on input type
-    let neynarEndpoint, params;
-    
-    if (username) {
-      // For username search, use the search endpoint
-      neynarEndpoint = `${NEYNAR_API_URL}/user/search`;
-      params = { q: username, limit: 1 };
-    } else {
-      // For FID lookup, use the user endpoint
-      neynarEndpoint = `${NEYNAR_API_URL}/user`;
-      params = { fid };
-    }
-    
-    // Make request to Neynar API
-    const response = await axios.get(neynarEndpoint, {
-      headers: {
-        'accept': 'application/json',
-        'api_key': NEYNAR_API_KEY
-      },
-      params
-    });
-    
-    // For username search, extract the matching user
-    let userData;
-    
-    if (username) {
-      const users = response.data.users || [];
-      // Try to find exact match first
-      userData = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-      
-      // If no exact match, use the first result
-      if (!userData && users.length > 0) {
-        userData = users[0];
+    // Build the GraphQL query based on provided parameters
+    const query = `
+      query GetFarcasterProfile(${fid ? '$fid: Int' : '$username: String'}) {
+        farcasterProfile(${fid ? 'fid: $fid' : 'username: $username'}) {
+          username
+          fid
+          metadata {
+            displayName
+            description
+            imageUrl
+            warpcast
+          }
+          custodyAddress
+          connectedAddresses
+          followerCount
+          followingCount
+        }
       }
-    } else {
-      // For FID lookup, use the direct response
-      userData = response.data.user;
-    }
+    `;
+
+    // Prepare variables
+    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
     
-    if (!userData) {
-      return res.status(404).json({ 
-        success: false, 
-        message: `Farcaster profile not found for ${username ? `username: ${username}` : `fid: ${fid}`}` 
-      });
-    }
+    // Try each Zapper API endpoint until one succeeds
+    let lastError = null;
     
-    // Get verified addresses for this user
-    let connectedAddresses = [];
-    try {
-      if (userData.fid) {
-        const addressesResponse = await axios.get(`${NEYNAR_API_URL}/user/verified-addresses`, {
+    for (const endpoint of ZAPPER_API_ENDPOINTS) {
+      try {
+        console.log(`Trying Zapper endpoint ${endpoint} for Farcaster profile...`);
+        
+        // Make request to Zapper API
+        const response = await axios({
+          method: 'post',
+          url: endpoint,
           headers: {
-            'accept': 'application/json',
-            'api_key': NEYNAR_API_KEY
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'X-API-KEY': ZAPPER_API_KEY,
+            'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
           },
-          params: { fid: userData.fid }
+          data: {
+            query,
+            variables
+          },
+          timeout: 10000 // 10 second timeout
         });
         
-        connectedAddresses = addressesResponse.data.verified_addresses?.map(a => a.addr.toLowerCase()) || [];
+        // Check for GraphQL errors
+        if (response.data?.errors) {
+          console.warn('GraphQL errors from Zapper:', JSON.stringify(response.data.errors));
+          
+          // Store error but continue trying other endpoints
+          lastError = new Error(response.data.errors[0]?.message || 'Unknown GraphQL error');
+          lastError.response = { data: response.data.errors };
+          continue;
+        }
+        
+        // Extract profile data
+        const profileData = response.data?.data?.farcasterProfile;
+        
+        if (!profileData) {
+          console.warn(`No profile data returned from ${endpoint}`);
+          continue;
+        }
+        
+        console.log(`Successfully found profile for ${username || fid} via ${endpoint}`);
+        
+        // Cache the profile
+        cache.set(cacheKey, {
+          timestamp: Date.now(),
+          data: profileData
+        });
+        
+        // Return the profile data
+        return res.status(200).json(profileData);
+      } catch (error) {
+        console.error(`Error with Zapper endpoint ${endpoint}:`, error.message);
+        lastError = error;
+        // Continue to the next endpoint
       }
-    } catch (addressError) {
-      console.warn('Could not fetch verified addresses:', addressError.message);
     }
     
-    // Transform the Neynar response to match the Zapper API format
-    // that our frontend expects
-    const formattedProfile = {
-      username: userData.username,
-      fid: userData.fid,
-      metadata: {
-        displayName: userData.display_name,
-        description: userData.profile?.bio?.text,
-        imageUrl: userData.pfp_url || userData.profile?.pfp?.url,
-        warpcast: `https://warpcast.com/${userData.username}`
-      },
-      custodyAddress: userData.custody_address,
-      connectedAddresses: connectedAddresses,
-      followerCount: userData.follower_count,
-      followingCount: userData.following_count
-    };
+    // If we get here, all endpoints failed
+    console.error('All Zapper endpoints failed for Farcaster profile');
     
-    // Cache the profile
-    cache.set(cacheKey, {
-      timestamp: Date.now(),
-      data: formattedProfile
+    if (lastError?.response?.data?.errors) {
+      return res.status(400).json({
+        error: 'GraphQL Error',
+        message: lastError.message,
+        details: lastError.response.data.errors
+      });
+    }
+    
+    return res.status(lastError?.response?.status || 500).json({
+      error: 'Error fetching Farcaster profile',
+      message: lastError?.message || 'Failed to fetch profile from all Zapper endpoints',
+      details: lastError?.response?.data
     });
-    
-    // Return the formatted profile
-    return res.status(200).json(formattedProfile);
   } catch (error) {
-    console.error('Error fetching Farcaster profile:', error);
+    console.error('Unexpected error in Farcaster profile API:', error.message);
     
-    return res.status(500).json({ 
-      success: false, 
-      message: error.message || 'Failed to fetch Farcaster profile',
-      error: error.response?.data || error.toString()
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message,
+      details: error.stack
     });
   }
 } 
