@@ -213,6 +213,8 @@ app.get('/farcaster-profile', async (req, res) => {
 
 // ALCHEMY API - Used for all NFT data
 app.all('/alchemy', async (req, res) => {
+  console.log(`Alchemy API request received: ${req.method} ${req.url}`);
+  
   // CORS headers for local development
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
