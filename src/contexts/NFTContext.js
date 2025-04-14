@@ -643,9 +643,30 @@ export const NFTProvider = ({ children }) => {
     
     // Filter by chain
     if (selectedChains.length > 0 && !selectedChains.includes('all')) {
-      filtered = filtered.filter(nft => 
-        nft.network && selectedChains.includes(nft.network.toLowerCase())
-      );
+      filtered = filtered.filter(nft => {
+        // Log some network values to debug
+        if (nft.id === filtered[0]?.id) {
+          console.log(`Chain filtering debug for first NFT: network=${nft.network}, chain=${nft.chain}`);
+        }
+        
+        // More flexible network matching - handle both network and chain properties
+        // Also normalize different chain names (eth = ethereum, etc)
+        const nftNetwork = (nft.network || nft.chain || '').toLowerCase();
+        const normalizedNetwork = nftNetwork === 'eth' ? 'ethereum' : 
+                                  nftNetwork === 'opt' ? 'optimism' : 
+                                  nftNetwork === 'arb' ? 'arbitrum' : 
+                                  nftNetwork;
+                                  
+        // Check for direct match or normalized match
+        return selectedChains.some(chain => {
+          const normalizedChain = chain === 'ethereum' ? 'eth' :
+                                  chain === 'optimism' ? 'opt' :
+                                  chain === 'arbitrum' ? 'arb' : 
+                                  chain;
+          return normalizedNetwork === chain || normalizedNetwork === normalizedChain || 
+                 nftNetwork === chain || nftNetwork === normalizedChain;
+        });
+      });
       console.log(`After chain filtering: ${filtered.length} NFTs`);
     }
     

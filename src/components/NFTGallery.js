@@ -62,6 +62,12 @@ const NFTGallery = () => {
       const walletAddresses = connectedWallets.map(wallet => wallet.address);
       const newWallets = walletAddresses.filter(address => !loadedWallets.includes(address));
       
+      // Make sure we're not filtering by chain initially - set to 'all'
+      if (selectedChains.length === 0 || !selectedChains.includes('all')) {
+        console.log("Setting default chain filter to 'all'");
+        setSelectedChains(['all']);
+      }
+      
       if (newWallets.length > 0) {
         console.log(`Fetching NFTs for ${newWallets.length} new connected wallets`);
         setFetchingAllWallets(true);
@@ -86,7 +92,7 @@ const NFTGallery = () => {
         setInitialLoad(false);
       }
     }
-  }, [connectedWallets, fetchNFTs, fetchAllNFTsForWallets, initialLoad, loadedWallets, excludeSpam]);
+  }, [connectedWallets, fetchNFTs, fetchAllNFTsForWallets, initialLoad, loadedWallets, excludeSpam, selectedChains, setSelectedChains]);
 
   // Automatically continue loading NFTs until we hit a reasonable threshold or hasMore becomes false
   // This helps ensure we load enough NFTs even with the pagination limits

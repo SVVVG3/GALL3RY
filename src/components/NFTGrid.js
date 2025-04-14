@@ -148,23 +148,29 @@ const NftGrid = ({ nfts = [] }) => {
   return (
     <div className="nft-grid">
       {nfts.length > 0 ? (
-        nfts.map((nft, index) => (
-          <div key={`${nft.id || nft.tokenId || index}`} className="nft-item">
-            <div className="nft-card">
-              <div className="nft-image">
-                <img 
-                  src={getImageUrl(nft)}
-                  alt={getNftName(nft)}
-                  onError={handleImageError}
-                />
-              </div>
-              <div className="nft-info">
-                <h3 className="nft-name">{getNftName(nft)}</h3>
-                <p className="nft-collection">{getCollectionName(nft)}</p>
+        nfts.map((nft, index) => {
+          // Get image URL with logging
+          const imageUrl = getImageUrl(nft);
+          console.log(`Rendering NFT ${index}: ${nft.name || nft.id} with image: ${imageUrl}`);
+          
+          return (
+            <div key={`${nft.id || nft.tokenId || index}`} className="nft-item">
+              <div className="nft-card">
+                <div className="nft-image">
+                  <img 
+                    src={imageUrl}
+                    alt={getNftName(nft)}
+                    onError={handleImageError}
+                  />
+                </div>
+                <div className="nft-info">
+                  <h3 className="nft-name">{getNftName(nft)}</h3>
+                  <p className="nft-collection">{getCollectionName(nft)}</p>
+                </div>
               </div>
             </div>
-          </div>
-        ))
+          );
+        })
       ) : (
         <div className="no-nfts-message">
           <p>No NFTs to display</p>
