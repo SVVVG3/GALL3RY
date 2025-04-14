@@ -31,12 +31,13 @@
   },
   "scripts": {
     "start": "react-app-rewired start",
-    "dev": "node -r dotenv/config server.js",
+    "dev": "bash ./scripts/start-server.sh",
+    "frontend": "react-app-rewired start",
     "build": "react-app-rewired build",
     "vercel-build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
-    "server": "node -r dotenv/config server.js"
+    "server": "bash ./scripts/start-server.sh"
   },
   "eslintConfig": {
     "extends": [

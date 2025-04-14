@@ -86,6 +86,27 @@ const setCachedData = (key, data) => {
 };
 
 /**
+ * Helper function to retry a failed request with exponential backoff
+ */
+const fetchWithRetry = async (config, retries = 3, delay = 1000) => {
+  try {
+    return await axios(config);
+  } catch (error) {
+    if (retries === 0) {
+      throw error;
+    }
+    
+    console.warn(`Request failed, retrying (${retries} attempts left):`, error.message);
+    
+    // Wait for the delay period
+    await new Promise(resolve => setTimeout(resolve, delay));
+    
+    // Retry with exponential backoff
+    return fetchWithRetry(config, retries - 1, delay * 2);
+  }
+};
+
+/**
  * Fetch NFTs for an address (main method)
  */
 const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
@@ -117,6 +138,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       pageSize: options.pageSize || 100,
       withMetadata: options.withMetadata !== false,
       excludeSpam: options.excludeSpam !== false,
+      includeMedia: true, // Always include media data
     };
     
     // Add pageKey if provided
@@ -124,17 +146,18 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       params.pageKey = options.pageKey;
     }
     
-    // Build the request config
+    // Build the request config with timeout
     const requestConfig = {
       method: 'get',
       url: apiUrl,
       params,
+      timeout: options.timeout || 30000, // 30 second timeout
     };
     
     console.log(`Fetching NFTs for ${normalizedAddress} on ${chain}`, requestConfig);
     
-    // Make the request
-    const response = await axios(requestConfig);
+    // Make the request with retry logic
+    const response = await fetchWithRetry(requestConfig, 3);
     
     // Process the response
     if (!response.data) {

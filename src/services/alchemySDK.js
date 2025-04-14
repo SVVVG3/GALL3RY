@@ -4,14 +4,14 @@
  */
 
 import { Alchemy, Network } from 'alchemy-sdk';
+import axios from 'axios';
 
-// Get the API key from environment variables
-const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY;
+// Never use direct API key from client - always use the proxy
+// This environment variable should be completely ignored in production
+const apiKey = 'unused-client-side-key';
 
-// Check if using demo key and warn
-if (apiKey === 'demo') {
-  console.warn('⚠️ WARNING: Using "demo" API key for Alchemy. This will cause rate limiting and failures. Please set a real API key in your .env file.');
-}
+// Define the base URL for the proxy endpoint
+const PROXY_URL = '/api/alchemy';
 
 // Configure the Alchemy SDK with improved reliability settings
 const config = {
@@ -24,6 +24,35 @@ const config = {
 
 // Create a single Alchemy instance
 const alchemy = new Alchemy(config);
+
+/**
+ * Improved NFT fetching using the proxy endpoint instead of direct API calls
+ * This ensures we use the server's API key and not expose any keys client-side
+ */
+const fetchNFTsViaProxy = async (address, options = {}) => {
+  try {
+    if (!address) {
+      throw new Error('Address is required');
+    }
+    
+    // Use the proxy endpoint
+    const response = await axios.get(PROXY_URL, {
+      params: {
+        endpoint: 'getnftsforowner',
+        chain: options.chain || 'eth',
+        owner: address,
+        pageSize: options.pageSize || 100,
+        withMetadata: true,
+        includeMedia: true
+      }
+    });
+    
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching NFTs via proxy:', error);
+    throw error;
+  }
+};
 
 /**
  * Fetch NFTs for a wallet address using the Alchemy SDK
@@ -131,7 +160,19 @@ export const getNFTsForMultipleOwners = async (addresses, options = {}) => {
   }
 };
 
+// Export both the Alchemy SDK instance and our custom methods
 export default {
-  getNFTsForOwner,
-  getNFTsForMultipleOwners
+  // Alchemy SDK instance - only used for methods not requiring direct API access
+  alchemy,
+  
+  // Custom methods
+  fetchNFTsViaProxy,
+  
+  // Alchemy NFT API methods
+  getNftsForOwner: async (owner, options = {}) => {
+    // Always use the proxy endpoint instead of direct Alchemy API
+    return fetchNFTsViaProxy(owner, options);
+  },
+  
+  // Additional methods can be added here
 }; 

@@ -635,17 +635,54 @@ if (process.env.NODE_ENV === 'production') {
   console.log('Running in development mode - serving static assets from /public');
 }
 
-// Start server
-app.listen(PORT, () => {
+// Start the server
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API base URL: http://localhost:${PORT}/api`);
 });
 
-// Handle uncaught errors
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+  
+  // Force close after timeout
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
 });
 
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully');
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+  
+  // Force close after timeout
+  setTimeout(() => {
+    console.error('Could not close connections in time, forcefully shutting down');
+    process.exit(1);
+  }, 10000);
+});
+
+// Handle uncaught exceptions and unhandled promise rejections
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+  
+  // Don't exit on port already in use error - let the script handle it
+  if (err.code === 'EADDRINUSE') {
+    console.error(`⚠️ Port ${PORT} is already in use`);
+    console.error('Please stop any other instances of the server or use a different port');
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't crash the application, but log the error
 }); 
