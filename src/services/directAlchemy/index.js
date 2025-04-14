@@ -50,7 +50,10 @@ const getChainBaseUrl = (chain) => {
 // Helper to build the API URL
 const buildApiUrl = (endpoint, chain) => {
   // Always use the proxy API, never direct
-  return `${ALCHEMY_PROXY_URL}?endpoint=${endpoint}&chain=${chain || 'eth'}`;
+  // Make sure the chain parameter is included
+  const chainParam = chain || 'eth';
+  console.log(`Building proxy URL for chain: ${chainParam}`);
+  return `${ALCHEMY_PROXY_URL}?endpoint=${endpoint}&chain=${chainParam}`;
 };
 
 // Simple in-memory cache
@@ -138,28 +141,34 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     
     // Map the response to our expected format
     const result = {
-      nfts: (response.data.ownedNfts || []).map(nft => ({
-        id: `${chain}:${nft.contract.address}-${nft.tokenId}`,
-        tokenId: nft.tokenId,
-        contractAddress: nft.contract.address,
-        name: nft.title || `#${nft.tokenId}`,
-        description: nft.description || '',
-        network: chain,
-        ownerAddress: normalizedAddress,
-        collection: {
-          name: nft.contract.name || 'Unknown Collection',
-          symbol: nft.contract.symbol || '',
-          tokenType: nft.contract.tokenType || 'ERC721',
-        },
-        metadata: nft.metadata || {},
-        media: {
-          original: nft.media[0]?.raw || nft.media[0]?.gateway || '',
-          gateway: nft.media[0]?.gateway || '',
-          thumbnail: nft.media[0]?.thumbnail || '',
-          format: nft.media[0]?.format || '',
-        },
-        timeLastUpdated: nft.timeLastUpdated,
-      })),
+      nfts: (response.data.ownedNfts || []).map(nft => {
+        // Safely extract media data with fallbacks
+        const mediaArray = Array.isArray(nft.media) ? nft.media : [];
+        const firstMedia = mediaArray[0] || {};
+        
+        return {
+          id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
+          tokenId: nft.tokenId || '0',
+          contractAddress: nft.contract?.address || 'unknown',
+          name: nft.title || `#${nft.tokenId || '0'}`,
+          description: nft.description || '',
+          network: chain,
+          ownerAddress: normalizedAddress,
+          collection: {
+            name: nft.contract?.name || 'Unknown Collection',
+            symbol: nft.contract?.symbol || '',
+            tokenType: nft.contract?.tokenType || 'ERC721',
+          },
+          metadata: nft.metadata || {},
+          media: {
+            original: firstMedia.raw || firstMedia.gateway || '',
+            gateway: firstMedia.gateway || '',
+            thumbnail: firstMedia.thumbnail || '',
+            format: firstMedia.format || '',
+          },
+          timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
+        };
+      }),
       pageKey: response.data.pageKey || null,
       hasMore: !!response.data.pageKey,
     };
@@ -183,6 +192,7 @@ const getNFTsForOwner = fetchNFTsForAddress;
  */
 const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   if (!addresses || addresses.length === 0) {
+    console.log('No addresses provided to batchFetchNFTs');
     return {};
   }
   
@@ -194,18 +204,39 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     for (let i = 0; i < addresses.length; i += batchSize) {
       const batch = addresses.slice(i, i + batchSize);
       
-      // Process batch in parallel
-      const batchPromises = batch.map(address => 
-        fetchNFTsForAddress(address, chain, options)
-          .then(result => ({ address, result }))
-      );
+      // Improved error handling for each address in the batch
+      const batchPromises = batch.map(address => {
+        // Ensure address is valid
+        if (!address) {
+          console.warn('Skipping empty address in batch fetch');
+          return Promise.resolve({ address: 'unknown', result: { nfts: [], pageKey: null, hasMore: false } });
+        }
+        
+        // Safely fetch NFTs for this address
+        return fetchNFTsForAddress(address, chain, options)
+          .then(result => {
+            // Ensure we have a valid result object
+            if (!result) {
+              console.warn(`No result returned for address ${address}`);
+              return { address, result: { nfts: [], pageKey: null, hasMore: false } };
+            }
+            return { address, result };
+          })
+          .catch(error => {
+            // Don't let one failure fail the entire batch
+            console.error(`Error in batch fetch for ${address}:`, error.message);
+            return { address, result: { nfts: [], pageKey: null, hasMore: false } };
+          });
+      });
       
       // Wait for all promises in this batch
       const batchResults = await Promise.all(batchPromises);
       
       // Add results to the collection
       batchResults.forEach(({ address, result }) => {
-        results[address] = result;
+        if (address && result) {
+          results[address] = result;
+        }
       });
     }
     
