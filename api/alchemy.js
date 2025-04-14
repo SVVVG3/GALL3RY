@@ -120,11 +120,21 @@ module.exports = async (req, res) => {
     if (endpoint === 'getNFTMetadataBatch') {
       console.log(`Batch request to ${endpointUrl}`);
       
-      // For POST requests, get the body from the request
+      // Get the request body
       let requestBody = {};
       
-      // If this is actually a GET request with tokens in params, convert to proper format
-      if (req.method === 'GET' && requestParams.tokens) {
+      // Handle different request methods
+      if (req.method === 'POST') {
+        try {
+          // Parse the request body
+          requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+          console.log(`Received POST request with body:`, JSON.stringify(requestBody).substring(0, 100) + '...');
+        } catch (error) {
+          console.error('Error parsing request body:', error);
+          return res.status(400).json({ error: 'Invalid request body' });
+        }
+      } else if (req.method === 'GET' && requestParams.tokens) {
+        // For GET requests with tokens parameter
         try {
           requestBody.tokens = JSON.parse(requestParams.tokens);
         } catch (e) {
@@ -137,19 +147,48 @@ module.exports = async (req, res) => {
           requestBody.refreshCache = requestParams.refreshCache === 'true';
         }
       } else {
-        // Otherwise, parse the body if available
-        if (req.body) {
-          requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        }
+        return res.status(400).json({ error: 'Invalid request format for getNFTMetadataBatch endpoint' });
+      }
+      
+      // Make sure tokens is an array
+      if (!requestBody.tokens || !Array.isArray(requestBody.tokens)) {
+        console.error('Invalid tokens array in request body:', requestBody);
+        return res.status(400).json({ error: 'Tokens must be an array of contractAddress and tokenId objects' });
       }
       
       // Make the POST request
-      console.log(`Making POST request with body:`, JSON.stringify(requestBody).substring(0, 100) + '...');
+      console.log(`Making POST request to ${endpointUrl} with ${requestBody.tokens.length} tokens`);
       
-      const response = await axios.post(endpointUrl, requestBody);
-      
-      // Return the response
-      return res.status(200).json(response.data);
+      try {
+        const response = await axios.post(endpointUrl, requestBody);
+        
+        // Log success and return the response
+        console.log(`Batch metadata request successful: ${response.status}`);
+        if (response.data && response.data.nfts) {
+          console.log(`Retrieved metadata for ${response.data.nfts.length} NFTs`);
+        }
+        
+        return res.status(200).json(response.data);
+      } catch (error) {
+        console.error('Error in batch metadata request:', error.message);
+        
+        if (error.response) {
+          console.error(`Status: ${error.response.status}`);
+          console.error(`Data:`, error.response.data);
+          
+          return res.status(error.response.status).json({
+            error: 'Alchemy API batch request failed',
+            status: error.response.status,
+            message: error.message,
+            details: error.response.data
+          });
+        }
+        
+        return res.status(500).json({
+          error: 'Internal server error during batch request',
+          message: error.message
+        });
+      }
     }
     
     // Regular GET request for other endpoints

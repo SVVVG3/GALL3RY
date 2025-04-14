@@ -297,7 +297,8 @@ export const getNFTMetadataBatch = async (nfts, chain = 'eth', options = {}) => 
       const tokenId = nft.tokenId || nft.id?.tokenId;
       
       if (!contractAddress || !tokenId) {
-        console.warn('Missing contractAddress or tokenId for NFT', nft);
+        console.warn('Missing contractAddress or tokenId for NFT:', 
+          nft.id || JSON.stringify(nft).substring(0, 100) + '...');
         return null;
       }
       
@@ -326,26 +327,35 @@ export const getNFTMetadataBatch = async (nfts, chain = 'eth', options = {}) => 
       // Make the batch request
       console.log(`Making batch request for ${batchTokens.length} NFTs (batch ${Math.floor(i/BATCH_SIZE) + 1}/${Math.ceil(tokens.length/BATCH_SIZE)})`);
       
-      const response = await alchemyClient.post(url, {
-        tokens: batchTokens,
-        refreshCache: options.refreshCache || false
-      });
-      
-      if (!response.data || !response.data.nfts) {
-        console.warn('Unexpected response from Alchemy batch API:', response.data);
-        continue;
-      }
-      
-      // Process and format the response
-      const batchResults = response.data.nfts.map(formatNft);
-      enhancedNFTs.push(...batchResults);
-      
-      // Add a small delay between batches to avoid rate limiting
-      if (i + BATCH_SIZE < tokens.length) {
-        await new Promise(resolve => setTimeout(resolve, 300));
+      try {
+        const response = await alchemyClient.post(url, {
+          tokens: batchTokens,
+          refreshCache: options.refreshCache || false
+        });
+        
+        if (!response.data || !response.data.nfts || !Array.isArray(response.data.nfts)) {
+          console.warn('Unexpected response format from Alchemy batch API:', 
+            JSON.stringify(response.data).substring(0, 200) + '...');
+          continue;
+        }
+        
+        console.log(`Successfully received metadata for ${response.data.nfts.length} NFTs`);
+        
+        // Process and format the response
+        const batchResults = response.data.nfts.map(formatNft);
+        enhancedNFTs.push(...batchResults);
+        
+        // Add a small delay between batches to avoid rate limiting
+        if (i + BATCH_SIZE < tokens.length) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+      } catch (error) {
+        console.error(`Error in batch ${Math.floor(i/BATCH_SIZE) + 1}:`, error);
+        // Continue with next batch despite errors
       }
     }
     
+    console.log(`Enhanced metadata fetched for ${enhancedNFTs.length}/${tokens.length} NFTs`);
     return enhancedNFTs;
   } catch (error) {
     console.error('Error fetching NFT metadata batch:', error);
@@ -378,32 +388,69 @@ export const enhanceNFTsWithMetadata = async (nfts, chain = 'eth', options = {})
       refreshCache: options.refreshCache || false
     });
     
-    // Create a map of enhanced NFTs by ID for easy lookup
+    if (!enhancedNFTs || enhancedNFTs.length === 0) {
+      console.warn('No enhanced NFTs returned from batch request');
+      return nfts; // Return original NFTs if enhancement fails
+    }
+    
+    // Create a map for efficient lookup
     const enhancedNFTMap = new Map();
+    
+    // Process each enhanced NFT
     enhancedNFTs.forEach(nft => {
-      const id = nft.id || `${chain}:${nft.contractAddress}-${nft.tokenId}`;
-      enhancedNFTMap.set(id, nft);
+      if (!nft || !nft.id) {
+        console.warn('Invalid enhanced NFT or missing ID:', nft);
+        return;
+      }
+      
+      // Debug price data
+      if (nft.estimatedValue || nft.valueUsd || nft.balanceUSD || 
+          (nft.collection && nft.collection.floorPrice)) {
+        console.log(`Price data found for ${nft.id}:`, {
+          estimatedValue: nft.estimatedValue,
+          valueUsd: nft.valueUsd,
+          balanceUSD: nft.balanceUSD,
+          collectionFloorPrice: nft.collection?.floorPrice
+        });
+      }
+      
+      enhancedNFTMap.set(nft.id, nft);
     });
     
     // Merge the enhanced data with the original NFTs
     const mergedNFTs = nfts.map(nft => {
-      const normalizedId = nft.id || `${chain}:${nft.contractAddress || nft.contract?.address}-${nft.tokenId}`;
+      // Get normalized ID for matching
+      const normalizedId = nft.id || 
+        `${chain}:${nft.contractAddress || nft.contract?.address}-${nft.tokenId}`;
+      
+      // Find the enhanced version
       const enhancedNFT = enhancedNFTMap.get(normalizedId);
       
       if (enhancedNFT) {
-        // Merge enhanced data with original, prioritizing enhanced data
-        return {
+        // Merge with original, prioritizing enhanced data for most fields
+        const merged = {
           ...nft,
           ...enhancedNFT,
-          // Preserve the original imageUrl if the enhanced one doesn't have it
-          imageUrl: enhancedNFT.imageUrl || nft.imageUrl,
-          // Ensure we have the owner address
+          // Preserve the original fields that might be better than enhanced
           ownerAddress: nft.ownerAddress || enhancedNFT.ownerAddress,
-          // If the original NFT had ownerAddresses array, preserve it
           ownerAddresses: nft.ownerAddresses || enhancedNFT.ownerAddresses,
-          // Preserve original collection if enhanced has none
-          collection: enhancedNFT.collection || nft.collection
         };
+        
+        // Special handling for image URL - only use enhanced if it's better
+        if (!merged.imageUrl || merged.imageUrl.includes('placeholder')) {
+          merged.imageUrl = enhancedNFT.imageUrl;
+        }
+        
+        // Debug data for merged NFT
+        console.log(`Enhanced NFT ${normalizedId}:`, {
+          name: merged.name,
+          hasImage: !!merged.imageUrl,
+          hasRawImage: !!merged.rawImageUrl,
+          estimatedValue: merged.estimatedValue,
+          floorPrice: merged.collection?.floorPrice
+        });
+        
+        return merged;
       }
       
       return nft;

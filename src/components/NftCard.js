@@ -632,26 +632,46 @@ const NftCard = ({
     });
   };
 
+  // Handle image error
   const handleImageError = () => {
+    console.error(`Image loading error for NFT: ${nft.id}`);
     setImageError(true);
+    
+    // Log detailed debug info to help diagnose why the image failed
+    console.log('NFT image debug info:', {
+      id: nft.id,
+      imageUrl: getImageUrl(), 
+      rawImageUrl: getRawImageUrl(),
+      hasMedia: nft.media ? true : false,
+      mediaCount: nft.media ? (Array.isArray(nft.media) ? nft.media.length : 1) : 0,
+      hasMetadata: nft.metadata ? true : false,
+      hasContract: nft.contract ? true : false
+    });
   };
 
+  // Get value for price display
   const getValue = () => {
-    // Try all possible ways this property might exist
+    if (!nft) return null;
     
-    // 1. First check direct USD values
-    if (nft.valueUsd !== undefined && nft.valueUsd !== null) {
-      return {
-        value: parseFloat(nft.valueUsd),
-        symbol: 'USD',
-        isUsd: true,
-        label: 'Value'
-      };
-    }
+    // Extensive price debugging to identify where data is missing
+    const debugData = {
+      id: nft.id,
+      name: nft.name,
+      valueUsd: nft.valueUsd,
+      estimatedValue: nft.estimatedValue,
+      balanceUSD: nft.balanceUSD,
+      hasContractMetadata: nft.contractMetadata ? true : false,
+      contractMetadataOpenSea: nft.contractMetadata?.openSea ? 'present' : 'missing',
+      floorPrice: nft.collection?.floorPrice ? 'present' : 'N/A'
+    };
     
-    // 2. Check for Alchemy-style estimatedValue
+    console.log('NFT price debug:', debugData);
+    
+    // 1. Check for Alchemy API estimated value (most accurate)
     if (nft.estimatedValue) {
-      if (nft.estimatedValue.valueUsd !== undefined && nft.estimatedValue.valueUsd !== null) {
+      // Prefer USD value if available
+      if (nft.estimatedValue.valueUsd !== undefined && 
+          nft.estimatedValue.valueUsd !== null) {
         return {
           value: parseFloat(nft.estimatedValue.valueUsd),
           symbol: 'USD',
@@ -660,68 +680,64 @@ const NftCard = ({
         };
       }
       
-      if (nft.estimatedValue.valueWithDenomination !== undefined) {
+      // Otherwise use ETH value
+      if (nft.estimatedValue.value !== undefined) {
+        const symbol = nft.estimatedValue.denomination?.symbol || 'ETH';
         return {
-          value: parseFloat(nft.estimatedValue.valueWithDenomination),
-          symbol: nft.estimatedValue.denomination?.symbol || 'ETH',
+          value: parseFloat(nft.estimatedValue.value),
+          symbol,
           isUsd: false,
-          label: 'Est. Value'
-        };
-      }
-      
-      if (nft.estimatedValue.amount !== undefined) {
-        return {
-          value: parseFloat(nft.estimatedValue.amount),
-          symbol: nft.estimatedValue.currency || 'USD',
-          isUsd: (nft.estimatedValue.currency === 'USD'),
           label: 'Est. Value'
         };
       }
     }
     
-    // 3. Check collection floor price as a fallback
+    // 2. Check for direct valueUsd (from zapper usually)
+    if (nft.valueUsd !== undefined && nft.valueUsd !== null && nft.valueUsd !== 0) {
+      return {
+        value: parseFloat(nft.valueUsd),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
+    }
+    
+    // 3. Check collection floor price from various sources
     if (nft.collection?.floorPrice) {
-      const floorPrice = nft.collection.floorPrice;
-      
-      if (floorPrice.valueUsd !== undefined && floorPrice.valueUsd !== null) {
+      if (typeof nft.collection.floorPrice === 'object') {
+        // New format with detailed info
+        if (nft.collection.floorPrice.valueUsd !== undefined && 
+            nft.collection.floorPrice.valueUsd !== null) {
+          return {
+            value: parseFloat(nft.collection.floorPrice.valueUsd),
+            symbol: 'USD',
+            isUsd: true,
+            label: 'Floor'
+          };
+        }
+        
+        if (nft.collection.floorPrice.value !== undefined && 
+            nft.collection.floorPrice.value !== null) {
+          return {
+            value: parseFloat(nft.collection.floorPrice.value),
+            symbol: nft.collection.floorPrice.currency || 'ETH',
+            isUsd: false,
+            label: 'Floor'
+          };
+        }
+      } else if (typeof nft.collection.floorPrice === 'number' || 
+                typeof nft.collection.floorPrice === 'string') {
+        // Simple numeric format
         return {
-          value: parseFloat(floorPrice.valueUsd),
-          symbol: 'USD',
-          isUsd: true,
-          label: 'Floor'
-        };
-      }
-      
-      if (floorPrice.value !== undefined && floorPrice.value !== null) {
-        return {
-          value: parseFloat(floorPrice.value),
-          symbol: floorPrice.currency || 'ETH',
+          value: parseFloat(nft.collection.floorPrice),
+          symbol: 'ETH',
           isUsd: false,
           label: 'Floor'
         };
       }
     }
     
-    // 4. Check for other common price fields
-    if (nft.balanceUSD !== undefined && nft.balanceUSD !== null) {
-      return {
-        value: parseFloat(nft.balanceUSD),
-        symbol: 'USD',
-        isUsd: true,
-        label: 'Value'
-      };
-    }
-    
-    if (nft.valuation?.balance_usd !== undefined && nft.valuation.balance_usd !== null) {
-      return {
-        value: parseFloat(nft.valuation.balance_usd),
-        symbol: 'USD',
-        isUsd: true,
-        label: 'Value'
-      };
-    }
-    
-    // 5. Look for contractMetadata with price info
+    // 4. Check for OpenSea floor price
     if (nft.contractMetadata?.openSea?.floorPrice !== undefined && 
         nft.contractMetadata.openSea.floorPrice !== null) {
       return {
@@ -731,8 +747,29 @@ const NftCard = ({
         label: 'Floor'
       };
     }
+
+    // 5. Check for balanceUSD or other price fields
+    if (nft.balanceUSD !== undefined && nft.balanceUSD !== null && nft.balanceUSD !== 0) {
+      return {
+        value: parseFloat(nft.balanceUSD),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
+    }
     
-    // Return null if no value found to indicate absence
+    if (nft.valuation?.balance_usd !== undefined && 
+        nft.valuation.balance_usd !== null && 
+        nft.valuation.balance_usd !== 0) {
+      return {
+        value: parseFloat(nft.valuation.balance_usd),
+        symbol: 'USD',
+        isUsd: true,
+        label: 'Value'
+      };
+    }
+    
+    // Return null if no value found
     return null;
   };
   

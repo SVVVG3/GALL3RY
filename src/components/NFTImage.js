@@ -12,7 +12,9 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
   const [error, setError] = useState(false);
   const [isVideo, setIsVideo] = useState(false);
   const [attemptCount, setAttemptCount] = useState(0);
+  const [urlsAttempted, setUrlsAttempted] = useState([]);
 
+  // When src or rawSrc change, reset state and try loading again
   useEffect(() => {
     if (!src && !rawSrc) {
       console.warn('NFTImage received empty source');
@@ -25,6 +27,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     setLoading(true);
     setError(false);
     setAttemptCount(0);
+    setUrlsAttempted([]);
     
     // Process the URL with different gateways based on attempt count
     processImageUrl(src, rawSrc, 0);
@@ -32,74 +35,138 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
 
   // Process image URL with different fallback strategies
   const processImageUrl = (originalSrc, rawSrc, attempt) => {
-    // Log the attempt for debugging
-    console.log(`Processing image URL (attempt ${attempt + 1}):`, originalSrc);
+    // Special case: null/undefined/empty src - try rawSrc directly
+    if (!originalSrc && rawSrc) {
+      console.log(`Original src is empty, trying rawSrc directly: ${rawSrc.substring(0, 50)}...`);
+      attemptLoading(rawSrc, attempt);
+      return;
+    }
+    
+    // Log the attempt
+    console.log(`Processing image URL (attempt ${attempt + 1}):`, 
+      originalSrc ? (originalSrc.substring(0, 50) + '...') : 'null/undefined');
+    
+    if (urlsAttempted.includes(originalSrc)) {
+      console.log(`Already attempted this URL, skipping to next fallback`);
+      if (attempt < 2) {
+        processImageUrl(rawSrc, null, attempt + 1);
+      } else {
+        useDefaultPlaceholder();
+      }
+      return;
+    }
     
     let processedSrc = originalSrc;
+    let shouldSkip = false;
     
     // Different strategies based on attempt number
     if (attempt === 0) {
-      // First attempt: use the original URL if it's from Alchemy gateway
-      // These URLs should already be optimized and cached
+      // First attempt: Check if it's an Alchemy gateway URL (preferred)
       if (originalSrc && (
           originalSrc.includes('nft-cdn.alchemy.com') || 
           originalSrc.includes('nft.alchemyapi.io')
       )) {
+        console.log(`Using Alchemy gateway URL directly: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc;
       } 
-      // Otherwise handle IPFS/AR URLs
+      // Handle IPFS/AR URLs
       else if (originalSrc && originalSrc.startsWith('ipfs://')) {
+        console.log(`Converting IPFS URL: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.io/ipfs/');
       } else if (originalSrc && originalSrc.startsWith('ar://')) {
+        console.log(`Converting Arweave URL: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc.replace('ar://', 'https://arweave.net/');
-      } else if (originalSrc) {
-        // Use original source as-is if it's a regular URL
-        processedSrc = originalSrc;
-      }
-    } else if (attempt === 1) {
-      // Second attempt: try with raw source URL if available
-      if (rawSrc) {
-        // Process rawSrc for IPFS/AR
-        if (rawSrc.startsWith('ipfs://')) {
-          processedSrc = rawSrc.replace('ipfs://', 'https://ipfs.io/ipfs/');
-        } else if (rawSrc.startsWith('ar://')) {
-          processedSrc = rawSrc.replace('ar://', 'https://arweave.net/');
-        } else {
-          processedSrc = rawSrc;
-        }
       } 
-      // Try Infura IPFS gateway as fallback
-      else if (originalSrc && originalSrc.startsWith('ipfs://')) {
-        processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.infura.io/ipfs/');
-      } else if (originalSrc && originalSrc.includes('ipfs.io')) {
-        processedSrc = originalSrc.replace('ipfs.io', 'ipfs.infura.io');
+      // Check for potentially problematic URLs
+      else if (originalSrc && (
+        originalSrc.includes('placeholder') ||
+        originalSrc.startsWith('data:') ||
+        !originalSrc.startsWith('http')
+      )) {
+        console.log(`Potentially problematic URL, skipping to rawSrc: ${originalSrc.substring(0, 50)}...`);
+        shouldSkip = true;
+        if (rawSrc) {
+          processImageUrl(rawSrc, null, 0);
+        } else {
+          processImageUrl(originalSrc, null, 1);
+        }
       } else if (originalSrc) {
-        // Use original source
-        processedSrc = originalSrc;
-      }
-    } else {
-      // Final attempt - simple fallback to placeholder
-      // We'll try one more direct URL first
-      if (originalSrc && !originalSrc.startsWith('data:')) {
+        // Use original source as-is for valid URLs
+        console.log(`Using original URL as-is: ${originalSrc.substring(0, 50)}...`);
         processedSrc = originalSrc;
       } else {
-        console.warn('Using placeholder for failed image load:', originalSrc);
-        processedSrc = '/assets/placeholder-nft.svg';
+        shouldSkip = true;
+        processImageUrl(null, rawSrc, 1);
+      }
+    } else if (attempt === 1) {
+      // Second attempt: try with alternative gateways
+      if (originalSrc && originalSrc.startsWith('ipfs://')) {
+        console.log(`Trying alternative IPFS gateway for: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc.replace('ipfs://', 'https://ipfs.infura.io/ipfs/');
+      } else if (originalSrc && originalSrc.includes('ipfs.io')) {
+        console.log(`Switching IPFS gateway from ipfs.io to Infura: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc.replace('ipfs.io', 'ipfs.infura.io');
+      } else if (rawSrc && !urlsAttempted.includes(rawSrc)) {
+        console.log(`Trying rawSrc as fallback: ${rawSrc.substring(0, 50)}...`);
+        processedSrc = rawSrc;
+      } else if (originalSrc) {
+        console.log(`Using original source on second attempt: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc;
+      } else {
+        shouldSkip = true;
+        processImageUrl(null, null, 2);
+      }
+    } else {
+      // Final attempt - try direct URL or use placeholder
+      if (originalSrc && !originalSrc.startsWith('data:') && !urlsAttempted.includes(originalSrc)) {
+        console.log(`Last attempt with original URL: ${originalSrc.substring(0, 50)}...`);
+        processedSrc = originalSrc;
+      } else {
+        useDefaultPlaceholder();
+        return;
       }
     }
 
+    if (!shouldSkip) {
+      attemptLoading(processedSrc, attempt);
+    }
+  };
+  
+  // Helper to add URL to attempted list and set media source
+  const attemptLoading = (url, attempt) => {
+    if (!url) {
+      console.warn('Empty URL provided to attemptLoading');
+      if (attempt < 2) {
+        processImageUrl(null, null, attempt + 1);
+      } else {
+        useDefaultPlaceholder();
+      }
+      return;
+    }
+    
     // Check if the media is a video based on extension or content type
-    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(processedSrc);
+    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
     setIsVideo(isVideoFile);
     
-    // Update the media source
-    setMediaSrc(processedSrc);
+    // Update attempted URLs list
+    setUrlsAttempted(prev => [...prev, url]);
+    
+    // Update the media source and attempt count
+    setMediaSrc(url);
     setAttemptCount(attempt);
+  };
+  
+  // Helper to use default placeholder
+  const useDefaultPlaceholder = () => {
+    console.warn('Using default placeholder after all attempts failed');
+    setMediaSrc('/assets/placeholder-nft.svg');
+    setIsVideo(false);
   };
 
   const handleMediaLoad = () => {
     console.log(`Media loaded successfully: ${mediaSrc}`);
     setLoading(false);
+    setError(false);
     onLoad();
   };
 
@@ -108,12 +175,12 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     
     // Try next fallback strategy if we haven't exhausted them
     if (attemptCount < 2) {
-      processImageUrl(src, rawSrc, attemptCount + 1);
+      processImageUrl(attemptCount === 0 ? rawSrc : null, null, attemptCount + 1);
     } else {
       // Give up after 3 attempts
-      console.error(`Failed to load image after ${attemptCount + 1} attempts:`, src);
+      console.error(`Failed to load image after ${attemptCount + 1} attempts, using placeholder`);
+      useDefaultPlaceholder();
       setError(true);
-      setLoading(false);
       onError();
     }
   };
