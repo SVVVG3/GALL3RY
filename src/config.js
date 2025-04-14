@@ -34,7 +34,9 @@ const config = {
   },
 
   // API keys (will be properly hidden in production builds)
-  ALCHEMY_API_KEY: process.env.REACT_APP_ALCHEMY_API_KEY,
+  // NOTE: Client-side API keys are NEVER used for Alchemy - we always use the server proxy
+  // which uses the server's environment variables instead
+  ALCHEMY_API_KEY: null, // process.env.REACT_APP_ALCHEMY_API_KEY - disabled to force proxy usage
   ALCHEMY_BASE_URL: process.env.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/',
   
   // Server configuration

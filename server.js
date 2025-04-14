@@ -1,6 +1,20 @@
 // Load environment variables from .env file
 require('dotenv').config();
 
+// Validate critical environment variables
+if (!process.env.ALCHEMY_API_KEY) {
+  console.error('CRITICAL ERROR: ALCHEMY_API_KEY environment variable is not set');
+  console.error('The application requires a valid Alchemy API key to function properly');
+  console.error('Please set this in your .env file or in your deployment environment');
+}
+
+// Log environment variables (safely)
+console.log('Environment variables loaded:');
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log('- Has ALCHEMY_API_KEY:', process.env.ALCHEMY_API_KEY ? 
+  `Yes (${process.env.ALCHEMY_API_KEY.slice(0, 4)}...${process.env.ALCHEMY_API_KEY.slice(-4)})` : 
+  'NO - APPLICATION WILL FAIL');
+
 // Minimal server.js file for development
 const express = require('express');
 const cors = require('cors');
@@ -634,9 +648,4 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
-});
-
-// Debugging environment variables
-console.log('Environment variables loaded:');
-console.log('- NODE_ENV:', process.env.NODE_ENV);
-console.log('- Has ALCHEMY_API_KEY:', !!process.env.ALCHEMY_API_KEY); 
+}); 

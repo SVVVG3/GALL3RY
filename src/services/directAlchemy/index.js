@@ -6,15 +6,16 @@
 const config = require('../../config');
 const axios = require('axios');
 
-const DEMO_KEY = 'demo';
-const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || DEMO_KEY;
+// Removed demo key - we will ONLY use the proxy API with server's key
+// const DEMO_KEY = 'demo';
+// const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY || DEMO_KEY;
 
 // API key handling - prioritize direct key or fallback to proxy
 const ALCHEMY_BASE_URL = config.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/';
 const ALCHEMY_PROXY_URL = config.ALCHEMY_PROXY_URL || '/api/alchemy';
 
-// Force using the proxy to ensure server API key is used
-// This prevents using the demo key directly from the client
+// ALWAYS force using the proxy to ensure server API key is used
+// Never use a client-side key which could be demo or undefined
 const USE_PROXY = true;
 
 // NFT API endpoints
@@ -42,18 +43,14 @@ const getChainBaseUrl = (chain) => {
   
   // Get chain URL or default to ethereum
   const chainUrl = chainUrls[chainId] || 'eth-mainnet';
-  return `${ALCHEMY_BASE_URL.replace(/\/+$/, '')}/${ALCHEMY_API_KEY}`;
+  // Use server's API key from environment variable through proxy instead
+  return `${ALCHEMY_BASE_URL.replace(/\/+$/, '')}/${config.ALCHEMY_API_KEY}`;
 };
 
 // Helper to build the API URL
 const buildApiUrl = (endpoint, chain) => {
-  if (USE_PROXY) {
-    // Use the proxy API
-    return `${ALCHEMY_PROXY_URL}?endpoint=${endpoint}&chain=${chain || 'eth'}`;
-  } else {
-    // Use direct Alchemy API
-    return `${getChainBaseUrl(chain)}/nft/v3/${endpoint}`;
-  }
+  // Always use the proxy API, never direct
+  return `${ALCHEMY_PROXY_URL}?endpoint=${endpoint}&chain=${chain || 'eth'}`;
 };
 
 // Simple in-memory cache

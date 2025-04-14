@@ -226,14 +226,21 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
     return res.status(200).send('OK');
   }
   
-  // Get Alchemy API key
+  // Get Alchemy API key - prioritize the server environment variable
+  // NOTE: NEVER fallback to a demo key, fail properly if no key is available
   const apiKey = process.env.ALCHEMY_API_KEY;
   
   // Debug: Log API key (redacted) to verify it's set
-  console.log('Alchemy API Key:', apiKey ? `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}` : 'NOT SET');
+  console.log('Alchemy API Key Status:', apiKey ? 
+    `Valid key found (${apiKey.slice(0, 4)}...${apiKey.slice(-4)})` : 
+    'NOT SET - CRITICAL ERROR');
   
   if (!apiKey) {
-    return res.status(500).json({ error: 'Alchemy API key not configured' });
+    console.error('CRITICAL ERROR: No Alchemy API key found in environment variables');
+    return res.status(500).json({ 
+      error: 'Alchemy API key not configured', 
+      message: 'The server is missing the Alchemy API key. Check environment variables.'
+    });
   }
   
   try {
