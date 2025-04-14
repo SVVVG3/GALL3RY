@@ -15,6 +15,7 @@ module.exports = function override(config) {
     "assert": require.resolve("assert/"),
     "url": require.resolve("url/"),
     "util": require.resolve("util/"),
+    "process": require.resolve("process/browser"),
   };
   
   // Add plugins for polyfills
