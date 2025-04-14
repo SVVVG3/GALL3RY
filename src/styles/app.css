@@ -521,7 +521,7 @@ a:hover {
 
 /* Home Page */
 .home-container {
-  max-width: 1200px;
+  max-width: 95vw;
   margin: 0 auto;
   padding: 40px 20px;
 }
@@ -647,7 +647,7 @@ a:hover {
 
 /* Farcaster User Search */
 .farcaster-user-search {
-  max-width: 1000px;
+  max-width: 95vw;
   margin: 0 auto;
 }
 
@@ -1073,8 +1073,4 @@ a:hover {
 .dropdown-item.sign-out {
   border-top: 1px solid #e5e7eb;
   color: #dc2626;
-}
-
-.dropdown-item.sign-out:hover {
-  background-color: #fee2e2;
 } 

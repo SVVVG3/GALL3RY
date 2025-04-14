@@ -178,7 +178,7 @@ body {
   width: 100%;
   padding: 0;
   overflow: hidden;
-  max-width: 1200px;
+  max-width: 95vw;
   margin: 0 auto;
 }
 
@@ -197,7 +197,7 @@ body {
   
   .nft-grid-container,
   .farcaster-search-container {
-    max-width: 1400px;
+    max-width: 95vw;
   }
 }
 
@@ -1394,7 +1394,7 @@ img {
 
 /* Center the search container and user profile */
 .farcaster-search-container {
-  max-width: 1200px;
+  max-width: 95vw;
   margin: 0 auto;
 }
 
@@ -1454,4 +1454,11 @@ img {
     width: 28px;
     height: 28px;
   }
+}
+
+.content-wrapper {
+  margin: 2rem auto;
+  max-width: 95vw;
+  padding: 0 1rem;
+  text-align: center;
 }
