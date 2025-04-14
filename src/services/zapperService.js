@@ -1,13 +1,15 @@
 import axios from 'axios';
-// Don't directly import from constants.js
-// import { ZAPPER_PROXY_URL } from '../constants';
-// Don't directly import from config/constants
-// import { ZAPPER_SERVER_URL, ZAPPER_API_KEY } from '../config/constants';
+// Completely remove any imports from NFTContext
 
-// Instead, access environment variables and define constants locally
-const ZAPPER_PROXY_URL = '/api/zapper';
-const ZAPPER_SERVER_URL = 'https://api.zapper.fi/v2';
+// Define constants locally rather than importing them
+// This helps break potential circular dependencies
+const ZAPPER_API_URL = process.env.REACT_APP_ZAPPER_API_URL || 'https://api.zapper.xyz/v2';
 const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
+const FALLBACK_ZAPPER_URL = 'https://api.zapper.fi/v2';
+
+// Single cache for all API responses
+const cache = new Map();
+const CACHE_TTL = 15 * 60 * 1000; // 15 minutes cache
 
 // Create a custom axios instance specifically for Zapper API calls
 const zapperAxios = axios.create({
@@ -42,12 +44,13 @@ const ZAPPER_API_ENDPOINTS = [
 ];
 // Direct endpoint is removed to prevent 404s - all requests should go through our proxy
 
-const NFT_CACHE = new Map();
-const NFT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes cache
+// Use the unified cache for NFT data instead of separate caches
+// const NFT_CACHE = new Map();
+// const NFT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes cache
 
-// Add a cache for NFT data to reduce API calls
-const nftCache = new Map();
-const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+// // Add a cache for NFT data to reduce API calls
+// const nftCache = new Map();
+// const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
 /**
  * Make a GraphQL request to the Zapper API with fallback endpoints
@@ -160,9 +163,9 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
  * @returns {Promise<object>} - Farcaster profile data
  */
 export const getFarcasterProfile = async (usernameOrFid) => {
-      if (!usernameOrFid) {
-        throw new Error('Username or FID is required');
-      }
+  if (!usernameOrFid) {
+    throw new Error('Username or FID is required');
+  }
       
   // Clean up the username - remove @, trim whitespace
   let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
@@ -191,156 +194,52 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // GraphQL query - exact match with Zapper API docs
   const query = `
     query GetFarcasterProfile($username: String, $fid: Int) {
-          farcasterProfile(username: $username, fid: $fid) {
-            username
-            fid
-            metadata {
-              displayName
-              description
-              imageUrl
-              warpcast
-            }
-            custodyAddress
-            connectedAddresses
+      farcasterProfile(username: $username, fid: $fid) {
+        username
+        fid
+        metadata {
+          displayName
+          bio
+          avatar
+          verifications {
+            eth
           }
         }
-      `;
-      
-  try {
-    // DEBUG: Log the full API request details
-    console.log(`Making Zapper API request with:`, {
-      query: query.substring(0, 50) + '...',
-      variables,
-      endpoints: ZAPPER_API_ENDPOINTS
-    });
-    
-    // Make the request to the Zapper API with increased retries
-    const response = await makeGraphQLRequest(query, variables, ZAPPER_API_ENDPOINTS, 5);
-    
-    // DEBUG: Log the response structure
-    console.log(`Zapper API response received:`, {
-      hasData: !!response.data,
-      hasProfile: response.data ? !!response.data.farcasterProfile : false,
-      responseKeys: Object.keys(response)
-    });
-    
-    // Check if profile was found
-    if (!response.data || !response.data.farcasterProfile) {
-      console.warn(`No profile found for ${cleanInput}, response:`, JSON.stringify(response).substring(0, 200));
-      
-      // Try without .eth if this is an ENS name
-      if (isEnsName && alternativeUsername) {
-        console.log(`Trying alternative username without .eth suffix: ${alternativeUsername}`);
-        
-        try {
-          const altResponse = await makeGraphQLRequest(query, { username: alternativeUsername }, ZAPPER_API_ENDPOINTS, 5);
-          
-          console.log(`Alternative username response:`, {
-            hasData: !!altResponse.data,
-            hasProfile: altResponse.data ? !!altResponse.data.farcasterProfile : false
-          });
-          
-          if (altResponse.data && altResponse.data.farcasterProfile) {
-            console.log(`Found profile using alternative username: ${alternativeUsername}`);
-            
-            // Transform response to match our application's expected format
-            const profile = altResponse.data.farcasterProfile;
-            return {
-              fid: profile.fid,
-              username: profile.username,
-              displayName: profile.metadata?.displayName || profile.username,
-              avatarUrl: profile.metadata?.imageUrl,
-              imageUrl: profile.metadata?.imageUrl,
-              pfpUrl: profile.metadata?.imageUrl,
-              bio: profile.metadata?.description,
-              custodyAddress: profile.custodyAddress,
-              connectedAddresses: profile.connectedAddresses || [],
-              metadata: {
-                displayName: profile.metadata?.displayName,
-                description: profile.metadata?.description,
-                imageUrl: profile.metadata?.imageUrl
-              }
-            };
-          }
-        } catch (altError) {
-          console.error(`Error with alternative username attempt:`, altError);
+        custodyAddress
+        connectedAddresses
+        connectedAddressesDetails {
+          address
+          chain
+          source
         }
       }
-      
-      // If we're looking up an ENS name, try a direct FID lookup as a last resort
-      if (isEnsName && !isFid) {
-        // Try with numeric FIDs for common test accounts - good for testing specific known profiles
-        const testFids = [1, 2, 3];
-        
-        for (const testFid of testFids) {
-          try {
-            console.log(`Trying fallback with test FID: ${testFid}`);
-            const fidResponse = await makeGraphQLRequest(query, { fid: testFid }, ZAPPER_API_ENDPOINTS, 3);
-            
-            if (fidResponse.data && fidResponse.data.farcasterProfile) {
-              console.log(`Found profile using test FID: ${testFid}`);
-              const profile = fidResponse.data.farcasterProfile;
-              return {
-                fid: profile.fid,
-                username: profile.username,
-                displayName: profile.metadata?.displayName || profile.username,
-                avatarUrl: profile.metadata?.imageUrl,
-                imageUrl: profile.metadata?.imageUrl,
-                pfpUrl: profile.metadata?.imageUrl,
-                bio: profile.metadata?.description,
-                custodyAddress: profile.custodyAddress,
-                connectedAddresses: profile.connectedAddresses || [],
-                metadata: {
-                  displayName: profile.metadata?.displayName,
-                  description: profile.metadata?.description,
-                  imageUrl: profile.metadata?.imageUrl
-                }
-              };
-            }
-          } catch (fidError) {
-            console.warn(`Error with test FID ${testFid}:`, fidError.message);
-          }
-        }
+    }
+  `;
+  
+  try {
+    const response = await makeGraphQLRequest(query, variables);
+    
+    if (!response.data || !response.data.farcasterProfile) {
+      // If we tried an ENS name and got nothing, try without .eth suffix
+      if (isEnsName && alternativeUsername) {
+        console.log(`Retrying without .eth suffix: ${alternativeUsername}`);
+        return getFarcasterProfile(alternativeUsername);
       }
       
       throw new Error(`Could not find Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
     }
     
-    // Transform response to match our application's expected format
-    const profile = response.data.farcasterProfile;
-    
-    // Log what we found
-    console.log(`Profile found via Zapper API: ${profile.username}, FID: ${profile.fid}`);
-    console.log(`Connected addresses: ${profile.connectedAddresses?.length || 0}, custody address: ${profile.custodyAddress || 'none'}`);
-    
-    // Return data in the expected format - include both avatarUrl and imageUrl for compatibility
-    return {
-      fid: profile.fid,
-      username: profile.username,
-      displayName: profile.metadata?.displayName || profile.username,
-      avatarUrl: profile.metadata?.imageUrl,
-      imageUrl: profile.metadata?.imageUrl,
-      pfpUrl: profile.metadata?.imageUrl,
-      bio: profile.metadata?.description,
-      custodyAddress: profile.custodyAddress,
-      connectedAddresses: profile.connectedAddresses || [],
-      metadata: {
-        displayName: profile.metadata?.displayName,
-        description: profile.metadata?.description,
-        imageUrl: profile.metadata?.imageUrl
-      }
-    };
+    console.log('Found Farcaster profile:', response.data.farcasterProfile);
+    return response.data.farcasterProfile;
   } catch (error) {
-    // Enhanced error logging
-    console.error('Error fetching Farcaster profile from Zapper API:', error);
-    console.error('Error details:', {
-      message: error.message,
-      stack: error.stack,
-      responseData: error.response?.data,
-      status: error.response?.status
-    });
+    console.error('Error fetching Farcaster profile:', error);
     
-    // Rethrow with additional context
+    // If we tried with an ENS name and got an error, try without .eth
+    if (isEnsName && alternativeUsername) {
+      console.log(`Error with ENS name, retrying without .eth suffix: ${alternativeUsername}`);
+      return getFarcasterProfile(alternativeUsername);
+    }
+    
     throw error;
   }
 };
@@ -559,7 +458,7 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
   const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
   
   // Additional options with defaults
-  const cacheTTL = options.cacheTTL || NFT_CACHE_TTL;
+  const cacheTTL = options.cacheTTL || CACHE_TTL;
   const endpoints = options.endpoints || ZAPPER_API_ENDPOINTS;
   const maxRetries = options.maxRetries || 3;
   
@@ -567,14 +466,14 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
   const cacheKey = `nfts:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
   
   // Check cache first if not bypassing
-  if (!bypassCache && NFT_CACHE.has(cacheKey)) {
-    const cachedData = NFT_CACHE.get(cacheKey);
+  if (!bypassCache && cache.has(cacheKey)) {
+    const cachedData = cache.get(cacheKey);
     if (cachedData.timestamp > Date.now() - cacheTTL) {
       console.log(`Using cached NFT data for ${normalizedAddresses.length} addresses`);
       return cachedData.data;
     } else {
       // Remove expired cache entry
-      NFT_CACHE.delete(cacheKey);
+      cache.delete(cacheKey);
     }
   }
   
@@ -838,7 +737,7 @@ export const getNftsForAddresses = async (addresses, limitOrOptions = 50, cursor
       };
       
       // Cache the result
-      NFT_CACHE.set(cacheKey, {
+      cache.set(cacheKey, {
         timestamp: Date.now(),
         data: result
       });
@@ -884,13 +783,13 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
   const cacheKey = `collection:${normalizedCollection}-owners:${normalizedAddresses.join(',')}-cursor:${cursor || 'initial'}`;
   
   // Check cache first
-  if (!bypassCache && NFT_CACHE.has(cacheKey)) {
-    const cachedData = NFT_CACHE.get(cacheKey);
-    if (cachedData.timestamp > Date.now() - NFT_CACHE_TTL) {
+  if (!bypassCache && cache.has(cacheKey)) {
+    const cachedData = cache.get(cacheKey);
+    if (cachedData.timestamp > Date.now() - CACHE_TTL) {
       console.log(`Using cached collection NFT data for ${normalizedCollection}`);
       return cachedData.data;
     } else {
-      NFT_CACHE.delete(cacheKey);
+      cache.delete(cacheKey);
     }
   }
   
@@ -1052,7 +951,7 @@ export const getNftsForCollection = async (walletAddresses, collectionAddress, o
       };
       
       // Cache the result
-      NFT_CACHE.set(cacheKey, {
+      cache.set(cacheKey, {
         timestamp: Date.now(),
         data: result
       });

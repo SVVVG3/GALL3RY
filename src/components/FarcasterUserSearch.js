@@ -7,7 +7,7 @@ import '../styles/FarcasterUserSearch.css';
 import { useNavigate } from 'react-router-dom';
 
 // Error boundary for handling API initialization issues
-class APIErrorBoundary extends React.Component {
+class FarcasterErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -18,37 +18,16 @@ class APIErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error("API Error:", error);
-    console.error("Component Stack:", errorInfo.componentStack);
+    console.error("Farcaster component error:", error, errorInfo);
   }
 
   render() {
     if (this.state.hasError) {
-      // Check for the specific initialization error
-      const isInitError = this.state.error && 
-        (this.state.error.toString().includes("Cannot access") &&
-         this.state.error.toString().includes("before initialization"));
-      
       return (
-        <div className="error-container">
-          <h3>API Error</h3>
-          {isInitError ? (
-            <>
-              <p>We're having trouble with the initialization order.</p>
-              <p>Please try refreshing the page to fix this issue.</p>
-            </>
-          ) : (
-            <p>There was an error loading NFT data. Please try again.</p>
-          )}
-          <button 
-            onClick={() => {
-              this.setState({ hasError: false, error: null });
-              if (this.props.onRetry) {
-                this.props.onRetry();
-              }
-            }}
-            className="retry-button"
-          >
+        <div className="farcaster-error">
+          <h3>Something went wrong loading Farcaster data</h3>
+          <p>{this.state.error?.message || "Unknown error"}</p>
+          <button onClick={() => this.setState({ hasError: false, error: null })}>
             Try Again
           </button>
         </div>
@@ -810,192 +789,197 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   };
 
   return (
-    <APIErrorBoundary onRetry={handleRetry}>
-      <div className="farcaster-search-container">
-        <div className="search-header">
-          <form onSubmit={handleSearch} className="search-form">
-            <input
-              type="text"
-              className="search-input"
-              placeholder="Enter Farcaster username (e.g. dwr, vitalik, etc.)"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              disabled={isSearching}
-              aria-label="Farcaster username"
-            />
-            <button 
-              type="submit" 
-              className="search-button"
-              disabled={isSearching}
-            >
-              {isSearching ? 'Searching...' : 'Search'}
-            </button>
-          </form>
+    <div className="farcaster-search-container">
+      <div className="search-header">
+        <form onSubmit={handleSearch} className="search-form">
+          <input
+            type="text"
+            className="search-input"
+            placeholder="Enter Farcaster username (e.g. dwr, vitalik, etc.)"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            disabled={isSearching}
+            aria-label="Farcaster username"
+          />
+          <button 
+            type="submit" 
+            className="search-button"
+            disabled={isSearching}
+          >
+            {isSearching ? 'Searching...' : 'Search'}
+          </button>
+        </form>
+      </div>
+      
+      {/* Display search error */}
+      {searchError && (
+        <div className="error-message">
+          {searchError}
         </div>
-        
-        {/* Display search error */}
-        {searchError && (
-          <div className="error-message">
-            {searchError}
-          </div>
-        )}
-        
-        {/* Display user profile */}
-        {userProfile && (
-          <div className="user-profile">
-            <div className="profile-section">
-              <div className="profile-content">
-                <div className="profile-image">
-                  <img 
-                    src={getProfileImageUrl(userProfile)} 
-                    alt={userProfile?.username || 'Profile'} 
-                    onError={(e) => {
-                      console.error('Profile image load error:', e);
-                      e.target.src = '/placeholder.png';
-                    }}
-                  />
-                </div>
-                <div className="profile-details">
-                  <h3 className="profile-display-name">{userProfile?.metadata?.displayName || userProfile?.username}</h3>
-                  <a 
-                    href={`https://warpcast.com/${userProfile?.username}`} 
-                    className="username-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
+      )}
+      
+      {/* Display user profile */}
+      {userProfile && (
+        <div className="user-profile">
+          <div className="profile-section">
+            <div className="profile-content">
+              <div className="profile-image">
+                <img 
+                  src={getProfileImageUrl(userProfile)} 
+                  alt={userProfile?.username || 'Profile'} 
+                  onError={(e) => {
+                    console.error('Profile image load error:', e);
+                    e.target.src = '/placeholder.png';
+                  }}
+                />
+              </div>
+              <div className="profile-details">
+                <h3 className="profile-display-name">{userProfile?.metadata?.displayName || userProfile?.username}</h3>
+                <a 
+                  href={`https://warpcast.com/${userProfile?.username}`} 
+                  className="username-link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  @{userProfile?.username}
+                </a>
+                <span className="fid-badge">FID: {userProfile?.fid}</span>
+              </div>
+              
+              {/* Display wallet addresses with toggle */}
+              <div className="wallet-addresses">
+                <div className="address-header" onClick={toggleWallets}>
+                  <span>
+                    {getWalletCount()} connected {getWalletCount() === 1 ? 'wallet' : 'wallets'}
+                  </span>
+                  <svg 
+                    className={`wallet-toggle-arrow ${walletsExpanded ? 'expanded' : ''}`}
+                    xmlns="http://www.w3.org/2000/svg" 
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2" 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round"
                   >
-                    @{userProfile?.username}
-                  </a>
-                  <span className="fid-badge">FID: {userProfile?.fid}</span>
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
                 </div>
                 
-                {/* Display wallet addresses with toggle */}
-                <div className="wallet-addresses">
-                  <div className="address-header" onClick={toggleWallets}>
-                    <span>
-                      {getWalletCount()} connected {getWalletCount() === 1 ? 'wallet' : 'wallets'}
-                    </span>
-                    <svg 
-                      className={`wallet-toggle-arrow ${walletsExpanded ? 'expanded' : ''}`}
-                      xmlns="http://www.w3.org/2000/svg" 
-                      width="16" 
-                      height="16" 
-                      viewBox="0 0 24 24" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      strokeWidth="2" 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round"
-                    >
-                      <polyline points="6 9 12 15 18 9"></polyline>
-                    </svg>
-                  </div>
-                  
-                  {walletsExpanded && (
-                    <ul className="address-list">
-                      {walletAddresses.map((address, index) => (
-                        <li key={index} title={address}>
-                          {address.slice(0, 6)}...{address.slice(-4)}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                {walletsExpanded && (
+                  <ul className="address-list">
+                    {walletAddresses.map((address, index) => (
+                      <li key={index} title={address}>
+                        {address.slice(0, 6)}...{address.slice(-4)}
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </div>
-            
-            {/* NFT sorting and filtering controls */}
-            {userNfts.length > 0 && (
-              <div className="nft-controls">
-                <div className="sort-controls">
-                  <label>Sort by:</label>
-                  <div className="sort-buttons">
+          </div>
+          
+          {/* NFT sorting and filtering controls */}
+          {userNfts.length > 0 && (
+            <div className="nft-controls">
+              <div className="sort-controls">
+                <label>Sort by:</label>
+                <div className="sort-buttons">
+                  <button 
+                    className={`sort-button ${sortMethod === 'value' ? 'active' : ''}`}
+                    onClick={() => handleSortChange('value')}
+                  >
+                    Estimated Value
+                  </button>
+                  <button 
+                    className={`sort-button ${sortMethod === 'recent' ? 'active' : ''}`}
+                    onClick={() => handleSortChange('recent')}
+                  >
+                    Recently Acquired
+                  </button>
+                  <button 
+                    className={`sort-button ${sortMethod === 'collection' ? 'active' : ''}`}
+                    onClick={() => handleSortChange('collection')}
+                  >
+                    Collection
+                  </button>
+                </div>
+              </div>
+              
+              <div className="filter-controls">
+                <input
+                  type="text"
+                  placeholder="Filter NFTs..."
+                  value={nftFilterText}
+                  onChange={(e) => setNftFilterText(e.target.value)}
+                  className="filter-input"
+                />
+                {nftFilterText && (
+                  <button 
+                    className="clear-filter" 
+                    onClick={clearFilter}
+                    aria-label="Clear filter"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {/* NFT Gallery */}
+          <div className="nft-gallery">
+            {isLoadingNfts && userNfts.length === 0 ? (
+              <div className="loading-nfts">
+                <div className="loading-animation"></div>
+                <p>Loading NFTs...</p>
+              </div>
+            ) : fetchNftsError ? (
+              <div className="fetch-error">
+                <p>{fetchNftsError}</p>
+              </div>
+            ) : userNfts.length > 0 ? (
+              <>
+                <div className="nft-count">
+                  <p>
+                    {getFilteredNfts().length} NFTs displayed
+                    {totalNftCount > 0 && hasEstimatedCount && (
+                      <span> (of approximately {totalNftCount} total)</span>
+                    )}
+                  </p>
+                </div>
+                <NftGrid nfts={getFilteredNfts()} onNftClick={handleNftClick} />
+                {hasMoreNfts && (
+                  <div className="load-more">
                     <button 
-                      className={`sort-button ${sortMethod === 'value' ? 'active' : ''}`}
-                      onClick={() => handleSortChange('value')}
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMoreNfts}
+                      className="load-more-button"
                     >
-                      Estimated Value
-                    </button>
-                    <button 
-                      className={`sort-button ${sortMethod === 'recent' ? 'active' : ''}`}
-                      onClick={() => handleSortChange('recent')}
-                    >
-                      Recently Acquired
-                    </button>
-                    <button 
-                      className={`sort-button ${sortMethod === 'collection' ? 'active' : ''}`}
-                      onClick={() => handleSortChange('collection')}
-                    >
-                      Collection
+                      {isLoadingMoreNfts ? 'Loading...' : 'Load More NFTs'}
                     </button>
                   </div>
-                </div>
-                
-                <div className="filter-controls">
-                  <input
-                    type="text"
-                    placeholder="Filter NFTs..."
-                    value={nftFilterText}
-                    onChange={(e) => setNftFilterText(e.target.value)}
-                    className="filter-input"
-                  />
-                  {nftFilterText && (
-                    <button 
-                      className="clear-filter" 
-                      onClick={clearFilter}
-                      aria-label="Clear filter"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
+                )}
+              </>
+            ) : (
+              <div className="no-nfts">
+                <p>No NFTs found for this user.</p>
               </div>
             )}
-            
-            {/* NFT Gallery */}
-            <div className="nft-gallery">
-              {isLoadingNfts && userNfts.length === 0 ? (
-                <div className="loading-nfts">
-                  <div className="loading-animation"></div>
-                  <p>Loading NFTs...</p>
-                </div>
-              ) : fetchNftsError ? (
-                <div className="fetch-error">
-                  <p>{fetchNftsError}</p>
-                </div>
-              ) : userNfts.length > 0 ? (
-                <>
-                  <div className="nft-count">
-                    <p>
-                      {getFilteredNfts().length} NFTs displayed
-                      {totalNftCount > 0 && hasEstimatedCount && (
-                        <span> (of approximately {totalNftCount} total)</span>
-                      )}
-                    </p>
-                  </div>
-                  <NftGrid nfts={getFilteredNfts()} onNftClick={handleNftClick} />
-                  {hasMoreNfts && (
-                    <div className="load-more">
-                      <button 
-                        onClick={handleLoadMore}
-                        disabled={isLoadingMoreNfts}
-                        className="load-more-button"
-                      >
-                        {isLoadingMoreNfts ? 'Loading...' : 'Load More NFTs'}
-                      </button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="no-nfts">
-                  <p>No NFTs found for this user.</p>
-                </div>
-              )}
-            </div>
           </div>
-        )}
-      </div>
-    </APIErrorBoundary>
+        </div>
+      )}
+    </div>
   );
 };
 
-export default FarcasterUserSearch; 
+// Export the component wrapped in the error boundary
+export default function SafeFarcasterUserSearch({ initialUsername = '' }) {
+  return (
+    <FarcasterErrorBoundary>
+      <FarcasterUserSearch initialUsername={initialUsername} />
+    </FarcasterErrorBoundary>
+  );
+} 
