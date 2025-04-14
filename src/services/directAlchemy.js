@@ -9,6 +9,9 @@ import config from '../config';
 // API base URL - use relative path for compatibility with Vercel deployments
 const API_BASE_URL = '/api/alchemy';
 
+// ALWAYS use the proxy rather than direct API calls to ensure our server's API key is used
+const USE_PROXY = true;
+
 // Create axios instance with proper configuration
 const alchemyClient = axios.create({
   headers: {

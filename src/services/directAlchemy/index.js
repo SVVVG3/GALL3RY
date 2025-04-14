@@ -11,8 +11,8 @@ const ALCHEMY_API_KEY = config.ALCHEMY_API_KEY;
 const ALCHEMY_BASE_URL = config.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/';
 const ALCHEMY_PROXY_URL = config.ALCHEMY_PROXY_URL || '/api/alchemy';
 
-// Check for Vercel environment to determine API strategy
-const USE_PROXY = !ALCHEMY_API_KEY || config.IS_VERCEL;
+// ALWAYS use the proxy API to ensure we use the server's API key
+const USE_PROXY = true;
 
 // NFT API endpoints
 const NFT_ENDPOINTS = {
