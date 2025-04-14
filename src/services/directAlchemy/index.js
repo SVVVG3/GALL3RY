@@ -43,8 +43,10 @@ const getChainBaseUrl = (chain) => {
   
   // Get chain URL or default to ethereum
   const chainUrl = chainUrls[chainId] || 'eth-mainnet';
-  // Use server's API key from environment variable through proxy instead
-  return `${ALCHEMY_BASE_URL.replace(/\/+$/, '')}/${config.ALCHEMY_API_KEY}`;
+  
+  // This function is no longer used since we always use the proxy
+  // Left for reference in case direct API access is needed in the future
+  return `https://${chainUrl}.g.alchemy.com/nft/v3/`;
 };
 
 // Helper to build the API URL
@@ -144,8 +146,27 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       nfts: Array.isArray(response.data.ownedNfts) ? response.data.ownedNfts.map(nft => {
         try {
           // Safely extract media data with fallbacks
-          const mediaArray = Array.isArray(nft.media) ? nft.media : [];
-          const firstMedia = mediaArray[0] || {};
+          let media = {};
+          
+          // Handle different media formats safely
+          if (nft.media) {
+            if (Array.isArray(nft.media) && nft.media.length > 0) {
+              const firstMedia = nft.media[0] || {};
+              media = {
+                original: firstMedia.raw || firstMedia.gateway || '',
+                gateway: firstMedia.gateway || '',
+                thumbnail: firstMedia.thumbnail || '',
+                format: firstMedia.format || ''
+              };
+            } else if (typeof nft.media === 'object') {
+              media = {
+                original: nft.media.raw || nft.media.gateway || '',
+                gateway: nft.media.gateway || '',
+                thumbnail: nft.media.thumbnail || '',
+                format: nft.media.format || ''
+              };
+            }
+          }
           
           return {
             id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
@@ -161,12 +182,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
               tokenType: nft.contract?.tokenType || 'ERC721',
             },
             metadata: nft.metadata || {},
-            media: {
-              original: firstMedia.raw || firstMedia.gateway || '',
-              gateway: firstMedia.gateway || '',
-              thumbnail: firstMedia.thumbnail || '',
-              format: firstMedia.format || '',
-            },
+            media: media,
             timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
           };
         } catch (err) {
