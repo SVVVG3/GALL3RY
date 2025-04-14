@@ -575,8 +575,38 @@ export const NFTProvider = ({ children }) => {
               pageSize: options.pageSize || 50
             });
             
+            // Ensure result has the expected structure
+            if (!result) {
+              console.warn(`No result returned from batchFetchNFTs for chain ${chain}`);
+              return { chain, nfts: [], hasMore: false, totalCount: 0 };
+            }
+            
+            // Process each address's result - ensure they all have nfts array
+            Object.keys(result).forEach(address => {
+              if (!result[address]?.nfts) {
+                result[address] = { nfts: [], pageKey: null, hasMore: false };
+              }
+            });
+            
+            // Extract all NFTs from all addresses
+            const allNftsForChain = Object.entries(result).flatMap(([address, addrResult]) => {
+              // Make sure we have an array of NFTs
+              const nftArray = Array.isArray(addrResult.nfts) ? addrResult.nfts : [];
+              
+              // Add owner address to each NFT if missing
+              return nftArray.map(nft => ({
+                ...nft,
+                ownerAddress: nft.ownerAddress || address,
+                network: chain
+              }));
+            });
+            
             // Update progress for this chain
             addresses.forEach(address => {
+              const addressNfts = allNftsForChain.filter(nft => 
+                nft?.ownerAddress?.toLowerCase() === address.toLowerCase()
+              ) || [];
+              
               setFetchProgress(prev => ({
                 ...prev,
                 [address]: {
@@ -584,9 +614,7 @@ export const NFTProvider = ({ children }) => {
                   [chain]: {
                     ...prev[address]?.[chain],
                     status: 'completed',
-                    totalNFTs: result.nfts.filter(nft => 
-                      nft.ownerAddress?.toLowerCase() === address.toLowerCase()
-                    ).length,
+                    totalNFTs: addressNfts.length,
                     completed: true
                   }
                 }
@@ -595,7 +623,9 @@ export const NFTProvider = ({ children }) => {
             
             return {
               chain,
-              ...result
+              nfts: allNftsForChain,
+              hasMore: Object.values(result).some(r => r?.hasMore),
+              totalCount: allNftsForChain.length
             };
           } catch (error) {
             console.error(`Error fetching NFTs from ${chain}:`, error);
@@ -629,7 +659,16 @@ export const NFTProvider = ({ children }) => {
       
       // Combine NFTs from all chains
       const allNfts = chainResults.flatMap(result => {
+        // Check if result has nfts property and it's an array
+        if (!result || !result.nfts || !Array.isArray(result.nfts)) {
+          console.warn(`Missing or invalid NFTs in result for chain ${result?.chain || 'unknown'}`);
+          return [];
+        }
+        
+        // Process NFTs with owner information
         const nftsWithOwners = result.nfts.map(nft => {
+          if (!nft) return null; // Skip null/undefined NFTs
+          
           // Make sure owner address is preserved
           if (!nft.ownerAddress && addresses.length === 1) {
             // If we're fetching for a single wallet and NFT has no owner, use the wallet address
@@ -637,7 +676,8 @@ export const NFTProvider = ({ children }) => {
             return { ...nft, ownerAddress: addresses[0] };
           }
           return nft;
-        });
+        }).filter(Boolean); // Remove any null entries
+        
         return nftsWithOwners;
       });
       

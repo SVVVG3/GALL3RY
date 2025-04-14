@@ -98,14 +98,25 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           console.log(`Fetching NFTs for addresses:`, addresses);
           
           const result = await fetchAllNFTsForWallets(addresses);
-          const nfts = result?.nfts || [];
           
-          console.log(`Fetched ${nfts.length} NFTs for user ${searchQuery}`);
-          setUserNfts(nfts);
+          // Ensure result contains nfts array
+          if (!result) {
+            console.warn('fetchAllNFTsForWallets returned undefined result');
+            setUserNfts([]);
+          } else {
+            const nfts = Array.isArray(result.nfts) ? result.nfts : [];
+            console.log(`Fetched ${nfts.length} NFTs for user ${searchQuery}`);
+            setUserNfts(nfts);
+          }
         } catch (nftError) {
           console.error('Error fetching NFTs:', nftError);
           setSearchError(`Found profile but could not load NFTs: ${nftError.message}`);
+          setUserNfts([]); // Ensure userNfts is always an array
         }
+      } else {
+        // No wallet addresses found
+        console.log('No wallet addresses found for this user');
+        setUserNfts([]);
       }
     } catch (error) {
       console.error('Search error:', error);
