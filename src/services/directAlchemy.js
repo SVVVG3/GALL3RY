@@ -4,6 +4,7 @@
  * Optimized for Vercel deployments
  */
 import axios from 'axios';
+import config from '../config';
 
 // API base URL - use relative path for compatibility with Vercel deployments
 const API_BASE_URL = '/api/alchemy';
@@ -621,11 +622,80 @@ export const enhanceNFTsWithMetadata = async (nfts, chain = 'eth', options = {})
   }
 };
 
-// Create a proper service object
-const alchemyService = {
-  fetchNFTsForAddress: getNFTsForOwner,
-  getNFTsForOwner,
-  batchFetchNFTs
+// Direct Alchemy service that doesn't rely on context
+// This avoids circular dependencies in the initialization flow
+
+// Simple service with only the essential methods needed
+const directAlchemyService = {
+  /**
+   * Fetch NFTs for multiple wallet addresses
+   * @param {Array} addresses - Array of wallet addresses
+   * @param {String} network - Network name ('eth', 'polygon', etc)
+   * @param {Object} options - Options for the API request
+   * @returns {Promise} - Promise that resolves to the NFT data
+   */
+  batchFetchNFTs: async (addresses, network = 'eth', options = {}) => {
+    if (!addresses || addresses.length === 0) {
+      console.error('No addresses provided to batchFetchNFTs');
+      return { nfts: [], hasMore: false, pageKey: null, totalCount: 0 };
+    }
+    
+    try {
+      // Default options
+      const defaultOptions = {
+        pageSize: 24,
+        withMetadata: true,
+        excludeSpam: true,
+      };
+      
+      // Merge default options with provided options
+      const requestOptions = { ...defaultOptions, ...options };
+      
+      // Construct the URL for the appropriate network
+      const baseUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${config.ALCHEMY_API_KEY}`;
+      const endpoint = `/getNFTsForOwners`;
+      
+      // Build the request body - simplified to avoid complex logic
+      const requestBody = {
+        owners: addresses,
+        pageSize: requestOptions.pageSize,
+        excludeSpam: requestOptions.excludeSpam,
+        withMetadata: requestOptions.withMetadata,
+      };
+      
+      // Add optional parameters if provided
+      if (requestOptions.pageKey) {
+        requestBody.pageKey = requestOptions.pageKey;
+      }
+      
+      // Make the API request
+      const response = await fetch(`${baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Alchemy API error: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // Transform the response to a consistent format
+      return {
+        nfts: data.ownerAddresses?.flatMap(owner => owner.nfts || []) || [],
+        hasMore: !!data.pageKey,
+        pageKey: data.pageKey || null,
+        totalCount: data.totalCount || 0,
+      };
+    } catch (error) {
+      console.error('Error in directAlchemyService.batchFetchNFTs:', error);
+      throw error;
+    }
+  }
 };
 
-export default alchemyService; 
+export default directAlchemyService; 

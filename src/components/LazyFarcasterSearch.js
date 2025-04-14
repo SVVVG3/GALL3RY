@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 import { NFTProvider } from '../contexts/NFTContext';
-import FarcasterUserSearch from './FarcasterUserSearch';
+
+// Dynamically import the FarcasterUserSearch component to avoid circular dependencies
+const DynamicFarcasterUserSearch = React.lazy(() => import('./FarcasterUserSearch'));
 
 /**
  * Error fallback component
@@ -27,6 +29,16 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => {
 };
 
 /**
+ * Loading component to show while the FarcasterUserSearch is loading
+ */
+const SearchLoader = () => (
+  <div className="search-loading">
+    <div className="loading-spinner"></div>
+    <p>Loading Farcaster search component...</p>
+  </div>
+);
+
+/**
  * Wrapper component that loads FarcasterUserSearch with proper context
  * This creates separation to avoid circular dependencies during initialization
  */
@@ -44,7 +56,9 @@ const LazyFarcasterSearch = ({ initialUsername }) => {
       onReset={() => setError(null)}
     >
       <NFTProvider>
-        <FarcasterUserSearch initialUsername={initialUsername} />
+        <Suspense fallback={<SearchLoader />}>
+          <DynamicFarcasterUserSearch initialUsername={initialUsername} />
+        </Suspense>
       </NFTProvider>
     </ErrorBoundary>
   );

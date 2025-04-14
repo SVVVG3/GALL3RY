@@ -1,13 +1,11 @@
-import React, { useState, lazy, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import SimpleSearch from '../components/SimpleSearch';
 
-// Lazy load the components that depend on contexts to avoid circular dependencies
-const FarcasterSearchWithContext = lazy(() => 
-  import('../components/LazyFarcasterSearch')
-);
+// No static imports of components that use NFT context
+// Everything is dynamically loaded
 
 /**
- * HomePage Component with safer loading approach
+ * HomePage Component with error-resistant loading approach
  * First renders a simple search component that doesn't depend on complex contexts
  * Only loads context and search component when a search is performed
  */
@@ -27,19 +25,30 @@ const HomePage = () => {
           // Simple search component with minimal dependencies
           <SimpleSearch onSearch={handleSearch} />
         ) : (
-          // Lazy-load the full search component with context to avoid circular dependencies
+          // Fully dynamic import to avoid any potential circular dependencies or initialization issues
           <Suspense fallback={
             <div className="loading-container">
               <div className="loading-spinner"></div>
               <p>Loading search results...</p>
             </div>
           }>
-            <FarcasterSearchWithContext initialUsername={searchQuery} />
+            <DynamicFarcasterSearch initialUsername={searchQuery} />
           </Suspense>
         )}
       </div>
     </div>
   );
 };
+
+// Define the dynamic component outside the main component
+// This ensures it's only imported when actually rendered
+const DynamicFarcasterSearch = React.lazy(() => {
+  // Add a small delay to ensure any initialization is complete
+  return new Promise(resolve => {
+    setTimeout(() => {
+      resolve(import('../components/LazyFarcasterSearch'));
+    }, 100);
+  });
+});
 
 export default HomePage; 
