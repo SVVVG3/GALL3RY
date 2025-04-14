@@ -5,8 +5,8 @@ const NFT_PAGE_SIZE = 24; // Matching Zapper's default exactly
 
 // Import services - but only import the specific functions we need from zapperService
 import directAlchemyService from '../services/directAlchemy';
-// Instead of * import, let's only import the specific functions we need
-import { getFarcasterProfile } from '../services/zapperService';
+// Rename the imported function to avoid naming conflicts
+import { getFarcasterProfile as zapperGetFarcasterProfile } from '../services/zapperService';
 
 // Create context
 const NFTContext = createContext();
@@ -224,7 +224,7 @@ export const NFTProvider = ({ children }) => {
     try {
       console.log(`Fetching Farcaster profile for ${usernameOrFid}`);
       // Use the imported zapperService to get real profile data
-      const profile = await getFarcasterProfile(usernameOrFid);
+      const profile = await zapperGetFarcasterProfile(usernameOrFid);
       return profile;
     } catch (err) {
       console.error(`Error fetching Farcaster profile:`, err);
