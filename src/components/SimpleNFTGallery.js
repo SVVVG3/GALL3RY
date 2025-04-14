@@ -143,7 +143,17 @@ const SimpleNFTGallery = () => {
       
       {error && (
         <div className="error-message">
-          <p>{error}</p>
+          <p><strong>Error:</strong> {error}</p>
+          {error.includes('Demo API key') && (
+            <div className="error-help">
+              <p>You need to set a real Alchemy API key in your <code>.env</code> file.</p>
+              <ol>
+                <li>Get a free API key from <a href="https://www.alchemy.com/" target="_blank" rel="noopener noreferrer">Alchemy</a></li>
+                <li>Add it to the <code>.env</code> file as <code>ALCHEMY_API_KEY=your_key_here</code></li>
+                <li>Restart the server</li>
+              </ol>
+            </div>
+          )}
         </div>
       )}
       
@@ -155,7 +165,9 @@ const SimpleNFTGallery = () => {
       
       {isLoading && (
         <div className="loading-indicator">
-          <p>Loading NFTs...</p>
+          <div className="loading-spinner"></div>
+          <p>Loading NFTs... This may take a moment</p>
+          <p className="loading-tip">Using a real Alchemy API key will improve performance</p>
         </div>
       )}
       

@@ -8,10 +8,18 @@ import { Alchemy, Network } from 'alchemy-sdk';
 // Get the API key from environment variables
 const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY;
 
-// Configure the Alchemy SDK
+// Check if using demo key and warn
+if (apiKey === 'demo') {
+  console.warn('⚠️ WARNING: Using "demo" API key for Alchemy. This will cause rate limiting and failures. Please set a real API key in your .env file.');
+}
+
+// Configure the Alchemy SDK with improved reliability settings
 const config = {
   apiKey: apiKey,
   network: Network.ETH_MAINNET,
+  maxRetries: 3,            // Retry failed requests
+  requestTimeout: 15000,    // 15 second timeout to avoid hanging
+  batchRequests: false      // Disable batch requests for more reliable operation
 };
 
 // Create a single Alchemy instance
@@ -29,21 +37,25 @@ export const getNFTsForOwner = async (owner, options = {}) => {
   }
 
   try {
-    console.log(`Fetching NFTs for ${owner} using Alchemy SDK`);
+    console.log(`Fetching NFTs for ${owner} using Alchemy SDK (apiKey: ${apiKey.substring(0, 4)}...)`);
     
     // Set default options
     const fetchOptions = {
-      pageSize: options.pageSize || 100,
+      pageSize: options.pageSize || 50,      // Reduced from 100 to 50 for better performance
       pageKey: options.pageKey || undefined,
       excludeFilters: ['SPAM'],
-      omitMetadata: false, // Always include metadata
+      omitMetadata: false,                   // Always include metadata
+      refreshCache: false                    // Use cached data when available for performance
     };
     
     // Make the API call using the SDK
+    console.time('Alchemy API Call');
     const nftsData = await alchemy.nft.getNftsForOwner(owner, fetchOptions);
+    console.timeEnd('Alchemy API Call');
     
     console.log(`Successfully fetched ${nftsData.ownedNfts.length} NFTs for ${owner}`);
     
+    // Return consistently structured data
     return {
       nfts: nftsData.ownedNfts,
       pageKey: nftsData.pageKey,
@@ -52,6 +64,12 @@ export const getNFTsForOwner = async (owner, options = {}) => {
     };
   } catch (error) {
     console.error('Error fetching NFTs from Alchemy:', error);
+    
+    // Provide more helpful error message
+    if (apiKey === 'demo') {
+      throw new Error('Demo API key is causing rate limiting. Please use a real Alchemy API key.');
+    }
+    
     throw error;
   }
 };
