@@ -4,7 +4,7 @@ import '../styles/NFTGrid.css';
 /**
  * Simple grid component to display NFTs
  */
-const NftGrid = ({ nfts = [] }) => {
+const NFTGrid = ({ nfts = [] }) => {
   // Log what's being received by the grid
   console.log(`NFTGrid rendering with ${nfts?.length || 0} NFTs:`, 
     nfts?.length > 0 ? nfts[0] : 'No NFTs');
@@ -180,4 +180,4 @@ const NftGrid = ({ nfts = [] }) => {
   );
 };
 
-export default NftGrid; 
+export default NFTGrid; 

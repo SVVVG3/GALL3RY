@@ -68,6 +68,8 @@ const NFTGallery = () => {
         setSelectedChains(['all']);
       }
       
+      console.log(`Initial load - wallets: ${connectedWallets.length}, newWallets: ${newWallets.length}, selectedChains:`, selectedChains);
+      
       if (newWallets.length > 0) {
         console.log(`Fetching NFTs for ${newWallets.length} new connected wallets`);
         setFetchingAllWallets(true);
@@ -76,12 +78,13 @@ const NFTGallery = () => {
         fetchAllNFTsForWallets(walletAddresses, {
           includeValue: true,
           includeBalanceUSD: true,
-          // Fetch from multiple chains if needed
+          // Always fetch from all chains
           chains: ['eth', 'base', 'polygon', 'arbitrum', 'optimism'],
           excludeSpam: excludeSpam
         }).finally(() => {
           setInitialLoad(false);
           setFetchingAllWallets(false);
+          console.log("Initial NFT fetch completed");
         });
       } else {
         // If all wallets already loaded, just fetch with refreshed options
@@ -468,6 +471,11 @@ const NFTGallery = () => {
       ) : (
         <>
           <NFTGridContainer>
+            {/* Add debugging just before rendering NFTGrid */}
+            {console.log(`About to render NFTGrid with ${safeFilteredNFTs.length} NFTs`, 
+              safeFilteredNFTs.length > 0 
+                ? `First NFT: ${safeFilteredNFTs[0].id}` 
+                : 'No NFTs available')}
             <NFTGrid nfts={safeFilteredNFTs} />
           </NFTGridContainer>
           

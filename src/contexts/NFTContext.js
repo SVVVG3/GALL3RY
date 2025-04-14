@@ -639,36 +639,54 @@ export const NFTProvider = ({ children }) => {
       excludeSpam
     });
 
+    // Log some sample NFT data to help debug
+    if (nfts.length > 0) {
+      console.log('Sample NFT for debugging:', {
+        id: nfts[0].id,
+        network: nfts[0].network,
+        chain: nfts[0].chain,
+        ownerAddress: nfts[0].ownerAddress,
+        collection: nfts[0].collection?.name
+      });
+    }
+
     let filtered = [...nfts];
     
-    // Filter by chain
+    // Filter by chain - ONLY if 'all' is not selected
     if (selectedChains.length > 0 && !selectedChains.includes('all')) {
+      console.log('Applying chain filter - NOT selecting all chains');
+      
       filtered = filtered.filter(nft => {
-        // Log some network values to debug
-        if (nft.id === filtered[0]?.id) {
-          console.log(`Chain filtering debug for first NFT: network=${nft.network}, chain=${nft.chain}`);
-        }
-        
         // More flexible network matching - handle both network and chain properties
         // Also normalize different chain names (eth = ethereum, etc)
         const nftNetwork = (nft.network || nft.chain || '').toLowerCase();
         const normalizedNetwork = nftNetwork === 'eth' ? 'ethereum' : 
-                                  nftNetwork === 'opt' ? 'optimism' : 
-                                  nftNetwork === 'arb' ? 'arbitrum' : 
-                                  nftNetwork;
+                                 nftNetwork === 'opt' ? 'optimism' : 
+                                 nftNetwork === 'arb' ? 'arbitrum' : 
+                                 nftNetwork;
                                   
         // Check for direct match or normalized match
-        return selectedChains.some(chain => {
+        const matches = selectedChains.some(chain => {
           const normalizedChain = chain === 'ethereum' ? 'eth' :
-                                  chain === 'optimism' ? 'opt' :
-                                  chain === 'arbitrum' ? 'arb' : 
-                                  chain;
+                                 chain === 'optimism' ? 'opt' :
+                                 chain === 'arbitrum' ? 'arb' : 
+                                 chain;
           return normalizedNetwork === chain || normalizedNetwork === normalizedChain || 
-                 nftNetwork === chain || nftNetwork === normalizedChain;
+                nftNetwork === chain || nftNetwork === normalizedChain;
         });
+        
+        // Debug the first few NFTs to see why they're being filtered
+        if (nft.id === nfts[0].id || nft.id === nfts[1]?.id || nft.id === nfts[2]?.id) {
+          console.log(`Chain filter for NFT ${nft.id}: network=${nftNetwork}, normalizedNetwork=${normalizedNetwork}, matches=${matches}`);
+        }
+        
+        return matches;
       });
-      console.log(`After chain filtering: ${filtered.length} NFTs`);
+    } else {
+      console.log('Skipping chain filter - "all" chains selected');
     }
+    
+    console.log(`After chain filtering: ${filtered.length} NFTs`);
     
     // Filter by wallet
     if (selectedWallets.length > 0) {
