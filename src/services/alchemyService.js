@@ -133,6 +133,67 @@ const alchemyService = {
       throw error;
     }
   },
+  
+  /**
+   * Fetch NFTs for multiple addresses at once
+   */
+  async batchFetchNFTs(addresses, network = 'ethereum', options = {}) {
+    if (!addresses || addresses.length === 0) {
+      console.error('No addresses provided to batchFetchNFTs');
+      return { nfts: [], hasMore: false, pageKey: null, totalCount: 0 };
+    }
+    
+    try {
+      // Use server endpoint for batch fetching
+      const response = await axios.post(`${SERVER_URL}/api/alchemy/batch-nfts`, {
+        addresses,
+        network,
+        options
+      });
+      
+      return {
+        nfts: response.data.nfts || [],
+        hasMore: !!response.data.pageKey,
+        pageKey: response.data.pageKey,
+        totalCount: response.data.totalCount || 0
+      };
+    } catch (error) {
+      console.error('Error in batchFetchNFTs:', error);
+      
+      // Fallback: fetch one by one if server endpoint fails
+      console.log('Falling back to individual fetching...');
+      const allNfts = [];
+      let hasMore = false;
+      
+      for (const address of addresses) {
+        try {
+          const result = await this.getNftsForOwner(address, { 
+            network, 
+            pageSize: options.pageSize || 24,
+            pageKey: options.pageKey
+          });
+          
+          if (result.ownedNfts) {
+            allNfts.push(...result.ownedNfts);
+          }
+          
+          if (result.pageKey) {
+            hasMore = true;
+          }
+        } catch (err) {
+          console.error(`Error fetching NFTs for ${address}:`, err);
+          // Continue with other addresses
+        }
+      }
+      
+      return {
+        nfts: allNfts,
+        hasMore,
+        pageKey: null,
+        totalCount: allNfts.length
+      };
+    }
+  },
 };
 
 export default alchemyService; 

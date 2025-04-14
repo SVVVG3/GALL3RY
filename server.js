@@ -3,12 +3,13 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
-const config = require('./src/server/config');
+const config = require('./src/config');
 const folderController = require('./src/server/folderController');
 const zapperHandler = require('./api/zapper');
 const neynarHandler = require('./api/neynar');
 const alchemyHandler = require('./api/alchemy');
 const net = require('net');
+const axios = require('axios');
 
 const app = express();
 const BASE_PORT = process.env.PORT || 3001;
@@ -121,4 +122,66 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
   // In production, you might want to use a logging service here
+});
+
+app.post('/api/alchemy/batch-nfts', async (req, res) => {
+  try {
+    const { addresses, network, options } = req.body;
+    
+    if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
+      return res.status(400).json({ error: 'Invalid addresses provided' });
+    }
+    
+    // Use Alchemy SDK to fetch NFTs
+    const baseURL = network === 'base' 
+      ? `https://base-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_BASE_API_KEY}`
+      : `https://eth-mainnet.g.alchemy.com/nft/v3/${process.env.ALCHEMY_ETH_API_KEY}`;
+    
+    const endpoint = '/getNFTsForOwners';
+    
+    // Prepare the request
+    const pageSize = options?.pageSize || 24;
+    const excludeSpam = options?.excludeSpam !== false;
+    const withMetadata = options?.withMetadata !== false;
+    const pageKey = options?.pageKey || null;
+    
+    const requestBody = {
+      owners: addresses,
+      pageSize,
+      excludeSpam,
+      withMetadata
+    };
+    
+    if (pageKey) {
+      requestBody.pageKey = pageKey;
+    }
+    
+    // Make the request to Alchemy
+    const response = await axios.post(`${baseURL}${endpoint}`, requestBody, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    // Process the response
+    const nfts = [];
+    
+    if (response.data.ownerAddresses) {
+      for (const owner of response.data.ownerAddresses) {
+        if (owner.nfts && Array.isArray(owner.nfts)) {
+          nfts.push(...owner.nfts);
+        }
+      }
+    }
+    
+    return res.json({
+      nfts: nfts,
+      pageKey: response.data.pageKey || null,
+      totalCount: response.data.totalCount || nfts.length
+    });
+  } catch (error) {
+    console.error('Error in batch NFTs endpoint:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to fetch NFTs' });
+  }
 }); 
