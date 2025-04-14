@@ -141,6 +141,47 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
   try {
     console.log(`Fetching NFTs for ${addresses.length} addresses using direct Alchemy service`);
     
+    // First, try a direct batch request to our API endpoint
+    try {
+      console.log('Attempting batch request via POST');
+      
+      // Build the URL for the batch request
+      const url = `${API_BASE_URL}?endpoint=getNFTsForOwner&chain=${chain}`;
+      
+      // Create the request body
+      const requestBody = {
+        owners: addresses,
+        pageSize: options.pageSize || 50,
+        excludeFilters: options.excludeSpam ? ['SPAM'] : [],
+        withMetadata: options.withMetadata !== false
+      };
+      
+      // Make the batch request
+      const response = await alchemyClient.post(url, requestBody);
+      
+      // Process the response
+      if (response.data?.ownedNfts?.length > 0) {
+        console.log(`Batch request successful! Received ${response.data.ownedNfts.length} NFTs`);
+        
+        // Format NFTs using our helper function
+        const formattedNfts = response.data.ownedNfts.map(formatNft).filter(Boolean);
+        
+        return {
+          nfts: formattedNfts,
+          pageKey: response.data.pageKey || null,
+          totalCount: response.data.totalCount || formattedNfts.length,
+          hasMore: !!response.data.pageKey
+        };
+      }
+      
+      console.log('Batch request returned no NFTs, falling back to individual requests');
+    } catch (batchError) {
+      console.log(`Batch request failed: ${batchError.message}. Falling back to individual requests.`);
+    }
+    
+    // Fallback to fetching each address individually
+    console.log('Fetching NFTs individually for each address');
+    
     // Create a copy of options with chain included
     const requestOptions = {
       ...options,
@@ -190,7 +231,8 @@ export const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => 
     return {
       nfts: uniqueNfts,
       hasMore,
-      totalCount: uniqueNfts.length
+      totalCount: uniqueNfts.length,
+      pageKey: null // No pageKey when using individual fetches
     };
   } catch (error) {
     console.error(`Error in batch fetch:`, error);
@@ -628,6 +670,17 @@ export const enhanceNFTsWithMetadata = async (nfts, chain = 'eth', options = {})
 // Simple service with only the essential methods needed
 const directAlchemyService = {
   /**
+   * Fetch NFTs for an owner address - Alchemy API v3 compliant
+   * @param {string} owner - Wallet address
+   * @param {string} network - Network name ('eth', 'polygon', etc)
+   * @param {object} options - Options for the API request
+   * @returns {Promise} - Promise that resolves to the NFT data
+   */
+  getNFTsForOwner: async (owner, network = 'eth', options = {}) => {
+    return getNFTsForOwner(owner, network, options);
+  },
+  
+  /**
    * Fetch NFTs for multiple wallet addresses
    * @param {Array} addresses - Array of wallet addresses
    * @param {String} network - Network name ('eth', 'polygon', etc)
@@ -641,58 +694,96 @@ const directAlchemyService = {
     }
     
     try {
-      // Default options
-      const defaultOptions = {
-        pageSize: 24,
-        withMetadata: true,
-        excludeSpam: true,
-      };
-      
-      // Merge default options with provided options
-      const requestOptions = { ...defaultOptions, ...options };
-      
-      // Construct the URL for the appropriate network
-      const baseUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${config.ALCHEMY_API_KEY}`;
-      const endpoint = `/getNFTsForOwners`;
-      
-      // Build the request body - simplified to avoid complex logic
-      const requestBody = {
-        owners: addresses,
-        pageSize: requestOptions.pageSize,
-        excludeSpam: requestOptions.excludeSpam,
-        withMetadata: requestOptions.withMetadata,
-      };
-      
-      // Add optional parameters if provided
-      if (requestOptions.pageKey) {
-        requestBody.pageKey = requestOptions.pageKey;
-      }
-      
-      // Make the API request
-      const response = await fetch(`${baseUrl}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Alchemy API error: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Transform the response to a consistent format
-      return {
-        nfts: data.ownerAddresses?.flatMap(owner => owner.nfts || []) || [],
-        hasMore: !!data.pageKey,
-        pageKey: data.pageKey || null,
-        totalCount: data.totalCount || 0,
-      };
+      // Use our exported function that has proper v3 API handling
+      return await batchFetchNFTs(addresses, network, options);
     } catch (error) {
       console.error('Error in directAlchemyService.batchFetchNFTs:', error);
+      
+      // Return a valid empty response when an error occurs
+      return {
+        nfts: [],
+        hasMore: false,
+        pageKey: null,
+        totalCount: 0
+      };
+    }
+  },
+  
+  /**
+   * Get metadata for a specific NFT - Alchemy API v3 compliant
+   * @param {string} contractAddress - Contract address
+   * @param {string} tokenId - Token ID
+   * @param {object} options - Additional options
+   * @returns {Promise<object>} NFT metadata
+   */
+  getNFTMetadata: async (contractAddress, tokenId, options = {}) => {
+    if (!contractAddress || !tokenId) {
+      console.error('Missing required parameters for getNFTMetadata');
+      throw new Error('Contract address and token ID are required');
+    }
+    
+    try {
+      console.log(`Fetching metadata for ${contractAddress}-${tokenId}`);
+      
+      const url = `${API_BASE_URL}?endpoint=getNFTMetadata&contractAddress=${contractAddress}&tokenId=${tokenId}&chain=${options.chain || 'eth'}`;
+      
+      // Add additional parameters
+      let requestUrl = url;
+      if (options.refreshCache) {
+        requestUrl += '&refreshCache=true';
+      }
+      
+      if (options.tokenType) {
+        requestUrl += `&tokenType=${options.tokenType}`;
+      }
+      
+      const response = await axios.get(requestUrl);
+      return response.data;
+    } catch (error) {
+      console.error(`Error fetching NFT metadata:`, error);
+      throw error;
+    }
+  },
+  
+  /**
+   * Get NFTs for a collection - Alchemy API v3 compliant
+   * @param {string} contractAddress - Collection contract address
+   * @param {object} options - Additional options
+   * @returns {Promise<object>} Collection NFTs
+   */
+  getNFTsForCollection: async (contractAddress, options = {}) => {
+    if (!contractAddress) {
+      console.error('Missing contract address for getNFTsForCollection');
+      throw new Error('Contract address is required');
+    }
+    
+    try {
+      console.log(`Fetching NFTs for collection ${contractAddress}`);
+      
+      const url = `${API_BASE_URL}?endpoint=getNFTsForCollection&contractAddress=${contractAddress}&chain=${options.chain || 'eth'}`;
+      
+      // Add additional parameters
+      let requestUrl = url;
+      if (options.withMetadata !== false) {
+        requestUrl += '&withMetadata=true';
+      }
+      
+      if (options.startToken) {
+        requestUrl += `&startToken=${options.startToken}`;
+      }
+      
+      if (options.limit) {
+        requestUrl += `&limit=${options.limit}`;
+      }
+      
+      const response = await axios.get(requestUrl);
+      return {
+        nfts: response.data.nfts || [],
+        pageKey: response.data.nextToken,
+        hasMore: !!response.data.nextToken
+      };
+    } catch (error) {
+      console.error(`Error fetching collection NFTs:`, error);
       throw error;
     }
   }

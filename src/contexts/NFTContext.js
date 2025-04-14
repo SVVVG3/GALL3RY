@@ -457,17 +457,40 @@ export const NFTProvider = ({ children }) => {
     try {
       console.log(`Fetching NFTs for ${addresses.length} addresses using Alchemy`);
       
-      // Use the existing Alchemy service
-      const result = await alchemyService.batchFetchNFTs(addresses, 'eth', {
-        withMetadata: true,
-        excludeSpam: true,
-        pageSize: 50
+      // Update tracking state for these wallets
+      setLoadedWallets(prev => {
+        const newWallets = [...prev];
+        addresses.forEach(address => {
+          if (!newWallets.includes(address)) {
+            newWallets.push(address);
+          }
+        });
+        return newWallets;
       });
       
-      setNfts(result.nfts || []);
+      // Use the direct Alchemy service for batch fetching
+      const result = await directAlchemyService.batchFetchNFTs(addresses, 'eth', {
+        withMetadata: true,
+        excludeSpam: options.excludeSpam !== false,
+        pageSize: options.pageSize || 50
+      });
+      
+      // Process the NFTs to enhance metadata
+      const processedNFTs = await processNFTs(result.nfts || [], options);
+      
+      // Update the NFT state
+      setNfts(processedNFTs);
+      
+      // Set pagination state
+      setPageKey(result.pageKey || null);
+      setHasMore(!!result.pageKey);
+      
+      console.log(`Successfully loaded ${processedNFTs.length} NFTs from ${addresses.length} wallets`);
+      
       return {
-        nfts: result.nfts || [],
-        hasMore: !!result.pageKey
+        nfts: processedNFTs,
+        hasMore: !!result.pageKey,
+        pageKey: result.pageKey
       };
     } catch (error) {
       console.error('Error fetching NFTs in NFTContext:', error);
@@ -476,7 +499,7 @@ export const NFTProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [processNFTs]);
   
   // Filter NFTs based on current filters
   const getFilteredNfts = useMemo(() => {

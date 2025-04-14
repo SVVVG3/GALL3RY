@@ -240,11 +240,11 @@ app.all('/alchemy', async (req, res) => {
         : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
       return `${baseUrl}${apiKey}/getNFTMetadata`;
     },
-    getNFTMetadataBatch: (apiKey, chain = 'eth') => {
+    getNFTsForCollection: (apiKey, chain = 'eth') => {
       const baseUrl = chain === 'eth' 
         ? 'https://eth-mainnet.g.alchemy.com/nft/v3/' 
         : `https://${chain}-mainnet.g.alchemy.com/nft/v3/`;
-      return `${baseUrl}${apiKey}/getNFTMetadataBatch`;
+      return `${baseUrl}${apiKey}/getNFTsForCollection`;
     }
   };
   
@@ -270,35 +270,81 @@ app.all('/alchemy', async (req, res) => {
     // Build the request URL
     const endpointUrl = ENDPOINTS[endpoint](ALCHEMY_API_KEY, chain);
     
-    // Prepare request parameters
+    // Prepare request parameters according to Alchemy v3 API format
     const requestParams = { ...params };
     
     // Enhanced handling for getNFTsForOwner
     if (endpoint === 'getNFTsForOwner') {
-      // Make sure all vital parameters are explicitly set for better results
-      requestParams.withMetadata = true;
-      requestParams.pageSize = requestParams.pageSize || 100;
-      requestParams.tokenUriTimeoutInMs = 5000;
-      requestParams.includeContract = true;
-      requestParams.excludeFilters = requestParams.excludeSpam === 'true' ? ['SPAM'] : [];
-      requestParams.includePrice = true;
-      requestParams.floorPrice = true;
+      // Process parameters to match Alchemy v3 API expectations
+      if (params.excludeFilters) {
+        // Handle excludeFilters array format conversion from string to array
+        try {
+          if (typeof params.excludeFilters === 'string') {
+            requestParams.excludeFilters = [params.excludeFilters];
+          }
+        } catch (e) {
+          console.error('Error processing excludeFilters:', e);
+        }
+      } else if (params.excludeSpam === 'true') {
+        // Convert excludeSpam parameter to the correct excludeFilters format
+        requestParams.excludeFilters = ['SPAM'];
+      }
+      
+      // Ensure proper boolean parameters
+      requestParams.withMetadata = params.withMetadata !== 'false';
+      requestParams.includeContract = params.includeContract !== 'false';
+      
+      // Set page size with default
+      requestParams.pageSize = parseInt(params.pageSize || '100', 10);
       
       console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
     }
     
-    // Special handling for POST requests like getNFTMetadataBatch
-    if (endpoint === 'getNFTMetadataBatch' && req.method === 'POST') {
-      console.log(`Batch request to ${endpointUrl}`);
+    // Handle different request methods appropriately
+    if (req.method === 'POST') {
+      console.log(`POST request to ${endpointUrl}`);
       
       // Get the request body
       const requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       
-      if (!requestBody.tokens || !Array.isArray(requestBody.tokens)) {
-        return res.status(400).json({ error: 'Tokens must be an array of contractAddress and tokenId objects' });
+      // Handle special case for batch owners request
+      if (endpoint === 'getNFTsForOwner' && requestBody.owners && Array.isArray(requestBody.owners)) {
+        console.log(`Batch request for multiple owners: ${requestBody.owners.length} addresses`);
+        
+        // For multiple owners, we need to make separate requests
+        const allNfts = [];
+        let totalCount = 0;
+        
+        // Process each owner address
+        for (const owner of requestBody.owners) {
+          try {
+            const ownerResponse = await axios.get(endpointUrl, { 
+              params: { 
+                ...requestParams, 
+                owner,
+                withMetadata: requestBody.withMetadata !== false,
+                excludeFilters: requestBody.excludeFilters || ['SPAM']
+              } 
+            });
+            
+            if (ownerResponse.data?.ownedNfts) {
+              allNfts.push(...ownerResponse.data.ownedNfts);
+              totalCount += ownerResponse.data.totalCount || 0;
+            }
+          } catch (e) {
+            console.error(`Error fetching NFTs for ${owner}:`, e.message);
+          }
+        }
+        
+        // Return combined results
+        return res.status(200).json({
+          ownedNfts: allNfts,
+          totalCount,
+          pageKey: null // No pagination for batch requests
+        });
       }
       
-      // Make the POST request
+      // Regular POST request
       const response = await axios.post(endpointUrl, requestBody);
       return res.status(200).json(response.data);
     } else {
