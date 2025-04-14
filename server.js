@@ -1,5 +1,7 @@
-// Minimal server.js file for development
+// Load environment variables from .env file
 require('dotenv').config();
+
+// Minimal server.js file for development
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -308,6 +310,15 @@ apiRouter.all('/alchemy', async (req, res) => {
   // Get Alchemy API keys from environment variables
   const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY || '';
   
+  // Improved validation with helpful error message
+  if (!ALCHEMY_API_KEY || ALCHEMY_API_KEY === 'demo') {
+    console.error('Alchemy API key not configured or using demo key');
+    return res.status(401).json({ 
+      error: 'API key not properly configured',
+      message: 'Please set a valid ALCHEMY_API_KEY in environment variables. "demo" is not a valid API key.'
+    });
+  }
+  
   // Define Alchemy V3 NFT endpoints
   const ENDPOINTS = {
     getNFTsForOwner: (apiKey, chain = 'eth') => {
@@ -334,15 +345,6 @@ apiRouter.all('/alchemy', async (req, res) => {
   const { query } = parse(req.url, true);
   const { endpoint = 'getNFTsForOwner', chain = 'eth', ...params } = query;
   
-  // Validate API key
-  if (!ALCHEMY_API_KEY) {
-    console.error('Alchemy API key not configured');
-    return res.status(401).json({ 
-      error: 'API key not configured',
-      message: 'Please set your ALCHEMY_API_KEY in environment variables'
-    });
-  }
-  
   // Validate endpoint
   if (!ENDPOINTS[endpoint]) {
     return res.status(400).json({ error: `Invalid endpoint: ${endpoint}` });
@@ -355,11 +357,11 @@ apiRouter.all('/alchemy', async (req, res) => {
     // Prepare request parameters
     const requestParams = { ...params };
     
-    // Enhanced handling for getNFTsForOwner
+    // Enhanced handling for getNFTsForOwner with better defaults
     if (endpoint === 'getNFTsForOwner') {
       // Make sure all vital parameters are explicitly set for better results
       requestParams.withMetadata = true;
-      requestParams.pageSize = requestParams.pageSize || 100;
+      requestParams.pageSize = Math.min(parseInt(requestParams.pageSize || '50', 10), 50); // Limit to 50 max
       requestParams.tokenUriTimeoutInMs = 5000;
       requestParams.includeContract = true;
       
@@ -382,99 +384,41 @@ apiRouter.all('/alchemy', async (req, res) => {
       });
       
       console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
-      
-      // Handle requests with multiple owners (batch processing)
-      if (requestParams.owners) {
-        // If owners is provided as an array (multiple addresses)
-        try {
-          // Parse owners parameter if it's a string
-          let ownerAddresses;
-          if (typeof requestParams.owners === 'string') {
-            try {
-              // Try to parse as JSON
-              ownerAddresses = JSON.parse(requestParams.owners);
-            } catch (e) {
-              // If not valid JSON, split by comma
-              ownerAddresses = requestParams.owners.split(',');
-            }
-          } else {
-            ownerAddresses = requestParams.owners;
-          }
-          
-          // Ensure it's an array
-          if (!Array.isArray(ownerAddresses)) {
-            ownerAddresses = [ownerAddresses];
-          }
-          
-          // Filter out empty or invalid addresses
-          ownerAddresses = ownerAddresses.filter(addr => addr && typeof addr === 'string');
-          
-          if (ownerAddresses.length > 0) {
-            console.log(`Processing batch request for ${ownerAddresses.length} owners`);
-            
-            // Make separate requests for each owner
-            const promises = ownerAddresses.map(owner => {
-              const ownerParams = { ...requestParams, owner };
-              delete ownerParams.owners; // Remove the 'owners' param
-              
-              return axios.get(endpointUrl, { params: ownerParams })
-                .then(resp => resp.data)
-                .catch(err => {
-                  console.error(`Error fetching NFTs for owner ${owner}:`, err.message);
-                  return { owner, error: err.message, ownedNfts: [] };
-                });
-            });
-            
-            // Wait for all requests to complete
-            const results = await Promise.all(promises);
-            
-            // Combine results (note: pagination won't work well in batch mode)
-            const combinedResult = {
-              ownedNfts: results.flatMap(r => Array.isArray(r.ownedNfts) ? r.ownedNfts : []),
-              totalCount: results.reduce((sum, r) => sum + (r.totalCount || 0), 0),
-              blockHash: results[0]?.blockHash,
-              batchResults: results.map(r => ({ 
-                owner: r.owner || r.ownerAddress,
-                count: r.ownedNfts?.length || 0,
-                error: r.error
-              }))
-            };
-            
-            return res.status(200).json(combinedResult);
-          }
-        } catch (batchError) {
-          console.error('Error processing batch owners request:', batchError.message);
-          // Fall back to standard processing if batch processing fails
-        }
-      }
     }
     
-    // Special handling for POST requests like getNFTMetadataBatch
-    if (endpoint === 'getNFTMetadataBatch' && req.method === 'POST') {
-      console.log(`Batch request to ${endpointUrl}`);
-      
-      // Get the request body
-      const requestBody = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      
-      if (!requestBody.tokens || !Array.isArray(requestBody.tokens)) {
-        return res.status(400).json({ error: 'Tokens must be an array of contractAddress and tokenId objects' });
-      }
-      
-      // Make the POST request
-      const response = await axios.post(endpointUrl, requestBody);
-      return res.status(200).json(response.data);
-    } else {
-      // Regular GET request
-      console.log(`GET request to ${endpointUrl}`);
-      const response = await axios.get(endpointUrl, { params: requestParams });
-      return res.status(200).json(response.data);
-    }
+    // Regular GET request with timeout
+    console.log(`GET request to ${endpointUrl}`);
+    
+    // Add timeout to prevent hanging
+    const response = await axios.get(endpointUrl, { 
+      params: requestParams,
+      timeout: 10000 // 10 second timeout
+    });
+    
+    // Return the response
+    return res.status(200).json(response.data);
   } catch (error) {
+    // Improved error handling
     console.error('Alchemy API error:', error.message);
     
-    return res.status(error.response?.status || 500).json({
+    let statusCode = error.response?.status || 500;
+    let errorMessage = error.message || 'Unknown error';
+    
+    // Provide more helpful error messages based on common issues
+    if (error.code === 'ECONNABORTED') {
+      statusCode = 504;
+      errorMessage = 'Request to Alchemy API timed out. Try with a smaller page size.';
+    } else if (statusCode === 429) {
+      errorMessage = 'Rate limit exceeded. Please use a real Alchemy API key.';
+    } else if (statusCode === 401) {
+      errorMessage = 'Invalid Alchemy API key. Make sure your API key is correctly set.';
+    } else if (statusCode >= 500) {
+      errorMessage = 'Alchemy API server error. Please try again later.';
+    }
+    
+    return res.status(statusCode).json({
       error: 'Error from Alchemy API',
-      message: error.message,
+      message: errorMessage,
       details: error.response?.data
     });
   }
@@ -684,4 +628,9 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (err) => {
   console.error('Unhandled rejection:', err);
-}); 
+});
+
+// Debugging environment variables
+console.log('Environment variables loaded:');
+console.log('- NODE_ENV:', process.env.NODE_ENV);
+console.log('- Has ALCHEMY_API_KEY:', !!process.env.ALCHEMY_API_KEY); 

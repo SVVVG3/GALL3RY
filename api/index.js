@@ -228,6 +228,9 @@ app.all('/alchemy', async (req, res) => {
   // Get Alchemy API keys from environment variables
   const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY || '';
   
+  // Debug logging for API key - only showing first 4 chars for security
+  console.log(`Alchemy API Key: ${ALCHEMY_API_KEY ? `${ALCHEMY_API_KEY.substring(0, 4)}...` : 'NOT FOUND'}`);
+  
   // Define Alchemy V3 NFT endpoints
   const ENDPOINTS = {
     getNFTsForOwner: (apiKey, chain = 'eth') => {

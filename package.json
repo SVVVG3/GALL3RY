@@ -34,7 +34,7 @@
     "vercel-build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
-    "server": "node server.js"
+    "server": "node -r dotenv/config server.js"
   },
   "eslintConfig": {
     "extends": [
