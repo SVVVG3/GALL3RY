@@ -10,6 +10,10 @@ console.log('Starting Vercel build process...');
 console.log('Applying process/browser patch...');
 const nodeModulesPath = path.join(__dirname, 'node_modules');
 
+// Install necessary polyfills
+console.log('Installing necessary polyfills...');
+execSync('npm install --save-dev crypto-browserify process', { stdio: 'inherit' });
+
 // Create process directory if it doesn't exist
 if (!fs.existsSync(path.join(nodeModulesPath, 'process'))) {
   console.log('Installing process package...');
@@ -42,10 +46,25 @@ if (!fs.existsSync(browserJsPath)) {
   console.log('Created process/browser.js polyfill.');
 }
 
-// Run the build command
+// Ensure config-overrides.js is properly set up
+console.log('Verifying config-overrides.js...');
+const configOverridesPath = path.join(__dirname, 'config-overrides.js');
+const configOverridesContent = fs.readFileSync(configOverridesPath, 'utf8');
+
+// Add crypto polyfill if not already present
+if (!configOverridesContent.includes('"crypto": require.resolve("crypto-browserify")')) {
+  console.log('Adding crypto polyfill to config-overrides.js...');
+  const updatedContent = configOverridesContent.replace(
+    'config.resolve.fallback = {',
+    'config.resolve.fallback = {\n    "crypto": require.resolve("crypto-browserify"),'
+  );
+  fs.writeFileSync(configOverridesPath, updatedContent);
+}
+
+// Run the build command with react-app-rewired
 try {
-  console.log('Building React app...');
-  execSync('CI=false DISABLE_ESLINT_PLUGIN=true react-scripts build', { stdio: 'inherit' });
+  console.log('Building React app with react-app-rewired...');
+  execSync('CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build', { stdio: 'inherit' });
   console.log('React build complete!');
 } catch (error) {
   console.error('Error building React app:', error);

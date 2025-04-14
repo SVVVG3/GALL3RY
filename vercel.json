@@ -1,6 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "node vercel-build.js",
+  "installCommand": "npm install --save-dev crypto-browserify process buffer stream-browserify path-browserify os-browserify url util assert stream-http https-browserify",
+  "buildCommand": "node build-for-vercel.js",
   "outputDirectory": "build",
   "routes": [
     { 
