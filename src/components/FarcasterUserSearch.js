@@ -42,10 +42,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       console.log(`Searching for Farcaster user: ${searchQuery}`);
       
       // Try to find the Farcaster profile using Zapper API
-      const profile = await getFarcasterProfile(searchQuery);
+      let profile;
+      try {
+        profile = await getFarcasterProfile(searchQuery);
+      } catch (profileError) {
+        console.error('Profile search error:', profileError);
+        throw new Error(`Could not find Farcaster user "${searchQuery}". Please check the username and try again.`);
+      }
       
       if (!profile) {
-        throw new Error('Profile not found');
+        throw new Error(`Could not find Farcaster user "${searchQuery}". Please check the username and try again.`);
       }
       
       console.log('Farcaster profile found:', profile);
@@ -63,8 +69,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         addresses = [...addresses, ...profile.connectedAddresses];
       }
       
-      // Filter out duplicates
-      addresses = [...new Set(addresses)];
+      // Filter out duplicates and invalid addresses
+      addresses = [...new Set(addresses)].filter(addr => 
+        addr && typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
+      );
+      
+      if (addresses.length === 0) {
+        console.warn(`No valid addresses found for user ${searchQuery}`);
+        throw new Error(`Found profile for ${searchQuery} but no wallet addresses are connected.`);
+      }
       
       setUserProfile(profile);
       setWalletAddresses(addresses);
@@ -81,8 +94,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       // Fetch NFTs if we have wallet addresses
       if (addresses.length > 0) {
         try {
-          const nfts = await fetchAllNFTsForWallets(addresses);
-          setUserNfts(nfts || []);
+          // Add a console.log right before the API call
+          console.log(`Fetching NFTs for addresses:`, addresses);
+          
+          const result = await fetchAllNFTsForWallets(addresses);
+          const nfts = result?.nfts || [];
+          
+          console.log(`Fetched ${nfts.length} NFTs for user ${searchQuery}`);
+          setUserNfts(nfts);
         } catch (nftError) {
           console.error('Error fetching NFTs:', nftError);
           setSearchError(`Found profile but could not load NFTs: ${nftError.message}`);

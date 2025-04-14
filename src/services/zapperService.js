@@ -128,7 +128,9 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
           throw notFoundError;
         }
         
-        return response.data;
+        // Return either response.data.data (standard GraphQL format) or response.data (direct format)
+        // This handles different API formats that might be returned
+        return response.data.data || response.data;
     } catch (error) {
         lastError = error;
         
@@ -218,20 +220,23 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     // Log response details for debugging
     console.log('Response status:', response.status);
     
-    // Check if response has errors
-    if (response.data.errors) {
-      console.error('GraphQL errors:', response.data.errors);
-      throw new Error(response.data.errors[0]?.message || 'Error fetching Farcaster profile');
+    // Check if response has GraphQL errors
+    if (response.errors) {
+      console.error('GraphQL errors:', response.errors);
+      throw new Error(response.errors[0]?.message || 'Error fetching Farcaster profile');
     }
     
-    // Check if the data is missing
-    if (!response.data.data || !response.data.data.farcasterProfile) {
-      console.error('Missing profile data in response:', response.data);
+    // Check for data existence - data might be directly in response or in response.data
+    const data = response.data || response;
+    
+    // Now check if the profile data is missing
+    if (!data || !data.farcasterProfile) {
+      console.error('Missing profile data in response:', response);
       throw new Error('Farcaster profile not found');
     }
     
-    console.log('Found Farcaster profile:', response.data.farcasterProfile);
-    return response.data.farcasterProfile;
+    console.log('Found Farcaster profile:', data.farcasterProfile);
+    return data.farcasterProfile;
   } catch (error) {
     console.error('Error in getFarcasterProfile:', error);
     throw error;
@@ -981,289 +986,15 @@ export const getFarcasterNftCollections = async (usernameOrFid, options = {}) =>
       throw new Error(`No addresses found for Farcaster user: ${usernameOrFid}`);
     }
     
-    // Then get NFT collections using the addresses
-    const {
-      limit = 100,
-      cursor = null,
-      bypassCache = false
-    } = options;
-    
-    const collectionsQuery = `
-      query UserNftCollections(
-        $owners: [Address!]!,
-        $first: Int = 100,
-        $after: String,
-        $bypassHidden: Boolean = true
-      ) {
-        nftUsersCollections(
-          owners: $owners,
-          first: $first,
-          after: $after,
-          bypassHidden: $bypassHidden
-        ) {
-          edges {
-            node {
-              id
-              name
-              address
-              network
-              nftStandard
-              type
-              cardImage
-              floorPrice {
-                valueUsd
-                valueWithDenomination
-                denomination {
-                  symbol
-                  network
-                }
-              }
-              medias {
-                logo {
-                  thumbnail
-                }
-              }
-              totalCount
-            }
-          }
-          pageInfo {
-            hasNextPage
-            endCursor
-          }
-        }
-      }
-    `;
-    
-    const variables = {
-      owners: addresses,
-      first: limit,
-      after: cursor,
-      bypassHidden: true
-    };
-    
-    console.log(`Fetching NFT collections for Farcaster user ${usernameOrFid}`);
-    
-    const response = await makeGraphQLRequest(collectionsQuery, variables);
-    
-    if (response.data && response.data.nftUsersCollections) {
-      const collectionsData = response.data.nftUsersCollections;
-      const edges = collectionsData.edges || [];
-      
-      console.log(`Found ${edges.length} NFT collections for ${usernameOrFid}`);
-      
-      const processedCollections = edges.map(edge => {
-        const collection = edge.node;
-        
-        return {
-          id: collection.id || '',
-          address: collection.address || '',
-          name: collection.name || 'Unknown Collection',
-          network: collection.network || 'ethereum',
-          nftStandard: collection.nftStandard || '',
-          type: collection.type || 'GENERAL',
-          description: collection.description || '',
-          imageUrl: collection.cardImage || 
-                   (collection.medias?.logo?.thumbnail || ''),
-          floorPrice: collection.floorPrice?.valueUsd || 0,
-          floorPriceEth: collection.floorPrice?.valueWithDenomination || 0,
-          totalCount: collection.totalCount || 0,
-        };
-      });
-      
-      return {
-        collections: processedCollections,
-        cursor: collectionsData.pageInfo?.endCursor || null,
-        hasMore: collectionsData.pageInfo?.hasNextPage || false,
-        farcasterUser: usernameOrFid,
-        addresses
-      };
-    }
+    // Now get the NFT collections for these addresses
+    const collections = await getNftsForCollection(addresses, null, options);
     
     return {
-      collections: [],
-      cursor: null,
-      hasMore: false,
-      farcasterUser: usernameOrFid,
-      addresses
+      collections: collections.nfts,
+      farcasterUser: usernameOrFid
     };
   } catch (error) {
     console.error('Error fetching Farcaster NFT collections:', error);
     throw error;
   }
-};
-
-/**
- * Optimized function to get Farcaster NFT data
- * This fetches collections first, then allows fetching NFTs by collection
- * Saves API credits by only fetching NFTs when needed
- * 
- * @param {string|number} usernameOrFid - Farcaster username or FID
- * @param {object} options - Options for fetching
- * @returns {Promise<object>} - Collections, addresses and functions to load NFTs
- */
-export const getOptimizedFarcasterNfts = async (farcasterUsername, options = {}) => {
-  console.log(`Getting optimized Farcaster NFTs for username: ${farcasterUsername}`);
-  
-  // This function uses a different approach:
-  // 1. First get the Farcaster profile to fetch wallet addresses
-  // 2. Then fetch collections only (not individual NFTs)
-  // 3. Allow fetching NFTs by collection on demand (lazy loading)
-  
-  // Step 1: Get Farcaster profile
-  const profile = await getFarcasterProfile(farcasterUsername, { bypassCache: options.bypassCache });
-  
-  if (!profile || !profile.addresses || profile.addresses.length === 0) {
-    console.warn(`No addresses found for Farcaster user: ${farcasterUsername}`);
-    return {
-      username: farcasterUsername,
-      displayName: profile?.displayName || farcasterUsername,
-      profilePictureUrl: profile?.profilePictureUrl || '',
-      addresses: [],
-      collections: [],
-      loadedCollections: {},
-      hasMoreCollections: false,
-      collectionsCursor: null,
-      // Helper functions to load data on demand
-      loadNftsForCollection: async () => ({ nfts: [] }),
-      loadInitialCollections: async () => ({ collections: [] }),
-      loadMoreCollections: async () => ({ collections: [] })
-    };
-  }
-  
-  const addresses = profile.addresses;
-  console.log(`Found ${addresses.length} addresses for Farcaster user: ${farcasterUsername}`, addresses);
-  
-  // Extract wallet addresses we can use
-  const walletAddresses = addresses.filter(addr => addr && addr.startsWith('0x') && addr.length === 42);
-  
-  if (walletAddresses.length === 0) {
-    console.warn(`No valid Ethereum addresses found for Farcaster user: ${farcasterUsername}`);
-    return {
-      username: farcasterUsername,
-      displayName: profile?.displayName || farcasterUsername,
-      profilePictureUrl: profile?.profilePictureUrl || '',
-      addresses: addresses,
-      collections: [],
-      loadedCollections: {},
-      hasMoreCollections: false,
-      collectionsCursor: null,
-      loadNftsForCollection: async () => ({ nfts: [] }),
-      loadInitialCollections: async () => ({ collections: [] }),
-      loadMoreCollections: async () => ({ collections: [] })
-    };
-  }
-  
-  // Step 2: Fetch collections only (much lighter API call)
-  const collectionsResult = await getNftsForAddresses(walletAddresses, { 
-    includeCollectionsOnly: true,
-    bypassCache: options.bypassCache,
-    limit: options.collectionsLimit || 50
-  });
-  
-  const collections = collectionsResult.collections || [];
-  const collectionsCursor = collectionsResult.cursor;
-  const hasMoreCollections = collectionsResult.hasMore;
-  
-  console.log(`Found ${collections.length} NFT collections for Farcaster user: ${farcasterUsername}`);
-  
-  // Create a function to load NFTs for a specific collection
-  const loadNftsForCollection = async (collectionAddress, loadOptions = {}) => {
-    if (!collectionAddress) {
-      console.warn('No collection address provided to loadNftsForCollection');
-      return { nfts: [] };
-    }
-    
-    console.log(`Loading NFTs for collection ${collectionAddress} for user ${farcasterUsername}`);
-    
-    return await getNftsForCollection(walletAddresses, collectionAddress, {
-      bypassCache: loadOptions.bypassCache,
-      limit: loadOptions.limit || 100,
-      cursor: loadOptions.cursor
-    });
-  };
-  
-  // Function to load more collections (pagination)
-  const loadMoreCollections = async (loadOptions = {}) => {
-    if (!hasMoreCollections) {
-      console.log('No more collections to load');
-      return { collections: [], hasMore: false, cursor: null };
-    }
-    
-    console.log(`Loading more collections for user ${farcasterUsername}`);
-    
-    const nextCollectionsResult = await getNftsForAddresses(walletAddresses, { 
-      includeCollectionsOnly: true,
-      bypassCache: loadOptions.bypassCache,
-      limit: loadOptions.limit || 50,
-      cursor: collectionsCursor
-    });
-    
-    return {
-      collections: nextCollectionsResult.collections || [],
-      hasMore: nextCollectionsResult.hasMore,
-      cursor: nextCollectionsResult.cursor
-    };
-  };
-  
-  // Function to load the initial collections (mostly for consistency)
-  const loadInitialCollections = async (loadOptions = {}) => {
-    console.log(`Loading initial collections for user ${farcasterUsername}`);
-    
-    const result = await getNftsForAddresses(walletAddresses, { 
-      includeCollectionsOnly: true,
-      bypassCache: true, // Always bypass cache for this refresh function
-      limit: loadOptions.limit || 50
-    });
-    
-    return {
-      collections: result.collections || [],
-      hasMore: result.hasMore,
-      cursor: result.cursor
-    };
-  };
-  
-  // Return a complete object with data and functions to load more data
-  return {
-    username: farcasterUsername,
-    displayName: profile?.displayName || farcasterUsername,
-    profilePictureUrl: profile?.profilePictureUrl || '',
-    addresses: walletAddresses,
-    collections,
-    loadedCollections: {}, // Will be populated as collections are loaded
-    hasMoreCollections,
-    collectionsCursor,
-    // Helper functions to load data on demand
-    loadNftsForCollection,
-    loadInitialCollections,
-    loadMoreCollections
-  };
-};
-
-/**
- * Combined function to get Farcaster profile and NFT gallery in one call
- * 
- * @param {string|number} usernameOrFid - Farcaster username or FID
- * @param {object} options - Options for fetching
- * @returns {Promise<object>} - Profile and NFT data
- */
-export const getFarcasterGallery = async (farcasterUsername, options = {}) => {
-  console.log(`Getting Farcaster gallery for username: ${farcasterUsername}`);
-  
-  // Use the optimized function
-  const gallery = await getOptimizedFarcasterNfts(farcasterUsername, options);
-  
-  // Return the full gallery object
-  return gallery;
-};
-
-// Update the default export to include the new functions
-export default {
-  getFarcasterProfile,
-  getNftsForAddresses,
-  getNftsForCollection,
-  getFarcasterAddresses,
-  getFarcasterPortfolio,
-  getFarcasterNftCollections,
-  getOptimizedFarcasterNfts,
-  getFarcasterGallery
 };
