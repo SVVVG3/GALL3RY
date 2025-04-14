@@ -233,96 +233,93 @@ export const NFTProvider = ({ children }) => {
           nft.id = `${chain}:${contractAddress}-${tokenId}`;
         }
         
-        // Improved image URL handling
-        if (!nft.imageUrl || nft.imageUrl === '/assets/placeholder-nft.svg') {
-          // Log available image fields for debugging
-          console.log(`Looking for image for NFT ${nft.id}:`, {
-            hasImage: !!nft.image,
-            imageType: nft.image ? typeof nft.image : 'none',
-            hasMedia: !!nft.media,
-            mediaCount: nft.media?.length || 0,
-            hasMetadata: !!nft.metadata,
-            metadataImage: nft.metadata?.image,
-            tokenUri: nft.tokenUri
-          });
-          
-          // Try to find the best image URL from various sources
-          let imageUrl = null;
-          
-          // 1. Try Alchemy v3 image object format
-          if (nft.image) {
-            if (typeof nft.image === 'string') {
-              imageUrl = nft.image;
-              console.log(`Set imageUrl from string image: ${imageUrl}`);
-            } else if (nft.image.gateway) {
-              imageUrl = nft.image.gateway;
-              console.log(`Set imageUrl from image.gateway: ${imageUrl}`);
-            } else if (nft.image.url) {
-              imageUrl = nft.image.url;
-              console.log(`Set imageUrl from image.url: ${imageUrl}`);
-            } else if (nft.image.originalUrl) {
-              imageUrl = nft.image.originalUrl;
-              console.log(`Set imageUrl from image.originalUrl: ${imageUrl}`);
-            }
+        // Improved image URL handling - according to Alchemy V3 API format
+        // Log available image fields for debugging
+        console.log(`Processing images for NFT ${nft.id}:`, {
+          hasImage: !!nft.image,
+          imageType: nft.image ? typeof nft.image : 'none',
+          imageGateway: nft.image?.gateway,
+          hasMedia: !!nft.media,
+          mediaCount: Array.isArray(nft.media) ? nft.media.length : 'not array',
+          hasMetadata: !!nft.metadata,
+          metadataImage: nft.metadata?.image,
+          tokenUri: nft.tokenUri
+        });
+        
+        // Try to find the best image URL from various sources
+        let imageUrl = null;
+        
+        // Image handling - based on Alchemy V3 API structure
+        // 1. Alchemy image.gateway is the most reliable source
+        if (nft.image && nft.image.gateway) {
+          imageUrl = nft.image.gateway;
+          console.log(`Using primary Alchemy image.gateway: ${imageUrl}`);
+        } 
+        // 2. String image field
+        else if (nft.image && typeof nft.image === 'string') {
+          imageUrl = nft.image;
+          console.log(`Using string image: ${imageUrl}`);
+        } 
+        // 3. Media array with gateway URLs
+        else if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+          // Find first media item with a gateway or thumbnail
+          const mediaItem = nft.media.find(m => m && (m.gateway || m.thumbnail || m.raw || m.uri));
+          if (mediaItem) {
+            imageUrl = mediaItem.gateway || mediaItem.thumbnail || mediaItem.raw || mediaItem.uri;
+            console.log(`Using media item: ${imageUrl}`);
           }
-          
-          // 2. Try media array
-          if (!imageUrl && nft.media && nft.media.length > 0) {
-            const mediaItem = nft.media[0];
-            imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri;
-            console.log(`Set imageUrl from media: ${imageUrl}`);
+        }
+        // 4. Check raw metadata
+        else if (nft.metadata) {
+          if (nft.metadata.image) {
+            imageUrl = nft.metadata.image;
+            console.log(`Using metadata.image: ${imageUrl}`);
+          } else if (nft.metadata.image_url) {
+            imageUrl = nft.metadata.image_url;
+            console.log(`Using metadata.image_url: ${imageUrl}`);
           }
-          
-          // 3. Try metadata
-          if (!imageUrl && nft.metadata) {
-            if (nft.metadata.image) {
-              imageUrl = nft.metadata.image;
-              console.log(`Set imageUrl from metadata.image: ${imageUrl}`);
-            } else if (nft.metadata.image_url) {
-              imageUrl = nft.metadata.image_url;
-              console.log(`Set imageUrl from metadata.image_url: ${imageUrl}`);
-            }
-          }
-          
-          // 4. Try tokenUri
-          if (!imageUrl && nft.tokenUri) {
-            if (nft.tokenUri.gateway) {
-              imageUrl = nft.tokenUri.gateway;
-              console.log(`Set imageUrl from tokenUri.gateway: ${imageUrl}`);
-            } else if (nft.tokenUri.raw) {
-              imageUrl = nft.tokenUri.raw;
-              console.log(`Set imageUrl from tokenUri.raw: ${imageUrl}`);
-            }
-          }
-          
-          // 5. Try collection image as last resort
-          if (!imageUrl && nft.contractMetadata?.openSea?.imageUrl) {
-            imageUrl = nft.contractMetadata.openSea.imageUrl;
-            console.log(`Set imageUrl from contractMetadata.openSea.imageUrl: ${imageUrl}`);
-          }
-          
-          // Fix IPFS and Arweave URLs
-          if (imageUrl && imageUrl.startsWith('ipfs://')) {
+        }
+        // 5. Check tokenUri
+        else if (nft.tokenUri && nft.tokenUri.gateway) {
+          imageUrl = nft.tokenUri.gateway;
+          console.log(`Using tokenUri.gateway: ${imageUrl}`);
+        }
+        // 6. Last resort - check contract metadata
+        else if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.imageUrl) {
+          imageUrl = nft.contractMetadata.openSea.imageUrl;
+          console.log(`Using contractMetadata.openSea.imageUrl: ${imageUrl}`);
+        }
+        
+        // Fix IPFS and Arweave URLs - normalize all protocols
+        if (imageUrl) {
+          // Fix IPFS URLs - try more reliable gateway
+          if (imageUrl.startsWith('ipfs://')) {
             imageUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
             console.log(`Fixed IPFS URL: ${imageUrl}`);
-          } else if (imageUrl && imageUrl.startsWith('ar://')) {
+          } 
+          // Fix Arweave URLs
+          else if (imageUrl.startsWith('ar://')) {
             imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
             console.log(`Fixed Arweave URL: ${imageUrl}`);
           }
-          
-          // If still no image, use placeholder only as a last resort
-          if (!imageUrl) {
+          // Handle data URLs - use placeholders instead
+          else if (imageUrl.startsWith('data:')) {
             imageUrl = '/assets/placeholder-nft.svg';
-            console.log(`No image found for NFT ${nft.id}, using placeholder`);
+            console.log(`Replaced data URL with placeholder`);
           }
-          
-          // Set the image URL
-          nft.imageUrl = imageUrl;
-          
-          // Also set rawImageUrl for backup
-          if (imageUrl !== '/assets/placeholder-nft.svg') {
-            nft.rawImageUrl = imageUrl;
-          }
+        }
+        
+        // Check if URL is a placeholder
+        const isPlaceholder = !imageUrl || imageUrl === '/assets/placeholder-nft.svg';
+        
+        // Set image URLs on the NFT object
+        nft.imageUrl = imageUrl || '/assets/placeholder-nft.svg';
+        
+        // Set rawImageUrl as backup (only if not a placeholder)
+        if (!isPlaceholder) {
+          nft.rawImageUrl = imageUrl;
+        } else {
+          console.log(`Using placeholder for NFT ${nft.id} - no valid image found`);
         }
         
         // Log price data fields for debugging

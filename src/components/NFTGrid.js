@@ -54,14 +54,17 @@ const NFTGrid = ({ nfts = [] }) => {
   const getImageUrl = (nft) => {
     if (!nft) return '/assets/placeholder-nft.svg';
     
+    // Log the NFT data for debugging
     console.log(`Processing image for NFT: ${nft.id || nft.tokenId}, raw data:`, {
       hasImage: !!nft.image,
       imageType: nft.image ? typeof nft.image : 'none',
+      imageGateway: nft.image?.gateway,
       hasImageUrl: !!nft.imageUrl,
+      rawImageUrl: nft.rawImageUrl,
       hasMedia: !!nft.media,
-      mediaCount: nft.media?.length || 0,
+      mediaCount: Array.isArray(nft.media) ? nft.media.length : 'not array',
       hasMetadata: !!nft.metadata,
-      metadataImageExists: !!nft.metadata?.image
+      metadataImage: !!nft.metadata?.image
     });
     
     // Helper function to fix IPFS URLs
@@ -81,79 +84,70 @@ const NFTGrid = ({ nfts = [] }) => {
       return url;
     };
     
-    // 1. Directly use imageUrl if already provided by our processing functions
+    // 1. Best case: Use provided imageUrl from NFTContext processing
     if (nft.imageUrl && nft.imageUrl !== '/assets/placeholder-nft.svg') {
-      const fixedUrl = fixIpfsUrl(nft.imageUrl);
-      console.log(`Using preprocessed imageUrl: ${fixedUrl}`);
-      return fixedUrl;
+      console.log(`Using processed imageUrl: ${nft.imageUrl}`);
+      return nft.imageUrl;
     }
     
-    // 2. Check the Alchemy v3 image format
+    // 2. Try rawImageUrl as backup
+    if (nft.rawImageUrl && nft.rawImageUrl !== '/assets/placeholder-nft.svg') {
+      console.log(`Using rawImageUrl: ${nft.rawImageUrl}`);
+      return nft.rawImageUrl;
+    }
+    
+    // 3. Try Alchemy V3 image format
     if (nft.image) {
+      if (nft.image.gateway) {
+        console.log(`Using image.gateway: ${nft.image.gateway}`);
+        return nft.image.gateway;
+      }
+      
       if (typeof nft.image === 'string') {
         const fixedUrl = fixIpfsUrl(nft.image);
         console.log(`Using string image URL: ${fixedUrl}`);
         return fixedUrl;
-      } else if (nft.image.gateway) {
-        console.log(`Using image.gateway: ${nft.image.gateway}`);
-        return nft.image.gateway;
-      } else if (nft.image.url) {
-        console.log(`Using image.url: ${nft.image.url}`);
-        return nft.image.url;
-      } else if (nft.image.originalUrl) {
-        console.log(`Using image.originalUrl: ${nft.image.originalUrl}`);
-        return nft.image.originalUrl;
       }
     }
     
-    // 3. Check various paths where image URL might be found
-    if (nft.media && nft.media.length > 0) {
-      const mediaItem = nft.media[0];
-      if (mediaItem.gateway) {
-        console.log(`Using media[0].gateway: ${mediaItem.gateway}`);
-        return mediaItem.gateway;
-      } else if (mediaItem.raw) {
-        const fixedUrl = fixIpfsUrl(mediaItem.raw);
-        console.log(`Using media[0].raw: ${fixedUrl}`);
-        return fixedUrl;
-      } else if (mediaItem.uri) {
-        const fixedUrl = fixIpfsUrl(mediaItem.uri);
-        console.log(`Using media[0].uri: ${fixedUrl}`);
-        return fixedUrl;
+    // 4. Try media array
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      // Try to find first media item with valid image URL
+      for (const mediaItem of nft.media) {
+        if (!mediaItem) continue;
+        
+        if (mediaItem.gateway) {
+          console.log(`Using media item gateway: ${mediaItem.gateway}`);
+          return mediaItem.gateway;
+        }
+        
+        if (mediaItem.raw) {
+          const fixedUrl = fixIpfsUrl(mediaItem.raw);
+          console.log(`Using media item raw: ${fixedUrl}`);
+          return fixedUrl;
+        }
+        
+        if (mediaItem.thumbnail) {
+          console.log(`Using media item thumbnail: ${mediaItem.thumbnail}`);
+          return mediaItem.thumbnail;
+        }
+        
+        if (mediaItem.uri) {
+          const fixedUrl = fixIpfsUrl(mediaItem.uri);
+          console.log(`Using media item uri: ${fixedUrl}`);
+          return fixedUrl;
+        }
       }
     }
     
-    // 4. Check rawImageUrl
-    if (nft.rawImageUrl) {
-      const fixedUrl = fixIpfsUrl(nft.rawImageUrl);
-      console.log(`Using rawImageUrl: ${fixedUrl}`);
-      return fixedUrl;
-    }
-
-    // 5. Check Legacy formats
-    if (nft.mediasV3?.images?.edges?.[0]?.node?.thumbnail) {
-      return nft.mediasV3.images.edges[0].node.thumbnail;
-    }
-    
-    if (nft.mediasV3?.images?.edges?.[0]?.node?.original) {
-      return nft.mediasV3.images.edges[0].node.original;
-    }
-    
-    if (nft.media && nft.media.thumbnail) {
-      return nft.media.thumbnail;
-    }
-    
-    if (nft.media && nft.media.url) {
-      return nft.media.url;
-    }
-    
-    // 6. Check metadata
+    // 5. Try metadata
     if (nft.metadata) {
       if (nft.metadata.image) {
         const fixedUrl = fixIpfsUrl(nft.metadata.image);
         console.log(`Using metadata.image: ${fixedUrl}`);
         return fixedUrl;
       }
+      
       if (nft.metadata.image_url) {
         const fixedUrl = fixIpfsUrl(nft.metadata.image_url);
         console.log(`Using metadata.image_url: ${fixedUrl}`);
@@ -161,30 +155,21 @@ const NFTGrid = ({ nfts = [] }) => {
       }
     }
     
-    // 7. Check tokenUri
+    // 6. Try tokenUri
     if (nft.tokenUri) {
       if (nft.tokenUri.gateway) {
         console.log(`Using tokenUri.gateway: ${nft.tokenUri.gateway}`);
         return nft.tokenUri.gateway;
       }
-      if (nft.tokenUri.raw) {
-        const fixedUrl = fixIpfsUrl(nft.tokenUri.raw);
-        console.log(`Using tokenUri.raw: ${fixedUrl}`);
-        return fixedUrl;
-      }
     }
     
-    // 8. Check contract and collection metadata as last resort
+    // 7. Last resort - contract metadata
     if (nft.contractMetadata?.openSea?.imageUrl) {
       console.log(`Using contractMetadata.openSea.imageUrl: ${nft.contractMetadata.openSea.imageUrl}`);
       return nft.contractMetadata.openSea.imageUrl;
     }
     
-    if (nft.collection?.imageUrl) {
-      console.log(`Using collection.imageUrl: ${nft.collection.imageUrl}`);
-      return nft.collection.imageUrl;
-    }
-    
+    // No image found - use placeholder
     console.log(`No image found for NFT: ${nft.id || nft.tokenId}, using placeholder`);
     return '/assets/placeholder-nft.svg';
   };

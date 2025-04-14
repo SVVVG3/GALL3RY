@@ -327,6 +327,23 @@ app.all('/alchemy', async (req, res) => {
               } 
             });
             
+            // Debug logging - print the first NFT's structure
+            if (ownerResponse.data?.ownedNfts && ownerResponse.data.ownedNfts.length > 0) {
+              console.log('Sample NFT data from Alchemy:', 
+                JSON.stringify({
+                  id: ownerResponse.data.ownedNfts[0].id,
+                  contract: ownerResponse.data.ownedNfts[0].contract,
+                  tokenId: ownerResponse.data.ownedNfts[0].tokenId,
+                  hasImage: !!ownerResponse.data.ownedNfts[0].image,
+                  imageFields: ownerResponse.data.ownedNfts[0].image,
+                  hasMedia: !!ownerResponse.data.ownedNfts[0].media,
+                  mediaFields: ownerResponse.data.ownedNfts[0].media && ownerResponse.data.ownedNfts[0].media.length > 0 ? 
+                    ownerResponse.data.ownedNfts[0].media[0] : null,
+                  hasTokenUri: !!ownerResponse.data.ownedNfts[0].tokenUri
+                }, null, 2)
+              );
+            }
+            
             if (ownerResponse.data?.ownedNfts) {
               // Add owner address to each NFT before adding to results
               const nftsWithOwner = ownerResponse.data.ownedNfts.map(nft => ({
