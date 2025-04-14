@@ -1,15 +1,20 @@
 {
   "version": 2,
   "framework": "create-react-app",
-  "buildCommand": "npm run vercel-build",
   "routes": [
     { 
       "src": "/api/(.*)", 
-      "dest": "/api/$1" 
+      "dest": "/api/index.js" 
     },
     { 
       "src": "/(.*)", 
       "dest": "/index.html" 
     }
-  ]
+  ],
+  "functions": {
+    "api/index.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  }
 }
