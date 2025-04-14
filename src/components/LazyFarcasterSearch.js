@@ -6,21 +6,25 @@ import FarcasterUserSearch from './FarcasterUserSearch';
 /**
  * Error fallback component
  */
-const ErrorFallback = ({ error, resetErrorBoundary }) => (
-  <div className="error-container">
-    <h3>Error Loading Component</h3>
-    <p>{error?.message || 'An unexpected error occurred'}</p>
-    <div className="error-details">
-      <pre>{error?.stack || 'No stack trace available'}</pre>
+const ErrorFallback = ({ error, resetErrorBoundary }) => {
+  console.error("Error in FarcasterSearch:", error);
+  
+  return (
+    <div className="error-container">
+      <h3>Error Loading Farcaster Data</h3>
+      <p>{error?.message || 'An unexpected error occurred'}</p>
+      <div className="error-details">
+        <pre>{error?.stack?.slice(0, 200) || 'No stack trace available'}</pre>
+      </div>
+      <button 
+        onClick={resetErrorBoundary} 
+        className="retry-button"
+      >
+        Try Again
+      </button>
     </div>
-    <button 
-      onClick={resetErrorBoundary} 
-      className="retry-button"
-    >
-      Try Again
-    </button>
-  </div>
-);
+  );
+};
 
 /**
  * Wrapper component that loads FarcasterUserSearch with proper context

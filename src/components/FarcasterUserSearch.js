@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-// Import getFarcasterProfile directly from zapperService
+// Import services directly
 import { getFarcasterProfile } from '../services/zapperService';
+import directAlchemyService from '../services/directAlchemy';
 import { useNFT } from '../contexts/NFTContext';
 import NftGrid from './NFTGrid';
 import '../styles/FarcasterUserSearch.css';
@@ -44,9 +45,8 @@ class FarcasterErrorBoundary extends React.Component {
  * @param {string} props.initialUsername - Optional initial username to search for
  */
 const FarcasterUserSearch = ({ initialUsername }) => {
-  // Get NFT context functions and services - remove getFarcasterProfile from destructuring
-  const { services } = useNFT();
-  const alchemyService = services?.alchemy;
+  // Get NFT context functions
+  const { isLoading: isContextLoading } = useNFT();
   
   // Search state
   const [searchQuery, setSearchQuery] = useState(initialUsername || '');
@@ -76,51 +76,27 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   
   // Sorting state
-  const [sortMethod, setSortMethod] = useState('value'); // Change default sort to value
-  const [sortOrder, setSortOrder] = useState('desc'); // Default to descending order (highest first)
+  const [sortMethod, setSortMethod] = useState('value'); // Default sort by value
+  const [sortOrder, setSortOrder] = useState('desc'); // Default to descending order
   
   // NFT filter state
   const [nftFilterText, setNftFilterText] = useState('');
 
   const navigate = useNavigate();
 
-  // Handle API retries
-  const handleRetry = () => {
-    if (initialUsername) {
-      performSearch(initialUsername);
-    }
-  };
-
   // Effect for initial search if username is provided
   useEffect(() => {
     if (initialUsername) {
-      performSearch(initialUsername);
+      handleSearch({ preventDefault: () => {} });
     }
   }, [initialUsername]);
-
-  // Load all available NFTs with pagination
-  const loadAllNfts = async (username, profile) => {
-    console.log('Loading all NFTs for', username);
-    
-    setIsLoadingNfts(true);
-    setUserNfts([]);
-    setFetchNftsError(null);
-    setHasMoreNfts(false);
-    setIsLoadingMoreNfts(false);
-    
-    try {
-      await fetchUserNfts(username, profile);
-    } catch (error) {
-      console.error('Failed to load NFTs:', error);
-      setFetchNftsError(`Failed to load NFTs: ${error.message || 'Unknown error'}`);
-    } finally {
-      setIsLoadingNfts(false);
-    }
-  };
 
   // Handle form submission
   const handleSearch = async (e) => {
     e.preventDefault();
+    
+    if (!searchQuery.trim()) return;
+
     setIsSearching(true);
     setSearchError(null);
     setUserProfile(null);
@@ -183,187 +159,56 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   };
 
-  /**
-   * Fetches NFTs owned by a user
-   * @param {string} username - Farcaster username
-   * @param {Object} profile - User profile data
-   */
+  // Fetch user NFTs
   const fetchUserNfts = async (username, profile) => {
+    const addresses = walletAddresses || [];
+    if (!addresses || addresses.length === 0) {
+      console.error(`No Ethereum addresses found for ${username}`);
+      setFetchNftsError('No wallet addresses found for this user');
+      return;
+    }
+    
+    setIsLoadingNfts(true);
+    
     try {
-      setIsLoadingNfts(true);
-      setFetchNftsError(null);
-      // Don't reset the NFTs array here - it's causing the flickering empty state
-      // setUserNfts([]);
-
-      // Extract ETH addresses from the profile
-      const addresses = walletAddresses || [];
-      if (!addresses || addresses.length === 0) {
-        console.error(`No Ethereum addresses found for ${username}`);
-        setFetchNftsError(`No Ethereum addresses found for ${username}`);
-        setIsLoadingNfts(false);
-        return;
-      }
+      console.log(`Fetching NFTs for ${addresses.length} addresses`);
       
-      console.log(`Fetching NFTs for ${username} with ${addresses.length} wallet addresses:`, addresses);
+      // Use the Alchemy API to fetch NFTs - using direct service to avoid circular dependencies
+      const result = await directAlchemyService.batchFetchNFTs(addresses, 'eth', {
+        withMetadata: true,
+        excludeSpam: true,
+        pageKey: endCursor,
+        pageSize: 24
+      });
       
-      // Get the NFT service from context rather than importing directly
-      if (!alchemyService) {
-        console.error('Alchemy service not available');
-        // Remove the problematic useNFT hook call and use a safer approach
-        throw new Error('Alchemy service not available. Please try refreshing the page.');
-      }
+      console.log(`Fetched ${result.nfts.length} NFTs`);
       
-      try {
-        // Fetch NFTs for all wallet addresses with improved error handling
-        const batchResults = await alchemyService.batchFetchNFTs(addresses, 'eth', {
-          pageSize: 50,
-          excludeSpam: true,
-          includeMetadata: true // Ensure we get complete metadata as per Alchemy docs
-        });
-        
-        console.log(`Fetched ${batchResults.nfts?.length || 0} NFTs for ${username}`, {
-          hasMore: !!batchResults.pageKey,
-          pageKey: batchResults.pageKey,
-          sampleNft: batchResults.nfts?.length > 0 ? batchResults.nfts[0] : null
-        });
-        
-        // Validate the NFT data structure
-        const validNfts = (batchResults.nfts || []).filter(nft => {
-          // Basic validation to ensure we have at least minimal required data
-          return nft && 
-                (nft.id || nft.tokenId) && 
-                (nft.contractAddress || nft.contract?.address || nft.collection?.address);
-        });
-        
-        if (validNfts.length !== batchResults.nfts?.length) {
-          console.warn(`Filtered out ${(batchResults.nfts?.length || 0) - validNfts.length} invalid NFTs`);
-        }
-        
-        // Only update state if we have valid NFTs to avoid flickering
-        if (validNfts.length > 0) {
-          setUserNfts(validNfts);
-          console.log(`Updated state with ${validNfts.length} NFTs`);
-        } else if (batchResults.nfts?.length === 0) {
-          // Only set empty array if we actually got zero NFTs from API
-          setUserNfts([]);
-        }
-        
-        setHasMoreNfts(!!batchResults.pageKey);
-        setEndCursor(batchResults.pageKey || null);
-        
-        if (validNfts.length === 0) {
-          console.warn(`No valid NFTs found for ${username}`);
-          setFetchNftsError(`No NFTs found for ${username}`);
-        }
-      } catch (apiError) {
-        console.error('Alchemy API error:', apiError);
-        throw new Error(`Alchemy API error: ${apiError.message || 'Unknown error'}`);
-      }
+      // Set NFTs and pagination info
+      setUserNfts(prev => [...prev, ...result.nfts]);
+      setHasMoreNfts(result.hasMore);
+      setEndCursor(result.pageKey);
+      setTotalNftCount(result.totalCount || 0);
+      
+      return result;
     } catch (error) {
-      console.error('Error fetching user NFTs:', error);
-      setFetchNftsError(`Failed to fetch NFTs: ${error.message}`);
-      // Don't reset NFTs array on error - this preserves previously loaded NFTs
-      // setUserNfts([]);
-      setHasMoreNfts(false);
+      console.error('Error fetching NFTs:', error);
+      setFetchNftsError(error.message || 'Failed to fetch NFTs');
+      return { nfts: [], hasMore: false };
     } finally {
       setIsLoadingNfts(false);
     }
   };
-  
-  // Helper to map network IDs to network names
-  const getNetworkFromId = (networkId) => {
-    if (!networkId) return 'ethereum';
-    
-    const networkMap = {
-      1: 'ethereum',
-      10: 'optimism',
-      137: 'polygon',
-      42161: 'arbitrum',
-      8453: 'base'
-    };
-    
-    return networkMap[networkId] || 'ethereum';
-  };
 
-  // Auto-load NFTs until we reach a threshold or there are no more
-  useEffect(() => {
-    const autoLoadMoreNfts = async () => {
-      // Only auto-load if:
-      // 1. We have NFTs already (initial load complete)
-      // 2. There are more NFTs to load
-      // 3. Not already loading more
-      // 4. We have less than a higher threshold (increased to load all NFTs)
-      if (userNfts.length > 0 && hasMoreNfts && !isLoadingMoreNfts && userNfts.length < 5000) {
-        console.log(`AUTO-LOADING MORE NFTs - Currently have ${userNfts.length}, hasMore=${hasMoreNfts}`);
-        // Reduce delay to speed up loading (still respect API limitations)
-        await new Promise(resolve => setTimeout(resolve, 300));
-        await handleLoadMore();
-      } else {
-        console.log(`AUTO-LOAD CHECK: userNfts=${userNfts.length}, hasMore=${hasMoreNfts}, isLoading=${isLoadingMoreNfts}`);
-      }
-    };
-    
-    autoLoadMoreNfts();
-  }, [userNfts, hasMoreNfts, isLoadingMoreNfts]);
-
-  // Handle loading more NFTs
+  // Load more NFTs
   const handleLoadMore = async () => {
-    if (!hasMoreNfts || isLoadingMoreNfts || !userProfile) return;
+    if (isLoadingMoreNfts || !hasMoreNfts) return;
     
-    console.log(`Loading more NFTs for ${userProfile.username}`);
+    setIsLoadingMoreNfts(true);
     
     try {
-      setIsLoadingMoreNfts(true);
-      
-      // Get the addresses from the user profile
-      const addresses = walletAddresses || [];
-      if (addresses.length === 0 && userProfile.connectedAddresses) {
-        addresses.push(...userProfile.connectedAddresses);
-      }
-      
-      if (addresses.length === 0) {
-        console.error('No addresses found for loading more NFTs');
-        setFetchNftsError('No wallet addresses found for this user');
-        setHasMoreNfts(false);
-        return;
-      }
-      
-      // Fetch with a larger page size
-      const batchResults = await alchemyService.batchFetchNFTs(addresses, 'eth', {
-        pageSize: 100, // Increased batch size
-        pageKey: endCursor,
-        excludeSpam: true,
-        includeMetadata: true,
-        bypassCache: false
-      });
-      
-      console.log(`Loaded ${batchResults.nfts?.length || 0} more NFTs`, {
-        hasMore: batchResults.hasMore || !!batchResults.pageKey,
-        pageKey: batchResults.pageKey,
-      });
-      
-      // Check if we actually got new NFTs
-      if (batchResults.nfts && batchResults.nfts.length > 0) {
-        // Add newly loaded NFTs to existing ones
-        setUserNfts(prev => {
-          // Check for duplicates and only add new NFTs
-          const existingIds = new Set(prev.map(nft => nft.id));
-          const newNfts = batchResults.nfts.filter(nft => !existingIds.has(nft.id));
-          
-          console.log(`Adding ${newNfts.length} new NFTs to collection`);
-          
-          return [...prev, ...newNfts];
-        });
-      }
-      
-      // Set page info
-      setEndCursor(batchResults.pageKey || null);
-      setHasMoreNfts(!!batchResults.pageKey || batchResults.hasMore || false);
-      
+      await fetchUserNfts(searchQuery, userProfile);
     } catch (error) {
       console.error('Error loading more NFTs:', error);
-      setFetchNftsError(`Failed to load more NFTs: ${error.message}`);
-      // Keep hasMoreNfts true to allow retry
     } finally {
       setIsLoadingMoreNfts(false);
     }
@@ -736,88 +581,81 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   return (
     <div className="farcaster-search-container">
       <div className="search-header">
-        <form onSubmit={handleSearch} className="search-form">
+        <h1>Search Farcaster Users</h1>
+        <p>Enter a Farcaster username to explore their NFT collection</p>
+      </div>
+      
+      <form onSubmit={handleSearch} className="search-form">
+        <div className="search-input-container">
           <input
             type="text"
-            className="search-input"
-            placeholder="Enter Farcaster username (e.g. dwr, vitalik, etc.)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            disabled={isSearching}
+            placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
+            className="search-input"
             aria-label="Farcaster username"
+            disabled={isSearching}
           />
           <button 
-            type="submit" 
+            type="submit"
             className="search-button"
-            disabled={isSearching}
+            disabled={!searchQuery.trim() || isSearching}
           >
             {isSearching ? 'Searching...' : 'Search'}
           </button>
-        </form>
-      </div>
+        </div>
+      </form>
       
-      {/* Display search error */}
       {searchError && (
         <div className="error-message">
-          {searchError}
+          <p>{searchError}</p>
         </div>
       )}
       
-      {/* Display user profile */}
       {userProfile && (
         <div className="user-profile">
-          <div className="profile-section">
-            <div className="profile-content">
-              <div className="profile-image">
+          <div className="profile-info">
+            <div className="profile-image">
+              {userProfile.metadata?.imageUrl ? (
                 <img 
-                  src={getProfileImageUrl(userProfile)} 
-                  alt={userProfile?.username || 'Profile'} 
+                  src={userProfile.metadata.imageUrl} 
+                  alt={`${userProfile.username}'s profile`} 
                   onError={(e) => {
-                    console.error('Profile image load error:', e);
-                    e.target.src = '/placeholder.png';
+                    e.target.onerror = null;
+                    e.target.src = '/assets/placeholder-profile.png';
                   }}
                 />
+              ) : (
+                <img src="/assets/placeholder-profile.png" alt="Default profile" />
+              )}
+            </div>
+            <div className="profile-details">
+              <h2>@{userProfile.username}</h2>
+              <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
+              <p className="bio">{userProfile.metadata?.description || ''}</p>
+              <div className="fid">
+                <span>FID: </span>
+                <span>{userProfile.fid}</span>
               </div>
-              <div className="profile-details">
-                <h3 className="profile-display-name">{userProfile?.metadata?.displayName || userProfile?.username}</h3>
-                <a 
-                  href={`https://warpcast.com/${userProfile?.username}`} 
-                  className="username-link"
-                  target="_blank"
-                  rel="noopener noreferrer"
+              <div className="wallet-info">
+                <button 
+                  className="wallet-toggle" 
+                  onClick={() => setWalletsExpanded(!walletsExpanded)}
                 >
-                  @{userProfile?.username}
-                </a>
-                <span className="fid-badge">FID: {userProfile?.fid}</span>
-              </div>
-              
-              {/* Display wallet addresses with toggle */}
-              <div className="wallet-addresses">
-                <div className="address-header" onClick={toggleWallets}>
-                  <span>
-                    {getWalletCount()} connected {getWalletCount() === 1 ? 'wallet' : 'wallets'}
-                  </span>
-                  <svg 
-                    className={`wallet-toggle-arrow ${walletsExpanded ? 'expanded' : ''}`}
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="16" 
-                    height="16" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round"
-                  >
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                </div>
-                
+                  {walletsExpanded ? 'Hide Wallets' : 'Show Wallets'} ({walletAddresses.length})
+                </button>
                 {walletsExpanded && (
-                  <ul className="address-list">
+                  <ul className="wallet-list">
                     {walletAddresses.map((address, index) => (
-                      <li key={index} title={address}>
-                        {address.slice(0, 6)}...{address.slice(-4)}
+                      <li key={index} className="wallet-item">
+                        <a 
+                          href={`https://etherscan.io/address/${address}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="wallet-link"
+                        >
+                          {address}
+                        </a>
                       </li>
                     ))}
                   </ul>
@@ -826,74 +664,47 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             </div>
           </div>
           
-          {/* NFT sorting and filtering controls */}
-          {userNfts.length > 0 && (
-            <div className="nft-controls">
-              <div className="sort-controls">
-                <label>Sort by:</label>
-                <div className="sort-buttons">
-                  <button 
-                    className={`sort-button ${sortMethod === 'value' ? 'active' : ''}`}
-                    onClick={() => handleSortChange('value')}
-                  >
-                    Estimated Value
-                  </button>
-                  <button 
-                    className={`sort-button ${sortMethod === 'recent' ? 'active' : ''}`}
-                    onClick={() => handleSortChange('recent')}
-                  >
-                    Recently Acquired
-                  </button>
-                  <button 
-                    className={`sort-button ${sortMethod === 'collection' ? 'active' : ''}`}
-                    onClick={() => handleSortChange('collection')}
-                  >
-                    Collection
-                  </button>
-                </div>
-              </div>
-              
-              <div className="filter-controls">
-                <input
-                  type="text"
-                  placeholder="Filter NFTs..."
-                  value={nftFilterText}
-                  onChange={(e) => setNftFilterText(e.target.value)}
-                  className="filter-input"
-                />
-                {nftFilterText && (
-                  <button 
-                    className="clear-filter" 
-                    onClick={clearFilter}
-                    aria-label="Clear filter"
-                  >
-                    ×
-                  </button>
+          <div className="nft-container">
+            <div className="nft-header">
+              <h2>NFT Collection</h2>
+              <p className="nft-count">
+                {isLoadingNfts ? (
+                  'Loading NFTs...'
+                ) : userNfts.length > 0 ? (
+                  `${userNfts.length} NFTs found${hasMoreNfts ? ' (more available)' : ''}`
+                ) : (
+                  'No NFTs found'
                 )}
-              </div>
+              </p>
             </div>
-          )}
-          
-          {/* NFT Gallery */}
-          <div className="nft-gallery">
-            {isLoadingNfts && userNfts.length === 0 ? (
-              <div className="loading-nfts">
-                <div className="loading-animation"></div>
-                <p>Loading NFTs...</p>
-              </div>
-            ) : fetchNftsError ? (
-              <div className="fetch-error">
+            
+            {fetchNftsError && (
+              <div className="error-message">
                 <p>{fetchNftsError}</p>
               </div>
+            )}
+            
+            {isLoadingNfts ? (
+              <div className="loading-spinner"></div>
             ) : userNfts.length > 0 ? (
               <>
-                <div className="nft-count">
-                  <p>
-                    {getFilteredNfts().length} NFTs displayed
-                    {totalNftCount > 0 && hasEstimatedCount && (
-                      <span> (of approximately {totalNftCount} total)</span>
+                <div className="controls-container">
+                  <div className="search-box">
+                    <input
+                      type="text"
+                      placeholder="Filter NFTs..."
+                      value={nftFilterText}
+                      onChange={(e) => setNftFilterText(e.target.value)}
+                    />
+                    {nftFilterText && (
+                      <button 
+                        className="clear-filter" 
+                        onClick={() => setNftFilterText('')}
+                      >
+                        ×
+                      </button>
                     )}
-                  </p>
+                  </div>
                 </div>
                 <NftGrid nfts={getFilteredNfts()} onNftClick={handleNftClick} />
                 {hasMoreNfts && (

@@ -198,21 +198,13 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         username
         fid
         metadata {
-          name
           displayName
-          bio
-          avatar
-          verifications {
-            eth
-          }
+          description
+          imageUrl
+          warpcast
         }
         custodyAddress
         connectedAddresses
-        connectedAddressesDetails {
-          address
-          chain
-          source
-        }
       }
     }
   `;
