@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
@@ -50,18 +50,11 @@ const safeStorage = {
   }
 };
 
-// Configure Farcaster Auth Kit
-const farcasterConfig = {
-  rpcUrl: process.env.REACT_APP_OPTIMISM_RPC_URL || 'https://mainnet.optimism.io',
-  domain: process.env.REACT_APP_FARCASTER_DOMAIN || 'gall3ry.vercel.app',
-  siweUri: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
-};
-
 // Loading component for suspense fallback
 const LoadingScreen = () => (
   <div className="loading-container">
     <div className="loading-spinner"></div>
-    <p>Loading app...</p>
+    <p>Loading GALL3RY...</p>
   </div>
 );
 
@@ -147,8 +140,12 @@ function App() {
   
   // Return the app with a proper provider hierarchy
   return (
-    <ErrorBoundary onError={(error) => setAppError(error)}>
-      <AuthKitProvider config={farcasterConfig}>
+    <ErrorBoundary>
+      <AuthKitProvider config={{
+        domain: 'gall3ry.vercel.app',
+        siweUri: 'https://gall3ry.vercel.app/login',
+        rpcUrl: 'https://mainnet.optimism.io'
+      }}>
         <AuthProvider>
           <WalletProvider>
             <Router>
@@ -172,7 +169,7 @@ function App() {
                 </main>
                 
                 <footer className="app-footer">
-                  vibe coded with 💜 by 
+                  <span>built with 💜 by </span>
                   <a 
                     href="https://warpcast.com/svvvg3.eth" 
                     target="_blank"

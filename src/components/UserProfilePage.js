@@ -1,16 +1,15 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useParams } from 'react-router-dom';
 import FarcasterUserSearch from './FarcasterUserSearch';
-import { useNFT } from '../contexts/NFTContext';
+import { ErrorBoundary } from 'react-error-boundary';
 import '../styles/UserProfilePage.css';
 
 /**
- * UserProfilePage component
+ * UserProfilePage component with better error handling
  * Displays a Farcaster user's NFTs based on the username in the URL
  */
 const UserProfilePage = () => {
   const { username } = useParams();
-  const { isLoading } = useNFT();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -20,21 +19,19 @@ const UserProfilePage = () => {
     setError(null);
   }, [username]);
 
-  // Handle error display
-  if (error) {
-    return (
-      <div className="error-container">
-        <h1>Error</h1>
-        <p>{error}</p>
-        <button 
-          onClick={() => setError(null)} 
-          className="retry-button"
-        >
-          Try Again
-        </button>
-      </div>
-    );
-  }
+  // ErrorFallback component
+  const ErrorFallback = ({ error, resetErrorBoundary }) => (
+    <div className="error-container">
+      <h1>Error Loading Profile</h1>
+      <p>{error?.message || "An error occurred while loading the profile"}</p>
+      <button 
+        onClick={resetErrorBoundary} 
+        className="retry-button"
+      >
+        Try Again
+      </button>
+    </div>
+  );
 
   return (
     <div className="user-profile-page">
@@ -46,9 +43,14 @@ const UserProfilePage = () => {
       </div>
 
       <div className="profile-content">
-        <Suspense fallback={<div className="loading-indicator">Loading user NFTs...</div>}>
-          <FarcasterUserSearch initialUsername={username} />
-        </Suspense>
+        <ErrorBoundary 
+          FallbackComponent={ErrorFallback}
+          onReset={() => setError(null)}
+        >
+          <Suspense fallback={<div className="loading-indicator">Loading user NFTs...</div>}>
+            <FarcasterUserSearch initialUsername={username} />
+          </Suspense>
+        </ErrorBoundary>
       </div>
     </div>
   );
