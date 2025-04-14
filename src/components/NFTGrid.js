@@ -273,6 +273,8 @@ const NFTGrid = ({ nfts = [] }) => {
                     alt={getNftName(nft)}
                     onError={handleImageError}
                     data-nftid={nft.id || nft.tokenId || index}
+                    loading="lazy"
+                    style={{ maxWidth: '100%', maxHeight: '100%' }}
                   />
                 </div>
                 <div className="nft-info">

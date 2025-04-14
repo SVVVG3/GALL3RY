@@ -1126,10 +1126,20 @@ body {
   }
 }
 
-/* Make sure images don't overflow their containers */
+/* Update image styles to fix display issues */
 img {
   max-width: 100%;
   height: auto;
+  display: block; /* This prevents unwanted whitespace below images */
+}
+
+/* Specific fix for NFT images */
+.nft-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  transition: transform 0.3s ease;
 }
 
 /* Header styling without navigation tabs */
