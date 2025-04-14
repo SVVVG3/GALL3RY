@@ -1,5 +1,5 @@
 import React from 'react';
-import '../styles/NFTCard.css';
+import './NftCard.css';
 
 /**
  * NFTCard component renders a single NFT
