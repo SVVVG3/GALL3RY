@@ -238,14 +238,33 @@ export const NFTProvider = ({ children }) => {
           const media = nft.media || [];
           if (media.length > 0) {
             nft.imageUrl = media[0].gateway || media[0].raw || media[0].uri;
+            console.log(`Set imageUrl from media: ${nft.imageUrl}`);
           } else if (nft.image) {
             if (typeof nft.image === 'string') {
               nft.imageUrl = nft.image;
+              console.log(`Set imageUrl from string image: ${nft.imageUrl}`);
             } else if (nft.image.gateway) {
               nft.imageUrl = nft.image.gateway;
+              console.log(`Set imageUrl from image.gateway: ${nft.imageUrl}`);
             }
           } else if (nft.metadata && nft.metadata.image) {
             nft.imageUrl = nft.metadata.image;
+            console.log(`Set imageUrl from metadata.image: ${nft.imageUrl}`);
+          }
+          
+          // Fix IPFS and Arweave URLs
+          if (nft.imageUrl && nft.imageUrl.startsWith('ipfs://')) {
+            nft.imageUrl = nft.imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+            console.log(`Fixed IPFS URL: ${nft.imageUrl}`);
+          } else if (nft.imageUrl && nft.imageUrl.startsWith('ar://')) {
+            nft.imageUrl = nft.imageUrl.replace('ar://', 'https://arweave.net/');
+            console.log(`Fixed Arweave URL: ${nft.imageUrl}`);
+          }
+          
+          // If still no image, use placeholder
+          if (!nft.imageUrl) {
+            nft.imageUrl = '/assets/placeholder-nft.svg';
+            console.log(`No image found, using placeholder`);
           }
         }
         

@@ -208,9 +208,14 @@ const NFTGallery = () => {
 
   // Add a method to manually fetch from all wallets
   const handleFetchAllWallets = () => {
-    if (connectedWallets && connectedWallets.length > 0 && !fetchingAllWallets) {
+    if (connectedWallets && connectedWallets.length > 0) {
+      console.log("Manually triggering fetch for all wallets");
       const walletAddresses = connectedWallets.map(wallet => wallet.address);
       setFetchingAllWallets(true);
+      
+      // Clear existing NFTs to ensure a fresh load
+      console.log("Clearing existing NFTs for fresh load");
+      setNfts([]);
       
       fetchAllNFTsForWallets(walletAddresses, {
         includeValue: true, 
@@ -222,6 +227,7 @@ const NFTGallery = () => {
         excludeSpam: excludeSpam
       }).finally(() => {
         setFetchingAllWallets(false);
+        console.log("Fetch for all wallets completed");
       });
     }
   };
@@ -321,6 +327,15 @@ const NFTGallery = () => {
           <FaShieldAlt />
           <span>Filter Spam</span>
         </SpamToggle>
+        
+        {/* Add manual refresh button */}
+        <RefreshButton 
+          onClick={handleFetchAllWallets}
+          disabled={fetchingAllWallets || isLoading}
+          title="Manually refresh all NFTs from connected wallets"
+        >
+          {fetchingAllWallets ? <FaSpinner className="spinner" /> : "Refresh NFTs"}
+        </RefreshButton>
       </ControlsContainer>
 
       {/* Filters Panel */}
