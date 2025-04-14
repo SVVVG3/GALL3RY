@@ -13,7 +13,7 @@ import { formatAddress } from '../utils/format';
  */
 const NFTGallery = () => {
   const {
-    filteredNFTs,
+    filteredNfts,
     isLoading,
     hasMore,
     loadingMore,
@@ -42,15 +42,15 @@ const NFTGallery = () => {
     setNfts
   } = useNFT();
   
-  // Safely get filteredNFTs with null check
-  const safeFilteredNFTs = Array.isArray(filteredNFTs) ? filteredNFTs : [];
+  // Safely get filteredNfts with null check
+  const safeFilteredNfts = Array.isArray(filteredNfts) ? filteredNfts : [];
   
-  console.log(`NFTGallery rendering with ${safeFilteredNFTs.length} NFTs to display:`, 
-    safeFilteredNFTs.length > 0 ? {
-      id: safeFilteredNFTs[0].id,
-      name: safeFilteredNFTs[0].name,
-      imageUrl: safeFilteredNFTs[0].imageUrl,
-      ownerAddress: safeFilteredNFTs[0].ownerAddress
+  console.log(`NFTGallery rendering with ${safeFilteredNfts.length} NFTs to display:`, 
+    safeFilteredNfts.length > 0 ? {
+      id: safeFilteredNfts[0].id,
+      name: safeFilteredNfts[0].name,
+      imageUrl: safeFilteredNfts[0].imageUrl,
+      ownerAddress: safeFilteredNfts[0].ownerAddress
     } : 'No NFTs');
     
   const { connectedWallets } = useWallet();
@@ -108,16 +108,16 @@ const NFTGallery = () => {
     const AUTO_LOAD_THRESHOLD = 300; // Reduced from 1000 to 300 to be less aggressive
     
     const autoLoadCheck = () => {
-      // Ensure safeFilteredNFTs is used instead of filteredNFTs
-      console.log("AUTO-LOAD CHECK: userNfts=" + safeFilteredNFTs.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading + ", loadingMore=" + loadingMore);
+      // Ensure safeFilteredNfts is used instead of filteredNfts
+      console.log("AUTO-LOAD CHECK: userNfts=" + safeFilteredNfts.length + ", hasMore=" + hasMore + ", isLoading=" + isLoading + ", loadingMore=" + loadingMore);
       
       // Fix the auto-loading logic - REMOVE arbitrary 200 NFT check
       // The goal is to load up to AUTO_LOAD_THRESHOLD NFTs automatically
-      const shouldAutoLoad = safeFilteredNFTs.length < AUTO_LOAD_THRESHOLD;
+      const shouldAutoLoad = safeFilteredNfts.length < AUTO_LOAD_THRESHOLD;
       
       // If we have 'hasMore' true, not currently loading, and haven't hit the threshold yet, load more
       if (hasMore && !isLoading && !loadingMore && shouldAutoLoad) {
-        console.log(`Auto-loading next batch of NFTs (current count: ${safeFilteredNFTs.length}/${AUTO_LOAD_THRESHOLD})...`);
+        console.log(`Auto-loading next batch of NFTs (current count: ${safeFilteredNfts.length}/${AUTO_LOAD_THRESHOLD})...`);
         
         // Significantly increased delay to avoid rate limiting
         setTimeout(() => {
@@ -128,11 +128,11 @@ const NFTGallery = () => {
       }
     };
     
-    // Check if we should auto-load more NFTs when safeFilteredNFTs, hasMore, or loading state changes
-    if (safeFilteredNFTs.length > 0) {
+    // Check if we should auto-load more NFTs when safeFilteredNfts, hasMore, or loading state changes
+    if (safeFilteredNfts.length > 0) {
       autoLoadCheck();
     }
-  }, [safeFilteredNFTs.length, hasMore, isLoading, loadingMore, loadMoreNFTs]);
+  }, [safeFilteredNfts.length, hasMore, isLoading, loadingMore, loadMoreNFTs]);
 
   // Intersection observer for infinite scrolling
   useEffect(() => {
@@ -467,12 +467,12 @@ const NFTGallery = () => {
         <FaClock /> NFT values and metadata load incrementally as you browse. Keep scrolling to see more NFTs.
       </EnhancementNote>
 
-      {isLoading && safeFilteredNFTs.length === 0 ? (
+      {isLoading && safeFilteredNfts.length === 0 ? (
         <LoadingContainer>
           <LoadingSpinner />
           <p>Loading your NFTs...</p>
         </LoadingContainer>
-      ) : safeFilteredNFTs.length === 0 ? (
+      ) : safeFilteredNfts.length === 0 ? (
         <EmptyState>
           <p>No NFTs found{searchQuery ? ` matching "${searchQuery}"` : ''}.</p>
           {fetchingAllWallets && <p>Fetching NFTs from all your wallets... This may take a moment.</p>}
@@ -481,23 +481,23 @@ const NFTGallery = () => {
         <>
           <NFTGridContainer>
             {/* Add debugging just before rendering NFTGrid */}
-            {console.log(`About to render NFTGrid with ${safeFilteredNFTs.length} NFTs`, 
-              safeFilteredNFTs.length > 0 
-                ? `First NFT: ${safeFilteredNFTs[0].id}` 
+            {console.log(`About to render NFTGrid with ${safeFilteredNfts.length} NFTs`, 
+              safeFilteredNfts.length > 0 
+                ? `First NFT: ${safeFilteredNfts[0].id}` 
                 : 'No NFTs available')}
             {console.log(`NFT data from NFTContext:`, { 
               isLoading, 
               hasMore, 
-              filteredNFTs: filteredNFTs ? {
-                length: filteredNFTs.length,
-                isArray: Array.isArray(filteredNFTs)
+              filteredNfts: filteredNfts ? {
+                length: filteredNfts.length,
+                isArray: Array.isArray(filteredNfts)
               } : 'undefined',
-              safeFilteredNFTs: {
-                length: safeFilteredNFTs.length,
-                isArray: Array.isArray(safeFilteredNFTs)
+              safeFilteredNfts: {
+                length: safeFilteredNfts.length,
+                isArray: Array.isArray(safeFilteredNfts)
               }
             })}
-            <NFTGrid nfts={safeFilteredNFTs} />
+            <NFTGrid nfts={safeFilteredNfts} />
           </NFTGridContainer>
           
           {hasMore && (
@@ -512,7 +512,7 @@ const NFTGallery = () => {
             </ManualLoadContainer>
           )}
           
-          {!isLoading && !hasMore && safeFilteredNFTs.length > 0 && (
+          {!isLoading && !hasMore && safeFilteredNfts.length > 0 && (
             <div className="end-message">
               You've seen all your NFTs. 
               <RefreshButton onClick={() => fetchNFTs({ bypassCache: true })}>
