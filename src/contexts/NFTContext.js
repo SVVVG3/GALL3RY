@@ -335,6 +335,44 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
   
+  // Apply filters to NFTs based on current filter settings
+  const applyFilters = useCallback((nfts) => {
+    if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
+      return [];
+    }
+
+    let filtered = [...nfts];
+    
+    // Filter by selected chain
+    if (selectedChains.length > 0) {
+      filtered = filtered.filter(nft => {
+        const network = nft.network || nft.chain || 'eth';
+        return selectedChains.includes(network);
+      });
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      filtered = filtered.filter(nft => {
+        // Search in title, description, contract, token ID
+        return (
+          (nft.name && nft.name.toLowerCase().includes(query)) ||
+          (nft.description && nft.description.toLowerCase().includes(query)) ||
+          (nft.contract?.name && nft.contract.name.toLowerCase().includes(query)) ||
+          (nft.tokenId && String(nft.tokenId).toLowerCase().includes(query))
+        );
+      });
+    }
+    
+    // Filter out spam NFTs if enabled
+    if (excludeSpam) {
+      filtered = filtered.filter(nft => !nft.isSpam);
+    }
+    
+    return filtered;
+  }, [selectedChains, searchQuery, excludeSpam]);
+  
   // Fetch NFTs using Alchemy service or fallback to other services
   const fetchNfts = useCallback(async (query, options = {}) => {
     // Skip if query is empty
