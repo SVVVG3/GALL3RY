@@ -461,7 +461,9 @@ const NFTGallery = () => {
         </EmptyState>
       ) : (
         <>
-          <NFTGrid nfts={safeFilteredNFTs} />
+          <NFTGridContainer>
+            <NFTGrid nfts={safeFilteredNFTs} />
+          </NFTGridContainer>
           
           {hasMore && (
             <ManualLoadContainer>
@@ -693,7 +695,7 @@ const SortOrderOption = styled(SortOption)`
   padding-top: 0.75rem;
 `;
 
-const NFTGrid = styled.div`
+const NFTGridContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 1rem;
