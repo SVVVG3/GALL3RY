@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // Get server URL from env vars or use a default
-const SERVER_URL = process.env.REACT_APP_API_URL || '';
+const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
 
 /**
  * Service for interacting with Alchemy NFT APIs
@@ -20,6 +20,7 @@ const alchemyService = {
     };
     
     const chainId = networkMap[network.toLowerCase()] || 'eth';
+    // Handle paths differently based on environment to avoid double "api/" in production
     return `${SERVER_URL}/api/alchemy?chain=${chainId}`;
   },
   
