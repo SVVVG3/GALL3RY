@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import SimpleSearch from '../components/SimpleSearch';
-import { NFTProvider } from '../contexts/NFTContext';
-import FarcasterUserSearch from '../components/FarcasterUserSearch';
+import LazyFarcasterSearch from '../components/LazyFarcasterSearch';
 
 /**
  * HomePage Component
- * Simple implementation that only renders NFTProvider when needed
+ * Simple implementation that uses LazyFarcasterSearch to avoid circular dependencies
  */
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -23,10 +22,8 @@ const HomePage = () => {
           // Simple search component with minimal dependencies
           <SimpleSearch onSearch={handleSearch} />
         ) : (
-          // Only wrap with NFTProvider after search to avoid initialization issues
-          <NFTProvider>
-            <FarcasterUserSearch initialUsername={searchQuery} />
-          </NFTProvider>
+          // Use the LazyFarcasterSearch component which handles NFTProvider internally
+          <LazyFarcasterSearch initialUsername={searchQuery} />
         )}
       </div>
     </div>

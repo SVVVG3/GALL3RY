@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
 import NFTGallery from './NFTGallery';
 import '../styles/FarcasterUserSearch.css';
+import safeStorage from '../utils/storage';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -23,16 +24,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   
-  // Effect for initial search if username is provided
-  useEffect(() => {
-    if (initialUsername) {
-      handleSearch({ preventDefault: () => {} });
+  // Wrap handleSearch in useCallback to use in useEffect
+  const handleSearch = useCallback(async (e) => {
+    if (e && e.preventDefault) {
+      e.preventDefault();
     }
-  }, [initialUsername]);
-
-  // Handle form submission
-  const handleSearch = async (e) => {
-    e.preventDefault();
     
     if (!searchQuery.trim()) return;
 
@@ -73,10 +69,24 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       setUserProfile(profile);
       setWalletAddresses(addresses);
       
+      // Save recently searched profile to storage if available
+      try {
+        const recentSearches = JSON.parse(safeStorage.getItem('recentSearches') || '[]');
+        const updatedSearches = [profile.username, ...recentSearches.filter(name => name !== profile.username)].slice(0, 5);
+        safeStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
+      } catch (storageError) {
+        console.warn('Could not save recent search:', storageError);
+      }
+      
       // Fetch NFTs if we have wallet addresses
       if (addresses.length > 0) {
-        const nfts = await fetchAllNFTsForWallets(addresses);
-        setUserNfts(nfts || []);
+        try {
+          const nfts = await fetchAllNFTsForWallets(addresses);
+          setUserNfts(nfts || []);
+        } catch (nftError) {
+          console.error('Error fetching NFTs:', nftError);
+          setSearchError(`Found profile but could not load NFTs: ${nftError.message}`);
+        }
       }
     } catch (error) {
       console.error('Search error:', error);
@@ -84,7 +94,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     } finally {
       setIsSearching(false);
     }
-  };
+  }, [searchQuery, fetchAllNFTsForWallets]);
+
+  // Effect for initial search if username is provided
+  useEffect(() => {
+    if (initialUsername) {
+      handleSearch();
+    }
+  }, [initialUsername, handleSearch]);
 
   return (
     <div className="farcaster-search-container">

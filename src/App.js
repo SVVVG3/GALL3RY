@@ -15,40 +15,7 @@ import { NFTProvider } from './contexts/NFTContext';
 import SignInButton from './components/SignInButton';
 import UserProfilePage from './components/UserProfilePage';
 import HomePage from './pages/HomePage'; // Import HomePage from the correct location
-
-// Check if we're in a browser environment with a robust check
-const isBrowser = typeof window !== 'undefined' && 
-                 window.document !== undefined && 
-                 window.localStorage !== undefined;
-
-// Safe localStorage wrapper
-const safeStorage = {
-  getItem: (key) => {
-    if (!isBrowser) return null;
-    try {
-      return localStorage.getItem(key);
-    } catch (error) {
-      console.error('Error accessing localStorage.getItem:', error);
-      return null;
-    }
-  },
-  setItem: (key, value) => {
-    if (!isBrowser) return;
-    try {
-      localStorage.setItem(key, value);
-    } catch (error) {
-      console.error('Error accessing localStorage.setItem:', error);
-    }
-  },
-  removeItem: (key) => {
-    if (!isBrowser) return;
-    try {
-      localStorage.removeItem(key);
-    } catch (error) {
-      console.error('Error accessing localStorage.removeItem:', error);
-    }
-  }
-};
+import safeStorage from './utils/storage';
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
