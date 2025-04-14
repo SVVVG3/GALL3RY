@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import NFTCard from './NFTCard';
+import NftCard from './NftCard';
 import { useNFT } from '../contexts/NFTContext';
 import { useWallet } from '../contexts/WalletContext';
 import { FaFilter, FaSort, FaSpinner, FaCheck, FaBolt, FaClock, FaShieldAlt } from 'react-icons/fa';
@@ -264,169 +264,218 @@ const NFTGallery = () => {
   };
 
   return (
-    <GalleryContainer>
-      <GalleryHeader>
-        <h2>My NFTs {filteredNFTs.length > 0 && <span>({filteredNFTs.length})</span>}</h2>
-        <ControlsContainer>
-          <SearchBox
+    <div className={`nft-gallery-container ${showFilters || showSortMenu ? 'blur-background' : ''}`}>
+      <ControlsContainer>
+        <SearchBox>
+          <input
             type="text"
-            placeholder="Search NFTs..."
+            placeholder="Search by name..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          
-          <FilterButton onClick={() => setShowFilters(!showFilters)}>
-            <FaFilter /> Filters
-          </FilterButton>
-          
-          <SortButton onClick={() => setShowSortMenu(!showSortMenu)}>
-            <FaSort /> Sort
-          </SortButton>
-          
-          <SpeedToggle $active={prioritizeSpeed} onClick={toggleSpeedMode}>
-            {prioritizeSpeed ? <FaBolt /> : <FaClock />}
-            {prioritizeSpeed ? 'Speed' : 'Complete'}
-          </SpeedToggle>
-          
-          <SpamToggle $active={excludeSpam} onClick={toggleSpamFilter}>
-            <FaShieldAlt />
-            {excludeSpam ? 'Spam Filtered' : 'Show All'}
-          </SpamToggle>
-          
-          {/* Add button to fetch all wallets */}
-          {connectedWallets && connectedWallets.length > 1 && (
-            <RefreshButton onClick={handleFetchAllWallets} disabled={fetchingAllWallets || isLoading}>
-              {fetchingAllWallets ? <FaSpinner className="spinning" /> : 'Refresh All Wallets'}
-            </RefreshButton>
+          {searchQuery && (
+            <button 
+              className="clear-search"
+              onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
           )}
-        </ControlsContainer>
-      </GalleryHeader>
-      
-      {/* Add fetch progress display */}
-      {(fetchingAllWallets || Object.values(fetchProgress).some(p => !p.completed)) && 
-        renderFetchProgress()}
+        </SearchBox>
+        
+        <FilterButton 
+          onClick={() => setShowFilters(!showFilters)}
+          className={showFilters ? 'active' : ''}
+        >
+          <FaFilter />
+          <span>Filter</span>
+        </FilterButton>
+        
+        <SortButton 
+          onClick={() => setShowSortMenu(!showSortMenu)}
+          className={showSortMenu ? 'active' : ''}
+        >
+          <FaSort />
+          <span>Sort</span>
+        </SortButton>
 
-      {/* Display NFT count and manual load button if we have NFTs */}
-      {filteredNFTs.length > 0 && hasMore && (
-        <ManualLoadContainer>
-          <p>Showing {filteredNFTs.length} NFTs {hasMore ? "(more available)" : ""}</p>
-          {!isLoading && !loadingMore && (
-            <ManualLoadButton onClick={handleManualLoadMore}>
-              Load Next 24 NFTs
-            </ManualLoadButton>
-          )}
-        </ManualLoadContainer>
-      )}
+        <SpeedToggle
+          onClick={toggleSpeedMode}
+          className={prioritizeSpeed ? 'active' : ''}
+          title={prioritizeSpeed ? 'Speed Mode ON (Less Metadata)' : 'Speed Mode OFF (Full Metadata)'}
+        >
+          <FaBolt />
+          <span>Speed</span>
+        </SpeedToggle>
+        
+        <SpamToggle
+          onClick={toggleSpamFilter}
+          className={excludeSpam ? 'active' : ''}
+          title={excludeSpam ? 'Spam Filter ON' : 'Spam Filter OFF'}
+        >
+          <FaShieldAlt />
+          <span>Filter Spam</span>
+        </SpamToggle>
+      </ControlsContainer>
 
+      {/* Filters Panel */}
       {showFilters && (
         <FiltersPanel>
+          <h3>Filter NFTs</h3>
+          
           <FilterSection>
-            <h3>Chains</h3>
+            <h4>Chains</h4>
             <FilterList>
+              <FilterItem 
+                onClick={() => setSelectedChains(['all'])}
+                className={selectedChains.includes('all') ? 'active' : ''}
+              >
+                All Chains
+              </FilterItem>
               {chains.map(chain => (
                 <FilterItem
-                  key={chain.id}
-                  $selected={selectedChains.includes(chain.id)}
-                  onClick={() => handleChainSelect(chain.id)}
+                  key={chain}
+                  onClick={() => handleChainSelect(chain)}
+                  className={selectedChains.includes(chain) ? 'active' : ''}
                 >
-                  {chain.name} ({chain.count})
-                  {selectedChains.includes(chain.id) && <FaCheck />}
+                  {chain.charAt(0).toUpperCase() + chain.slice(1)}
                 </FilterItem>
               ))}
             </FilterList>
           </FilterSection>
-
+          
           <FilterSection>
-            <h3>Collections</h3>
+            <h4>Collections</h4>
             <FilterList>
-              {collections.map(collection => (
+              <FilterItem 
+                onClick={() => setSelectedCollections([])}
+                className={selectedCollections.length === 0 ? 'active' : ''}
+              >
+                All Collections
+              </FilterItem>
+              {collections.slice(0, 10).map(collection => (
                 <FilterItem
                   key={collection.id}
-                  $selected={selectedCollections.includes(collection.id)}
                   onClick={() => handleCollectionSelect(collection.id)}
+                  className={selectedCollections.includes(collection.id) ? 'active' : ''}
                 >
-                  {collection.name} ({collection.count})
-                  {selectedCollections.includes(collection.id) && <FaCheck />}
+                  {collection.name || 'Unknown Collection'}
                 </FilterItem>
               ))}
             </FilterList>
           </FilterSection>
+          
+          <button onClick={() => setShowFilters(false)}>Close</button>
         </FiltersPanel>
       )}
 
+      {/* Sort Menu */}
       {showSortMenu && (
         <SortMenu>
-          <SortOption
-            $selected={sortBy === 'value' || sortBy === 'estimatedValue'}
-            onClick={() => {
-              console.log("Setting sort to value");
-              setSortBy('value');
-              setSortOrder('desc');
-            }}
+          <h3>Sort NFTs</h3>
+          
+          <SortOption 
+            onClick={() => setSortBy('value')}
+            className={sortBy === 'value' ? 'active' : ''}
           >
-            Value {(sortBy === 'value' || sortBy === 'estimatedValue') && <FaCheck />}
+            <FaCheck className="check-icon" />
+            <span>Estimated Value</span>
           </SortOption>
-          <SortOption
-            $selected={sortBy === 'name'}
-            onClick={() => setSortBy('name')}
-          >
-            Name (A-Z) {sortBy === 'name' && <FaCheck />}
-          </SortOption>
-          <SortOption
-            $selected={sortBy === 'collection'}
-            onClick={() => setSortBy('collection')}
-          >
-            Collection {sortBy === 'collection' && <FaCheck />}
-          </SortOption>
-          <SortOption
-            $selected={sortBy === 'acquiredAt' || sortBy === 'recent'}
+          
+          <SortOption 
             onClick={() => setSortBy('recent')}
+            className={sortBy === 'recent' ? 'active' : ''}
           >
-            Acquisition Date {(sortBy === 'acquiredAt' || sortBy === 'recent') && <FaCheck />}
+            <FaCheck className="check-icon" />
+            <span>Recently Acquired</span>
           </SortOption>
+          
+          <SortOption 
+            onClick={() => setSortBy('name')}
+            className={sortBy === 'name' ? 'active' : ''}
+          >
+            <FaCheck className="check-icon" />
+            <span>Name</span>
+          </SortOption>
+          
+          <SortOption 
+            onClick={() => setSortBy('collection')}
+            className={sortBy === 'collection' ? 'active' : ''}
+          >
+            <FaCheck className="check-icon" />
+            <span>Collection</span>
+          </SortOption>
+          
+          <div className="sort-divider"></div>
+          
           <SortOrderOption onClick={toggleSortOrder}>
-            Order: {sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+            {sortOrder === 'desc' ? 'Descending (High to Low)' : 'Ascending (Low to High)'}
           </SortOrderOption>
+          
+          <button onClick={() => setShowSortMenu(false)}>Close</button>
         </SortMenu>
       )}
 
-      {isLoading && !loadingMore ? (
+      {/* Show NFT fetch progress if available */}
+      {renderFetchProgress()}
+
+      {/* Enhancement Feature Notice */}
+      <EnhancementNote>
+        <FaClock /> NFT values and metadata load incrementally as you browse. Keep scrolling to see more NFTs.
+      </EnhancementNote>
+
+      {isLoading && filteredNFTs.length === 0 ? (
         <LoadingContainer>
-          <FaSpinner className="spinner" />
+          <LoadingSpinner />
           <p>Loading your NFTs...</p>
         </LoadingContainer>
       ) : filteredNFTs.length === 0 ? (
         <EmptyState>
-          <p>No NFTs found. Connect a wallet or try different filters.</p>
+          <p>No NFTs found{searchQuery ? ` matching "${searchQuery}"` : ''}.</p>
+          {fetchingAllWallets && <p>Fetching NFTs from all your wallets... This may take a moment.</p>}
         </EmptyState>
       ) : (
-        <NFTGrid>
-          {filteredNFTs.map(nft => (
-            <NFTCard 
-              key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} 
-              nft={nft} 
-              showLikeButton={true}
-              onLike={handleLike}
-            />
-          ))}
-        </NFTGrid>
-      )}
-
-      {(hasMore || loadingMore) && (
-        <LoaderElement ref={loaderRef}>
-          {loadingMore ? (
-            <LoadingSpinner>
-              <FaSpinner className="spinner" /> 
-              <span>Loading more NFTs...</span>
-            </LoadingSpinner>
-          ) : (
-            <LoadMoreButton onClick={loadMoreNFTs}>
-              Load More NFTs
-            </LoadMoreButton>
+        <>
+          <NFTGrid>
+            {filteredNFTs.map(nft => (
+              <NftCard 
+                key={nft.id || `${nft.collection?.address}-${nft.tokenId}`} 
+                nft={nft} 
+                onClick={() => console.log('NFT clicked:', nft.id)}
+                showLastPrice={false}
+                showLikeButton={true}
+                onLike={handleLike}
+              />
+            ))}
+          </NFTGrid>
+          
+          {hasMore && (
+            <ManualLoadContainer>
+              {loadingMore ? (
+                <LoadingSpinner />
+              ) : (
+                <ManualLoadButton onClick={handleManualLoadMore}>
+                  Load More NFTs
+                </ManualLoadButton>
+              )}
+            </ManualLoadContainer>
           )}
-        </LoaderElement>
+          
+          {!isLoading && !hasMore && filteredNFTs.length > 0 && (
+            <div className="end-message">
+              You've seen all your NFTs. 
+              <RefreshButton onClick={() => fetchNFTs({ bypassCache: true })}>
+                Refresh
+              </RefreshButton>
+            </div>
+          )}
+          
+          {/* Invisible element for intersection observer */}
+          <div ref={loaderRef} style={{ height: '20px', width: '100%' }}></div>
+        </>
       )}
-    </GalleryContainer>
+    </div>
   );
 };
 
@@ -469,11 +518,26 @@ const ControlsContainer = styled.div`
   }
 `;
 
-const SearchBox = styled.input`
-  padding: 0.5rem 1rem;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-  min-width: 200px;
+const SearchBox = styled.div`
+  position: relative;
+  flex: 1;
+  
+  input {
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    width: 100%;
+  }
+  
+  button {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+  }
   
   @media (max-width: 768px) {
     flex: 1;
