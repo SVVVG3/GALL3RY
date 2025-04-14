@@ -1,109 +1,130 @@
 import React from 'react';
-import NftCard from './NftCard';
-import styled from 'styled-components';
+import '../styles/NFTGrid.css';
 
 /**
- * NftGrid component for displaying a grid of NFTs
- * @param {Array} nfts - Array of NFT objects to display
- * @param {Function} onNftClick - Function to call when an NFT is clicked
- * @param {boolean} loading - Whether the NFTs are loading
- * @param {string} emptyMessage - Message to display when there are no NFTs
+ * Simple grid component to display NFTs
  */
-const NftGrid = ({ nfts = [], onNftClick, loading = false, emptyMessage = 'No NFTs found' }) => {
-  if (loading) {
-    return (
-      <LoadingContainer>
-        <LoadingSpinner />
-        <p>Loading NFTs...</p>
-      </LoadingContainer>
-    );
-  }
+const NftGrid = ({ nfts = [] }) => {
+  // Handle broken/missing images
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    e.target.src = '/assets/placeholder-nft.svg';
+  };
 
-  // Enhanced validation for nfts array
-  if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
-    console.warn('NftGrid received invalid NFT data:', nfts);
-    return (
-      <EmptyStateContainer>
-        <p>{emptyMessage}</p>
-      </EmptyStateContainer>
-    );
-  }
+  // Get the best available image URL from the NFT
+  const getImageUrl = (nft) => {
+    if (!nft) return '/assets/placeholder-nft.svg';
+    
+    // Check various paths where image URL might be found
+    if (nft.media && nft.media.gateway) {
+      return nft.media.gateway;
+    }
+    
+    if (nft.mediasV3?.images?.edges?.[0]?.node?.thumbnail) {
+      return nft.mediasV3.images.edges[0].node.thumbnail;
+    }
+    
+    if (nft.mediasV3?.images?.edges?.[0]?.node?.original) {
+      return nft.mediasV3.images.edges[0].node.original;
+    }
+    
+    if (nft.media && nft.media.thumbnail) {
+      return nft.media.thumbnail;
+    }
+    
+    if (nft.media && nft.media.url) {
+      return nft.media.url;
+    }
+    
+    // If we have image data but no proper URL structure
+    if (typeof nft.image === 'string' && nft.image.startsWith('http')) {
+      return nft.image;
+    }
+    
+    // Return placeholder if no valid image URL is found
+    return '/assets/placeholder-nft.svg';
+  };
 
-  // Filter out any null or undefined nfts to prevent rendering errors
-  const validNfts = nfts.filter(nft => nft !== null && nft !== undefined);
-  
-  if (validNfts.length === 0) {
-    console.warn('NftGrid filtered out all invalid NFTs from array');
-    return (
-      <EmptyStateContainer>
-        <p>{emptyMessage}</p>
-      </EmptyStateContainer>
-    );
-  }
+  // Get the NFT name with fallbacks
+  const getNftName = (nft) => {
+    if (!nft) return 'Unknown NFT';
+    
+    if (nft.name) {
+      return nft.name;
+    }
+    
+    if (nft.title) {
+      return nft.title;
+    }
+    
+    if (nft.metadata && nft.metadata.name) {
+      return nft.metadata.name;
+    }
+    
+    // Show token ID if we can't find a name
+    if (nft.tokenId) {
+      return `Token #${nft.tokenId}`;
+    }
+    
+    return 'Unnamed NFT';
+  };
+
+  // Get collection name with fallbacks
+  const getCollectionName = (nft) => {
+    if (!nft) return 'Unknown Collection';
+    
+    // Try different paths where collection name might be found
+    if (nft.collection && nft.collection.name) {
+      return nft.collection.name;
+    }
+    
+    if (nft.contract && nft.contract.name) {
+      return nft.contract.name;
+    }
+    
+    if (nft.contractMetadata && nft.contractMetadata.name) {
+      return nft.contractMetadata.name;
+    }
+    
+    // Show contract address as fallback
+    if (nft.contractAddress) {
+      return `${nft.contractAddress.slice(0, 6)}...${nft.contractAddress.slice(-4)}`;
+    }
+    
+    if (nft.contract && nft.contract.address) {
+      return `${nft.contract.address.slice(0, 6)}...${nft.contract.address.slice(-4)}`;
+    }
+    
+    return 'Unknown Collection';
+  };
 
   return (
-    <GridContainer>
-      {validNfts.map((nft, index) => (
-        <NftCard 
-          key={`${nft.collection?.address || 'unknown'}-${nft.tokenId || index}-${index}`}
-          nft={nft}
-          onClick={onNftClick}
-          disabled={false}
-        />
-      ))}
-    </GridContainer>
+    <div className="nft-grid">
+      {nfts.length > 0 ? (
+        nfts.map((nft, index) => (
+          <div key={`${nft.id || nft.tokenId || index}`} className="nft-item">
+            <div className="nft-card">
+              <div className="nft-image">
+                <img 
+                  src={getImageUrl(nft)}
+                  alt={getNftName(nft)}
+                  onError={handleImageError}
+                />
+              </div>
+              <div className="nft-info">
+                <h3 className="nft-name">{getNftName(nft)}</h3>
+                <p className="nft-collection">{getCollectionName(nft)}</p>
+              </div>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="no-nfts-message">
+          <p>No NFTs to display</p>
+        </div>
+      )}
+    </div>
   );
 };
-
-// Styled components
-const GridContainer = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
-  margin: 1.5rem 0;
-  
-  @media (max-width: 1200px) {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  
-  @media (max-width: 768px) {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-  }
-  
-  @media (max-width: 480px) {
-    grid-template-columns: repeat(1, 1fr);
-  }
-`;
-
-const LoadingContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 0;
-  color: #666;
-`;
-
-const LoadingSpinner = styled.div`
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  border-top-color: #3498db;
-  animation: spin 1s ease-in-out infinite;
-  margin-bottom: 1rem;
-  
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-`;
-
-const EmptyStateContainer = styled.div`
-  text-align: center;
-  padding: 3rem 0;
-  color: #666;
-  font-size: 1.1rem;
-`;
 
 export default NftGrid; 
