@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --max-width: 1200px;
+  --max-width: 95vw;
   --border-radius: 0.5rem;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
@@ -72,6 +72,21 @@ img {
   margin-right: auto;
   padding-left: 1rem;
   padding-right: 1rem;
+}
+
+/* Home container and content wrapper */
+.home-container,
+.content-wrapper,
+.app-content {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.farcaster-search-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
 }
 
 @media (max-width: 768px) {
