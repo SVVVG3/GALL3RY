@@ -151,6 +151,15 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       // Parse the JSON response
       const data = await response.json();
       
+      // Enhanced logging for response debugging
+      console.log(`Response from ${normalizedChain} for ${normalizedAddress}:`, {
+        status: response.status,
+        hasOwnedNfts: !!data.ownedNfts,
+        ownedNftsCount: data.ownedNfts ? data.ownedNfts.length : 0,
+        totalCount: data.totalCount || 0,
+        hasPageKey: !!data.pageKey
+      });
+      
       // Basic response validation
       if (!data) {
         return { nfts: [], pageKey: null, hasMore: false };
@@ -186,6 +195,17 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
         } catch (e) {
           console.warn('Error formatting NFT:', e.message);
         }
+      }
+      
+      // If we got NFTs, log a sample for debugging
+      if (formattedNfts.length > 0) {
+        const sample = formattedNfts[0];
+        console.log(`Sample formatted NFT (of ${formattedNfts.length}):`, {
+          id: sample.id,
+          name: sample.name,
+          collection: sample.collection?.name,
+          media: !!sample.media
+        });
       }
       
       console.log(`Successfully processed ${formattedNfts.length} NFTs for ${normalizedAddress}`);

@@ -550,9 +550,30 @@ export const NFTProvider = ({ children }) => {
             continue;
           }
           
+          // Enhanced debug logging to trace NFT data
+          console.log(`Response from ${chain}:`, {
+            hasNfts: !!response.nfts,
+            nftsIsArray: Array.isArray(response.nfts),
+            nftsLength: Array.isArray(response.nfts) ? response.nfts.length : 'N/A',
+            totalCount: response.totalCount || 0,
+            hasMore: !!response.hasMore
+          });
+          
           // Ensure nfts is an array even if response structure is unexpected
           const nfts = Array.isArray(response.nfts) ? response.nfts : [];
           console.log(`Retrieved ${nfts.length} NFTs from ${chain}`);
+          
+          // Log first NFT for debugging (if available)
+          if (nfts.length > 0) {
+            const sampleNft = nfts[0];
+            console.log(`Sample NFT (first of ${nfts.length}) from ${chain}:`, {
+              id: sampleNft.id,
+              name: sampleNft.name || 'No name',
+              contractAddress: sampleNft.contractAddress || 'No address',
+              network: sampleNft.network || chain,
+              ownerAddress: sampleNft.ownerAddress || 'No owner'
+            });
+          }
           
           // Add successfully fetched NFTs to the collection
           if (nfts.length > 0) {
@@ -611,7 +632,7 @@ export const NFTProvider = ({ children }) => {
       setNfts(sortedNFTs);
       setIsBatchLoading(false);
       
-      return { 
+      return {
         nfts: sortedNFTs, 
         hasMore: false, 
         error: hasErrors ? "Some NFTs may not have been retrieved due to API errors" : null 
@@ -632,7 +653,7 @@ export const NFTProvider = ({ children }) => {
     if (!nfts || nfts.length === 0) {
       return [];
     }
-    
+
     let filtered = [...nfts];
     
     // Filter by selected chain
@@ -654,7 +675,7 @@ export const NFTProvider = ({ children }) => {
       filtered = filtered.filter(nft => {
         // Search in title, description, contract, token ID
         return (
-          (nft.name && nft.name.toLowerCase().includes(query)) ||
+        (nft.name && nft.name.toLowerCase().includes(query)) ||
           (nft.description && nft.description.toLowerCase().includes(query)) ||
           (nft.contract?.name && nft.contract.name.toLowerCase().includes(query)) ||
           (nft.tokenId && nft.tokenId.toLowerCase().includes(query))
