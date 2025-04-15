@@ -224,114 +224,150 @@ export const NFTProvider = ({ children }) => {
     try {
       console.log(`Processing ${nfts.length} NFTs...`);
       
-      const enhancedNFTs = nfts.map(nft => {
-        // Skip null or invalid NFTs
-        if (!nft) return null;
-        
-        try {
-          // Create a unique id if not present
-          const id = nft.id || (nft.contract?.address && nft.tokenId ? 
-            `${nft.network || 'eth'}:${nft.contract.address}-${nft.tokenId}` : 
-            `unknown-${Date.now()}`);
-          
-          let imageUrl = '';
-          let mediaType = 'image';
-          
-          // Image handling - based on Alchemy V3 API structure
-          // 1. Alchemy image.gateway is the most reliable source
-          if (nft.image && nft.image.gateway) {
-            imageUrl = nft.image.gateway;
-            console.log(`Using primary Alchemy image.gateway: ${imageUrl}`);
-          } 
-          // 2. String image field
-          else if (nft.image && typeof nft.image === 'string') {
-            imageUrl = nft.image;
-            console.log(`Using string image: ${imageUrl}`);
-          } 
-          // 3. Media array with gateway URLs
-          else if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
-            // Find first media item with a gateway or thumbnail
-            const mediaItem = nft.media.find(m => m && (m.gateway || m.thumbnail || m.raw || m.uri));
-            if (mediaItem) {
-              imageUrl = mediaItem.gateway || mediaItem.thumbnail || mediaItem.raw || mediaItem.uri;
-              mediaType = mediaItem.format || 'image';
-              console.log(`Using media item: ${imageUrl}`);
+      const enhancedNFTs = nfts
+        .filter(nft => nft !== null && nft !== undefined) // Filter out null/undefined entries
+        .map(nft => {
+          try {
+            // Skip NFTs that don't have the minimum required properties
+            if (!nft || typeof nft !== 'object') {
+              console.warn('Invalid NFT object:', nft);
+              return null;
             }
-          }
-          // 4. Handle single media object (not array)
-          else if (nft.media && typeof nft.media === 'object' && !Array.isArray(nft.media)) {
-            const mediaObj = nft.media;
-            imageUrl = mediaObj.gateway || mediaObj.thumbnail || mediaObj.raw || mediaObj.uri || '';
-            mediaType = mediaObj.format || 'image';
-            console.log(`Using media object: ${imageUrl}`);
-          }
-          // 5. Check raw metadata
-          else if (nft.metadata) {
-            if (nft.metadata.image) {
-              imageUrl = nft.metadata.image;
-              console.log(`Using metadata.image: ${imageUrl}`);
-            } else if (nft.metadata.image_url) {
-              imageUrl = nft.metadata.image_url;
-              console.log(`Using metadata.image_url: ${imageUrl}`);
-            }
-          }
-          // 6. Check tokenUri
-          else if (nft.tokenUri && nft.tokenUri.gateway) {
-            imageUrl = nft.tokenUri.gateway;
-            console.log(`Using tokenUri.gateway: ${imageUrl}`);
-          }
-          // 7. Last resort - check contract metadata
-          else if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.imageUrl) {
-            imageUrl = nft.contractMetadata.openSea.imageUrl;
-            console.log(`Using contractMetadata.openSea.imageUrl: ${imageUrl}`);
-          }
 
-          // Ensure we have contract information
-          const contractName = 
-            (nft.contract?.name) || 
-            (nft.contractMetadata?.name) || 
-            (nft.title ? nft.title.split('#')[0].trim() : 'Unknown Collection');
-          
-          // Ensure we have owner information
-          const ownerAddress = nft.ownerAddress || nft.owner || '';
-          
-          return {
-            ...nft,
-            id,
-            title: nft.title || nft.name || `#${nft.tokenId || '?'}`,
-            name: nft.name || nft.title || `${contractName} #${nft.tokenId || '?'}`,
-            description: nft.description || '',
-            image: {
-              url: imageUrl,
-              type: mediaType
-            },
-            contract: {
-              ...nft.contract,
-              name: contractName,
-              address: nft.contract?.address || nft.contractAddress || '',
-              type: nft.contract?.tokenType || 'ERC721'
-            },
-            ownerAddress
-          };
-        } catch (err) {
-          console.error('Error enhancing NFT:', err);
-          // Return minimal valid NFT to avoid breaking the app
-          return {
-            id: nft.id || `unknown-${Date.now()}`,
-            title: nft.title || nft.name || 'Unknown NFT',
-            name: nft.name || 'Unknown NFT',
-            description: 'Error processing NFT data',
-            image: { url: '', type: 'image' },
-            contract: { name: 'Unknown', address: '', type: 'ERC721' },
-            ownerAddress: nft.ownerAddress || nft.owner || ''
-          };
-        }
-      }).filter(Boolean); // Remove any null entries
+            // Create a unique id if not present
+            const network = nft.network || nft.chain || 'eth';
+            const tokenId = (nft.tokenId || '0').toString();
+            const contractAddress = nft.contract?.address || nft.contractAddress || 'unknown';
+            
+            const id = nft.id || 
+              (contractAddress && tokenId ? 
+                `${network}:${contractAddress}-${tokenId}` : 
+                `unknown-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
+            
+            let imageUrl = '';
+            let mediaType = 'image';
+            
+            // Safely extract media data
+            try {
+              // Image handling - based on Alchemy V3 API structure
+              // 1. Alchemy image.gateway is the most reliable source
+              if (nft.image) {
+                if (typeof nft.image === 'object' && nft.image !== null) {
+                  imageUrl = nft.image.gateway || nft.image.url || nft.image.thumbnail || '';
+                } else if (typeof nft.image === 'string') {
+                  imageUrl = nft.image;
+                }
+              } 
+              // 2. Media array with gateway URLs
+              else if (nft.media) {
+                if (Array.isArray(nft.media)) {
+                  // Safely find a media item with a valid URL
+                  const mediaItem = nft.media.find(m => m && 
+                    (typeof m === 'object' && (m.gateway || m.thumbnail || m.raw || m.uri)));
+                  
+                  if (mediaItem) {
+                    imageUrl = mediaItem.gateway || mediaItem.thumbnail || mediaItem.raw || mediaItem.uri || '';
+                    mediaType = mediaItem.format || 'image';
+                  }
+                } 
+                // 3. Handle single media object (not array)
+                else if (nft.media && typeof nft.media === 'object') {
+                  const mediaObj = nft.media;
+                  imageUrl = mediaObj.gateway || mediaObj.thumbnail || mediaObj.raw || mediaObj.uri || '';
+                  mediaType = mediaObj.format || 'image';
+                }
+              }
+              // 4. Check raw metadata
+              if (!imageUrl && nft.metadata) {
+                imageUrl = nft.metadata.image || nft.metadata.image_url || '';
+              }
+              // 5. Check tokenUri
+              if (!imageUrl && nft.tokenUri && nft.tokenUri.gateway) {
+                imageUrl = nft.tokenUri.gateway;
+              }
+              // 6. Check contract metadata
+              if (!imageUrl && nft.contractMetadata && nft.contractMetadata.openSea) {
+                imageUrl = nft.contractMetadata.openSea.imageUrl || '';
+              }
+            } catch (mediaError) {
+              console.error('Error extracting media data:', mediaError);
+              imageUrl = '';
+            }
+
+            // Ensure we have contract information
+            let contractName = 'Unknown Collection';
+            try {
+              contractName = 
+                (nft.contract?.name) || 
+                (nft.contractMetadata?.name) || 
+                (nft.title ? nft.title.split('#')[0].trim() : 'Unknown Collection');
+            } catch (contractError) {
+              console.error('Error extracting contract name:', contractError);
+            }
+            
+            // Ensure we have title/name
+            let title = '';
+            let name = '';
+            try {
+              title = nft.title || nft.name || `#${tokenId || '?'}`;
+              name = nft.name || nft.title || `${contractName} #${tokenId || '?'}`;
+            } catch (nameError) {
+              title = `NFT #${tokenId || '?'}`;
+              name = `NFT #${tokenId || '?'}`;
+            }
+            
+            // Ensure we have owner information
+            const ownerAddress = nft.ownerAddress || nft.owner || '';
+            
+            return {
+              id,
+              tokenId,
+              contractAddress,
+              title,
+              name,
+              description: nft.description || '',
+              network,
+              image: {
+                url: imageUrl,
+                type: mediaType
+              },
+              contract: {
+                name: contractName,
+                address: contractAddress,
+                type: nft.contract?.tokenType || 'ERC721'
+              },
+              ownerAddress
+            };
+          } catch (err) {
+            console.error('Error enhancing NFT:', err, 'NFT:', JSON.stringify(nft).slice(0, 200) + '...');
+            // Return minimal valid NFT to avoid breaking the app
+            return {
+              id: `unknown-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+              title: 'Unknown NFT',
+              name: 'Unknown NFT',
+              description: 'Error processing NFT data',
+              network: 'eth',
+              image: { url: '', type: 'image' },
+              contract: { name: 'Unknown', address: '', type: 'ERC721' },
+              ownerAddress: ''
+            };
+          }
+        })
+        .filter(Boolean); // Remove any null entries
       
       return enhancedNFTs;
     } catch (e) {
       console.error('Error in processNFTs:', e);
-      return nfts; // Return original NFTs if processing fails
+      // Return a safe array of basic NFT objects if processing fails completely
+      return nfts.map((nft, index) => ({
+        id: `fallback-${index}-${Date.now()}`,
+        title: 'NFT Data Error',
+        name: 'NFT Data Error',
+        description: 'Could not process NFT data',
+        image: { url: '', type: 'image' },
+        contract: { name: 'Unknown', address: '', type: 'ERC721' },
+        ownerAddress: ''
+      }));
     }
   }, []);
   
@@ -465,92 +501,130 @@ export const NFTProvider = ({ children }) => {
       console.log(`Fetching NFTs for ${validAddresses.length} wallets`);
       
       // Fetch from each selected chain with retry logic
-      const chainsToFetch = [...selectedChains];
+      let chainsToFetch = [...selectedChains];
       
       // If no chains selected or only 'all' is selected, use specific chains
       if (chainsToFetch.length === 0 || (chainsToFetch.length === 1 && chainsToFetch[0] === 'all')) {
-        chainsToFetch.length = 0; // Clear array
-        // Add specific chains instead of using 'all'
-        chainsToFetch.push('eth', 'polygon', 'optimism', 'arbitrum', 'base');
+        // For performance, limit to Ethereum and maybe one or two more major L2s
+        // This reduces the number of API calls and chances of timeouts
+        chainsToFetch = ['eth'];
       }
+      
+      console.log(`Will fetch from chains: ${chainsToFetch.join(', ')}`);
       
       // Store all NFTs from all chains
       let allNFTs = [];
+      let hasErrors = false;
       
       // Fetch from each selected chain with retry logic
       for (const chain of chainsToFetch) {
-        let attempt = 0;
-        let success = false;
-        let result = { nfts: [] };
-        
-        // Try up to 3 times for each chain
-        while (attempt < 3 && !success) {
-          try {
-            console.log(`Fetching NFTs from ${chain} (attempt ${attempt + 1})`);
-            
-            if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
-              console.error('directAlchemyService or batchFetchNFTs is not available');
-              throw new Error('NFT service not properly initialized');
-            }
-            
-            const response = await directAlchemyService.batchFetchNFTs(
-              validAddresses,
-              chain,
-              {
-                excludeSpam: excludeSpam,
-                withMetadata: true
+        try {
+          let attempt = 0;
+          let success = false;
+          let result = { nfts: [] };
+          
+          // Try up to 2 times for each chain (reduced from 3)
+          while (attempt < 2 && !success) {
+            try {
+              console.log(`Fetching NFTs from ${chain} (attempt ${attempt + 1})`);
+              
+              if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
+                console.error('directAlchemyService or batchFetchNFTs is not available');
+                throw new Error('NFT service not properly initialized');
               }
-            );
-            
-            // Safely check if the result is valid
-            if (response && Array.isArray(response.nfts)) {
-              result = response;
-              success = true;
-            } else {
-              console.warn(`Invalid response format from ${chain}:`, response);
-              // Create safe default if response is invalid
-              result = { 
-                ...response, 
-                nfts: Array.isArray(response?.nfts) ? response.nfts : [] 
-              };
-              success = true; // We'll still consider this a success to avoid retries
-            }
-          } catch (error) {
-            console.error(`Error fetching from ${chain} (attempt ${attempt + 1}):`, error);
-            attempt++;
-            
-            // Add delay between retries
-            if (attempt < 3) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              
+              const response = await directAlchemyService.batchFetchNFTs(
+                validAddresses,
+                chain,
+                {
+                  excludeSpam: excludeSpam,
+                  withMetadata: true,
+                  pageSize: 25 // Limit page size to reduce payload size
+                }
+              );
+              
+              // Safely check if the result is valid
+              if (response && Array.isArray(response.nfts)) {
+                result = response;
+                success = true;
+              } else {
+                console.warn(`Invalid response format from ${chain}:`, response);
+                // Create safe default if response is invalid
+                result = { 
+                  ...response, 
+                  nfts: Array.isArray(response?.nfts) ? response.nfts : [] 
+                };
+                success = true; // We'll still consider this a success to avoid retries
+              }
+            } catch (error) {
+              console.error(`Error fetching from ${chain} (attempt ${attempt + 1}):`, error);
+              attempt++;
+              hasErrors = true;
+              
+              // Add delay between retries
+              if (attempt < 2) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+              }
             }
           }
-        }
-        
-        // Add successfully fetched NFTs to the collection
-        if (Array.isArray(result.nfts)) {
-          console.log(`Retrieved ${result.nfts.length} NFTs from ${chain}`);
-          allNFTs = [...allNFTs, ...result.nfts];
-        } else {
-          console.warn(`No valid NFTs array from ${chain}, skipping`);
+          
+          // Add successfully fetched NFTs to the collection
+          if (Array.isArray(result.nfts)) {
+            console.log(`Retrieved ${result.nfts.length} NFTs from ${chain}`);
+            // Ensure we set the network property correctly
+            const nftsWithNetwork = result.nfts.map(nft => ({
+              ...nft,
+              network: nft.network || chain // Ensure network is set
+            }));
+            allNFTs = [...allNFTs, ...nftsWithNetwork];
+          } else {
+            console.warn(`No valid NFTs array from ${chain}, skipping`);
+          }
+        } catch (chainError) {
+          console.error(`Failed to process chain ${chain}:`, chainError);
+          hasErrors = true;
+          // Continue with next chain instead of failing completely
         }
       }
       
-      // Process all NFTs to ensure consistent structure
-      const processedNFTs = await processNFTs(allNFTs);
+      // Process all NFTs to ensure consistent structure - handle errors gracefully
+      let processedNFTs = [];
+      try {
+        processedNFTs = await processNFTs(allNFTs);
+      } catch (processError) {
+        console.error('Error processing NFTs:', processError);
+        processedNFTs = allNFTs; // Use raw NFTs if processing fails
+      }
       
-      // Apply filtering
-      const filteredNFTs = applyFilters(processedNFTs);
+      // Apply filtering - handle errors gracefully
+      let filteredNFTs = [];
+      try {
+        filteredNFTs = applyFilters(processedNFTs);
+      } catch (filterError) {
+        console.error('Error filtering NFTs:', filterError);
+        filteredNFTs = processedNFTs; // Use unfiltered NFTs if filtering fails
+      }
       
       // Sort NFTs if needed
-      const sortedNFTs = sortOrder === 'asc' ? 
-        [...filteredNFTs].sort((a, b) => a.name?.localeCompare(b.name || '')) : 
-        [...filteredNFTs].sort((a, b) => b.name?.localeCompare(a.name || ''));
+      let sortedNFTs = [];
+      try {
+        sortedNFTs = sortOrder === 'asc' ? 
+          [...filteredNFTs].sort((a, b) => (a.name || '').localeCompare(b.name || '')) : 
+          [...filteredNFTs].sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+      } catch (sortError) {
+        console.error('Error sorting NFTs:', sortError);
+        sortedNFTs = filteredNFTs; // Use unsorted NFTs if sorting fails
+      }
       
       // Update state
       setNfts(sortedNFTs);
       setIsBatchLoading(false);
       
-      return { nfts: sortedNFTs, hasMore: false, error: null };
+      return { 
+        nfts: sortedNFTs, 
+        hasMore: false, 
+        error: hasErrors ? "Some NFTs may not have been retrieved due to API errors" : null 
+      };
     } catch (err) {
       console.error('Error in fetchAllNFTsForWallets:', err);
       setError('Failed to fetch NFTs. Please try again.');

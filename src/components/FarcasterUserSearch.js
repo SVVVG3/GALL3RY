@@ -97,21 +97,31 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           // Add a console.log right before the API call
           console.log(`Fetching NFTs for addresses:`, addresses);
           
-          const result = await fetchAllNFTsForWallets(addresses);
-          
-          // Ensure result contains nfts array
-          if (!result) {
-            console.warn('fetchAllNFTsForWallets returned undefined result');
-            setUserNfts([]);
-          } else if (!Array.isArray(result.nfts)) {
-            console.warn('fetchAllNFTsForWallets returned invalid format:', result);
-            setUserNfts([]);
-          } else {
-            console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);
-            setUserNfts(result.nfts);
+          // Fetch with proper error handling
+          try {
+            const result = await fetchAllNFTsForWallets(addresses);
+            
+            // Debug log to see what we're getting back
+            console.log('NFT fetch result:', result);
+            
+            // Ensure result contains nfts array
+            if (!result) {
+              console.warn('fetchAllNFTsForWallets returned undefined result');
+              setUserNfts([]);
+            } else if (!Array.isArray(result.nfts)) {
+              console.warn('fetchAllNFTsForWallets returned invalid format:', result);
+              setUserNfts([]);
+            } else {
+              console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);
+              setUserNfts(result.nfts);
+            }
+          } catch (nftAPIError) {
+            console.error('API Error fetching NFTs:', nftAPIError);
+            setSearchError(`Found profile but could not fetch NFTs: ${nftAPIError.message}`);
+            setUserNfts([]); // Ensure userNfts is always an array
           }
         } catch (nftError) {
-          console.error('Error fetching NFTs:', nftError);
+          console.error('Error in NFT fetch process:', nftError);
           setSearchError(`Found profile but could not load NFTs: ${nftError.message}`);
           setUserNfts([]); // Ensure userNfts is always an array
         }

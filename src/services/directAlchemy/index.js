@@ -54,8 +54,17 @@ const buildApiUrl = (endpoint, chain) => {
   // Always use the proxy API, never direct
   // Make sure the chain parameter is included
   const chainParam = chain || 'eth';
+  
+  // Ensure we have a valid proxy URL with proper formatting
+  let proxyUrl = ALCHEMY_PROXY_URL;
+  
+  // Make sure the URL doesn't have double slashes
+  if (proxyUrl.endsWith('/') && endpoint.startsWith('/')) {
+    proxyUrl = proxyUrl.slice(0, -1);
+  }
+  
   console.log(`Building proxy URL for chain: ${chainParam}`);
-  return `${ALCHEMY_PROXY_URL}?endpoint=${endpoint}&chain=${chainParam}`;
+  return `${proxyUrl}?endpoint=${endpoint}&chain=${chainParam}`;
 };
 
 // Simple in-memory cache
@@ -93,7 +102,11 @@ const fetchWithRetry = async (config, retries = 3, delay = 1000) => {
     return await axios(config);
   } catch (error) {
     if (retries === 0) {
-      throw error;
+      // Enhance error message when throwing
+      const enhancedError = new Error(`Max retries reached: ${error.message}`);
+      enhancedError.originalError = error;
+      enhancedError.config = config;
+      throw enhancedError;
     }
     
     console.warn(`Request failed, retrying (${retries} attempts left):`, error.message);
@@ -253,46 +266,79 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     return { nfts: [], totalCount: 0, pageKey: null, hasMore: false };
   }
 
+  // Filter out invalid addresses upfront
+  const validAddresses = addresses.filter(addr => 
+    addr && typeof addr === 'string' && addr.trim().length > 0
+  );
+  
+  if (validAddresses.length === 0) {
+    console.warn('No valid addresses found in input array');
+    return { nfts: [], totalCount: 0, pageKey: null, hasMore: false };
+  }
+
   // Create an object to track retry attempts for each address
   const retryTracker = {};
-  addresses.forEach(addr => {
-    if (addr) {
-      retryTracker[addr.toLowerCase()] = 0;
-    }
+  validAddresses.forEach(addr => {
+    retryTracker[addr.toLowerCase()] = 0;
   });
 
   try {
-    console.log(`Batch fetching NFTs for ${addresses.length} addresses on ${chain}`);
+    console.log(`Batch fetching NFTs for ${validAddresses.length} addresses on ${chain}`);
     
     // If we're using the proxy API, we can try to use its batch capability
     if (USE_PROXY) {
       try {
         console.log('Using proxy batch API endpoint');
+        
+        const proxyUrl = `${ALCHEMY_PROXY_URL}?endpoint=getnftsforowner&chain=${chain}`;
+        console.log(`Making batch request to: ${proxyUrl}`);
+        
+        const requestBody = {
+          owners: validAddresses,
+          chain: chain,
+          pageSize: options.pageSize || 100,
+          withMetadata: options.withMetadata !== false,
+          excludeFilters: options.excludeSpam !== false ? ['SPAM'] : [],
+          includeMedia: true
+        };
+        
+        console.log('Request body:', JSON.stringify(requestBody));
+        
         const response = await axios({
           method: 'post',
-          url: `${ALCHEMY_PROXY_URL}?endpoint=getnftsforowner&chain=${chain}`,
-          data: {
-            owners: addresses,
-            chain: chain,
-            pageSize: options.pageSize || 100,
-            withMetadata: options.withMetadata !== false,
-            excludeFilters: options.excludeSpam !== false ? ['SPAM'] : [],
-            includeMedia: true
-          },
-          timeout: 30000 // 30 second timeout
+          url: proxyUrl,
+          data: requestBody,
+          timeout: 30000, // 30 second timeout
+          headers: {
+            'Content-Type': 'application/json'
+          }
         });
         
         // Verify the response structure and return if valid
-        if (response.data && Array.isArray(response.data.ownedNfts)) {
-          return {
-            nfts: response.data.ownedNfts,
-            totalCount: response.data.totalCount || response.data.ownedNfts.length,
-            pageKey: response.data.pageKey || null,
-            hasMore: !!response.data.pageKey
-          };
+        if (response?.data) {
+          console.log(`Batch API response received with status: ${response.status}`);
+          
+          // Handle different response formats
+          if (Array.isArray(response.data.ownedNfts)) {
+            console.log(`Successful batch response with ${response.data.ownedNfts.length} NFTs`);
+            return {
+              nfts: response.data.ownedNfts,
+              totalCount: response.data.totalCount || response.data.ownedNfts.length,
+              pageKey: response.data.pageKey || null,
+              hasMore: !!response.data.pageKey
+            };
+          } else {
+            console.warn('Response data did not contain ownedNfts array:', 
+              Object.keys(response.data).join(', '));
+          }
+        } else {
+          console.warn('Invalid response from batch API', response);
         }
       } catch (error) {
         console.warn('Batch API request failed, falling back to individual requests:', error.message);
+        if (error.response) {
+          console.warn('Error response:', error.response.status, error.response.data);
+        }
         // Continue to individual requests fallback
       }
     }
@@ -307,23 +353,14 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     const MAX_CONCURRENT = 3;
     
     // Process addresses in batches to avoid too many concurrent requests
-    for (let i = 0; i < addresses.length; i += MAX_CONCURRENT) {
-      const batch = addresses.slice(i, i + MAX_CONCURRENT);
+    for (let i = 0; i < validAddresses.length; i += MAX_CONCURRENT) {
+      const batch = validAddresses.slice(i, i + MAX_CONCURRENT);
       
-      // Execute requests for this batch concurrently
-      const results = await Promise.all(
-        batch.map(async (address) => {
-          if (!address) {
-            console.warn('Skipping undefined or null address in batch');
-            return {
-              success: false,
-              address: null,
-              error: 'Invalid address (null/undefined)',
-              nfts: [],
-              count: 0
-            };
-          }
-          
+      console.log(`Processing batch ${Math.floor(i/MAX_CONCURRENT) + 1} of ${Math.ceil(validAddresses.length/MAX_CONCURRENT)}: ${batch.join(', ')}`);
+      
+      try {
+        // Execute requests for this batch concurrently
+        const batchPromises = batch.map(async (address) => {
           const normalizedAddress = address.toLowerCase().trim();
           
           // Try up to 3 times for each address
@@ -380,31 +417,37 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
             nfts: [],
             count: 0
           };
-        })
-      );
-      
-      // Process results from this batch
-      if (Array.isArray(results)) {
-        results.forEach(result => {
-          if (result && result.success && Array.isArray(result.nfts)) {
-            // Add owner address to each NFT
-            const nftsWithOwner = result.nfts.map(nft => ({
-              ...nft,
-              ownerAddress: result.address
-            }));
-            
-            allNfts.push(...nftsWithOwner);
-            totalCount += result.count;
-          } else if (result) {
-            console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
-          }
         });
-      } else {
-        console.error('Unexpected non-array results from Promise.all');
+        
+        // Execute all promises and handle any errors at the batch level
+        const results = await Promise.all(batchPromises);
+        
+        // Process results from this batch
+        if (Array.isArray(results)) {
+          results.forEach(result => {
+            if (result && result.success && Array.isArray(result.nfts)) {
+              // Add owner address to each NFT
+              const nftsWithOwner = result.nfts.map(nft => ({
+                ...nft,
+                ownerAddress: result.address
+              }));
+              
+              allNfts.push(...nftsWithOwner);
+              totalCount += result.count;
+            } else if (result) {
+              console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
+            }
+          });
+        } else {
+          console.error('Unexpected non-array results from Promise.all');
+        }
+      } catch (batchError) {
+        console.error(`Error processing batch starting at index ${i}:`, batchError.message);
+        // Continue with next batch instead of failing completely
       }
     }
     
-    console.log(`Successfully processed ${allNfts.length} NFTs from ${addresses.length} addresses`);
+    console.log(`Successfully processed ${allNfts.length} NFTs from ${validAddresses.length} addresses`);
     
     return {
       nfts: allNfts,
