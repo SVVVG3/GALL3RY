@@ -41,25 +41,6 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Add Content Security Policy middleware
-app.use((req, res, next) => {
-  // Set CSP headers to allow necessary resources
-  res.setHeader('Content-Security-Policy', `
-    default-src 'self';
-    script-src 'self' 'unsafe-inline' 'unsafe-eval';
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    font-src 'self' https://fonts.gstatic.com data:;
-    img-src 'self' https: data: blob:;
-    media-src 'self' https: data: blob:;
-    connect-src 'self' https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://relay.farcaster.xyz https://api.opensea.io https://*.vercel.app localhost:*;
-    frame-src 'self' https:;
-    worker-src 'self' blob:;
-    child-src 'self' blob:;
-  `.replace(/\s+/g, ' '));
-  
-  next();
-});
-
 // API Routes
 const apiRouter = express.Router();
 
