@@ -103,9 +103,26 @@ const fetchWithRetry = async (config, retries = 3, delay = 1000) => {
   } catch (error) {
     if (retries === 0) {
       // Enhance error message when throwing
-      const enhancedError = new Error(`Max retries reached: ${error.message}`);
+      let errorMessage = error.message || 'Unknown error';
+      
+      // Create a more descriptive error if possible
+      const enhancedError = new Error(`Max retries reached: ${errorMessage}`);
       enhancedError.originalError = error;
       enhancedError.config = config;
+      enhancedError.status = error.response?.status;
+      
+      // Include response data if available for debugging
+      if (error.response && error.response.data) {
+        enhancedError.responseData = error.response.data;
+      }
+      
+      console.error('Fetch failed after all retries:', {
+        url: config.url,
+        method: config.method,
+        errorMessage,
+        status: error.response?.status
+      });
+      
       throw enhancedError;
     }
     
@@ -315,11 +332,11 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         });
         
         // Verify the response structure and return if valid
-        if (response?.data) {
+        if (response && response.data) {
           console.log(`Batch API response received with status: ${response.status}`);
           
-          // Handle different response formats
-          if (Array.isArray(response.data.ownedNfts)) {
+          // Handle different response formats safely
+          if (response.data.ownedNfts && Array.isArray(response.data.ownedNfts)) {
             console.log(`Successful batch response with ${response.data.ownedNfts.length} NFTs`);
             return {
               nfts: response.data.ownedNfts,
@@ -328,11 +345,21 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
               hasMore: !!response.data.pageKey
             };
           } else {
-            console.warn('Response data did not contain ownedNfts array:', 
-              Object.keys(response.data).join(', '));
+            // If we got a response but it doesn't have the expected format
+            console.warn('Response data did not contain valid ownedNfts array:', 
+              Object.keys(response.data || {}).join(', '));
+            
+            // Return a valid but empty result to avoid errors
+            return {
+              nfts: [],
+              totalCount: 0,
+              pageKey: null,
+              hasMore: false
+            };
           }
         } else {
           console.warn('Invalid response from batch API', response);
+          // Continue to individual requests fallback
         }
       } catch (error) {
         console.warn('Batch API request failed, falling back to individual requests:', error.message);

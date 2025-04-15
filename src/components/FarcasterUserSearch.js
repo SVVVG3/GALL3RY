@@ -108,8 +108,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             if (!result) {
               console.warn('fetchAllNFTsForWallets returned undefined result');
               setUserNfts([]);
+            } else if (!result.nfts) {
+              console.warn('fetchAllNFTsForWallets result is missing nfts property:', result);
+              setUserNfts([]);
             } else if (!Array.isArray(result.nfts)) {
-              console.warn('fetchAllNFTsForWallets returned invalid format:', result);
+              console.warn('fetchAllNFTsForWallets returned invalid format - nfts is not an array:', result);
               setUserNfts([]);
             } else {
               console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);

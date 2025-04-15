@@ -547,7 +547,7 @@ export const NFTProvider = ({ children }) => {
               if (response && Array.isArray(response.nfts)) {
                 result = response;
                 success = true;
-              } else {
+              } else if (response) {
                 console.warn(`Invalid response format from ${chain}:`, response);
                 // Create safe default if response is invalid
                 result = { 
@@ -555,6 +555,10 @@ export const NFTProvider = ({ children }) => {
                   nfts: Array.isArray(response?.nfts) ? response.nfts : [] 
                 };
                 success = true; // We'll still consider this a success to avoid retries
+              } else {
+                console.warn(`Null or undefined response from ${chain}`);
+                result = { nfts: [] };
+                success = true; // Consider it a success to avoid endless retries
               }
             } catch (error) {
               console.error(`Error fetching from ${chain} (attempt ${attempt + 1}):`, error);
