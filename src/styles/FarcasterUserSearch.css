@@ -865,4 +865,22 @@
 .footer-link:hover {
   color: var(--color-primary-dark);
   text-decoration: underline;
+}
+
+/* Add styles for the new NFT display approach */
+.nft-display {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.no-nfts-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem;
+  background-color: #f7f7f7;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.1rem;
+  color: #666;
 } 

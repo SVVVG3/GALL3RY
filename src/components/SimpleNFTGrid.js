@@ -21,7 +21,7 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   // Handle image load error
   const handleImageError = useCallback((e, nft) => {
     const img = e.target;
-    const nftId = nft.contract.address + '-' + nft.tokenId;
+    const nftId = getNftKey(nft);
     
     // Skip if already showing a placeholder
     if (img.src.includes('/assets/placeholder-nft.svg')) {
@@ -94,13 +94,18 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
       imageUrl = media.gateway || media.thumbnailUrl || media.raw;
     }
     
+    // Try metadata.image if available
+    if (!imageUrl && nft.metadata && nft.metadata.image) {
+      imageUrl = nft.metadata.image;
+    }
+    
     // Try raw metadata
     if (!imageUrl && nft.raw && nft.raw.metadata && nft.raw.metadata.image) {
       imageUrl = nft.raw.metadata.image;
     }
     
     // If IPFS, use reliable gateway
-    if (imageUrl && imageUrl.startsWith('ipfs://')) {
+    if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
       imageUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
     }
     
@@ -109,25 +114,14 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   
   // Render image or placeholder
   const renderNftImage = (nft) => {
-    const nftId = nft.contract.address + '-' + nft.tokenId;
+    if (!nft) return renderPlaceholder('Invalid NFT data');
+    
+    // Generate a consistent ID for the NFT
+    const nftId = getNftKey(nft);
     const imageUrl = getImageUrl(nft);
     
     if (!imageUrl) {
-      return (
-        <div 
-          className="nft-placeholder"
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#f0f0f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
-          <span style={{ color: '#888', fontStyle: 'italic' }}>No image</span>
-        </div>
-      );
+      return renderPlaceholder('No image available');
     }
     
     return (
@@ -150,33 +144,77 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     );
   };
   
+  // Render placeholder for missing images
+  const renderPlaceholder = (message = 'No image') => {
+    return (
+      <div 
+        className="nft-placeholder"
+        style={{
+          width: '100%',
+          height: '100%',
+          backgroundColor: '#f0f0f0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <span style={{ color: '#888', fontStyle: 'italic' }}>{message}</span>
+      </div>
+    );
+  };
+  
   // Get NFT title
   const getNftTitle = (nft) => {
     if (!nft) return 'Unknown NFT';
     
-    return nft.title || `#${nft.tokenId}`;
+    return nft.title || nft.name || `#${nft.tokenId || '0'}`;
   };
   
   // Get collection name
   const getCollectionName = (nft) => {
-    if (!nft || !nft.contract) return 'Unknown Collection';
+    if (!nft) return 'Unknown Collection';
     
-    return (
-      nft.contract.name || 
-      (nft.contract.address ? 
-        `${nft.contract.address.slice(0, 6)}...${nft.contract.address.slice(-4)}` : 
-        'Unknown Collection')
-    );
+    if (nft.collection && nft.collection.name) {
+      return nft.collection.name;
+    }
+    
+    if (nft.contract && nft.contract.name) {
+      return nft.contract.name;
+    }
+    
+    // Fall back to contract address if available
+    const address = nft.contractAddress || 
+                    (nft.contract ? nft.contract.address : null);
+    
+    if (address) {
+      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    }
+    
+    return 'Unknown Collection';
+  };
+  
+  // Generate a unique key for each NFT
+  const getNftKey = (nft) => {
+    if (!nft) return Math.random().toString(36).substring(7);
+    
+    if (nft.id) return nft.id;
+    
+    const contractAddress = nft.contractAddress || 
+                           (nft.contract ? nft.contract.address : 'unknown');
+    const tokenId = nft.tokenId || '0';
+    
+    return `${contractAddress}-${tokenId}`;
   };
   
   return (
     <div className="nft-grid">
       {nfts.length > 0 ? (
         nfts.map((nft) => {
-          const nftId = nft.contract.address + '-' + nft.tokenId;
+          // Generate a unique key that's less likely to cause issues
+          const nftKey = getNftKey(nft);
           
           return (
-            <div key={nftId} className="nft-item">
+            <div key={nftKey} className="nft-item">
               <div className="nft-card">
                 <div className="nft-image">
                   {renderNftImage(nft)}

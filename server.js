@@ -25,6 +25,7 @@ const fs = require('fs');
 const compression = require('compression');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const apiRoutes = require('./api/index.js'); // Import API routes from api/index.js
+const net = require('net');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -39,6 +40,25 @@ app.use(cors({
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
+
+// Add Content Security Policy middleware
+app.use((req, res, next) => {
+  // Set CSP headers to allow necessary resources
+  res.setHeader('Content-Security-Policy', `
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval';
+    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    font-src 'self' https://fonts.gstatic.com data:;
+    img-src 'self' https: data: blob:;
+    media-src 'self' https: data: blob:;
+    connect-src 'self' https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://relay.farcaster.xyz https://api.opensea.io https://*.vercel.app localhost:*;
+    frame-src 'self' https:;
+    worker-src 'self' blob:;
+    child-src 'self' blob:;
+  `.replace(/\s+/g, ' '));
+  
+  next();
+});
 
 // API Routes
 const apiRouter = express.Router();
@@ -635,40 +655,79 @@ if (process.env.NODE_ENV === 'production') {
   console.log('Running in development mode - serving static assets from /public');
 }
 
-// Start the server
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API base URL: http://localhost:${PORT}/api`);
-});
-
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
+// Function to find an available port
+const findAvailablePort = (startPort, maxTries = 10) => {
+  return new Promise((resolve, reject) => {
+    let currentPort = startPort;
+    let tries = 0;
+    
+    const tryPort = (port) => {
+      tries++;
+      if (tries > maxTries) {
+        return reject(new Error(`Could not find an available port after ${maxTries} attempts`));
+      }
+      
+      const tester = net.createServer()
+        .once('error', (err) => {
+          if (err.code === 'EADDRINUSE') {
+            console.log(`Port ${port} is in use, trying ${port + 1}`);
+            tryPort(port + 1);
+          } else {
+            reject(err);
+          }
+        })
+        .once('listening', () => {
+          tester.once('close', () => resolve(port))
+            .close();
+        })
+        .listen(port);
+    };
+    
+    tryPort(currentPort);
   });
-  
-  // Force close after timeout
-  setTimeout(() => {
-    console.error('Could not close connections in time, forcefully shutting down');
-    process.exit(1);
-  }, 10000);
-});
+};
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
-  
-  // Force close after timeout
-  setTimeout(() => {
-    console.error('Could not close connections in time, forcefully shutting down');
+// Start the server with port conflict handling
+const startServer = async () => {
+  try {
+    const availablePort = await findAvailablePort(PORT);
+    
+    // Create HTTP server and listen on the available port
+    const server = app.listen(availablePort, () => {
+      console.log(`Server running on port ${availablePort}`);
+      console.log(`API base URL: http://localhost:${availablePort}/api`);
+      
+      // Add development mode indicator
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('Running in development mode - serving static assets from /public');
+      }
+    });
+    
+    // Handle graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received, shutting down gracefully');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+    
+    process.on('SIGINT', () => {
+      console.log('SIGINT received, shutting down gracefully');
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+    });
+    
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
     process.exit(1);
-  }, 10000);
-});
+  }
+};
+
+// Replace the original app.listen call with this line:
+startServer();
 
 // Handle uncaught exceptions and unhandled promise rejections
 process.on('uncaughtException', (err) => {

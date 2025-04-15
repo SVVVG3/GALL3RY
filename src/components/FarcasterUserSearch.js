@@ -4,6 +4,7 @@ import { getFarcasterProfile } from '../services/zapperService';
 import NFTGallery from './NFTGallery';
 import '../styles/FarcasterUserSearch.css';
 import safeStorage from '../utils/storage';
+import SimpleNFTGrid from './SimpleNFTGrid';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -385,7 +386,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             {isNftLoading ? (
               <div className="loading-spinner"></div>
             ) : (
-              <NFTGallery nfts={userNfts} />
+              <div className="nft-display">
+                {userNfts.length > 0 ? (
+                  <SimpleNFTGrid nfts={userNfts} />
+                ) : (
+                  <div className="no-nfts-message">
+                    <p>No NFTs found for this user</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
