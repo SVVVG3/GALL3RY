@@ -4,7 +4,10 @@
  */
 
 const config = require('../../config');
-const axios = require('axios');
+// Try to use the global axios first (for browser) or require it (for Node)
+const axios = typeof window !== 'undefined' && window.axios 
+  ? window.axios 
+  : require('axios');
 
 // Removed demo key - we will ONLY use the proxy API with server's key
 // const DEMO_KEY = 'demo';
