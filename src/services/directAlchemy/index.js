@@ -268,7 +268,7 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         console.log('Using proxy batch API endpoint');
         const response = await axios({
           method: 'post',
-          url: `${PROXY_BASE_URL}?endpoint=getnftsforowner&chain=${chain}`,
+          url: `${ALCHEMY_PROXY_URL}?endpoint=getnftsforowner&chain=${chain}`,
           data: {
             owners: addresses,
             chain: chain,

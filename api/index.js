@@ -277,6 +277,14 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
           'zora': 'zora-mainnet'
         };
         
+        // Special handling for 'all' chain - default to eth-mainnet
+        // The client side will handle multiple chain requests separately
+        if (chain.toLowerCase() === 'all') {
+          console.log('Request for "all" chains - defaulting to eth-mainnet');
+          const baseUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/`;
+          return `${baseUrl}${apiKey}/getNFTsForOwner`;
+        }
+        
         // Get the correct chain URL or default to eth-mainnet
         const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
         

@@ -464,12 +464,14 @@ export const NFTProvider = ({ children }) => {
       
       console.log(`Fetching NFTs for ${validAddresses.length} wallets`);
       
-      // Determine which chains to fetch from
+      // Fetch from each selected chain with retry logic
       const chainsToFetch = [...selectedChains];
       
-      // If no chains selected, default to ETH
-      if (chainsToFetch.length === 0) {
-        chainsToFetch.push('eth');
+      // If no chains selected or only 'all' is selected, use specific chains
+      if (chainsToFetch.length === 0 || (chainsToFetch.length === 1 && chainsToFetch[0] === 'all')) {
+        chainsToFetch.length = 0; // Clear array
+        // Add specific chains instead of using 'all'
+        chainsToFetch.push('eth', 'polygon', 'optimism', 'arbitrum', 'base');
       }
       
       // Store all NFTs from all chains
