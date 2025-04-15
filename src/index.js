@@ -9,12 +9,6 @@ import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 
-// Make sure axios is available globally
-import axios from 'axios';
-if (typeof window !== 'undefined') {
-  window.axios = axios;
-}
-
 // Error Boundary Component to catch errors
 class ErrorBoundary extends React.Component {
   constructor(props) {

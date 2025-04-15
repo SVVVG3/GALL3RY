@@ -1,7 +1,7 @@
 /**
  * Direct Alchemy NFT service (bypasses dynamic loading)
  * Uses direct API calls to the Alchemy API or server endpoints
- * FETCH VERSION - No axios dependency
+ * FETCH VERSION - No external dependencies
  */
 
 const config = require('../../config');

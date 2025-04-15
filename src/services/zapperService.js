@@ -16,24 +16,9 @@ const zapperAxios = axios.create({
   headers: {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
-    // Important: Always include a User-Agent that identifies your app
-    'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+    // Don't set User-Agent to avoid CSP issues
   }
 });
-
-// Add axios interceptor to ensure proper headers for all requests
-axios.interceptors.request.use(
-  config => {
-    // We should NOT set User-Agent in browser environment
-    // if (!config.headers['User-Agent']) {
-    //   config.headers['User-Agent'] = 'GALL3RY/1.0 (https://gall3ry.vercel.app)';
-    // }
-    return config;
-  },
-  error => {
-    return Promise.reject(error);
-  }
-);
 
 // Constants
 const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
