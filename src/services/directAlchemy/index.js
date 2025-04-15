@@ -95,68 +95,7 @@ const setCachedData = (key, data) => {
 };
 
 /**
- * Helper function to retry a failed request with exponential backoff
- * Simplified version that avoids setTimeout Promise issues in serverless environments
- */
-const fetchWithRetry = async (config, retries = 3, delay = 1000) => {
-  let lastError = null;
-  
-  // Try up to retries + 1 times (initial attempt + retries)
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      // Make the request
-      return await axios(config);
-    } catch (error) {
-      // Save the error for potential re-throw
-      lastError = error;
-      
-      // Log the failure
-      console.warn(`Request failed (attempt ${attempt + 1}/${retries + 1}):`, error.message);
-      
-      // If this was our last attempt, throw the error
-      if (attempt >= retries) {
-        // Enhance error message when throwing
-        let errorMessage = error.message || 'Unknown error';
-        
-        // Create a more descriptive error that includes attempt info
-        const enhancedError = new Error(`Max retries (${retries}) reached: ${errorMessage}`);
-        enhancedError.originalError = error;
-        enhancedError.config = config;
-        enhancedError.status = error.response?.status;
-        
-        // Include response data if available for debugging
-        if (error.response && error.response.data) {
-          enhancedError.responseData = error.response.data;
-        }
-        
-        console.error('Fetch failed after all retries:', {
-          url: config.url,
-          method: config.method,
-          errorMessage,
-          status: error.response?.status
-        });
-        
-        throw enhancedError;
-      }
-      
-      // If not the last attempt, wait a bit before trying again
-      // We'll use a synchronous approach rather than Promises+setTimeout to avoid issues
-      const sleepMs = delay * Math.pow(2, attempt);
-      console.log(`Waiting ${sleepMs}ms before retry ${attempt + 1}...`);
-      
-      // Simple sleep function that doesn't use Promise + setTimeout
-      // This is a safer approach for serverless environments
-      const start = Date.now();
-      while (Date.now() - start < sleepMs) {
-        // Busy wait - not ideal but guaranteed to work in all environments
-        // We only use this for small delays during retries
-      }
-    }
-  }
-};
-
-/**
- * Fetch NFTs for an address (main method) - SIMPLIFIED VERSION
+ * Fetch NFTs for an address (main method) - ULTRA SIMPLIFIED VERSION FOR PRODUCTION
  */
 const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
   if (!address) {
@@ -187,29 +126,18 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     
     console.log(`Fetching NFTs for ${normalizedAddress} on ${chain}`, { method: 'get', url: apiUrl, params });
     
-    // Simple request with direct error handling - no retries
+    // ULTRA SIMPLIFIED VERSION - No retries, minimal error handling, direct axios call
     try {
-      // Make a single request with reasonable timeout
-      const response = await axios({
-        method: 'get',
-        url: apiUrl,
-        params,
-        timeout: options.timeout || 30000
-      });
+      const response = await axios.get(apiUrl, { params, timeout: 30000 });
       
+      // Basic response validation
       if (!response || !response.data) {
-        console.warn(`Empty or invalid response from API for ${normalizedAddress}`);
-        return { nfts: [], pageKey: null, hasMore: false, error: 'Empty response from API' };
+        return { nfts: [], pageKey: null, hasMore: false };
       }
       
-      // Safety check for ownedNfts 
       const ownedNfts = response.data.ownedNfts || [];
-      if (!Array.isArray(ownedNfts)) {
-        console.warn(`Invalid ownedNfts data: not an array`);
-        return { nfts: [], pageKey: null, hasMore: false, error: 'Invalid NFT data format' };
-      }
       
-      // Process NFTs with basic formatting - fully defensive approach
+      // Build a simple array for the NFTs
       const formattedNfts = [];
       
       for (let i = 0; i < ownedNfts.length; i++) {
@@ -217,36 +145,25 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
           const nft = ownedNfts[i];
           if (!nft) continue;
           
-          // Safely extract properties with defaults
-          const tokenId = nft.tokenId || '0';
-          const contractAddress = nft.contract?.address || 'unknown';
-          const contractName = nft.contract?.name || 'Unknown Collection';
-          const contractSymbol = nft.contract?.symbol || '';
-          const tokenType = nft.contract?.tokenType || 'ERC721';
-          const title = nft.title || `#${tokenId}`;
-          const description = nft.description || '';
-          
-          // Create a formatted NFT with safe defaults
           formattedNfts.push({
-            id: `${chain}:${contractAddress}-${tokenId}`,
-            tokenId,
-            contractAddress,
-            name: title,
-            description,
+            id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
+            tokenId: nft.tokenId || '0',
+            contractAddress: nft.contract?.address || 'unknown',
+            name: nft.title || `#${nft.tokenId || '0'}`,
+            description: nft.description || '',
             network: chain,
             ownerAddress: normalizedAddress,
             collection: {
-              name: contractName,
-              symbol: contractSymbol,
-              tokenType,
+              name: nft.contract?.name || 'Unknown Collection',
+              symbol: nft.contract?.symbol || '',
+              tokenType: nft.contract?.tokenType || 'ERC721',
             },
             metadata: nft.metadata || {},
             media: nft.media || {},
             timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
           });
-        } catch (nftError) {
-          // Just log and continue if one NFT fails
-          console.warn(`Error formatting NFT at index ${i}:`, nftError.message);
+        } catch (e) {
+          console.warn('Error formatting NFT:', e.message);
         }
       }
       
@@ -258,45 +175,12 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
         hasMore: !!response.data.pageKey
       };
     } catch (apiError) {
-      // Enhanced error logging with more details
-      console.error(`API error for ${normalizedAddress}:`, {
-        message: apiError.message,
-        status: apiError.response?.status,
-        statusText: apiError.response?.statusText,
-        data: apiError.response?.data,
-        code: apiError.code
-      });
-      
-      // Return informative error based on the type of error
-      let errorMessage = 'Unknown API error';
-      
-      if (apiError.code === 'ECONNABORTED') {
-        errorMessage = 'Request timeout - the API took too long to respond';
-      } else if (apiError.code === 'ECONNREFUSED') {
-        errorMessage = 'Connection refused - the API server is not available';
-      } else if (apiError.response?.status === 404) {
-        errorMessage = 'API endpoint not found';
-      } else if (apiError.response?.status === 401 || apiError.response?.status === 403) {
-        errorMessage = 'API key unauthorized or invalid';
-      } else if (apiError.response?.status >= 500) {
-        errorMessage = 'API server error';
-      }
-      
-      return { 
-        nfts: [], 
-        pageKey: null, 
-        hasMore: false, 
-        error: errorMessage
-      };
+      console.error(`API error for ${normalizedAddress}:`, apiError.message);
+      return { nfts: [], pageKey: null, hasMore: false };
     }
   } catch (error) {
     console.error(`Overall error fetching NFTs for ${address}:`, error.message);
-    return { 
-      nfts: [], 
-      pageKey: null, 
-      hasMore: false,
-      error: `Error fetching NFTs: ${error.message}`
-    };
+    return { nfts: [], pageKey: null, hasMore: false };
   }
 };
 
@@ -305,7 +189,7 @@ const getNFTsForOwner = fetchNFTsForAddress;
 
 /**
  * Fetch NFTs for multiple addresses simultaneously
- * Ultra-simplified implementation with minimal dependencies
+ * Ultra-simplified implementation without retry mechanisms or complex logic
  */
 const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
@@ -328,91 +212,53 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   // Store all results
   const allNfts = [];
   let totalCount = 0;
-  let errors = [];
   
-  try {
-    // Process each address one by one (sequential to avoid rate limits)
-    for (let addrIndex = 0; addrIndex < validAddresses.length; addrIndex++) {
-      const address = validAddresses[addrIndex];
-      
-      try {
-        if (!address) continue; // Skip empty addresses
-        
-        const normalizedAddress = address.toLowerCase().trim();
-        console.log(`Processing address ${normalizedAddress} (${addrIndex + 1}/${validAddresses.length})`);
-        
-        // Simple direct fetch - no retries or complex logic
-        const result = await fetchNFTsForAddress(normalizedAddress, chain, options);
-        
-        // Process results if valid - fully defensive
-        if (result && Array.isArray(result.nfts)) {
-          // Safety check each NFT before adding
-          const validNfts = result.nfts.filter(nft => nft && typeof nft === 'object');
-          
-          // Make sure each NFT has the owner address
-          const nftsWithOwner = validNfts.map(nft => {
-            // Create a new object instead of mutating
-            return {
-              ...nft,
-              ownerAddress: normalizedAddress // Explicitly add the owner address
-            };
-          });
-          
-          // Add to our collection - push all at once to reduce mutations
-          if (nftsWithOwner.length > 0) {
-            allNfts.push(...nftsWithOwner);
-            totalCount += nftsWithOwner.length;
-            console.log(`Found ${nftsWithOwner.length} NFTs for ${normalizedAddress}`);
-          } else {
-            console.log(`No NFTs found for ${normalizedAddress}`);
-          }
-        } else if (result.error) {
-          // Track this error
-          errors.push(`${normalizedAddress}: ${result.error}`);
-          console.warn(`Error fetching NFTs for ${normalizedAddress}: ${result.error}`);
-        } else {
-          console.warn(`No valid NFTs found for ${normalizedAddress}`);
+  // Process each address one by one
+  for (let i = 0; i < validAddresses.length; i++) {
+    const address = validAddresses[i];
+    
+    if (!address) continue; // Skip empty addresses
+    
+    const normalizedAddress = address.toLowerCase().trim();
+    console.log(`Processing address ${normalizedAddress} (${i + 1}/${validAddresses.length})`);
+    
+    // Simple direct fetch
+    let result;
+    try {
+      result = await fetchNFTsForAddress(normalizedAddress, chain, options);
+    } catch (err) {
+      console.error(`Error fetching NFTs for address ${normalizedAddress}:`, err.message);
+      continue; // Skip to next address on error
+    }
+    
+    // Make sure we have valid NFTs before adding them
+    if (result && Array.isArray(result.nfts) && result.nfts.length > 0) {
+      // Add owner address explicitly to each NFT
+      for (let j = 0; j < result.nfts.length; j++) {
+        if (result.nfts[j]) {
+          result.nfts[j].ownerAddress = normalizedAddress;
         }
-      } catch (addressError) {
-        // Collect the error but continue processing
-        const errorMsg = addressError.message || 'Unknown error';
-        errors.push(`${address}: ${errorMsg}`);
-        console.error(`Error processing address ${address}:`, errorMsg);
-        // Continue to next address
       }
+      
+      // Add valid NFTs to our collection
+      const validNfts = result.nfts.filter(nft => nft && typeof nft === 'object');
+      allNfts.push(...validNfts);
+      totalCount += validNfts.length;
+      
+      console.log(`Found ${validNfts.length} NFTs for ${normalizedAddress}`);
+    } else {
+      console.log(`No NFTs found for ${normalizedAddress}`);
     }
-    
-    console.log(`Successfully processed ${allNfts.length} NFTs from ${validAddresses.length} addresses`);
-    
-    // Return error details if we had problems
-    if (errors.length > 0) {
-      return {
-        nfts: allNfts,
-        totalCount: totalCount,
-        pageKey: null, // No pagination for batch requests
-        hasMore: false,
-        error: `Encountered ${errors.length} errors while fetching NFTs: ${errors.slice(0, 3).join('; ')}${errors.length > 3 ? '...' : ''}`
-      };
-    }
-    
-    // Otherwise return successful result
-    return {
-      nfts: allNfts,
-      totalCount: totalCount,
-      pageKey: null, // No pagination for batch requests
-      hasMore: false
-    };
-  } catch (error) {
-    console.error('Critical error in batchFetchNFTs:', error.message);
-    // Return a valid result even if there was an error
-    return {
-      nfts: allNfts, // Return any NFTs we managed to collect before the error
-      totalCount: totalCount,
-      pageKey: null,
-      hasMore: false,
-      error: error.message
-    };
   }
+  
+  console.log(`Successfully processed ${allNfts.length} NFTs from ${validAddresses.length} addresses`);
+  
+  return {
+    nfts: allNfts,
+    totalCount: totalCount,
+    pageKey: null, // No pagination for batch requests
+    hasMore: false
+  };
 };
 
 /**
