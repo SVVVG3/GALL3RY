@@ -486,18 +486,22 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           <div className="nft-container">
             <div className="nft-header">
-              <p className="nft-count">
-                Found {userNfts.length} NFTs
-              </p>
+              <div className="nft-header-left">
+                <p className="nft-count">
+                  <span role="img" aria-label="NFT collection">🖼️</span> Found {userNfts.length} NFTs
+                </p>
+              </div>
               
               {/* Add sort controls if NFTs are available */}
               {userNfts.length > 0 && (
-                <NFTSortControls 
-                  sortBy={sortBy} 
-                  setSortBy={setSortBy} 
-                  sortOrder={sortOrder} 
-                  setSortOrder={setSortOrder}
-                />
+                <div className="nft-header-right">
+                  <NFTSortControls 
+                    sortBy={sortBy} 
+                    setSortBy={setSortBy} 
+                    sortOrder={sortOrder} 
+                    setSortOrder={setSortOrder}
+                  />
+                </div>
               )}
             </div>
             

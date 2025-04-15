@@ -281,18 +281,31 @@
 
 .nft-header {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
   margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.nft-header-left,
+.nft-header-right {
+  display: flex;
+  align-items: center;
 }
 
 .nft-count {
-  font-size: 1rem;
-  color: #374151;
   margin: 0;
-  background-color: #f3f4f6;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  font-weight: 500;
+  font-weight: 600;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
 }
 
 .footer {
@@ -1382,19 +1395,29 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  flex-wrap: nowrap;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+  padding: 0.75rem 1rem;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-.nft-header h2 {
-  margin: 0;
-  font-size: 22px;
-  color: #333;
+.nft-header-left,
+.nft-header-right {
+  display: flex;
+  align-items: center;
 }
 
 .nft-count {
-  font-size: 14px;
-  color: #666;
   margin: 0;
+  font-weight: 600;
+  color: #4b5563;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
 }
 
 .nft-display {
@@ -1478,12 +1501,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-left: auto;
 }
 
 .sort-options {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
 }
 
 .sort-option {
@@ -1517,19 +1540,12 @@
   color: var(--secondary-text);
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  align-items: center;
 }
 
 .sort-order-toggle:hover {
   background-color: #f3f4f6;
-}
-
-.nft-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 1.5rem;
 }
 
 /* Responsive styles for sorting */
@@ -1537,6 +1553,13 @@
   .nft-header {
     flex-direction: column;
     align-items: flex-start;
+    gap: 12px;
+    padding: 12px;
+  }
+  
+  .nft-header-left,
+  .nft-header-right {
+    width: 100%;
   }
   
   .nft-sort-controls {
