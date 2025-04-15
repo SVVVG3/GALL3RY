@@ -102,13 +102,17 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     // Normalize the address
     const normalizedAddress = address.toLowerCase().trim();
     
+    // Normalize chain parameter to ensure consistency
+    // Some requests might use 'eth-mainnet' while the server expects 'eth'
+    const normalizedChain = chain.includes('-') ? chain.split('-')[0] : chain;
+    
     // Build the API URL base
     const apiUrl = `${ALCHEMY_PROXY_URL}`;
     
     // Build query parameters
     const params = {
       endpoint: NFT_ENDPOINTS.getNftsForOwner,
-      chain: chain,
+      chain: normalizedChain,
       owner: normalizedAddress,
       pageSize: options.pageSize || 100,
       withMetadata: options.withMetadata !== false,
@@ -124,7 +128,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     // Build full URL with query parameters
     const fullUrl = buildUrl(apiUrl, params);
     
-    console.log(`Fetching NFTs for ${normalizedAddress} on ${chain}`, { 
+    console.log(`Fetching NFTs for ${normalizedAddress} on ${normalizedChain}`, { 
       method: 'get', 
       url: fullUrl 
     });
@@ -163,12 +167,12 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
           if (!nft) continue;
           
           formattedNfts.push({
-            id: `${chain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
+            id: `${normalizedChain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
             tokenId: nft.tokenId || '0',
             contractAddress: nft.contract?.address || 'unknown',
             name: nft.title || `#${nft.tokenId || '0'}`,
             description: nft.description || '',
-            network: chain,
+            network: normalizedChain,
             ownerAddress: normalizedAddress,
             collection: {
               name: nft.contract?.name || 'Unknown Collection',
@@ -225,7 +229,10 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     return { nfts: [], totalCount: 0, pageKey: null, hasMore: false };
   }
 
-  console.log(`Batch fetching NFTs for ${validAddresses.length} addresses on ${chain}`);
+  // Normalize chain parameter to ensure consistency
+  const normalizedChain = chain.includes('-') ? chain.split('-')[0] : chain;
+
+  console.log(`Batch fetching NFTs for ${validAddresses.length} addresses on ${normalizedChain}`);
   
   try {
     // Process each address sequentially to avoid race conditions
@@ -240,7 +247,7 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
       
       // Fetch NFTs for this address
       try {
-        const result = await fetchNFTsForAddress(address, chain, options);
+        const result = await fetchNFTsForAddress(address, normalizedChain, options);
         
         if (result.nfts && result.nfts.length > 0) {
           // Add each NFT to the results
