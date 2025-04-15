@@ -200,13 +200,23 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     const response = await fetchWithRetry(requestConfig, 3);
     
     // Process the response
-    if (!response.data) {
-      throw new Error('No data received from Alchemy API');
+    if (!response || !response.data) {
+      console.warn(`Empty or invalid response from Alchemy API for ${normalizedAddress}`);
+      return { nfts: [], pageKey: null, hasMore: false };
     }
     
-    // Map the response to our expected format
+    // Safely check if ownedNfts exists and is an array
+    const ownedNfts = response.data.ownedNfts;
+    const isValidNftsArray = Array.isArray(ownedNfts);
+    
+    if (!isValidNftsArray) {
+      console.warn(`Invalid ownedNfts data for ${normalizedAddress}: expected array, got ${typeof ownedNfts}`);
+      return { nfts: [], pageKey: null, hasMore: false };
+    }
+    
+    // Map the response to our expected format with additional safety
     const result = {
-      nfts: Array.isArray(response.data.ownedNfts) ? response.data.ownedNfts.map(nft => {
+      nfts: ownedNfts.map(nft => {
         try {
           // Safely extract media data with fallbacks
           let media = {};
@@ -264,7 +274,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
             media: { original: '', gateway: '', thumbnail: '', format: '' },
           };
         }
-      }) : [],
+      }),
       pageKey: response.data.pageKey || null,
       hasMore: !!response.data.pageKey,
     };
@@ -311,60 +321,62 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     const allNfts = [];
     let totalCount = 0;
     
-    // Map each address to its own promise
-    const promises = validAddresses.map(address => {
+    // Create an array of promises that will always resolve (never reject)
+    const safePromises = validAddresses.map(address => {
       const normalizedAddress = address.toLowerCase().trim();
       
-      // Return a promise that will either resolve with NFTs or resolve with an empty array on error
-      return fetchNFTsForAddress(
-        normalizedAddress,
-        chain,
-        {
-          pageSize: options.pageSize || 100,
-          withMetadata: options.withMetadata !== false,
-          excludeSpam: options.excludeSpam !== false
-        }
-      )
-      .then(result => {
-        // Process successful results
-        if (result && Array.isArray(result.nfts)) {
-          // Add owner address to each NFT
-          const nftsWithOwner = result.nfts.map(nft => ({
-            ...nft,
-            ownerAddress: normalizedAddress
-          }));
-          
-          return {
-            success: true,
-            address: normalizedAddress,
-            nfts: nftsWithOwner,
-            count: nftsWithOwner.length
-          };
-        } else {
-          console.warn(`No NFTs or invalid response for ${normalizedAddress}`);
-          return { 
-            success: true, 
+      // Wrap the entire operation in a promise that always resolves
+      return new Promise(resolve => {
+        fetchNFTsForAddress(
+          normalizedAddress,
+          chain,
+          {
+            pageSize: options.pageSize || 100,
+            withMetadata: options.withMetadata !== false,
+            excludeSpam: options.excludeSpam !== false
+          }
+        )
+        .then(result => {
+          // Process successful results
+          if (result && Array.isArray(result.nfts)) {
+            // Add owner address to each NFT
+            const nftsWithOwner = result.nfts.map(nft => ({
+              ...nft,
+              ownerAddress: normalizedAddress
+            }));
+            
+            resolve({
+              success: true,
+              address: normalizedAddress,
+              nfts: nftsWithOwner,
+              count: nftsWithOwner.length
+            });
+          } else {
+            console.warn(`No NFTs or invalid response for ${normalizedAddress}`);
+            resolve({ 
+              success: true, 
+              address: normalizedAddress, 
+              nfts: [], 
+              count: 0 
+            });
+          }
+        })
+        .catch(error => {
+          // Handle errors for this specific address
+          console.error(`Error fetching NFTs for ${normalizedAddress}:`, error.message);
+          resolve({ 
+            success: false, 
             address: normalizedAddress, 
+            error: error.message,
             nfts: [], 
             count: 0 
-          };
-        }
-      })
-      .catch(error => {
-        // Handle errors for this specific address
-        console.error(`Error fetching NFTs for ${normalizedAddress}:`, error.message);
-        return { 
-          success: false, 
-          address: normalizedAddress, 
-          error: error.message,
-          nfts: [], 
-          count: 0 
-        };
+          });
+        });
       });
     });
     
-    // Wait for all promises to complete (even those that failed)
-    const results = await Promise.all(promises);
+    // Wait for all promises to complete (they will never reject)
+    const results = await Promise.all(safePromises);
     
     // Process all results
     results.forEach(result => {
