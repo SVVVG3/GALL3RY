@@ -66,13 +66,11 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   const getImageUrl = (nft) => {
     if (!nft) return null;
     
-    // Log the entire NFT object once to see its structure
-    console.log('NFT structure for debugging:', {
-      id: nft.id,
-      tokenId: nft.tokenId,
-      hasImage: !!nft.image,
-      imageType: nft.image ? typeof nft.image : 'none',
-      mediaCount: nft.media ? nft.media.length : 0
+    // Enhanced debugging to see exactly what we're getting
+    console.log(`NFT image data for ${nft.name || nft.tokenId}:`, {
+      fullImageObj: nft.image,
+      media: nft.media,
+      raw: nft.raw && nft.raw.metadata ? nft.raw.metadata.image : 'No raw metadata'
     });
     
     // Try all possible image paths in Alchemy's v3 API response
@@ -81,8 +79,13 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     // Handle Alchemy's new format with .image field
     if (nft.image) {
       if (typeof nft.image === 'object') {
-        imageUrl = nft.image.thumbnailUrl || nft.image.cachedUrl || nft.image.pngUrl || 
-                  nft.image.originalUrl || nft.image.gateway;
+        // Try cached URL first, then thumbnails, then other options
+        imageUrl = nft.image.cachedUrl || 
+                  nft.image.thumbnailUrl || 
+                  nft.image.pngUrl || 
+                  nft.image.originalUrl || 
+                  nft.image.gateway ||
+                  (nft.image.url && typeof nft.image.url === 'string' ? nft.image.url : null);
       } else if (typeof nft.image === 'string') {
         imageUrl = nft.image;
       }
@@ -91,22 +94,44 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     // Try media array
     if (!imageUrl && nft.media && nft.media.length > 0) {
       const media = nft.media[0];
-      imageUrl = media.gateway || media.thumbnailUrl || media.raw;
+      imageUrl = media.gateway || media.thumbnailUrl || media.raw || media.uri;
+      
+      // If we found media, log it for debugging
+      if (imageUrl) {
+        console.log(`Found image in media array: ${imageUrl}`);
+      }
     }
     
     // Try metadata.image if available
     if (!imageUrl && nft.metadata && nft.metadata.image) {
       imageUrl = nft.metadata.image;
+      console.log(`Found image in metadata: ${imageUrl}`);
     }
     
     // Try raw metadata
     if (!imageUrl && nft.raw && nft.raw.metadata && nft.raw.metadata.image) {
       imageUrl = nft.raw.metadata.image;
+      console.log(`Found image in raw.metadata: ${imageUrl}`);
+    }
+    
+    // If image_url exists (common in some NFT standards)
+    if (!imageUrl && nft.metadata && nft.metadata.image_url) {
+      imageUrl = nft.metadata.image_url;
+      console.log(`Found image in metadata.image_url: ${imageUrl}`);
     }
     
     // If IPFS, use reliable gateway
     if (imageUrl && typeof imageUrl === 'string' && imageUrl.startsWith('ipfs://')) {
-      imageUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      const newUrl = imageUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      console.log(`Converted IPFS URL: ${imageUrl} -> ${newUrl}`);
+      imageUrl = newUrl;
+    }
+    
+    // If we found an image URL, log it
+    if (imageUrl) {
+      console.log(`Final image URL for ${nft.name || nft.tokenId}: ${imageUrl}`);
+    } else {
+      console.warn(`No image URL found for NFT ${nft.name || nft.tokenId}`);
     }
     
     return imageUrl;
@@ -167,7 +192,7 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   const getNftTitle = (nft) => {
     if (!nft) return 'Unknown NFT';
     
-    return nft.title || nft.name || `#${nft.tokenId || '0'}`;
+    return nft.name || nft.title || `#${nft.tokenId || '0'}`;
   };
   
   // Get collection name
@@ -178,19 +203,52 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
       return nft.collection.name;
     }
     
-    if (nft.contract && nft.contract.name) {
-      return nft.contract.name;
+    if (nft.contract) {
+      // Prefer contract name if available
+      if (nft.contract.name) {
+        return nft.contract.name;
+      }
+      
+      // OpenSea metadata often has richer information
+      if (nft.contract.openSeaMetadata && nft.contract.openSeaMetadata.collectionName) {
+        return nft.contract.openSeaMetadata.collectionName;
+      }
+      
+      // Fall back to contract address if available
+      if (nft.contract.address) {
+        return `${nft.contract.address.slice(0, 6)}...${nft.contract.address.slice(-4)}`;
+      }
     }
     
-    // Fall back to contract address if available
-    const address = nft.contractAddress || 
-                    (nft.contract ? nft.contract.address : null);
-    
-    if (address) {
-      return `${address.slice(0, 6)}...${address.slice(-4)}`;
+    // Direct contractAddress property
+    if (nft.contractAddress) {
+      return `${nft.contractAddress.slice(0, 6)}...${nft.contractAddress.slice(-4)}`;
     }
     
     return 'Unknown Collection';
+  };
+  
+  // Get floor price if available
+  const getFloorPrice = (nft) => {
+    if (!nft) return null;
+    
+    // Check OpenSea metadata first (most reliable)
+    if (nft.contract && nft.contract.openSeaMetadata && nft.contract.openSeaMetadata.floorPrice) {
+      return `${nft.contract.openSeaMetadata.floorPrice} ETH`;
+    }
+    
+    // Check collection floor price
+    if (nft.collection && nft.collection.floorPrice) {
+      const price = nft.collection.floorPrice;
+      if (price.valueUsd) {
+        return `$${price.valueUsd.toFixed(2)}`;
+      }
+      if (price.value) {
+        return `${price.value} ${price.currency || 'ETH'}`;
+      }
+    }
+    
+    return null;
   };
   
   // Generate a unique key for each NFT
@@ -206,27 +264,32 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     return `${contractAddress}-${tokenId}`;
   };
   
+  // Format NFT card jsx
+  const renderNftCard = (nft) => {
+    const nftKey = getNftKey(nft);
+    const floorPrice = getFloorPrice(nft);
+    
+    return (
+      <div key={nftKey} className="nft-item">
+        <div className="nft-card">
+          <div className="nft-image">
+            {renderNftImage(nft)}
+          </div>
+          <div className="nft-info">
+            <h3 className="nft-name">{getNftTitle(nft)}</h3>
+            <p className="nft-collection">{getCollectionName(nft)}</p>
+            {floorPrice && <p className="nft-price">Floor: {floorPrice}</p>}
+            {nft.tokenType && <span className="nft-type">{nft.tokenType}</span>}
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="nft-grid">
       {nfts.length > 0 ? (
-        nfts.map((nft) => {
-          // Generate a unique key that's less likely to cause issues
-          const nftKey = getNftKey(nft);
-          
-          return (
-            <div key={nftKey} className="nft-item">
-              <div className="nft-card">
-                <div className="nft-image">
-                  {renderNftImage(nft)}
-                </div>
-                <div className="nft-info">
-                  <h3 className="nft-name">{getNftTitle(nft)}</h3>
-                  <p className="nft-collection">{getCollectionName(nft)}</p>
-                </div>
-              </div>
-            </div>
-          );
-        })
+        nfts.map(renderNftCard)
       ) : (
         <div className="no-nfts-message">
           <p>No NFTs found</p>

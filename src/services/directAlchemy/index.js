@@ -121,15 +121,16 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     // Build the API URL base
     const apiUrl = `${ALCHEMY_PROXY_URL}`;
     
-    // Build query parameters
+    // Build query parameters - ensure we get all the media and metadata
     const params = {
       endpoint: NFT_ENDPOINTS.getNftsForOwner,
       chain: normalizedChain,
       owner: normalizedAddress,
       pageSize: options.pageSize || 100,
-      withMetadata: options.withMetadata !== false,
+      withMetadata: true, // Always get metadata
       excludeSpam: options.excludeSpam !== false,
-      includeMedia: true // Always include media data
+      includeMedia: true, // Always include media data
+      includeContract: true // Include contract details
     };
     
     // Add pageKey if provided
@@ -187,21 +188,44 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
           const nft = ownedNfts[i];
           if (!nft) continue;
           
+          // Store the full contract data, especially important for OpenSea metadata
+          const contract = nft.contract || {};
+          
+          // Create a well-structured NFT object that preserves all the Alchemy data
           formattedNfts.push({
             id: `${normalizedChain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
             tokenId: nft.tokenId || '0',
             contractAddress: nft.contract?.address || 'unknown',
-            name: nft.title || `#${nft.tokenId || '0'}`,
+            name: nft.title || nft.name || `#${nft.tokenId || '0'}`,
             description: nft.description || '',
             network: normalizedChain,
             ownerAddress: normalizedAddress,
-            collection: {
-              name: nft.contract?.name || 'Unknown Collection',
-              symbol: nft.contract?.symbol || '',
-              tokenType: nft.contract?.tokenType || 'ERC721',
-            },
+            tokenType: nft.tokenType || contract.tokenType || 'ERC721',
+            
+            // Include full contract data to keep OpenSea metadata
+            contract: contract,
+            
+            // Preserve all image and media data
+            image: nft.image || null,
+            media: nft.media || [],
+            
+            // Include raw metadata if available
             metadata: nft.metadata || {},
-            media: nft.media || {},
+            raw: nft.raw || {},
+            
+            // Include the complete collection data
+            collection: {
+              name: contract.name || 'Unknown Collection',
+              symbol: contract.symbol || '',
+              tokenType: contract.tokenType || 'ERC721',
+              floorPrice: contract.openSeaMetadata?.floorPrice ? {
+                value: contract.openSeaMetadata?.floorPrice,
+                currency: 'ETH',
+                valueUsd: contract.openSeaMetadata?.floorPrice * 4000 // Approximate USD value
+              } : null
+            },
+            
+            // Timestamp for potential sorting
             timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
           });
         } catch (e) {
@@ -217,7 +241,8 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
           id: sample.id,
           name: sample.name,
           collection: sample.collection?.name,
-          media: !!sample.media
+          hasImage: !!sample.image,
+          hasMedia: !!sample.media
         });
       }
       
@@ -282,13 +307,22 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   let totalNfts = 0;
   let hasMoreData = false;
   
+  // Ensure all options are passed to fetchNFTsForAddress
+  const fullOptions = {
+    withMetadata: true,
+    includeMedia: true,
+    includeContract: true,
+    pageSize: options.pageSize || 25,
+    ...options
+  };
+  
   // Sequential processing - slower but more reliable than Promise.all in production
   for (let i = 0; i < validAddresses.length; i++) {
     const address = validAddresses[i];
     console.log(`Processing address ${i+1}/${validAddresses.length}: ${address}`);
     
     try {
-      const result = await fetchNFTsForAddress(address, normalizedChain, options);
+      const result = await fetchNFTsForAddress(address, normalizedChain, fullOptions);
       
       // Validate the result has nfts
       if (!result || !result.nfts) {
@@ -315,7 +349,7 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
           }
           
           // Ensure the owner address is set on each NFT
-          // Deep copy to avoid reference issues
+          // Create a new object to avoid modifying the original by reference
           const enhancedNft = {
             ...nft,
             ownerAddress: address,
