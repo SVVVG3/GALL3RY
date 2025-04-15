@@ -33,6 +33,8 @@
   width: 100%;
   max-width: 600px;
   margin: 0 auto 1rem;
+  display: flex;
+  justify-content: center;
 }
 
 .search-header {
@@ -50,6 +52,7 @@
 .search-input-wrapper {
   display: flex;
   width: 100%;
+  max-width: 600px;
 }
 
 .search-input {
@@ -105,19 +108,25 @@
 /* User profile section */
 .user-profile {
   width: 100%;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   background-color: var(--component-bg);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
   margin-top: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .profile-info {
   padding: 2rem;
   background-color: var(--profile-header-bg);
   color: var(--text-color);
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .profile-header {
@@ -125,6 +134,9 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
+  width: 100%;
+  max-width: 500px;
+  margin: 0 auto;
 }
 
 .profile-image-name {
@@ -132,6 +144,7 @@
   flex-direction: column;
   align-items: center;
   margin-bottom: 1rem;
+  width: 100%;
 }
 
 .profile-image {
@@ -151,10 +164,11 @@
 }
 
 .display-name {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 700;
-  margin: 0;
+  margin: 0.5rem 0;
   color: var(--heading-color);
+  text-align: center;
 }
 
 .username-container {
@@ -162,13 +176,14 @@
   flex-direction: column;
   align-items: center;
   margin-bottom: 1rem;
+  width: 100%;
 }
 
 .username-link {
   color: var(--accent-color);
   text-decoration: none;
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1.25rem;
   transition: color 0.2s;
 }
 
@@ -190,6 +205,9 @@
   width: 100%;
   max-width: 350px;
   margin: 1rem auto 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .wallet-toggle {
@@ -205,6 +223,8 @@
   color: #374151;
   transition: all 0.2s;
   width: 100%;
+  max-width: 300px;
+  margin: 0 auto;
 }
 
 .wallet-toggle:hover {
