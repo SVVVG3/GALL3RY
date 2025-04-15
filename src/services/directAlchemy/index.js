@@ -290,22 +290,51 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     try {
       const result = await fetchNFTsForAddress(address, normalizedChain, options);
       
-      if (result.nfts && result.nfts.length > 0) {
-        // Add owner address to each NFT if not already present
+      // Validate the result has nfts
+      if (!result || !result.nfts) {
+        console.warn(`No valid result or NFTs array for address ${address}`);
+        errors.push({ address, error: 'Invalid response structure' });
+        continue;
+      }
+      
+      // Valid NFTs exist
+      if (Array.isArray(result.nfts) && result.nfts.length > 0) {
+        // Keep track of valid NFTs for this address
+        let validNftsForAddress = 0;
+        
+        // Process each NFT with validation
         result.nfts.forEach(nft => {
-          if (nft) {
-            // Ensure the owner address is set on each NFT
-            nft.ownerAddress = address;
-            allNfts.push(nft);
-            totalNfts++;
+          if (!nft) {
+            console.warn(`Skipping null/undefined NFT for ${address}`);
+            return;
           }
+          
+          if (!nft.contractAddress || !nft.tokenId) {
+            console.warn(`Skipping NFT with missing contractAddress or tokenId for ${address}`);
+            return;
+          }
+          
+          // Ensure the owner address is set on each NFT
+          // Deep copy to avoid reference issues
+          const enhancedNft = {
+            ...nft,
+            ownerAddress: address,
+            // Ensure network is set
+            network: nft.network || normalizedChain,
+            // Ensure ID has network prefix
+            id: nft.id || `${normalizedChain}:${nft.contractAddress}-${nft.tokenId}`
+          };
+          
+          allNfts.push(enhancedNft);
+          totalNfts++;
+          validNftsForAddress++;
         });
+        
+        console.log(`Added ${validNftsForAddress} valid NFTs from ${address}`);
         
         if (result.hasMore) {
           hasMoreData = true;
         }
-        
-        console.log(`Found ${result.nfts.length} NFTs for ${address}`);
       } else {
         console.log(`No NFTs found for ${address}`);
       }
@@ -315,13 +344,28 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     }
   }
   
+  // Final validation of NFT array
+  const finalNfts = allNfts.filter(nft => 
+    nft && 
+    typeof nft === 'object' && 
+    nft.contractAddress && 
+    nft.tokenId
+  );
+  
+  if (finalNfts.length !== allNfts.length) {
+    console.warn(`Filtered out ${allNfts.length - finalNfts.length} invalid NFTs during final validation`);
+  }
+  
+  // Error reporting
   if (errors.length > 0) {
     console.warn(`Completed with ${errors.length} errors:`, errors);
   }
   
+  console.log(`Batch fetch complete. Returning ${finalNfts.length} NFTs from ${validAddresses.length} addresses`);
+  
   return {
-    nfts: allNfts,
-    totalCount: totalNfts,
+    nfts: finalNfts,
+    totalCount: finalNfts.length,
     pageKey: null, // No pagination for batch requests
     hasMore: hasMoreData,
     errors: errors.length > 0 ? errors : undefined

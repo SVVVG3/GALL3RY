@@ -374,23 +374,32 @@ export const NFTProvider = ({ children }) => {
   // Apply filters to NFTs based on current filter settings
   const applyFilters = useCallback((nfts) => {
     if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
+      console.log('applyFilters received empty or invalid NFT array');
       return [];
     }
 
+    console.log(`Starting filter process with ${nfts.length} NFTs`);
     let filtered = [...nfts];
     
     // Filter by selected chain
-    if (selectedChains.length > 0) {
+    if (selectedChains.length > 0 && !selectedChains.includes('all')) {
+      console.log(`Filtering by chains: ${selectedChains.join(', ')}`);
+      const beforeCount = filtered.length;
       filtered = filtered.filter(nft => {
+        if (!nft) return false;
         const network = nft.network || nft.chain || 'eth';
         return selectedChains.includes(network);
       });
+      console.log(`After chain filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
     }
     
     // Filter by search query
     if (searchQuery) {
+      console.log(`Filtering by search query: ${searchQuery}`);
       const query = searchQuery.toLowerCase();
+      const beforeCount = filtered.length;
       filtered = filtered.filter(nft => {
+        if (!nft) return false;
         // Search in title, description, contract, token ID
         return (
           (nft.name && nft.name.toLowerCase().includes(query)) ||
@@ -399,13 +408,28 @@ export const NFTProvider = ({ children }) => {
           (nft.tokenId && String(nft.tokenId).toLowerCase().includes(query))
         );
       });
+      console.log(`After search filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
     }
     
     // Filter out spam NFTs if enabled
     if (excludeSpam) {
-      filtered = filtered.filter(nft => !nft.isSpam);
+      console.log('Filtering out spam NFTs');
+      const beforeCount = filtered.length;
+      filtered = filtered.filter(nft => {
+        if (!nft) return false;
+        return !nft.isSpam;
+      });
+      console.log(`After spam filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
+    }
+
+    // Ensure we don't have undefined/null entries
+    const finalCount = filtered.length;
+    filtered = filtered.filter(nft => nft && typeof nft === 'object');
+    if (finalCount !== filtered.length) {
+      console.log(`Removed ${finalCount - filtered.length} invalid NFT entries`);
     }
     
+    console.log(`Filter process complete. Final count: ${filtered.length} NFTs`);
     return filtered;
   }, [selectedChains, searchQuery, excludeSpam]);
   
@@ -599,6 +623,16 @@ export const NFTProvider = ({ children }) => {
         allNFTs = [];
       }
       
+      console.log(`Total raw NFTs fetched across all chains: ${allNFTs.length}`);
+      
+      // EARLY EXIT: If no NFTs were found, return early
+      if (allNFTs.length === 0) {
+        console.log('No NFTs found for any of the provided wallets. Returning empty result.');
+        setNfts([]);
+        setIsBatchLoading(false);
+        return { nfts: [], hasMore: false, error: null };
+      }
+      
       // Process all NFTs to ensure consistent structure - handle errors gracefully
       let processedNFTs = [];
       try {
@@ -616,19 +650,55 @@ export const NFTProvider = ({ children }) => {
         }
       } catch (processError) {
         console.error('Error processing NFTs:', processError);
-        processedNFTs = allNFTs; // Use raw NFTs if processing fails
         console.log('Using raw NFTs instead of processed ones due to error');
+        
+        // Attempt to sanitize raw NFTs at minimum
+        processedNFTs = allNFTs.filter(nft => nft && typeof nft === 'object');
+        console.log(`After sanitizing raw NFTs: ${processedNFTs.length} valid NFTs remain`);
+      }
+      
+      // EARLY EXIT: If all NFTs were filtered out during processing, return empty result
+      if (processedNFTs.length === 0) {
+        console.log('All NFTs were filtered out during processing. Returning empty result.');
+        setNfts([]);
+        setIsBatchLoading(false);
+        return { nfts: [], hasMore: false, error: null };
       }
       
       // Apply filtering - handle errors gracefully
       let filteredNFTs = [];
       try {
-        filteredNFTs = applyFilters(processedNFTs);
+        // Skip filtering if selected chains includes 'all' and no other filters are active
+        const shouldSkipFiltering = 
+          (selectedChains.length === 0 || 
+           (selectedChains.length === 1 && selectedChains[0] === 'all')) && 
+          !searchQuery && 
+          !excludeSpam;
+          
+        if (shouldSkipFiltering) {
+          console.log('Skipping filtering as no active filters are applied');
+          filteredNFTs = processedNFTs;
+        } else {
+          filteredNFTs = applyFilters(processedNFTs);
+        }
+        
         console.log(`After filtering: ${filteredNFTs.length} NFTs remain`);
       } catch (filterError) {
         console.error('Error filtering NFTs:', filterError);
         filteredNFTs = processedNFTs; // Use unfiltered NFTs if filtering fails
         console.log('Using unfiltered NFTs due to error');
+      }
+      
+      // EARLY EXIT: If all NFTs were filtered out, return empty result with explanation
+      if (filteredNFTs.length === 0) {
+        console.log('All NFTs were filtered out by current filter settings. Returning empty result with explanation.');
+        setNfts([]);
+        setIsBatchLoading(false);
+        return { 
+          nfts: [], 
+          hasMore: false, 
+          error: "No NFTs matched your current filter settings. Try adjusting your filters." 
+        };
       }
       
       // Sort NFTs if needed
@@ -644,18 +714,55 @@ export const NFTProvider = ({ children }) => {
         console.log('Using unsorted NFTs due to error');
       }
       
-      // Update state
+      // Update state with the final NFTs
       setNfts(sortedNFTs);
       setIsBatchLoading(false);
+      
+      // Determine the appropriate error message
+      let errorMessage = null;
+      if (hasErrors) {
+        errorMessage = "Some NFTs may not have been retrieved due to API errors";
+      }
+      
+      if (allNFTs.length > 0 && processedNFTs.length === 0) {
+        errorMessage = "Unable to process any of the retrieved NFTs";
+      }
+      
+      if (processedNFTs.length > 0 && filteredNFTs.length === 0) {
+        errorMessage = "All NFTs were filtered out by your current filter settings";
+      }
+      
+      if (allNFTs.length === 0) {
+        // Be more specific about why no NFTs were found
+        if (validAddresses.length === 0) {
+          errorMessage = "No valid wallet addresses provided";
+        } else if (validAddresses.length === 1) {
+          errorMessage = `No NFTs found for wallet ${validAddresses[0]}`;
+        } else {
+          errorMessage = `No NFTs found in any of the ${validAddresses.length} wallets`;
+        }
+      }
+      
+      // Log the final result with detailed information
+      console.log(`Final NFT processing summary:`, {
+        initialAddressCount: addresses ? addresses.length : 0,
+        validAddressCount: validAddresses ? validAddresses.length : 0,
+        rawNftCount: allNFTs.length,
+        processedNftCount: processedNFTs.length,
+        filteredNftCount: filteredNFTs.length,
+        sortedNftCount: sortedNFTs.length,
+        hasErrors,
+        errorMessage
+      });
       
       // CRITICAL FIX: Return the actual NFTs we've gathered
       const result = {
         nfts: sortedNFTs, 
         hasMore: false, 
-        error: hasErrors ? "Some NFTs may not have been retrieved due to API errors" : null 
+        error: errorMessage
       };
       
-      console.log(`Final result returning ${result.nfts.length} NFTs to caller`);
+      console.log(`Final result returning ${result.nfts.length} NFTs to caller${result.error ? ' with error: ' + result.error : ''}`);
       
       return result;
     } catch (err) {
