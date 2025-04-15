@@ -397,9 +397,12 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     withMetadata: true,
     includeMedia: true,
     includeContract: true,
-    pageSize: options.pageSize || 25,
+    pageSize: options.pageSize || 100, // Default to larger page size
     ...options
   };
+
+  // Define maximum number of pages to fetch per address (to avoid infinite loops)
+  const MAX_PAGES_PER_ADDRESS = options.maxPages || 5; // Fetch up to 5 pages per address by default
   
   // Sequential processing - slower but more reliable than Promise.all in production
   for (let i = 0; i < validAddresses.length; i++) {
@@ -407,7 +410,13 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     console.log(`Processing address ${i+1}/${validAddresses.length}: ${address}`);
     
     try {
-      const result = await fetchNFTsForAddress(address, normalizedChain, fullOptions);
+      // Track pagination for this address
+      let pageKey = null;
+      let currentPage = 0;
+      let addressNfts = [];
+      
+      // Fetch first page
+      let result = await fetchNFTsForAddress(address, normalizedChain, fullOptions);
       
       // Validate the result has nfts
       if (!result || !result.nfts) {
@@ -416,17 +425,76 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         continue;
       }
       
+      // Process first page of NFTs
+      if (Array.isArray(result.nfts) && result.nfts.length > 0) {
+        addressNfts = [...result.nfts];
+        console.log(`Got ${result.nfts.length} NFTs on first page for ${address}`);
+      }
+      
+      // Get pageKey for pagination
+      pageKey = result.pageKey;
+      currentPage = 1;
+      
+      // If we have a pageKey and haven't reached the max pages, fetch more pages
+      while (pageKey && currentPage < MAX_PAGES_PER_ADDRESS) {
+        console.log(`Fetching page ${currentPage + 1} for ${address} using pageKey: ${pageKey.slice(0, 10)}...`);
+        
+        // Fetch next page with the pageKey
+        try {
+          const nextPageOptions = {
+            ...fullOptions,
+            pageKey: pageKey
+          };
+          
+          const nextPageResult = await fetchNFTsForAddress(address, normalizedChain, nextPageOptions);
+          
+          if (nextPageResult && Array.isArray(nextPageResult.nfts)) {
+            // Add NFTs from this page
+            addressNfts = [...addressNfts, ...nextPageResult.nfts];
+            console.log(`Added ${nextPageResult.nfts.length} more NFTs from page ${currentPage + 1} for ${address}`);
+            
+            // Update pageKey for next iteration
+            pageKey = nextPageResult.pageKey;
+            
+            // If we have no more pages, break the loop
+            if (!pageKey) {
+              console.log(`No more pages for ${address}`);
+              break;
+            }
+          } else {
+            console.warn(`Invalid or empty response for page ${currentPage + 1}`);
+            break;
+          }
+        } catch (pageError) {
+          console.error(`Error fetching page ${currentPage + 1} for ${address}:`, pageError);
+          errors.push({ address, error: `Error on page ${currentPage + 1}: ${pageError.message}` });
+          break;
+        }
+        
+        // Increment page counter
+        currentPage++;
+      }
+      
+      // If we hit the page limit but there are more NFTs, note this
+      if (pageKey && currentPage >= MAX_PAGES_PER_ADDRESS) {
+        console.warn(`Reached maximum of ${MAX_PAGES_PER_ADDRESS} pages for ${address}, but more NFTs exist`);
+        hasMoreData = true;
+      }
+      
+      // Process all NFTs for this address
+      console.log(`Processing ${addressNfts.length} total NFTs for ${address}`);
+      
       // Log detailed NFT validation information
-      console.log(`Got ${result.nfts.length} NFTs from API for ${address}, now validating each one`);
+      console.log(`Got ${addressNfts.length} NFTs from API for ${address}, now validating each one`);
       
       // Valid NFTs exist
-      if (Array.isArray(result.nfts) && result.nfts.length > 0) {
+      if (addressNfts.length > 0) {
         // Keep track of valid NFTs for this address
         let validNftsForAddress = 0;
         let invalidNftsForAddress = 0;
         
         // Process each NFT with validation
-        result.nfts.forEach(nft => {
+        addressNfts.forEach(nft => {
           // Add better validation with detailed logging
           if (!nft) {
             console.warn(`Skipping null/undefined NFT for ${address}`);
@@ -515,7 +583,7 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         
         console.log(`Added ${validNftsForAddress} valid NFTs from ${address}, skipped ${invalidNftsForAddress} invalid NFTs`);
         
-        if (result.hasMore) {
+        if (pageKey) {
           hasMoreData = true;
         }
       } else {
@@ -544,7 +612,7 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     console.warn(`Completed with ${errors.length} errors:`, errors);
   }
   
-  console.log(`Batch fetch complete. Returning ${finalNfts.length} NFTs from ${validAddresses.length} addresses`);
+  console.log(`Batch fetch complete. Returning ${finalNfts.length} NFTs from ${validAddresses.length} addresses across up to ${MAX_PAGES_PER_ADDRESS} pages per address`);
   
   return {
     nfts: finalNfts,

@@ -584,9 +584,9 @@ export const NFTProvider = ({ children }) => {
       
       // If no chains selected or only 'all' is selected, use specific chains
       if (chainsToFetch.length === 0 || (chainsToFetch.length === 1 && chainsToFetch[0] === 'all')) {
-        // For performance, limit to Ethereum and maybe one or two more major L2s
-        // This reduces the number of API calls and chances of timeouts
-        chainsToFetch = ['eth'];
+        // Include all major chains that have reasonable NFT activity
+        chainsToFetch = ['eth', 'polygon', 'arbitrum', 'optimism', 'base'];
+        console.log(`No specific chains selected, using all major chains: ${chainsToFetch.join(', ')}`);
       }
       
       console.log(`Will fetch from chains: ${chainsToFetch.join(', ')}`);
@@ -619,7 +619,7 @@ export const NFTProvider = ({ children }) => {
             {
               excludeSpam: excludeSpam,
               withMetadata: true,
-              pageSize: 25 // Limit page size to reduce payload size
+              pageSize: 100 // Increase page size to get more NFTs per request
             }
           );
           
