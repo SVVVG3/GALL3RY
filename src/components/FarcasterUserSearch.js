@@ -291,12 +291,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   return (
     <div className="farcaster-search-container">
       <div className="search-header">
-        <h1>Search Farcaster Users</h1>
-        <p>Enter a Farcaster username to explore their NFT collection</p>
+        <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
       <form onSubmit={handleSearch} className="search-form">
-        <div className="search-input-container">
+        <div className="search-input-wrapper">
           <input
             type="text"
             value={searchQuery}
@@ -340,19 +339,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               )}
             </div>
             <div className="profile-details">
-              <h2>@{userProfile.username}</h2>
-              <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
-              <p className="bio">{userProfile.metadata?.description || ''}</p>
-              <div className="fid">
-                <span>FID: </span>
-                <span>{userProfile.fid}</span>
+              <div className="user-header">
+                <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
+                <div className="username-container">
+                  <a 
+                    href={`https://warpcast.com/${userProfile.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="username-link"
+                  >
+                    @{userProfile.username}
+                  </a>
+                  <span className="fid-display">FID: {userProfile.fid}</span>
+                </div>
               </div>
               <div className="wallet-info">
                 <button 
                   className="wallet-toggle" 
                   onClick={() => setWalletsExpanded(!walletsExpanded)}
                 >
-                  {walletsExpanded ? 'Hide Wallets' : 'Show Wallets'} ({walletAddresses.length})
+                  {walletsExpanded ? 'Hide Connected Wallets' : 'Show Connected Wallets'} ({walletAddresses.length})
                 </button>
                 {walletsExpanded && (
                   <ul className="wallet-list">
@@ -364,7 +370,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                           rel="noopener noreferrer"
                           className="wallet-link"
                         >
-                          {address}
+                          {address.substring(0, 6)}...{address.substring(address.length - 4)}
                         </a>
                       </li>
                     ))}
@@ -378,7 +384,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             <div className="nft-header">
               <h2>NFT Collection</h2>
               <p className="nft-count">
-                Found {userNfts.length} NFTs for {userProfile.username}
+                Found {userNfts.length} NFTs
               </p>
             </div>
             
@@ -399,6 +405,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           </div>
         </div>
       )}
+      <div className="footer">
+        <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
+      </div>
     </div>
   );
 };

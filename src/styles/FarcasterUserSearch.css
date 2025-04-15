@@ -883,4 +883,286 @@
   text-align: center;
   font-size: 1.1rem;
   color: #666;
+}
+
+.farcaster-search-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+.search-header {
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.search-instructions {
+  font-size: 18px;
+  margin-bottom: 25px;
+  color: #333;
+}
+
+.search-form {
+  margin-bottom: 30px;
+}
+
+.search-input-wrapper {
+  display: flex;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 15px;
+  font-size: 16px;
+  border: 1px solid #ddd;
+  border-radius: 4px 0 0 4px;
+  outline: none;
+}
+
+.search-button {
+  padding: 12px 20px;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.search-button:hover {
+  background-color: #7c3aed;
+}
+
+.search-button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}
+
+.error-message {
+  background-color: #fff5f5;
+  border: 1px solid #feb2b2;
+  color: #c53030;
+  padding: 12px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.user-profile {
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 25px;
+  margin-bottom: 30px;
+}
+
+.profile-info {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 25px;
+}
+
+.profile-image {
+  margin-right: 20px;
+  flex-shrink: 0;
+}
+
+.profile-image img {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #f0f0f0;
+}
+
+.profile-details {
+  flex: 1;
+}
+
+.user-header {
+  margin-bottom: 15px;
+}
+
+.display-name {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #333;
+}
+
+.username-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.username-link {
+  color: #8b5cf6;
+  text-decoration: none;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.username-link:hover {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+
+.fid-display {
+  color: #666;
+  font-size: 14px;
+  padding: 3px 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.wallet-info {
+  margin-top: 15px;
+}
+
+.wallet-toggle {
+  background-color: transparent;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.wallet-toggle:hover {
+  background-color: #f8f8f8;
+  border-color: #ccc;
+}
+
+.wallet-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+}
+
+.wallet-item {
+  margin-bottom: 5px;
+  font-size: 14px;
+  background-color: #f9f9f9;
+  padding: 6px 10px;
+  border-radius: 4px;
+}
+
+.wallet-link {
+  color: #8b5cf6;
+  text-decoration: none;
+  transition: color 0.2s;
+  font-family: monospace;
+}
+
+.wallet-link:hover {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+
+.nft-container {
+  margin-top: 20px;
+}
+
+.nft-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.nft-header h2 {
+  margin: 0;
+  font-size: 22px;
+  color: #333;
+}
+
+.nft-count {
+  font-size: 14px;
+  color: #666;
+  margin: 0;
+}
+
+.nft-display {
+  min-height: 200px;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.loading-spinner:after {
+  content: "";
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.no-nfts-message {
+  text-align: center;
+  padding: 40px 0;
+  color: #666;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eaeaea;
+  color: #666;
+  font-size: 14px;
+}
+
+.footer a {
+  color: #8b5cf6;
+  text-decoration: none;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .profile-info {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+  
+  .profile-image {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .username-container {
+    justify-content: center;
+  }
+  
+  .nft-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .nft-count {
+    margin-top: 5px;
+  }
 } 

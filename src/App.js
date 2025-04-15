@@ -112,8 +112,13 @@ function App() {
   
   // Return the app with a proper provider hierarchy
   return (
-    <ErrorBoundary>
-      <AuthKitProvider config={{
+    <ErrorBoundary
+      onError={error => console.error('App error boundary caught:', error)}
+      FallbackComponent={({ error, resetErrorBoundary }) => 
+        <ErrorDisplay error={error} onRetry={resetErrorBoundary} />
+      }
+    >
+      <AuthKitProvider authKitConfig={{
         domain: 'gall3ry.vercel.app',
         siweUri: 'https://gall3ry.vercel.app/login',
         rpcUrl: 'https://mainnet.optimism.io'
@@ -142,7 +147,7 @@ function App() {
                 </main>
                 
                 <footer className="app-footer">
-                  <span>built with 💜 by </span>
+                  <span>vibe coded with 💜 by </span>
                   <a 
                     href="https://warpcast.com/svvvg3.eth" 
                     target="_blank"

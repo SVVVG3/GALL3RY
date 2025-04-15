@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  --max-width: 95vw;
+  --max-width: 1200px;
   --border-radius: 0.5rem;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
