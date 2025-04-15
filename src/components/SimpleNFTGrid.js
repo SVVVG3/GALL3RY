@@ -79,33 +79,32 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     // Handle Alchemy's new format with .image field
     if (nft.image) {
       if (typeof nft.image === 'object') {
-        // Try cached URL first, then thumbnails, then other options
+        // Try all possible image URLs in the image object
         imageUrl = nft.image.cachedUrl || 
                   nft.image.thumbnailUrl || 
                   nft.image.pngUrl || 
                   nft.image.originalUrl || 
-                  nft.image.gateway ||
+                  (nft.image.gateway ? nft.image.gateway : null) ||
                   (nft.image.url && typeof nft.image.url === 'string' ? nft.image.url : null);
+                  
+        console.log(`Found image URL in image object: ${imageUrl}`);
       } else if (typeof nft.image === 'string') {
         imageUrl = nft.image;
+        console.log(`Found string image URL: ${imageUrl}`);
       }
     }
     
     // Try media array
-    if (!imageUrl && nft.media && nft.media.length > 0) {
+    if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
       const media = nft.media[0];
-      imageUrl = media.gateway || media.thumbnailUrl || media.raw || media.uri;
-      
-      // If we found media, log it for debugging
-      if (imageUrl) {
-        console.log(`Found image in media array: ${imageUrl}`);
+      if (media) {
+        imageUrl = media.gateway || media.thumbnailUrl || media.raw || media.uri;
+        
+        // If we found media, log it for debugging
+        if (imageUrl) {
+          console.log(`Found image in media array: ${imageUrl}`);
+        }
       }
-    }
-    
-    // Try metadata.image if available
-    if (!imageUrl && nft.metadata && nft.metadata.image) {
-      imageUrl = nft.metadata.image;
-      console.log(`Found image in metadata: ${imageUrl}`);
     }
     
     // Try raw metadata
@@ -114,10 +113,21 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
       console.log(`Found image in raw.metadata: ${imageUrl}`);
     }
     
-    // If image_url exists (common in some NFT standards)
-    if (!imageUrl && nft.metadata && nft.metadata.image_url) {
-      imageUrl = nft.metadata.image_url;
-      console.log(`Found image in metadata.image_url: ${imageUrl}`);
+    // Try metadata.image if available
+    if (!imageUrl && nft.metadata && nft.metadata.image) {
+      imageUrl = nft.metadata.image;
+      console.log(`Found image in metadata: ${imageUrl}`);
+    }
+    
+    // Try image_url variants
+    if (!imageUrl) {
+      if (nft.raw && nft.raw.metadata && nft.raw.metadata.image_url) {
+        imageUrl = nft.raw.metadata.image_url;
+        console.log(`Found image in raw.metadata.image_url: ${imageUrl}`);
+      } else if (nft.metadata && nft.metadata.image_url) {
+        imageUrl = nft.metadata.image_url;
+        console.log(`Found image in metadata.image_url: ${imageUrl}`);
+      }
     }
     
     // If IPFS, use reliable gateway
@@ -149,9 +159,20 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
       return renderPlaceholder('No image available');
     }
     
+    // Modify the URL to use the proxy for all external URLs
+    // This helps prevent CORS issues with Alchemy's CDN
+    let finalImageUrl = imageUrl;
+    
+    // Only add proxy for external URLs (not for local assets)
+    if (imageUrl && !imageUrl.startsWith('/') && !imageUrl.startsWith('data:')) {
+      // Always use the image proxy for external URLs to avoid CORS issues
+      finalImageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+      console.log(`Using proxy for image: ${imageUrl.substring(0, 50)}...`);
+    }
+    
     return (
       <img
-        src={imageUrl}
+        src={finalImageUrl}
         alt={getNftTitle(nft)}
         onLoad={() => handleImageSuccess(nftId)}
         onError={(e) => handleImageError(e, nft)}

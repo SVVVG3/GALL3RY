@@ -293,95 +293,92 @@ const NFTGrid = ({ nfts = [] }) => {
   
   // Render function for NFT image content
   const renderNftMedia = (nft, nftId) => {
+    if (!nft) {
+      return <div className="nft-placeholder">No NFT data</div>;
+    }
+    
+    // Get the best available media URL
     const mediaUrl = getMediaUrl(nft);
+    
+    if (!mediaUrl) {
+      return <div className="nft-placeholder">No media available</div>;
+    }
+    
+    // Determine content type for appropriate rendering
     const contentType = getContentType(nft, mediaUrl);
     
-    // If we have no media URL, render a placeholder div directly
-    if (!mediaUrl) {
+    // Modify URLs to use the image proxy for external URLs
+    // This helps prevent CORS issues with various image sources
+    let finalMediaUrl = mediaUrl;
+    
+    // Always use our proxy for external URLs to prevent CORS issues
+    // But don't proxy local assets or data URIs
+    if (finalMediaUrl && !finalMediaUrl.startsWith('/') && !finalMediaUrl.startsWith('data:')) {
+      finalMediaUrl = `/api/image-proxy?url=${encodeURIComponent(finalMediaUrl)}`;
+      console.log(`Using proxy for media: ${finalMediaUrl.substring(0, 50)}...`);
+    }
+    
+    // Render appropriate media based on content type
+    if (contentType === 'video') {
       return (
-        <div 
-          className="nft-placeholder"
+        <video
+          src={finalMediaUrl}
+          controls
+          loop
+          muted
+          onError={handleImageError}
+          data-nftid={nftId}
           style={{
             width: '100%',
             height: '100%',
-            backgroundColor: '#f0f0f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
+            objectFit: 'contain'
+          }}
+        />
+      );
+    } else if (contentType === 'svg') {
+      return (
+        <object
+          type="image/svg+xml"
+          data={finalMediaUrl}
+          className="svg-object"
+          style={{
+            width: '100%',
+            height: '100%'
           }}
         >
-          <span style={{ color: '#888', fontStyle: 'italic' }}>No image</span>
-        </div>
+          <img
+            src={finalMediaUrl}
+            alt={getNftName(nft)}
+            onError={handleImageError}
+            data-nftid={nftId}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain'
+            }}
+          />
+        </object>
       );
-    }
-    
-    // Render based on content type
-    if (contentType === 'video') {
+    } else {
+      // Default to image rendering
       return (
-        <video 
-          src={mediaUrl}
+        <img
+          src={finalMediaUrl}
           alt={getNftName(nft)}
-          poster={null} // Don't use video-placeholder.svg to avoid extra requests
-          controls
-          muted
-          loop
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'contain',
-            backgroundColor: '#f0f0f0'
-          }}
-          data-nftid={nftId}
-          onError={handleImageError}
-          onLoadedData={handleImageSuccess}
-          crossOrigin="anonymous"
-        />
-      );
-    } 
-    
-    if (contentType === 'svg') {
-      // For SVGs, use a simpler approach that doesn't involve the object tag
-      return (
-        <img 
-          src={mediaUrl}
-          alt={getNftName(nft)}
-          onError={handleImageError}
           onLoad={handleImageSuccess}
+          onError={handleImageError}
           data-nftid={nftId}
-          loading="lazy"
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'contain',
-            objectPosition: 'center',
-            backgroundColor: '#f0f0f0'
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain'
           }}
-          referrerPolicy="no-referrer"
+          loading="lazy"
           crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
         />
       );
     }
-    
-    // Regular image
-    return (
-      <img 
-        src={mediaUrl}
-        alt={getNftName(nft)}
-        onError={handleImageError}
-        onLoad={handleImageSuccess}
-        data-nftid={nftId}
-        loading="lazy"
-        style={{ 
-          width: '100%', 
-          height: '100%', 
-          objectFit: 'contain',
-          objectPosition: 'center',
-          backgroundColor: '#f0f0f0'
-        }}
-        referrerPolicy="no-referrer"
-        crossOrigin="anonymous"
-      />
-    );
   };
 
   return (
@@ -392,16 +389,16 @@ const NFTGrid = ({ nfts = [] }) => {
           
           return (
             <div key={nftId} className="nft-item">
-              <div className="nft-card">
-                <div className="nft-image">
+            <div className="nft-card">
+              <div className="nft-image">
                   {renderNftMedia(nft, nftId)}
-                </div>
-                <div className="nft-info">
-                  <h3 className="nft-name">{getNftName(nft)}</h3>
-                  <p className="nft-collection">{getCollectionName(nft)}</p>
-                </div>
+              </div>
+              <div className="nft-info">
+                <h3 className="nft-name">{getNftName(nft)}</h3>
+                <p className="nft-collection">{getCollectionName(nft)}</p>
               </div>
             </div>
+          </div>
           );
         })
       ) : (
