@@ -36,8 +36,8 @@ const config = {
   // API keys (will be properly hidden in production builds)
   // NOTE: Client-side API keys are NEVER used for Alchemy - we always use the server proxy
   // which uses the server's environment variables instead
-  ALCHEMY_API_KEY: null, // process.env.REACT_APP_ALCHEMY_API_KEY - disabled to force proxy usage
-  ALCHEMY_BASE_URL: process.env.ALCHEMY_BASE_URL || 'https://eth-mainnet.g.alchemy.com/v3/',
+  ALCHEMY_API_KEY: null, // Disabled to force proxy usage
+  ALCHEMY_BASE_URL: null, // Disabled to force proxy usage
   
   // Server configuration
   PORT: process.env.PORT || 3003,
@@ -45,9 +45,11 @@ const config = {
   // MongoDB connection
   MONGODB_URI: process.env.MONGODB_URI || 'mongodb://localhost:27017/gall3ry',
   
-  // API Proxies
+  // API Proxies - Always use absolute URLs to avoid path issues
   API_BASE_URL: process.env.API_BASE_URL || '/api',
-  ALCHEMY_PROXY_URL: '/api/alchemy',
+  ALCHEMY_PROXY_URL: process.env.REACT_APP_API_URL 
+    ? `${process.env.REACT_APP_API_URL}/alchemy` 
+    : '/api/alchemy',
   OPENSEA_PROXY_URL: '/api/opensea',
   ZAPPER_PROXY_URL: process.env.REACT_APP_ZAPPER_PROXY_URL || '/api/zapper',
   
@@ -55,7 +57,7 @@ const config = {
   DEFAULT_CHAIN: process.env.DEFAULT_CHAIN || 'eth',
   NFT_SERVICES: process.env.NFT_SERVICES 
     ? process.env.NFT_SERVICES.split(',') 
-    : ['alchemy', 'directAlchemy'],
+    : ['directAlchemy'], // Only use the directAlchemy service
 
   // Feature flags
   ENABLE_CACHING: process.env.ENABLE_CACHING !== 'false',
@@ -75,17 +77,24 @@ const config = {
   FARCASTER_SIWE_URI: process.env.REACT_APP_FARCASTER_SIWE_URI || 'https://gall3ry.vercel.app/login',
 };
 
+// Debug logging for proxy URLs
+console.log('Config initialized with proxy URLs:', {
+  alchemyProxy: config.ALCHEMY_PROXY_URL,
+  zapperProxy: config.ZAPPER_PROXY_URL
+});
+
 // Ensure API paths are properly formatted for Vercel deployments
 if (config.IS_VERCEL) {
-  // Use relative API paths in Vercel environment
-  config.ALCHEMY_PROXY_URL = '/api/alchemy';
-  config.OPENSEA_PROXY_URL = '/api/opensea';
-  config.ZAPPER_PROXY_URL = '/api/zapper';
+  // Handle Vercel-specific configuration
+  console.log('Running in Vercel environment, configuring API paths');
   
-  // Prefer direct API calls in Vercel environment
-  if (!config.NFT_SERVICES.includes('directAlchemy')) {
-    config.NFT_SERVICES.push('directAlchemy');
+  // In Vercel, ensure we're always using relative API paths
+  if (!config.ALCHEMY_PROXY_URL.startsWith('/api/')) {
+    config.ALCHEMY_PROXY_URL = '/api/alchemy';
   }
+  
+  // Force directAlchemy as the NFT service in production
+  config.NFT_SERVICES = ['directAlchemy'];
 }
 
 // Export all config values

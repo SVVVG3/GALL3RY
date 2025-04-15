@@ -488,7 +488,12 @@ export const NFTProvider = ({ children }) => {
           try {
             console.log(`Fetching NFTs from ${chain} (attempt ${attempt + 1})`);
             
-            result = await directAlchemyService.batchFetchNFTs(
+            if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
+              console.error('directAlchemyService or batchFetchNFTs is not available');
+              throw new Error('NFT service not properly initialized');
+            }
+            
+            const response = await directAlchemyService.batchFetchNFTs(
               validAddresses,
               chain,
               {
@@ -497,11 +502,18 @@ export const NFTProvider = ({ children }) => {
               }
             );
             
-            // We have a successful result if nfts exists and is an array
-            if (result && Array.isArray(result.nfts)) {
+            // Safely check if the result is valid
+            if (response && Array.isArray(response.nfts)) {
+              result = response;
               success = true;
             } else {
-              throw new Error(`Invalid response format: nfts array missing for chain ${chain}`);
+              console.warn(`Invalid response format from ${chain}:`, response);
+              // Create safe default if response is invalid
+              result = { 
+                ...response, 
+                nfts: Array.isArray(response?.nfts) ? response.nfts : [] 
+              };
+              success = true; // We'll still consider this a success to avoid retries
             }
           } catch (error) {
             console.error(`Error fetching from ${chain} (attempt ${attempt + 1}):`, error);
@@ -515,9 +527,11 @@ export const NFTProvider = ({ children }) => {
         }
         
         // Add successfully fetched NFTs to the collection
-        if (success && Array.isArray(result.nfts)) {
+        if (Array.isArray(result.nfts)) {
           console.log(`Retrieved ${result.nfts.length} NFTs from ${chain}`);
           allNFTs = [...allNFTs, ...result.nfts];
+        } else {
+          console.warn(`No valid NFTs array from ${chain}, skipping`);
         }
       }
       

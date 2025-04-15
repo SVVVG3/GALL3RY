@@ -256,7 +256,9 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   // Create an object to track retry attempts for each address
   const retryTracker = {};
   addresses.forEach(addr => {
-    retryTracker[addr.toLowerCase()] = 0;
+    if (addr) {
+      retryTracker[addr.toLowerCase()] = 0;
+    }
   });
 
   try {
@@ -311,6 +313,17 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
       // Execute requests for this batch concurrently
       const results = await Promise.all(
         batch.map(async (address) => {
+          if (!address) {
+            console.warn('Skipping undefined or null address in batch');
+            return {
+              success: false,
+              address: null,
+              error: 'Invalid address (null/undefined)',
+              nfts: [],
+              count: 0
+            };
+          }
+          
           const normalizedAddress = address.toLowerCase().trim();
           
           // Try up to 3 times for each address
@@ -358,24 +371,37 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
               // Otherwise continue to next retry attempt
             }
           }
+          
+          // If we reached here without returning, return an error result
+          return {
+            success: false,
+            address: normalizedAddress,
+            error: 'Max retries exceeded',
+            nfts: [],
+            count: 0
+          };
         })
       );
       
       // Process results from this batch
-      results.forEach(result => {
-        if (result && result.success && Array.isArray(result.nfts)) {
-          // Add owner address to each NFT
-          const nftsWithOwner = result.nfts.map(nft => ({
-            ...nft,
-            ownerAddress: result.address
-          }));
-          
-          allNfts.push(...nftsWithOwner);
-          totalCount += result.count;
-        } else if (result) {
-          console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
-        }
-      });
+      if (Array.isArray(results)) {
+        results.forEach(result => {
+          if (result && result.success && Array.isArray(result.nfts)) {
+            // Add owner address to each NFT
+            const nftsWithOwner = result.nfts.map(nft => ({
+              ...nft,
+              ownerAddress: result.address
+            }));
+            
+            allNfts.push(...nftsWithOwner);
+            totalCount += result.count;
+          } else if (result) {
+            console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
+          }
+        });
+      } else {
+        console.error('Unexpected non-array results from Promise.all');
+      }
     }
     
     console.log(`Successfully processed ${allNfts.length} NFTs from ${addresses.length} addresses`);
