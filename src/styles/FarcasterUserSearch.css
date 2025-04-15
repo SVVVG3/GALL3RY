@@ -1,58 +1,66 @@
 /* FarcasterUserSearch Component Styling */
 
+:root {
+  --component-bg: #ffffff;
+  --profile-header-bg: #f8f9fa;
+  --input-bg: #ffffff;
+  --input-border: #d1d5db;
+  --text-color: #333333;
+  --heading-color: #111827;
+  --secondary-text: #6b7280;
+  --accent-color: #8b5cf6;
+  --accent-hover: #7c3aed;
+}
+
 .farcaster-user-search {
   width: 100%;
   max-width: 800px;
   margin: 0 auto;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
 }
 
 /* Search form */
 .search-form {
-  display: flex;
-  margin-bottom: 2rem;
   width: 100%;
   max-width: 600px;
-  margin: 0 auto 2rem;
+  margin: 0 auto 1rem;
+}
+
+.search-input-wrapper {
+  display: flex;
+  width: 100%;
 }
 
 .search-input {
   flex: 1;
   padding: 12px 16px;
-  border: 2px solid var(--color-gray-200);
+  font-size: 1rem;
+  border: 2px solid var(--input-border);
   border-radius: 8px 0 0 8px;
-  font-size: 16px;
-  outline: none;
-  transition: border-color 0.2s;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
-  font-style: normal !important;
-}
-
-.search-input:focus {
-  border-color: var(--color-primary);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  transition: border-color 0.3s;
 }
 
 .search-button {
-  padding: 12px 24px;
-  background-color: var(--color-primary);
+  padding: 12px 20px;
+  background-color: var(--accent-color);
   color: white;
   border: none;
   border-radius: 0 8px 8px 0;
-  font-size: 16px;
-  font-weight: 600;
   cursor: pointer;
+  font-size: 16px;
+  font-weight: 500;
   transition: background-color 0.2s;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
-  font-style: normal !important;
 }
 
 .search-button:hover {
-  background-color: var(--color-primary-dark);
+  background-color: var(--accent-hover);
 }
 
 .search-button:disabled {
-  background-color: var(--color-gray-400);
+  background-color: #cccccc;
   cursor: not-allowed;
 }
 
@@ -60,7 +68,7 @@
 .loading-message {
   text-align: center;
   margin: 1rem 0;
-  color: var(--color-primary);
+  color: var(--accent-color);
   font-weight: 500;
 }
 
@@ -76,18 +84,20 @@
 
 /* User profile section */
 .user-profile {
-  background-color: white;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  padding: 24px;
-  margin-bottom: 24px;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  background-color: var(--component-bg);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  margin-top: 1.5rem;
 }
 
 .profile-info {
-  margin-bottom: 25px;
+  padding: 2rem;
+  background-color: var(--profile-header-bg);
+  color: var(--text-color);
 }
 
 .profile-header {
@@ -95,91 +105,95 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  margin-bottom: 20px;
 }
 
 .profile-image-name {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 1rem;
 }
 
 .profile-image {
-  margin-right: 15px;
-  flex-shrink: 0;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  border: 4px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 .profile-image img {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 3px solid #f0f0f0;
 }
 
 .display-name {
+  font-size: 1.75rem;
+  font-weight: 700;
   margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #333;
+  color: var(--heading-color);
 }
 
 .username-container {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 15px;
+  margin-bottom: 1rem;
 }
 
 .username-link {
-  color: #8b5cf6;
+  color: var(--accent-color);
   text-decoration: none;
-  font-size: 18px;
+  font-weight: 600;
+  font-size: 1.1rem;
   transition: color 0.2s;
 }
 
 .username-link:hover {
-  color: #7c3aed;
+  color: var(--accent-hover);
   text-decoration: underline;
 }
 
 .fid-display {
-  color: #666;
-  font-size: 14px;
-  padding: 3px 8px;
-  background-color: #f5f5f5;
-  border-radius: 4px;
+  font-size: 0.9rem;
+  color: var(--secondary-text);
+  margin-top: 0.5rem;
+  background-color: #f3f4f6;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
 }
 
 .wallet-info {
   width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  max-width: 350px;
+  margin: 1rem auto 0;
 }
 
 .wallet-toggle {
   display: flex;
   align-items: center;
-  background-color: transparent;
-  border: 1px solid #ddd;
-  padding: 8px 12px;
-  border-radius: 4px;
+  justify-content: center;
+  background-color: #f9fafb;
+  border: 1px solid #e5e7eb;
+  padding: 8px 16px;
+  border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
-  color: #555;
+  color: #374151;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .wallet-toggle:hover {
-  background-color: #f8f8f8;
-  border-color: #ccc;
+  background-color: #f3f4f6;
+  border-color: #d1d5db;
 }
 
 .dropdown-arrow {
-  margin-left: 6px;
+  margin-left: 8px;
   font-size: 10px;
   transition: transform 0.2s ease;
 }
@@ -191,53 +205,153 @@
 .wallet-list {
   list-style-type: none;
   padding: 0;
-  margin: 10px 0 0 0;
+  margin: 12px 0 0 0;
   width: 100%;
-  max-width: 400px;
 }
 
 .wallet-item {
-  margin-bottom: 5px;
+  margin-bottom: 8px;
   font-size: 14px;
-  background-color: #f9f9f9;
-  padding: 6px 10px;
-  border-radius: 4px;
+  background-color: #f9fafb;
+  padding: 8px 12px;
+  border-radius: 8px;
   text-align: center;
+  border: 1px solid #e5e7eb;
+}
+
+.wallet-item:hover {
+  background-color: #f3f4f6;
+}
+
+.wallet-link {
+  color: var(--accent-color);
+  text-decoration: none;
+  font-family: monospace;
+  font-size: 15px;
+}
+
+.wallet-link:hover {
+  text-decoration: underline;
+}
+
+.nft-container {
+  padding: 1.5rem;
 }
 
 .nft-header {
   display: flex;
   justify-content: center;
-  margin-bottom: 15px;
+  margin-bottom: 1.5rem;
 }
 
 .nft-count {
-  font-size: 16px;
-  color: #666;
+  font-size: 1rem;
+  color: #374151;
   margin: 0;
+  background-color: #f3f4f6;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 500;
 }
 
 .footer {
+  margin-top: 3rem;
+  padding: 1.5rem 0;
   text-align: center;
-  margin-top: 40px;
-  padding-top: 20px;
-  border-top: 1px solid #eaeaea;
-  color: #666;
-  font-size: 14px;
-}
-
-.footer p {
-  margin: 0;
+  font-size: 0.9rem;
+  color: var(--secondary-text);
+  border-top: 1px solid #e5e7eb;
 }
 
 .footer a {
-  color: #8b5cf6;
+  color: var(--accent-color);
   text-decoration: none;
-  margin-left: 5px;
+  font-weight: 600;
 }
 
 .footer a:hover {
   text-decoration: underline;
+}
+
+/* NFT display */
+.nft-display {
+  width: 100%;
+  margin-top: 1.5rem;
+}
+
+.loading-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 200px;
+}
+
+.loading-spinner:after {
+  content: '';
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.no-nfts-message {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 3rem 2rem;
+  background-color: #f9fafb;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.no-nfts-message p {
+  font-size: 1.1rem;
+  color: #4b5563;
+  margin: 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .user-profile {
+    border-radius: 8px;
+  }
+  
+  .profile-image {
+    width: 100px;
+    height: 100px;
+  }
+  
+  .display-name {
+    font-size: 1.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .profile-image {
+    width: 80px;
+    height: 80px;
+    margin-bottom: 0.75rem;
+  }
+  
+  .footer {
+    margin-top: 2rem;
+    padding: 1rem 0;
+  }
+}
+
+/* Fix compatibility with existing container */
+.farcaster-search-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px 10px;
 }
 
 /* NFT Count Display */
@@ -248,7 +362,7 @@
   color: var(--color-gray-600);
   font-size: 0.95rem;
   margin: 0.5rem auto 0.6rem;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
   width: 100%;
   text-align: center;
@@ -367,7 +481,7 @@
   background-color: white;
   color: var(--color-gray-700);
   transition: all 0.2s ease;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
 }
 
@@ -428,7 +542,7 @@
   color: var(--color-gray-600);
   cursor: pointer;
   transition: all 0.2s ease;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
 }
 
@@ -631,7 +745,7 @@
   .filter-results-count,
   .nft-count,
   .nft-count-number {
-    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     font-style: normal !important;
     text-transform: none !important;
     letter-spacing: normal !important;
@@ -654,7 +768,7 @@
   
   /* Override any potential italic or cursive styles */
   .nft-section-header h3 {
-    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
     font-style: normal !important;
     font-weight: 600 !important;
   }
@@ -963,24 +1077,28 @@
 }
 
 .search-header {
-  margin-bottom: 20px;
   text-align: center;
+  margin-bottom: 20px;
 }
 
-.search-instructions {
-  font-size: 18px;
-  margin-bottom: 25px;
+.search-header h1 {
+  font-size: 28px;
+  margin-bottom: 10px;
   color: #333;
 }
 
-.search-form {
-  margin-bottom: 30px;
+.search-instructions, 
+.search-header p {
+  font-size: 16px;
+  color: #666;
+  margin-bottom: 20px;
 }
 
-.search-input-wrapper {
+.search-input-container {
   display: flex;
   max-width: 600px;
   margin: 0 auto;
+  width: 100%;
 }
 
 .search-input {

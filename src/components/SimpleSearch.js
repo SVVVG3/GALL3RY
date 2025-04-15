@@ -19,11 +19,11 @@ const SimpleSearch = ({ onSearch }) => {
     <div className="farcaster-search-container">
       <div className="search-header">
         <h1>Search Farcaster Users</h1>
-        <p>Enter a Farcaster username to explore their NFT collection</p>
+        <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
       <form onSubmit={handleSubmit} className="search-form">
-        <div className="search-input-container">
+        <div className="search-input-wrapper">
           <input
             type="text"
             value={searchQuery}
