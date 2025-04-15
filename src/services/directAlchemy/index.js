@@ -117,17 +117,20 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     
     console.log(`Fetching NFTs for ${normalizedAddress} on ${normalizedChain}`);
     
-    // Build URL for the API call
-    const baseURL = normalizedChain === 'polygon' 
-      ? `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
-      : `https://eth-mainnet.g.alchemy.com/nft/v3/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
-      
+    // Use the proxy endpoint instead of direct API calls
+    // This ensures the server's API key is used and not exposed in client-side code
+    const proxyUrl = new URL(ALCHEMY_PROXY_URL, window.location.origin);
+    
+    // Add parameters to the URL
     const params = new URLSearchParams({
+      endpoint: 'getNftsForOwner',  // Use the correct endpoint name
+      chain: normalizedChain,
       owner: normalizedAddress,
       withMetadata: true,
       pageSize: options.pageSize || 25,
       excludeSpam: options.excludeSpam !== false,
-      orderBy: 'transferTime'
+      orderBy: 'transferTime',
+      includeMedia: true
     });
     
     // Add pageKey if provided
@@ -135,7 +138,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       params.append('pageKey', options.pageKey);
     }
     
-    const fullUrl = `${baseURL}/getNFTsForOwner?${params.toString()}`;
+    const fullUrl = `${proxyUrl}?${params.toString()}`;
     console.log(`API URL: ${fullUrl}`);
     
     // Set up request timeout
@@ -398,228 +401,77 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     includeMedia: true,
     includeContract: true,
     pageSize: options.pageSize || 100, // Default to larger page size
+    excludeSpam: options.excludeSpam !== false,
     ...options
   };
-
-  // Define maximum number of pages to fetch per address (to avoid infinite loops)
-  const MAX_PAGES_PER_ADDRESS = options.maxPages || 5; // Fetch up to 5 pages per address by default
   
-  // Sequential processing - slower but more reliable than Promise.all in production
-  for (let i = 0; i < validAddresses.length; i++) {
-    const address = validAddresses[i];
-    console.log(`Processing address ${i+1}/${validAddresses.length}: ${address}`);
-    
+  // Iterate through addresses sequentially for reliability
+  for (const address of validAddresses) {
     try {
-      // Track pagination for this address
-      let pageKey = null;
-      let currentPage = 0;
-      let addressNfts = [];
+      console.log(`Fetching NFTs for address: ${address} on ${normalizedChain}`);
       
-      // Fetch first page
-      let result = await fetchNFTsForAddress(address, normalizedChain, fullOptions);
+      // Use the fetchNFTsForAddress function which now uses the proxy
+      const result = await fetchNFTsForAddress(address, normalizedChain, fullOptions);
       
-      // Validate the result has nfts
-      if (!result || !result.nfts) {
-        console.warn(`No valid result or NFTs array for address ${address}`);
-        errors.push({ address, error: 'Invalid response structure' });
+      if (result.error) {
+        console.error(`Error fetching NFTs for ${address}:`, result.error);
+        errors.push({ address, error: result.error });
         continue;
       }
       
-      // Process first page of NFTs
-      if (Array.isArray(result.nfts) && result.nfts.length > 0) {
-        addressNfts = [...result.nfts];
-        console.log(`Got ${result.nfts.length} NFTs on first page for ${address}`);
+      const nfts = result.nfts || [];
+      
+      console.log(`Found ${nfts.length} NFTs for ${address}`);
+      
+      if (nfts.length > 0) {
+        // Tag each NFT with its owner address for filtering
+        const taggedNfts = nfts.map(nft => ({
+          ...nft,
+          ownerAddress: address, // Add owner address if not already present
+          _source: `${normalizedChain}:${address}` // Add source info for debugging
+        }));
+        
+        // Add to the aggregated list
+        allNfts.push(...taggedNfts);
+        totalNfts += nfts.length;
       }
       
-      // Get pageKey for pagination
-      pageKey = result.pageKey;
-      currentPage = 1;
-      
-      // If we have a pageKey and haven't reached the max pages, fetch more pages
-      while (pageKey && currentPage < MAX_PAGES_PER_ADDRESS) {
-        console.log(`Fetching page ${currentPage + 1} for ${address} using pageKey: ${pageKey.slice(0, 10)}...`);
-        
-        // Fetch next page with the pageKey
-        try {
-          const nextPageOptions = {
-            ...fullOptions,
-            pageKey: pageKey
-          };
-          
-          const nextPageResult = await fetchNFTsForAddress(address, normalizedChain, nextPageOptions);
-          
-          if (nextPageResult && Array.isArray(nextPageResult.nfts)) {
-            // Add NFTs from this page
-            addressNfts = [...addressNfts, ...nextPageResult.nfts];
-            console.log(`Added ${nextPageResult.nfts.length} more NFTs from page ${currentPage + 1} for ${address}`);
-            
-            // Update pageKey for next iteration
-            pageKey = nextPageResult.pageKey;
-            
-            // If we have no more pages, break the loop
-            if (!pageKey) {
-              console.log(`No more pages for ${address}`);
-              break;
-            }
-          } else {
-            console.warn(`Invalid or empty response for page ${currentPage + 1}`);
-            break;
-          }
-        } catch (pageError) {
-          console.error(`Error fetching page ${currentPage + 1} for ${address}:`, pageError);
-          errors.push({ address, error: `Error on page ${currentPage + 1}: ${pageError.message}` });
-          break;
-        }
-        
-        // Increment page counter
-        currentPage++;
-      }
-      
-      // If we hit the page limit but there are more NFTs, note this
-      if (pageKey && currentPage >= MAX_PAGES_PER_ADDRESS) {
-        console.warn(`Reached maximum of ${MAX_PAGES_PER_ADDRESS} pages for ${address}, but more NFTs exist`);
+      // Update if there are more results for any address
+      if (result.hasMore) {
         hasMoreData = true;
       }
-      
-      // Process all NFTs for this address
-      console.log(`Processing ${addressNfts.length} total NFTs for ${address}`);
-      
-      // Log detailed NFT validation information
-      console.log(`Got ${addressNfts.length} NFTs from API for ${address}, now validating each one`);
-      
-      // Valid NFTs exist
-      if (addressNfts.length > 0) {
-        // Keep track of valid NFTs for this address
-        let validNftsForAddress = 0;
-        let invalidNftsForAddress = 0;
-        
-        // Process each NFT with validation
-        addressNfts.forEach(nft => {
-          // Add better validation with detailed logging
-          if (!nft) {
-            console.warn(`Skipping null/undefined NFT for ${address}`);
-            invalidNftsForAddress++;
-            return;
-          }
-          
-          if (!nft.contractAddress || !nft.tokenId) {
-            console.warn(`Skipping NFT without contractAddress or tokenId for ${address}: ${JSON.stringify({
-              hasContractAddress: !!nft.contractAddress,
-              hasTokenId: !!nft.tokenId,
-              id: nft.id || 'missing'
-            })}`);
-            invalidNftsForAddress++;
-            return;
-          }
-          
-          // Ensure the owner address is set on each NFT
-          // Create a new object to avoid modifying the original by reference
-          const enhancedNft = {
-            ...nft,
-            ownerAddress: address,
-            // Ensure network is set
-            network: nft.network || normalizedChain,
-            // Ensure ID has network prefix
-            id: nft.id || `${normalizedChain}:${nft.contractAddress}-${nft.tokenId}`
-          };
-          
-          // Add a debug property to track where this NFT came from (useful for debugging)
-          enhancedNft._source = `${normalizedChain}:${address}`;
-          
-          // Make sure image exists - add placeholder if needed
-          if (!enhancedNft.image) {
-            // Try to extract from media or metadata
-            if (enhancedNft.media && Array.isArray(enhancedNft.media) && enhancedNft.media.length > 0) {
-              enhancedNft.image = {
-                originalUrl: enhancedNft.media[0].raw || enhancedNft.media[0].gateway || enhancedNft.media[0].uri,
-                thumbnailUrl: enhancedNft.media[0].thumbnailUrl || enhancedNft.media[0].gateway,
-                url: enhancedNft.media[0].gateway || enhancedNft.media[0].raw || enhancedNft.media[0].uri
-              };
-              console.log(`Generated image object from media for NFT ${enhancedNft.id}`);
-            } else if (enhancedNft.raw && enhancedNft.raw.metadata && enhancedNft.raw.metadata.image) {
-              enhancedNft.image = {
-                url: enhancedNft.raw.metadata.image,
-                originalUrl: enhancedNft.raw.metadata.image
-              };
-              console.log(`Generated image object from raw.metadata for NFT ${enhancedNft.id}`);
-            } else if (enhancedNft.metadata && enhancedNft.metadata.image) {
-              enhancedNft.image = {
-                url: enhancedNft.metadata.image,
-                originalUrl: enhancedNft.metadata.image
-              };
-              console.log(`Generated image object from metadata for NFT ${enhancedNft.id}`);
-            } else {
-              // Add a placeholder image property so our frontend doesn't break
-              enhancedNft.image = {
-                url: '/assets/placeholder-nft.svg',
-                originalUrl: '/assets/placeholder-nft.svg',
-                thumbnailUrl: '/assets/placeholder-nft.svg'
-              };
-              console.log(`Added placeholder image for NFT ${enhancedNft.id} with no image data`);
-            }
-          } else if (typeof enhancedNft.image === 'string') {
-            // Convert string image to object
-            enhancedNft.image = {
-              url: enhancedNft.image,
-              originalUrl: enhancedNft.image
-            };
-            console.log(`Converted string image to object for NFT ${enhancedNft.id}`);
-          }
-          
-          // Add basic collection if missing
-          if (!enhancedNft.collection) {
-            enhancedNft.collection = {
-              name: enhancedNft.contract?.name || 'Unknown Collection',
-              symbol: enhancedNft.contract?.symbol || '',
-              tokenType: enhancedNft.tokenType || enhancedNft.contract?.tokenType || 'ERC721'
-            };
-            console.log(`Generated collection object for NFT ${enhancedNft.id}`);
-          }
-          
-          allNfts.push(enhancedNft);
-          totalNfts++;
-          validNftsForAddress++;
-        });
-        
-        console.log(`Added ${validNftsForAddress} valid NFTs from ${address}, skipped ${invalidNftsForAddress} invalid NFTs`);
-        
-        if (pageKey) {
-          hasMoreData = true;
-        }
-      } else {
-        console.log(`No NFTs found for ${address}`);
-      }
     } catch (error) {
-      console.error(`Error processing address ${address}:`, error.message);
+      console.error(`Failed to fetch NFTs for ${address}:`, error.message);
       errors.push({ address, error: error.message });
     }
   }
   
-  // Final validation of NFT array
-  const finalNfts = allNfts.filter(nft => 
-    nft && 
-    typeof nft === 'object' && 
-    nft.contractAddress && 
-    nft.tokenId
-  );
+  // Sort NFTs by some sensible default
+  allNfts.sort((a, b) => {
+    // Sort by collection name first
+    const collectionA = a.collection?.name || '';
+    const collectionB = b.collection?.name || '';
+    return collectionA.localeCompare(collectionB);
+  });
   
-  if (finalNfts.length !== allNfts.length) {
-    console.warn(`Filtered out ${allNfts.length - finalNfts.length} invalid NFTs during final validation`);
+  // Deduplicate NFTs based on ID
+  const uniqueNfts = [];
+  const seenIds = new Set();
+  
+  for (const nft of allNfts) {
+    if (!seenIds.has(nft.id)) {
+      seenIds.add(nft.id);
+      uniqueNfts.push(nft);
+    }
   }
   
-  // Error reporting
-  if (errors.length > 0) {
-    console.warn(`Completed with ${errors.length} errors:`, errors);
-  }
-  
-  console.log(`Batch fetch complete. Returning ${finalNfts.length} NFTs from ${validAddresses.length} addresses across up to ${MAX_PAGES_PER_ADDRESS} pages per address`);
+  console.log(`Returning ${uniqueNfts.length} unique NFTs (from ${allNfts.length} total)`);
   
   return {
-    nfts: finalNfts,
-    totalCount: finalNfts.length,
-    pageKey: null, // No pagination for batch requests
+    nfts: uniqueNfts,
+    totalCount: totalNfts,
     hasMore: hasMoreData,
-    errors: errors.length > 0 ? errors : undefined
+    errors: errors.length > 0 ? errors : null
   };
 };
 
