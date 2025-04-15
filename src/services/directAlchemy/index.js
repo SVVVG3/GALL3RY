@@ -128,11 +128,21 @@ const fetchWithRetry = async (config, retries = 3, delay = 1000) => {
     
     console.warn(`Request failed, retrying (${retries} attempts left):`, error.message);
     
-    // Wait for the delay period
-    await new Promise(resolve => setTimeout(resolve, delay));
+    // Wait for the delay period - wrap in try/catch to prevent "i is not a function" errors
+    try {
+      await new Promise(resolve => setTimeout(resolve, delay));
+    } catch (timeoutError) {
+      console.error('Error in delay timeout:', timeoutError);
+      // Continue without delay if setTimeout fails for some reason
+    }
     
-    // Retry with exponential backoff
-    return fetchWithRetry(config, retries - 1, delay * 2);
+    // Retry with exponential backoff - wrap in try/catch
+    try {
+      return await fetchWithRetry(config, retries - 1, delay * 2);
+    } catch (retryError) {
+      console.error('Error in retry:', retryError);
+      throw retryError; // Re-throw the error after logging
+    }
   }
 };
 
