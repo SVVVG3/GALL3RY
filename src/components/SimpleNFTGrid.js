@@ -157,7 +157,9 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     // Only add proxy for external URLs (not for local assets)
     if (imageUrl && !imageUrl.startsWith('/') && !imageUrl.startsWith('data:')) {
       // Always use the image proxy for external URLs to avoid CORS issues
-      finalImageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+      // Make sure URL is properly encoded
+      const encodedUrl = encodeURIComponent(imageUrl);
+      finalImageUrl = `/api/image-proxy?url=${encodedUrl}`;
       console.log(`Using proxy for image: ${imageUrl}`);
     }
     
@@ -177,6 +179,8 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
         }}
         referrerPolicy="no-referrer"
         crossOrigin="anonymous"
+        // Use base URL for placeholder
+        placeholder="/assets/placeholder-nft.svg"
       />
     );
   };

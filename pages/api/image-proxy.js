@@ -30,14 +30,18 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing url parameter' });
   }
   
-  console.log(`Image proxy request for: ${url}`);
+  console.log(`Image proxy request for: ${decodeURIComponent(url)}`);
   
   try {
-    let proxyUrl = url;
+    // Always decode the URL to handle any encoded characters
+    let proxyUrl = decodeURIComponent(url);
+    
+    // Default headers for most requests
     let customHeaders = {
-      // Default headers for most requests
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-      'Referer': 'https://gall3ry.vercel.app/'
+      'Referer': 'https://gall3ry.vercel.app/',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br'
     };
     
     // Special handling for different URL types
@@ -47,10 +51,18 @@ export default async function handler(req, res) {
       console.log('Detected Alchemy CDN URL, adding special headers');
       customHeaders = {
         ...customHeaders,
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Cache-Control': 'no-cache',
         'Origin': 'https://gall3ry.vercel.app'
+      };
+    }
+    
+    // Handle OpenSea's seadn.io URLs specifically
+    if (proxyUrl.includes('i.seadn.io')) {
+      console.log('Detected OpenSea seadn.io URL, adding special headers');
+      customHeaders = {
+        ...customHeaders,
+        'Origin': 'https://opensea.io',
+        'Referer': 'https://opensea.io/'
       };
     }
     
@@ -60,11 +72,33 @@ export default async function handler(req, res) {
       console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
     }
     
+    // Handle ipfs links that aren't using the ipfs:// protocol
+    if (proxyUrl.includes('/ipfs/')) {
+      console.log('Detected standard IPFS gateway URL');
+      // Just keep the URL as is, but add special headers
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null
+      };
+    }
+    
     // Special handling for Arweave URLs
     if (proxyUrl.startsWith('ar://')) {
       proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
       console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
     }
+    
+    // Handle S3 URLs for AWS
+    if (proxyUrl.includes('amazonaws.com')) {
+      console.log('Detected AWS S3 URL, using direct access');
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null,
+        'Referer': null
+      };
+    }
+    
+    console.log(`Fetching from final URL: ${proxyUrl}`);
     
     // Fetch the image with retries
     let response;
@@ -99,6 +133,17 @@ export default async function handler(req, res) {
           if (urlWithoutParams !== proxyUrl) {
             console.log(`Retrying with cleaned URL: ${urlWithoutParams}`);
             proxyUrl = urlWithoutParams;
+            retries++;
+            continue;
+          }
+        }
+        
+        // For seadn.io URLs, try removing the w=500 parameter
+        if (proxyUrl.includes('i.seadn.io') && proxyUrl.includes('w=')) {
+          const cleanedUrl = proxyUrl.replace(/w=\d+(&|$)/, '');
+          if (cleanedUrl !== proxyUrl) {
+            console.log(`Retrying seadn.io without width parameter: ${cleanedUrl}`);
+            proxyUrl = cleanedUrl;
             retries++;
             continue;
           }
