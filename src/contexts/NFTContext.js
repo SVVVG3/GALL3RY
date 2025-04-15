@@ -519,70 +519,44 @@ export const NFTProvider = ({ children }) => {
       // Fetch from each selected chain with retry logic
       for (const chain of chainsToFetch) {
         try {
-          let attempt = 0;
-          let success = false;
-          let result = { nfts: [] };
+          console.log(`Fetching NFTs from ${chain}`);
           
-          // Try up to 2 times for each chain (reduced from 3)
-          while (attempt < 2 && !success) {
-            try {
-              console.log(`Fetching NFTs from ${chain} (attempt ${attempt + 1})`);
-              
-              if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
-                console.error('directAlchemyService or batchFetchNFTs is not available');
-                throw new Error('NFT service not properly initialized');
-              }
-              
-              const response = await directAlchemyService.batchFetchNFTs(
-                validAddresses,
-                chain,
-                {
-                  excludeSpam: excludeSpam,
-                  withMetadata: true,
-                  pageSize: 25 // Limit page size to reduce payload size
-                }
-              );
-              
-              // Safely check if the result is valid
-              if (response && Array.isArray(response.nfts)) {
-                result = response;
-                success = true;
-              } else if (response) {
-                console.warn(`Invalid response format from ${chain}:`, response);
-                // Create safe default if response is invalid
-                result = { 
-                  ...response, 
-                  nfts: Array.isArray(response?.nfts) ? response.nfts : [] 
-                };
-                success = true; // We'll still consider this a success to avoid retries
-              } else {
-                console.warn(`Null or undefined response from ${chain}`);
-                result = { nfts: [] };
-                success = true; // Consider it a success to avoid endless retries
-              }
-            } catch (error) {
-              console.error(`Error fetching from ${chain} (attempt ${attempt + 1}):`, error);
-              attempt++;
-              hasErrors = true;
-              
-              // Add delay between retries
-              if (attempt < 2) {
-                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-              }
-            }
+          if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
+            console.error('directAlchemyService or batchFetchNFTs is not available');
+            throw new Error('NFT service not properly initialized');
           }
           
+          // Make a single request to batchFetchNFTs which now handles all addresses internally
+          const response = await directAlchemyService.batchFetchNFTs(
+            validAddresses,
+            chain,
+            {
+              excludeSpam: excludeSpam,
+              withMetadata: true,
+              pageSize: 25 // Limit page size to reduce payload size
+            }
+          );
+          
+          // Ensure we got a valid response with NFTs array
+          if (!response) {
+            console.warn(`Null or undefined response from ${chain}`);
+            continue;
+          }
+          
+          // Ensure nfts is an array even if response structure is unexpected
+          const nfts = Array.isArray(response.nfts) ? response.nfts : [];
+          console.log(`Retrieved ${nfts.length} NFTs from ${chain}`);
+          
           // Add successfully fetched NFTs to the collection
-          if (Array.isArray(result.nfts)) {
-            console.log(`Retrieved ${result.nfts.length} NFTs from ${chain}`);
+          if (nfts.length > 0) {
             // Ensure we set the network property correctly
-            const nftsWithNetwork = result.nfts.map(nft => ({
+            const nftsWithNetwork = nfts.map(nft => ({
               ...nft,
               network: nft.network || chain // Ensure network is set
             }));
             allNFTs = [...allNFTs, ...nftsWithNetwork];
           } else {
-            console.warn(`No valid NFTs array from ${chain}, skipping`);
+            console.warn(`No NFTs found from ${chain}, continuing`);
           }
         } catch (chainError) {
           console.error(`Failed to process chain ${chain}:`, chainError);

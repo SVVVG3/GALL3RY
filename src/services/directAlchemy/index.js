@@ -275,7 +275,7 @@ const getNFTsForOwner = fetchNFTsForAddress;
 
 /**
  * Fetch NFTs for multiple addresses simultaneously
- * Enhanced with better error handling and retry logic
+ * Simplified implementation to avoid the "i is not a function" error
  */
 const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
   if (!addresses || !Array.isArray(addresses) || addresses.length === 0) {
@@ -293,186 +293,76 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
     return { nfts: [], totalCount: 0, pageKey: null, hasMore: false };
   }
 
-  // Create an object to track retry attempts for each address
-  const retryTracker = {};
-  validAddresses.forEach(addr => {
-    retryTracker[addr.toLowerCase()] = 0;
-  });
-
   try {
     console.log(`Batch fetching NFTs for ${validAddresses.length} addresses on ${chain}`);
     
-    // If we're using the proxy API, we can try to use its batch capability
-    if (USE_PROXY) {
-      try {
-        console.log('Using proxy batch API endpoint');
-        
-        const proxyUrl = `${ALCHEMY_PROXY_URL}?endpoint=getnftsforowner&chain=${chain}`;
-        console.log(`Making batch request to: ${proxyUrl}`);
-        
-        const requestBody = {
-          owners: validAddresses,
-          chain: chain,
-          pageSize: options.pageSize || 100,
-          withMetadata: options.withMetadata !== false,
-          excludeFilters: options.excludeSpam !== false ? ['SPAM'] : [],
-          includeMedia: true
-        };
-        
-        console.log('Request body:', JSON.stringify(requestBody));
-        
-        const response = await axios({
-          method: 'post',
-          url: proxyUrl,
-          data: requestBody,
-          timeout: 30000, // 30 second timeout
-          headers: {
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        // Verify the response structure and return if valid
-        if (response && response.data) {
-          console.log(`Batch API response received with status: ${response.status}`);
-          
-          // Handle different response formats safely
-          if (response.data.ownedNfts && Array.isArray(response.data.ownedNfts)) {
-            console.log(`Successful batch response with ${response.data.ownedNfts.length} NFTs`);
-            return {
-              nfts: response.data.ownedNfts,
-              totalCount: response.data.totalCount || response.data.ownedNfts.length,
-              pageKey: response.data.pageKey || null,
-              hasMore: !!response.data.pageKey
-            };
-          } else {
-            // If we got a response but it doesn't have the expected format
-            console.warn('Response data did not contain valid ownedNfts array:', 
-              Object.keys(response.data || {}).join(', '));
-            
-            // Return a valid but empty result to avoid errors
-            return {
-              nfts: [],
-              totalCount: 0,
-              pageKey: null,
-              hasMore: false
-            };
-          }
-        } else {
-          console.warn('Invalid response from batch API', response);
-          // Continue to individual requests fallback
-        }
-      } catch (error) {
-        console.warn('Batch API request failed, falling back to individual requests:', error.message);
-        if (error.response) {
-          console.warn('Error response:', error.response.status, error.response.data);
-        }
-        // Continue to individual requests fallback
-      }
-    }
-    
-    // Fallback: fetch NFTs for each address individually with retry logic
-    console.log('Using individual requests for each address with retry logic');
-    
+    // For multiple wallets, we need separate requests (this is the fundamental change)
+    // Use a straightforward Promise.all approach with proper error handling
     const allNfts = [];
     let totalCount = 0;
     
-    // Maximum number of concurrent requests
-    const MAX_CONCURRENT = 3;
-    
-    // Process addresses in batches to avoid too many concurrent requests
-    for (let i = 0; i < validAddresses.length; i += MAX_CONCURRENT) {
-      const batch = validAddresses.slice(i, i + MAX_CONCURRENT);
+    // Map each address to its own promise
+    const promises = validAddresses.map(address => {
+      const normalizedAddress = address.toLowerCase().trim();
       
-      console.log(`Processing batch ${Math.floor(i/MAX_CONCURRENT) + 1} of ${Math.ceil(validAddresses.length/MAX_CONCURRENT)}: ${batch.join(', ')}`);
-      
-      try {
-        // Execute requests for this batch concurrently
-        const batchPromises = batch.map(async (address) => {
-          const normalizedAddress = address.toLowerCase().trim();
-          
-          // Try up to 3 times for each address
-          for (let attempt = 0; attempt < 3; attempt++) {
-            try {
-              retryTracker[normalizedAddress] = attempt;
-              
-              // Add small delay between retries
-              if (attempt > 0) {
-                await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-                console.log(`Retry #${attempt} for ${normalizedAddress}`);
-              }
-              
-              const result = await fetchNFTsForAddress(
-                normalizedAddress,
-                chain,
-                {
-                  pageSize: options.pageSize || 100,
-                  withMetadata: options.withMetadata !== false,
-                  excludeSpam: options.excludeSpam !== false,
-                  timeout: 20000 + (attempt * 5000) // Increase timeout with each retry
-                }
-              );
-              
-              // Return successful result
-              return {
-                success: true,
-                address: normalizedAddress,
-                nfts: result.nfts || [],
-                count: result.nfts ? result.nfts.length : 0
-              };
-            } catch (error) {
-              console.error(`Attempt ${attempt + 1} failed for ${normalizedAddress}:`, error.message);
-              
-              // If this is the last attempt, return error result
-              if (attempt === 2) {
-                return {
-                  success: false,
-                  address: normalizedAddress,
-                  error: error.message,
-                  nfts: [],
-                  count: 0
-                };
-              }
-              // Otherwise continue to next retry attempt
-            }
-          }
-          
-          // If we reached here without returning, return an error result
-          return {
-            success: false,
-            address: normalizedAddress,
-            error: 'Max retries exceeded',
-            nfts: [],
-            count: 0
-          };
-        });
-        
-        // Execute all promises and handle any errors at the batch level
-        const results = await Promise.all(batchPromises);
-        
-        // Process results from this batch
-        if (Array.isArray(results)) {
-          results.forEach(result => {
-            if (result && result.success && Array.isArray(result.nfts)) {
-              // Add owner address to each NFT
-              const nftsWithOwner = result.nfts.map(nft => ({
-                ...nft,
-                ownerAddress: result.address
-              }));
-              
-              allNfts.push(...nftsWithOwner);
-              totalCount += result.count;
-            } else if (result) {
-              console.error(`Failed to fetch NFTs for ${result.address}: ${result.error || 'Unknown error'}`);
-            }
-          });
-        } else {
-          console.error('Unexpected non-array results from Promise.all');
+      // Return a promise that will either resolve with NFTs or resolve with an empty array on error
+      return fetchNFTsForAddress(
+        normalizedAddress,
+        chain,
+        {
+          pageSize: options.pageSize || 100,
+          withMetadata: options.withMetadata !== false,
+          excludeSpam: options.excludeSpam !== false
         }
-      } catch (batchError) {
-        console.error(`Error processing batch starting at index ${i}:`, batchError.message);
-        // Continue with next batch instead of failing completely
+      )
+      .then(result => {
+        // Process successful results
+        if (result && Array.isArray(result.nfts)) {
+          // Add owner address to each NFT
+          const nftsWithOwner = result.nfts.map(nft => ({
+            ...nft,
+            ownerAddress: normalizedAddress
+          }));
+          
+          return {
+            success: true,
+            address: normalizedAddress,
+            nfts: nftsWithOwner,
+            count: nftsWithOwner.length
+          };
+        } else {
+          console.warn(`No NFTs or invalid response for ${normalizedAddress}`);
+          return { 
+            success: true, 
+            address: normalizedAddress, 
+            nfts: [], 
+            count: 0 
+          };
+        }
+      })
+      .catch(error => {
+        // Handle errors for this specific address
+        console.error(`Error fetching NFTs for ${normalizedAddress}:`, error.message);
+        return { 
+          success: false, 
+          address: normalizedAddress, 
+          error: error.message,
+          nfts: [], 
+          count: 0 
+        };
+      });
+    });
+    
+    // Wait for all promises to complete (even those that failed)
+    const results = await Promise.all(promises);
+    
+    // Process all results
+    results.forEach(result => {
+      if (result && result.success && Array.isArray(result.nfts)) {
+        allNfts.push(...result.nfts);
+        totalCount += result.count;
       }
-    }
+    });
     
     console.log(`Successfully processed ${allNfts.length} NFTs from ${validAddresses.length} addresses`);
     
