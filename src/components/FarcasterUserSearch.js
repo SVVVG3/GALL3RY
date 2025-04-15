@@ -108,15 +108,33 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             if (!result) {
               console.warn('fetchAllNFTsForWallets returned undefined result');
               setUserNfts([]);
+              setSearchError('Could not fetch NFTs: Received empty response from server');
+            } else if (result.error) {
+              // Display error from the result if present
+              console.warn('fetchAllNFTsForWallets returned error:', result.error);
+              setUserNfts(result.nfts || []);
+              setSearchError(`Could not fetch all NFTs: ${result.error}`);
             } else if (!result.nfts) {
               console.warn('fetchAllNFTsForWallets result is missing nfts property:', result);
               setUserNfts([]);
+              setSearchError('Could not fetch NFTs: Invalid response format from server');
             } else if (!Array.isArray(result.nfts)) {
               console.warn('fetchAllNFTsForWallets returned invalid format - nfts is not an array:', result);
               setUserNfts([]);
+              setSearchError('Could not fetch NFTs: Received invalid NFT data format');
             } else {
               console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);
               setUserNfts(result.nfts);
+              
+              // Clear error if we got NFTs successfully
+              if (result.nfts.length > 0) {
+                setSearchError(null);
+              } else if (searchError) {
+                // Keep existing error if we still have no NFTs
+              } else {
+                // Set a gentle message if there are no NFTs but no error
+                setSearchError(`No NFTs found for user ${searchQuery}. They might not own any NFTs on the supported chains.`);
+              }
             }
           } catch (nftAPIError) {
             console.error('API Error fetching NFTs:', nftAPIError);

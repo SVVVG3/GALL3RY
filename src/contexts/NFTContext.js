@@ -516,15 +516,22 @@ export const NFTProvider = ({ children }) => {
       let allNFTs = [];
       let hasErrors = false;
       
+      // Check if directAlchemyService is available
+      if (!directAlchemyService) {
+        console.error('directAlchemyService is not available');
+        throw new Error('NFT service not properly initialized');
+      }
+      
+      // Check if batchFetchNFTs function exists
+      if (typeof directAlchemyService.batchFetchNFTs !== 'function') {
+        console.error('batchFetchNFTs function is not available');
+        throw new Error('NFT service missing required functions');
+      }
+      
       // Fetch from each selected chain with retry logic
       for (const chain of chainsToFetch) {
         try {
           console.log(`Fetching NFTs from ${chain}`);
-          
-          if (!directAlchemyService || typeof directAlchemyService.batchFetchNFTs !== 'function') {
-            console.error('directAlchemyService or batchFetchNFTs is not available');
-            throw new Error('NFT service not properly initialized');
-          }
           
           // Make a single request to batchFetchNFTs which now handles all addresses internally
           const response = await directAlchemyService.batchFetchNFTs(
@@ -537,7 +544,7 @@ export const NFTProvider = ({ children }) => {
             }
           );
           
-          // Ensure we got a valid response with NFTs array
+          // Ensure we got a valid response
           if (!response) {
             console.warn(`Null or undefined response from ${chain}`);
             continue;
@@ -563,6 +570,12 @@ export const NFTProvider = ({ children }) => {
           hasErrors = true;
           // Continue with next chain instead of failing completely
         }
+      }
+      
+      // Protect against empty array
+      if (!allNFTs || !Array.isArray(allNFTs)) {
+        console.warn('allNFTs is not a valid array, creating empty array');
+        allNFTs = [];
       }
       
       // Process all NFTs to ensure consistent structure - handle errors gracefully
