@@ -90,62 +90,57 @@ const buildUrl = (baseUrl, params = {}) => {
 };
 
 /**
- * ULTRA SIMPLIFIED Fetch NFTs for an address - Guaranteed to work in production
- * No retry logic, no complex Promise chains, simple error handling
- * Single direct fetch request with timeout
+ * ULTRA SIMPLIFIED VERSION FOR PRODUCTION
+ * Fetch NFTs for an address on a specific chain.
  */
 const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
-  // Defensive check for address
-  if (!address) {
-    console.error('No address provided to fetchNFTsForAddress');
-    return { nfts: [], pageKey: null, hasMore: false };
-  }
-  
   try {
-    // Normalize the address
+    // Validate address
+    if (!address || typeof address !== 'string') {
+      console.error('Invalid address provided to fetchNFTsForAddress');
+      return { nfts: [], pageKey: null, hasMore: false, error: 'Invalid address' };
+    }
+
+    // Normalize parameters
     const normalizedAddress = address.toLowerCase().trim();
-    
-    // Normalize chain parameter
     const normalizedChain = chain.includes('-') ? chain.split('-')[0] : chain;
     
-    // Generate cache key
-    const key = cacheKey('getNftsForOwner', normalizedAddress, normalizedChain, options);
+    // Create cache key
+    const key = `nfts_${normalizedChain}_${normalizedAddress}_${options.excludeSpam ? 'no_spam' : 'with_spam'}`;
     
-    // Check cache
-    const cachedData = getCachedData(key);
-    if (cachedData) {
-      console.log(`Using cached NFTs for ${normalizedAddress} on ${normalizedChain}`);
-      return cachedData;
+    // Check cache first
+    const cached = getCachedData(key);
+    if (cached) {
+      console.log(`Using cached NFT data for ${normalizedAddress} on ${normalizedChain}`);
+      return cached;
     }
     
-    // Build the API URL base
-    const apiUrl = `${ALCHEMY_PROXY_URL}`;
+    console.log(`Fetching NFTs for ${normalizedAddress} on ${normalizedChain}`);
     
-    // Build query parameters - ensure we get all the media and metadata
-    const params = {
-      endpoint: NFT_ENDPOINTS.getNftsForOwner,
-      chain: normalizedChain,
+    // Build URL for the API call
+    const baseURL = normalizedChain === 'polygon' 
+      ? `https://polygon-mainnet.g.alchemy.com/nft/v3/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`
+      : `https://eth-mainnet.g.alchemy.com/nft/v3/${process.env.NEXT_PUBLIC_ALCHEMY_API_KEY}`;
+      
+    const params = new URLSearchParams({
       owner: normalizedAddress,
-      pageSize: options.pageSize || 100,
-      withMetadata: true, // Always get metadata
+      withMetadata: true,
+      pageSize: options.pageSize || 25,
       excludeSpam: options.excludeSpam !== false,
-      includeMedia: true, // Always include media data
-      includeContract: true // Include contract details
-    };
+      orderBy: 'transferTime'
+    });
     
     // Add pageKey if provided
     if (options.pageKey) {
-      params.pageKey = options.pageKey;
+      params.append('pageKey', options.pageKey);
     }
     
-    // Build full URL with query parameters
-    const fullUrl = buildUrl(apiUrl, params);
+    const fullUrl = `${baseURL}/getNFTsForOwner?${params.toString()}`;
+    console.log(`API URL: ${fullUrl}`);
     
-    console.log(`Fetching NFTs for ${normalizedAddress} on ${normalizedChain}`, { url: fullUrl });
-    
-    // ULTRA SIMPLIFIED - Single direct fetch with timeout
+    // Set up request timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
     
     try {
       const response = await fetch(fullUrl, { 
@@ -159,7 +154,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       // Check if the response is OK
       if (!response.ok) {
         console.error(`API error: ${response.status} ${response.statusText}`);
-        return { nfts: [], pageKey: null, hasMore: false };
+        return { nfts: [], pageKey: null, hasMore: false, error: `API error: ${response.status} ${response.statusText}` };
       }
       
       // Parse the JSON response
@@ -171,31 +166,75 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
         hasOwnedNfts: !!data.ownedNfts,
         ownedNftsCount: data.ownedNfts ? data.ownedNfts.length : 0,
         totalCount: data.totalCount || 0,
-        hasPageKey: !!data.pageKey
+        hasPageKey: !!data.pageKey,
+        responseStructure: Object.keys(data).join(', ')
       });
+      
+      // Sample log of the first NFT if available
+      if (data.ownedNfts && data.ownedNfts.length > 0) {
+        const sampleNft = data.ownedNfts[0];
+        console.log(`Sample NFT from API (first of ${data.ownedNfts.length}):`, {
+          title: sampleNft.title || 'No title',
+          tokenId: sampleNft.tokenId || 'No tokenId',
+          hasContract: !!sampleNft.contract,
+          contractAddress: sampleNft.contract?.address || 'No contract address',
+          hasMedia: !!sampleNft.media && Array.isArray(sampleNft.media) && sampleNft.media.length > 0,
+          hasImage: !!sampleNft.image,
+          imageType: sampleNft.image ? typeof sampleNft.image : 'none'
+        });
+      }
       
       // Basic validation
       if (!data) {
-        return { nfts: [], pageKey: null, hasMore: false };
+        console.error('Empty response data from API');
+        return { nfts: [], pageKey: null, hasMore: false, error: 'Empty response data' };
       }
       
       const ownedNfts = data.ownedNfts || [];
+      
+      if (!Array.isArray(ownedNfts)) {
+        console.error('ownedNfts is not an array:', typeof ownedNfts);
+        return { nfts: [], pageKey: null, hasMore: false, error: 'Invalid response format' };
+      }
+      
+      console.log(`Processing ${ownedNfts.length} NFTs from API response`);
+      
       const formattedNfts = [];
       
       // Fully defensive approach to processing NFTs
       for (let i = 0; i < ownedNfts.length; i++) {
         try {
           const nft = ownedNfts[i];
-          if (!nft) continue;
+          if (!nft) {
+            console.warn(`NFT at index ${i} is null or undefined, skipping`);
+            continue;
+          }
           
           // Store the full contract data, especially important for OpenSea metadata
           const contract = nft.contract || {};
           
+          if (!nft.tokenId) {
+            console.warn(`NFT at index ${i} has no tokenId, skipping:`, JSON.stringify({
+              title: nft.title || 'No title', 
+              hasContract: !!nft.contract,
+              contractAddress: nft.contract?.address || 'No address'
+            }));
+            continue;
+          }
+          
+          if (!contract.address) {
+            console.warn(`NFT at index ${i} has no contract address, skipping:`, JSON.stringify({
+              title: nft.title || 'No title',
+              tokenId: nft.tokenId
+            }));
+            continue;
+          }
+          
           // Create a well-structured NFT object that preserves all the Alchemy data
-          formattedNfts.push({
-            id: `${normalizedChain}:${nft.contract?.address || 'unknown'}-${nft.tokenId || '0'}`,
+          const formattedNft = {
+            id: `${normalizedChain}:${contract.address || 'unknown'}-${nft.tokenId || '0'}`,
             tokenId: nft.tokenId || '0',
-            contractAddress: nft.contract?.address || 'unknown',
+            contractAddress: contract.address || 'unknown',
             name: nft.title || nft.name || `#${nft.tokenId || '0'}`,
             description: nft.description || '',
             network: normalizedChain,
@@ -227,9 +266,54 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
             
             // Timestamp for potential sorting
             timeLastUpdated: nft.timeLastUpdated || new Date().toISOString(),
-          });
+          };
+          
+          // Add debug field that tracks which chain/address this came from
+          formattedNft._source = `${normalizedChain}:${normalizedAddress}`;
+          
+          // Make sure image exists - add placeholder if needed
+          if (!formattedNft.image) {
+            // Try to extract from media or metadata
+            if (formattedNft.media && Array.isArray(formattedNft.media) && formattedNft.media.length > 0) {
+              formattedNft.image = {
+                originalUrl: formattedNft.media[0].raw || formattedNft.media[0].gateway || formattedNft.media[0].uri,
+                thumbnailUrl: formattedNft.media[0].thumbnailUrl || formattedNft.media[0].gateway,
+                url: formattedNft.media[0].gateway || formattedNft.media[0].raw || formattedNft.media[0].uri
+              };
+              console.log(`Generated image object from media for NFT ${formattedNft.id}`);
+            } else if (formattedNft.raw && formattedNft.raw.metadata && formattedNft.raw.metadata.image) {
+              formattedNft.image = {
+                url: formattedNft.raw.metadata.image,
+                originalUrl: formattedNft.raw.metadata.image
+              };
+              console.log(`Generated image object from raw.metadata for NFT ${formattedNft.id}`);
+            } else if (formattedNft.metadata && formattedNft.metadata.image) {
+              formattedNft.image = {
+                url: formattedNft.metadata.image,
+                originalUrl: formattedNft.metadata.image
+              };
+              console.log(`Generated image object from metadata for NFT ${formattedNft.id}`);
+            } else {
+              // Add a placeholder image property so our frontend doesn't break
+              formattedNft.image = {
+                url: '/assets/placeholder-nft.svg',
+                originalUrl: '/assets/placeholder-nft.svg',
+                thumbnailUrl: '/assets/placeholder-nft.svg'
+              };
+              console.log(`Added placeholder image for NFT ${formattedNft.id} with no image data`);
+            }
+          } else if (typeof formattedNft.image === 'string') {
+            // Convert string image to object
+            formattedNft.image = {
+              url: formattedNft.image,
+              originalUrl: formattedNft.image
+            };
+            console.log(`Converted string image to object for NFT ${formattedNft.id}`);
+          }
+          
+          formattedNfts.push(formattedNft);
         } catch (e) {
-          console.warn('Error formatting NFT:', e.message);
+          console.warn(`Error formatting NFT at index ${i}:`, e.message);
           // Continue with next NFT even if this one fails
         }
       }
@@ -242,7 +326,8 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
           name: sample.name,
           collection: sample.collection?.name,
           hasImage: !!sample.image,
-          hasMedia: !!sample.media
+          imageType: sample.image ? typeof sample.image : 'none',
+          hasMedia: Array.isArray(sample.media) && sample.media.length > 0
         });
       }
       
@@ -331,20 +416,31 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
         continue;
       }
       
+      // Log detailed NFT validation information
+      console.log(`Got ${result.nfts.length} NFTs from API for ${address}, now validating each one`);
+      
       // Valid NFTs exist
       if (Array.isArray(result.nfts) && result.nfts.length > 0) {
         // Keep track of valid NFTs for this address
         let validNftsForAddress = 0;
+        let invalidNftsForAddress = 0;
         
         // Process each NFT with validation
         result.nfts.forEach(nft => {
+          // Add better validation with detailed logging
           if (!nft) {
             console.warn(`Skipping null/undefined NFT for ${address}`);
+            invalidNftsForAddress++;
             return;
           }
           
           if (!nft.contractAddress || !nft.tokenId) {
-            console.warn(`Skipping NFT with missing contractAddress or tokenId for ${address}`);
+            console.warn(`Skipping NFT without contractAddress or tokenId for ${address}: ${JSON.stringify({
+              hasContractAddress: !!nft.contractAddress,
+              hasTokenId: !!nft.tokenId,
+              id: nft.id || 'missing'
+            })}`);
+            invalidNftsForAddress++;
             return;
           }
           
@@ -359,12 +455,65 @@ const batchFetchNFTs = async (addresses, chain = 'eth', options = {}) => {
             id: nft.id || `${normalizedChain}:${nft.contractAddress}-${nft.tokenId}`
           };
           
+          // Add a debug property to track where this NFT came from (useful for debugging)
+          enhancedNft._source = `${normalizedChain}:${address}`;
+          
+          // Make sure image exists - add placeholder if needed
+          if (!enhancedNft.image) {
+            // Try to extract from media or metadata
+            if (enhancedNft.media && Array.isArray(enhancedNft.media) && enhancedNft.media.length > 0) {
+              enhancedNft.image = {
+                originalUrl: enhancedNft.media[0].raw || enhancedNft.media[0].gateway || enhancedNft.media[0].uri,
+                thumbnailUrl: enhancedNft.media[0].thumbnailUrl || enhancedNft.media[0].gateway,
+                url: enhancedNft.media[0].gateway || enhancedNft.media[0].raw || enhancedNft.media[0].uri
+              };
+              console.log(`Generated image object from media for NFT ${enhancedNft.id}`);
+            } else if (enhancedNft.raw && enhancedNft.raw.metadata && enhancedNft.raw.metadata.image) {
+              enhancedNft.image = {
+                url: enhancedNft.raw.metadata.image,
+                originalUrl: enhancedNft.raw.metadata.image
+              };
+              console.log(`Generated image object from raw.metadata for NFT ${enhancedNft.id}`);
+            } else if (enhancedNft.metadata && enhancedNft.metadata.image) {
+              enhancedNft.image = {
+                url: enhancedNft.metadata.image,
+                originalUrl: enhancedNft.metadata.image
+              };
+              console.log(`Generated image object from metadata for NFT ${enhancedNft.id}`);
+            } else {
+              // Add a placeholder image property so our frontend doesn't break
+              enhancedNft.image = {
+                url: '/assets/placeholder-nft.svg',
+                originalUrl: '/assets/placeholder-nft.svg',
+                thumbnailUrl: '/assets/placeholder-nft.svg'
+              };
+              console.log(`Added placeholder image for NFT ${enhancedNft.id} with no image data`);
+            }
+          } else if (typeof enhancedNft.image === 'string') {
+            // Convert string image to object
+            enhancedNft.image = {
+              url: enhancedNft.image,
+              originalUrl: enhancedNft.image
+            };
+            console.log(`Converted string image to object for NFT ${enhancedNft.id}`);
+          }
+          
+          // Add basic collection if missing
+          if (!enhancedNft.collection) {
+            enhancedNft.collection = {
+              name: enhancedNft.contract?.name || 'Unknown Collection',
+              symbol: enhancedNft.contract?.symbol || '',
+              tokenType: enhancedNft.tokenType || enhancedNft.contract?.tokenType || 'ERC721'
+            };
+            console.log(`Generated collection object for NFT ${enhancedNft.id}`);
+          }
+          
           allNfts.push(enhancedNft);
           totalNfts++;
           validNftsForAddress++;
         });
         
-        console.log(`Added ${validNftsForAddress} valid NFTs from ${address}`);
+        console.log(`Added ${validNftsForAddress} valid NFTs from ${address}, skipped ${invalidNftsForAddress} invalid NFTs`);
         
         if (result.hasMore) {
           hasMoreData = true;

@@ -214,224 +214,279 @@ export const NFTProvider = ({ children }) => {
   }, [collectionHolders]);
   
   // Process NFTs to ensure consistent structure and handle media properties properly
-  const processNFTs = useCallback(async (nfts, options = {}) => {
-    // Skip if no NFTs
-    if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
-      console.log('No NFTs to process');
+  const processNFTs = useCallback(async (nfts) => {
+    // Validate input
+    if (!nfts || !Array.isArray(nfts)) {
+      console.warn('Invalid NFT array passed to processNFTs');
       return [];
     }
     
+    // Return empty array for empty input
+    if (nfts.length === 0) {
+      return [];
+    }
+
     try {
-      console.log(`Processing ${nfts.length} NFTs...`);
+      // First, filter out any obviously bad data
+      const validNfts = nfts.filter(nft => 
+        nft && typeof nft === 'object' && 
+        (nft.contractAddress || (nft.contract && nft.contract.address))
+      );
       
-      const enhancedNFTs = nfts
-        .filter(nft => nft !== null && nft !== undefined) // Filter out null/undefined entries
-        .map(nft => {
-          try {
-            // Skip NFTs that don't have the minimum required properties
-            if (!nft || typeof nft !== 'object') {
-              console.warn('Invalid NFT object:', nft);
-              return null;
-            }
-
-            // Create a unique id if not present
-            const network = nft.network || nft.chain || 'eth';
-            const tokenId = (nft.tokenId || '0').toString();
-            const contractAddress = nft.contract?.address || nft.contractAddress || 'unknown';
-            
-            const id = nft.id || 
-              (contractAddress && tokenId ? 
-                `${network}:${contractAddress}-${tokenId}` : 
-                `unknown-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`);
-            
-            let imageUrl = '';
-            let mediaType = 'image';
-            
-            // Safely extract media data
-            try {
-              // Image handling - based on Alchemy V3 API structure
-              // 1. Alchemy image.gateway is the most reliable source
-              if (nft.image) {
-                if (typeof nft.image === 'object' && nft.image !== null) {
-                  imageUrl = nft.image.gateway || nft.image.url || nft.image.thumbnail || '';
-                } else if (typeof nft.image === 'string') {
-                  imageUrl = nft.image;
-                }
-              } 
-              // 2. Media array with gateway URLs
-              else if (nft.media) {
-                if (Array.isArray(nft.media)) {
-                  // Safely find a media item with a valid URL
-                  const mediaItem = nft.media.find(m => m && 
-                    (typeof m === 'object' && (m.gateway || m.thumbnail || m.raw || m.uri)));
-                  
-                  if (mediaItem) {
-                    imageUrl = mediaItem.gateway || mediaItem.thumbnail || mediaItem.raw || mediaItem.uri || '';
-                    mediaType = mediaItem.format || 'image';
-                  }
-                } 
-                // 3. Handle single media object (not array)
-                else if (nft.media && typeof nft.media === 'object') {
-                  const mediaObj = nft.media;
-                  imageUrl = mediaObj.gateway || mediaObj.thumbnail || mediaObj.raw || mediaObj.uri || '';
-                  mediaType = mediaObj.format || 'image';
-                }
-              }
-              // 4. Check raw metadata
-              if (!imageUrl && nft.metadata) {
-                imageUrl = nft.metadata.image || nft.metadata.image_url || '';
-              }
-              // 5. Check tokenUri
-              if (!imageUrl && nft.tokenUri && nft.tokenUri.gateway) {
-                imageUrl = nft.tokenUri.gateway;
-              }
-              // 6. Check contract metadata
-              if (!imageUrl && nft.contractMetadata && nft.contractMetadata.openSea) {
-                imageUrl = nft.contractMetadata.openSea.imageUrl || '';
-              }
-            } catch (mediaError) {
-              console.error('Error extracting media data:', mediaError);
-              imageUrl = '';
-            }
-
-            // Ensure we have contract information
-            let contractName = 'Unknown Collection';
-            try {
-              contractName = 
-                (nft.contract?.name) || 
-                (nft.contractMetadata?.name) || 
-                (nft.title ? nft.title.split('#')[0].trim() : 'Unknown Collection');
-            } catch (contractError) {
-              console.error('Error extracting contract name:', contractError);
-            }
-            
-            // Ensure we have title/name
-            let title = '';
-            let name = '';
-            try {
-              title = nft.title || nft.name || `#${tokenId || '?'}`;
-              name = nft.name || nft.title || `${contractName} #${tokenId || '?'}`;
-            } catch (nameError) {
-              title = `NFT #${tokenId || '?'}`;
-              name = `NFT #${tokenId || '?'}`;
-            }
-            
-            // Ensure we have owner information
-            const ownerAddress = nft.ownerAddress || nft.owner || '';
-            
-            return {
-              id,
-              tokenId,
-              contractAddress,
-              title,
-              name,
-              description: nft.description || '',
-              network,
-              image: {
-                url: imageUrl,
-                type: mediaType
-              },
-              contract: {
-                name: contractName,
-                address: contractAddress,
-                type: nft.contract?.tokenType || 'ERC721'
-              },
-              ownerAddress
-            };
-          } catch (err) {
-            console.error('Error enhancing NFT:', err, 'NFT:', JSON.stringify(nft).slice(0, 200) + '...');
-            // Return minimal valid NFT to avoid breaking the app
-            return {
-              id: `unknown-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-              title: 'Unknown NFT',
-              name: 'Unknown NFT',
-              description: 'Error processing NFT data',
-              network: 'eth',
-              image: { url: '', type: 'image' },
-              contract: { name: 'Unknown', address: '', type: 'ERC721' },
-              ownerAddress: ''
-            };
+      if (validNfts.length !== nfts.length) {
+        console.warn(`Filtered out ${nfts.length - validNfts.length} invalid NFTs during processing`);
+      }
+      
+      // For each NFT, ensure all required fields are present and normalized
+      return validNfts.map(nft => {
+        try {
+          // Ensure we have a contractAddress (sometimes it's only in nft.contract.address)
+          if (!nft.contractAddress && nft.contract && nft.contract.address) {
+            nft.contractAddress = nft.contract.address;
           }
-        })
-        .filter(Boolean); // Remove any null entries
-      
-      return enhancedNFTs;
+          
+          // Ensure we have a tokenId
+          if (!nft.tokenId && nft.token_id) {
+            nft.tokenId = nft.token_id;
+          }
+          
+          // Ensure we have a network (sometimes called chain)
+          if (!nft.network && nft.chain) {
+            nft.network = nft.chain;
+          }
+          
+          // If we still don't have a network, default to 'eth'
+          if (!nft.network) {
+            nft.network = 'eth';
+          }
+          
+          // Normalize image field if it exists
+          if (nft.image) {
+            // If image is a string, convert to object format
+            if (typeof nft.image === 'string') {
+              nft.image = {
+                url: nft.image,
+                originalUrl: nft.image
+              };
+            }
+          } else {
+            // Try to extract image from other fields if not present
+            if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+              // Extract from media field
+              nft.image = {
+                url: nft.media[0].gateway || nft.media[0].raw || nft.media[0].uri,
+                originalUrl: nft.media[0].raw || nft.media[0].gateway || nft.media[0].uri,
+                thumbnailUrl: nft.media[0].thumbnailUrl || nft.media[0].gateway
+              };
+            } else if (nft.metadata && nft.metadata.image) {
+              // Extract from metadata
+              nft.image = {
+                url: nft.metadata.image,
+                originalUrl: nft.metadata.image
+              };
+            } else if (nft.raw && nft.raw.metadata && nft.raw.metadata.image) {
+              // Extract from raw metadata
+              nft.image = {
+                url: nft.raw.metadata.image,
+                originalUrl: nft.raw.metadata.image
+              };
+            } else {
+              // Use placeholder as last resort
+              nft.image = {
+                url: '/assets/placeholder-nft.svg',
+                originalUrl: '/assets/placeholder-nft.svg',
+                thumbnailUrl: '/assets/placeholder-nft.svg'
+              };
+            }
+          }
+          
+          // Normalize IPFS URLs
+          if (nft.image && nft.image.url && typeof nft.image.url === 'string' && 
+              nft.image.url.startsWith('ipfs://')) {
+            nft.image.url = nft.image.url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+          }
+          
+          if (nft.image && nft.image.originalUrl && typeof nft.image.originalUrl === 'string' && 
+              nft.image.originalUrl.startsWith('ipfs://')) {
+            nft.image.originalUrl = nft.image.originalUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+          }
+          
+          return nft;
+        } catch (e) {
+          console.warn('Error processing individual NFT:', e);
+          // Return the original NFT if processing failed
+          return nft;
+        }
+      });
     } catch (e) {
-      console.error('Error in processNFTs:', e);
-      // Return a safe array of basic NFT objects if processing fails completely
-      return nfts.map((nft, index) => ({
-        id: `fallback-${index}-${Date.now()}`,
-        title: 'NFT Data Error',
-        name: 'NFT Data Error',
-        description: 'Could not process NFT data',
-        image: { url: '', type: 'image' },
-        contract: { name: 'Unknown', address: '', type: 'ERC721' },
-        ownerAddress: ''
-      }));
+      console.error('Error processing NFTs:', e);
+      // Return original array in case of error
+      return nfts;
     }
   }, []);
   
-  // Apply filters to NFTs based on current filter settings
+  // Apply filters (chain, collection, search query)
   const applyFilters = useCallback((nfts) => {
+    // Safety check
     if (!nfts || !Array.isArray(nfts) || nfts.length === 0) {
-      console.log('applyFilters received empty or invalid NFT array');
+      console.log('No NFTs to filter');
       return [];
     }
+    
+    // Count for logging
+    const originalCount = nfts.length;
 
-    console.log(`Starting filter process with ${nfts.length} NFTs`);
+    // Create a copy of the array to avoid mutating the original
     let filtered = [...nfts];
     
-    // Filter by selected chain
+    // Filter out invalid NFTs first
+    const validNfts = filtered.filter(nft => 
+      nft && 
+      typeof nft === 'object' && 
+      (nft.contractAddress || (nft.contract && nft.contract.address)) && 
+      nft.tokenId
+    );
+    
+    if (validNfts.length !== filtered.length) {
+      console.log(`Filtered out ${filtered.length - validNfts.length} invalid NFTs`);
+      filtered = validNfts;
+    }
+    
+    const afterValidationCount = filtered.length;
+    
+    // Keep track of which filters actually remove items (for debugging)
+    const filterResults = {
+      original: originalCount,
+      afterBasicValidation: afterValidationCount,
+      selectedChains: 0,
+      excludeSpam: 0,
+      searchQuery: 0,
+      selectedWallets: 0,
+      final: 0
+    };
+    
+    // Filter by selected chains
     if (selectedChains.length > 0 && !selectedChains.includes('all')) {
-      console.log(`Filtering by chains: ${selectedChains.join(', ')}`);
       const beforeCount = filtered.length;
+      
       filtered = filtered.filter(nft => {
-        if (!nft) return false;
-        const network = nft.network || nft.chain || 'eth';
-        return selectedChains.includes(network);
+        const nftChain = nft.network || nft.chain || 'eth';
+        return selectedChains.includes(nftChain);
       });
-      console.log(`After chain filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
+      
+      filterResults.selectedChains = beforeCount - filtered.length;
+      console.log(`Chain filter: ${filtered.length} NFTs remain after filtering by chains: ${selectedChains.join(', ')}`);
+    }
+    
+    // Filter out spam NFTs if requested
+    if (excludeSpam) {
+      const beforeCount = filtered.length;
+      
+      filtered = filtered.filter(nft => {
+        // Skip if NFT is marked as spam
+        if (nft.isSpam === true) {
+          return false;
+        }
+        
+        // Skip if OpenSea metadata indicates it's spam
+        if (nft.contract && 
+            nft.contract.openSeaMetadata && 
+            nft.contract.openSeaMetadata.safelistRequestStatus === 'spam') {
+          return false;
+        }
+        
+        return true;
+      });
+      
+      filterResults.excludeSpam = beforeCount - filtered.length;
+      console.log(`Spam filter: ${filtered.length} NFTs remain after excluding spam`);
     }
     
     // Filter by search query
     if (searchQuery) {
-      console.log(`Filtering by search query: ${searchQuery}`);
-      const query = searchQuery.toLowerCase();
       const beforeCount = filtered.length;
+      const query = searchQuery.toLowerCase();
+      
       filtered = filtered.filter(nft => {
-        if (!nft) return false;
-        // Search in title, description, contract, token ID
-        return (
-          (nft.name && nft.name.toLowerCase().includes(query)) ||
-          (nft.description && nft.description.toLowerCase().includes(query)) ||
-          (nft.contract?.name && nft.contract.name.toLowerCase().includes(query)) ||
-          (nft.tokenId && String(nft.tokenId).toLowerCase().includes(query))
+        // Make all checks much more lenient
+        try {
+          // Only attempt to search if we have a valid NFT object
+          if (!nft) return false;
+          
+          // Search in title, description, contract, token ID
+          const nameMatch = nft.name && typeof nft.name === 'string' && 
+                          nft.name.toLowerCase().includes(query);
+          
+          const descMatch = nft.description && typeof nft.description === 'string' && 
+                          nft.description.toLowerCase().includes(query);
+          
+          const contractMatch = nft.contract && nft.contract.name && 
+                              typeof nft.contract.name === 'string' && 
+                              nft.contract.name.toLowerCase().includes(query);
+                              
+          const collectionMatch = nft.collection && nft.collection.name && 
+                                typeof nft.collection.name === 'string' && 
+                                nft.collection.name.toLowerCase().includes(query);
+          
+          const tokenIdMatch = nft.tokenId && typeof nft.tokenId === 'string' && 
+                             nft.tokenId.toLowerCase().includes(query);
+                             
+          return nameMatch || descMatch || contractMatch || collectionMatch || tokenIdMatch;
+        } catch (e) {
+          console.warn(`Error while filtering NFT by search query: ${e.message}`);
+          // In case of error during filtering, include the NFT
+          return true;
+        }
+      });
+      
+      filterResults.searchQuery = beforeCount - filtered.length;
+      console.log(`Search filter: ${filtered.length} NFTs remain after filtering by query: "${searchQuery}"`);
+    }
+    
+    // Filter by selected wallets
+    if (selectedWallets.length > 0) {
+      const beforeCount = filtered.length;
+      
+      filtered = filtered.filter(nft => {
+        if (!nft || !nft.ownerAddress) return false;
+        
+        const ownerAddress = typeof nft.ownerAddress === 'string' ? 
+                           nft.ownerAddress.toLowerCase() : null;
+                           
+        return ownerAddress && selectedWallets.some(wallet => 
+          wallet.toLowerCase() === ownerAddress
         );
       });
-      console.log(`After search filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
+      
+      filterResults.selectedWallets = beforeCount - filtered.length;
+      console.log(`Wallet filter: ${filtered.length} NFTs remain after filtering by selected wallets`);
     }
     
-    // Filter out spam NFTs if enabled
-    if (excludeSpam) {
-      console.log('Filtering out spam NFTs');
-      const beforeCount = filtered.length;
-      filtered = filtered.filter(nft => {
-        if (!nft) return false;
-        return !nft.isSpam;
-      });
-      console.log(`After spam filtering: ${filtered.length} NFTs (removed ${beforeCount - filtered.length})`);
-    }
-
-    // Ensure we don't have undefined/null entries
-    const finalCount = filtered.length;
-    filtered = filtered.filter(nft => nft && typeof nft === 'object');
-    if (finalCount !== filtered.length) {
-      console.log(`Removed ${finalCount - filtered.length} invalid NFT entries`);
+    filterResults.final = filtered.length;
+    
+    // Detailed logging of filter results
+    console.log('Filter results:', filterResults);
+    
+    // IMPORTANT - if we filtered out all NFTs, return an empty array
+    if (filtered.length === 0) {
+      console.warn(`After filtering: 0 NFTs remain. Original count was ${originalCount}`);
+      
+      if (filterResults.selectedChains > 0) {
+        console.warn(`Chain filter removed ${filterResults.selectedChains} NFTs`);
+      }
+      if (filterResults.excludeSpam > 0) {
+        console.warn(`Spam filter removed ${filterResults.excludeSpam} NFTs`);
+      }
+      if (filterResults.searchQuery > 0) {
+        console.warn(`Search query filter removed ${filterResults.searchQuery} NFTs`);
+      }
+      if (filterResults.selectedWallets > 0) {
+        console.warn(`Selected wallets filter removed ${filterResults.selectedWallets} NFTs`);
+      }
     }
     
-    console.log(`Filter process complete. Final count: ${filtered.length} NFTs`);
     return filtered;
-  }, [selectedChains, searchQuery, excludeSpam]);
+  }, [selectedChains, selectedWallets, searchQuery, excludeSpam]);
   
   // Fetch NFTs using Alchemy service or fallback to other services
   const fetchNfts = useCallback(async (query, options = {}) => {
@@ -468,7 +523,7 @@ export const NFTProvider = ({ children }) => {
       setHasMore(!!result.pageKey);
 
       // Process NFTs to enhance metadata and images
-      const processedNFTs = await processNFTs(result.nfts, options);
+      const processedNFTs = await processNFTs(result.nfts);
       
       // Update NFT state based on loadMore option
       if (options.loadMore) {
