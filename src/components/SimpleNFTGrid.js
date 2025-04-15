@@ -244,6 +244,22 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     return 'Unknown Collection';
   };
   
+  // Get token type in a cleaned format
+  const getTokenType = (nft) => {
+    if (!nft || !nft.tokenType) return null;
+    
+    // Clean up the token type (remove duplications in display)
+    const tokenType = nft.tokenType.toUpperCase();
+    
+    // Only return the token type if it's not already included in the title
+    const title = getNftTitle(nft);
+    if (title && title.toUpperCase().includes(tokenType)) {
+      return null;
+    }
+    
+    return tokenType;
+  };
+  
   // Get floor price if available
   const getFloorPrice = (nft) => {
     if (!nft) return null;
@@ -284,6 +300,15 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   const renderNftCard = (nft) => {
     const nftKey = getNftKey(nft);
     const floorPrice = getFloorPrice(nft);
+    const title = getNftTitle(nft);
+    const collectionName = getCollectionName(nft);
+    const tokenType = getTokenType(nft);
+    
+    // Check if the title appears to be a duplicate of the tokenId
+    const isDuplicateTitle = title.includes(nft.tokenId) && nft.tokenId;
+    
+    // Check if title already includes collection name to avoid redundancy
+    const titleIncludesCollection = title.toLowerCase().includes(collectionName.toLowerCase());
     
     return (
       <div key={nftKey} className="nft-item">
@@ -292,10 +317,18 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
             {renderNftImage(nft)}
           </div>
           <div className="nft-info">
-            <h3 className="nft-name">{getNftTitle(nft)}</h3>
-            <p className="nft-collection">{getCollectionName(nft)}</p>
-            {floorPrice && <p className="nft-price">Floor: {floorPrice}</p>}
-            {nft.tokenType && <span className="nft-type">{nft.tokenType}</span>}
+            {/* Show title only once, avoid duplicate tokenId display */}
+            <h3 className="nft-name">{title}</h3>
+            
+            {/* Only show collection if it's not already part of the title */}
+            {!titleIncludesCollection && (
+              <p className="nft-collection">{collectionName}</p>
+            )}
+            
+            <div className="nft-metadata">
+              {floorPrice && <span className="nft-price">Floor: {floorPrice}</span>}
+              {tokenType && <span className="nft-type">{tokenType}</span>}
+            </div>
           </div>
         </div>
       </div>
