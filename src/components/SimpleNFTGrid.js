@@ -38,28 +38,19 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     // Try image proxy if not already using it
     if (!img.src.includes('/api/image-proxy') && !img.src.includes('/assets/placeholder-nft.svg')) {
       console.log(`Trying image proxy for NFT ${nftId}`);
+      const originalSrc = img.src;
+      img.onerror = () => {
+        console.log(`Proxy also failed for NFT ${nftId}, using placeholder`);
+        img.onerror = null; // Prevent infinite loop
+        img.src = '/assets/placeholder-nft.svg';
+      };
       img.src = `/api/image-proxy?url=${encodeURIComponent(getImageUrl(nft))}`;
       return;
     }
     
-    // Instead of loading a placeholder image, create a colored div
-    const placeholderDiv = document.createElement('div');
-    placeholderDiv.style.width = '100%';
-    placeholderDiv.style.height = '100%';
-    placeholderDiv.style.backgroundColor = '#f0f0f0';
-    placeholderDiv.style.display = 'flex';
-    placeholderDiv.style.alignItems = 'center';
-    placeholderDiv.style.justifyContent = 'center';
-    
-    // Add text to the div
-    const textNode = document.createElement('span');
-    textNode.textContent = 'Image unavailable';
-    textNode.style.color = '#888';
-    textNode.style.fontStyle = 'italic';
-    placeholderDiv.appendChild(textNode);
-    
-    // Replace the image with our div
-    img.parentNode.replaceChild(placeholderDiv, img);
+    // If the proxy also failed, use a placeholder
+    img.onerror = null; // Prevent infinite loop
+    img.src = '/assets/placeholder-nft.svg';
   }, []);
   
   // Get the best available image URL from Alchemy NFT data
@@ -167,7 +158,7 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     if (imageUrl && !imageUrl.startsWith('/') && !imageUrl.startsWith('data:')) {
       // Always use the image proxy for external URLs to avoid CORS issues
       finalImageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-      console.log(`Using proxy for image: ${imageUrl.substring(0, 50)}...`);
+      console.log(`Using proxy for image: ${imageUrl}`);
     }
     
     return (

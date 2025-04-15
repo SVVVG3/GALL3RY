@@ -619,7 +619,8 @@ export const NFTProvider = ({ children }) => {
             {
               excludeSpam: excludeSpam,
               withMetadata: true,
-              pageSize: 100 // Increase page size to get more NFTs per request
+              pageSize: 100, // Increase page size to get more NFTs per request
+              includeMedia: true // Always include media data
             }
           );
           

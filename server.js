@@ -450,145 +450,147 @@ apiRouter.get('/image-proxy', async (req, res) => {
     return res.status(400).json({ error: 'URL parameter is required' });
   }
   
+  console.log(`Image proxy request for: ${url}`);
+  
   try {
     let proxyUrl = url;
+    let customHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Referer': 'https://gall3ry.vercel.app/'
+    };
+    
+    // Special handling for different URL types
+    
+    // Handle Alchemy CDN URLs specifically
+    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+      console.log('Detected Alchemy CDN URL, adding special headers');
+      customHeaders = {
+        ...customHeaders,
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Origin': 'https://gall3ry.vercel.app'
+      };
+    }
     
     // Special handling for IPFS URLs
-    if (url.includes('ipfs') || url.includes('ipfs:')) {
-      console.log('Detected potential IPFS URL in proxy request:', url);
+    if (proxyUrl.startsWith('ipfs://')) {
+      const ipfsHash = proxyUrl.replace('ipfs://', '');
+      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Special handling for Arweave URLs
+    if (proxyUrl.startsWith('ar://')) {
+      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle api.zora.co renderer URLs that include ipfs content
+    if (proxyUrl.includes('api.zora.co') && proxyUrl.includes('ipfs')) {
+      // Try to extract the ipfs hash from various formats
+      let ipfsHash = null;
       
-      // Handle api.zora.co renderer URLs that include ipfs content
-      if (url.includes('api.zora.co') && url.includes('ipfs')) {
-        // Try to extract the ipfs hash from various formats
-        let ipfsHash = null;
-        
-        // Common patterns seen in the Zora URLs
-        const ipfsPatterns = [
-          /ipfs(?:%3a|:)%2f%2f([a-zA-Z0-9]+)/i, // URL encoded ipfs://hash
-          /ipfs:\/\/([a-zA-Z0-9]+)/i,           // Direct ipfs://hash
-          /ipfs\/([a-zA-Z0-9]+)/i               // /ipfs/hash format
-        ];
-        
-        // Try each pattern
-        for (const pattern of ipfsPatterns) {
-          const match = url.match(pattern);
-          if (match && match[1]) {
-            ipfsHash = match[1];
-            console.log(`Extracted IPFS hash ${ipfsHash} from Zora URL`);
-            break;
-          }
-        }
-        
-        // If we found a hash, use a more reliable IPFS gateway
-        if (ipfsHash) {
-          // Try multiple gateways in order of reliability
-          const gateways = [
-            `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
-            `https://ipfs.io/ipfs/${ipfsHash}`,
-            `https://gateway.pinata.cloud/ipfs/${ipfsHash}`
-          ];
-          
-          // Use the first gateway in the list
-          proxyUrl = gateways[0];
-          console.log(`Using alternative IPFS gateway: ${proxyUrl}`);
+      // Common patterns seen in the Zora URLs
+      const ipfsPatterns = [
+        /ipfs(?:%3a|:)%2f%2f([a-zA-Z0-9]+)/i, // URL encoded ipfs://hash
+        /ipfs:\/\/([a-zA-Z0-9]+)/i,           // Direct ipfs://hash
+        /ipfs\/([a-zA-Z0-9]+)/i               // /ipfs/hash format
+      ];
+      
+      // Try each pattern
+      for (const pattern of ipfsPatterns) {
+        const match = proxyUrl.match(pattern);
+        if (match && match[1]) {
+          ipfsHash = match[1];
+          console.log(`Extracted IPFS hash ${ipfsHash} from Zora URL`);
+          break;
         }
       }
-      // Direct IPFS URLs without gateway
-      else if (url.startsWith('ipfs://')) {
-        const ipfsHash = url.replace('ipfs://', '');
+      
+      // If we found a hash, use a more reliable IPFS gateway
+      if (ipfsHash) {
         proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
-        console.log(`Converted direct IPFS URL to gateway URL: ${proxyUrl}`);
+        console.log(`Using alternative IPFS gateway: ${proxyUrl}`);
       }
     }
+    
+    console.log(`Fetching image: ${proxyUrl}`);
     
     // Attempt to proxy the image
     const response = await axios({
       method: 'get',
       url: proxyUrl,
-      responseType: 'stream',
-      timeout: 5000,
-      headers: {
-        'Referer': 'https://gall3ry.vercel.app/',
-        'User-Agent': 'Mozilla/5.0 (compatible; GALL3RY/1.0)'
-      }
+      responseType: 'arraybuffer',
+      timeout: 10000,
+      headers: customHeaders,
+      validateStatus: false // Allow non-200 status codes to process them below
     });
     
-    // Forward content type
-    if (response.headers['content-type']) {
-      res.setHeader('Content-Type', response.headers['content-type']);
+    // If response wasn't successful, return placeholder
+    if (response.status >= 400) {
+      console.error(`Source returned error status ${response.status} for: ${proxyUrl}`);
+      
+      try {
+        const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.send(placeholder);
+      } catch (readError) {
+        console.error('Error reading placeholder image:', readError);
+        
+        // Create a simple SVG placeholder if file can't be read
+        const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+          <rect width="200" height="200" fill="#f0f0f0"/>
+          <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        </svg>`);
+        
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.send(placeholderSvg);
+      }
     }
     
-    // Set CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    // Set cache headers
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    
-    // Pipe the image data to the response
-    response.data.pipe(res);
-  } catch (error) {
-    console.error(`Error proxying image ${url}:`, error.message);
-    return res.status(404).sendFile(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
-  }
-});
-
-// Image proxy endpoint to handle CORS issues with NFT images
-app.get('/api/image-proxy', async (req, res) => {
-  const imageUrl = req.query.url;
-  
-  if (!imageUrl) {
-    return res.status(400).send('Missing url parameter');
-  }
-  
-  try {
-    // Fetch the image with proper headers
-    const response = await axios.get(imageUrl, {
-      responseType: 'arraybuffer',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': 'https://gall3ry.xyz/'
-      },
-      timeout: 5000, // 5 second timeout to avoid hanging
-      validateStatus: false // Accept any response
-    });
-    
-    // Determine content type based on response headers or URL extension
+    // Determine content type
     let contentType = response.headers['content-type'];
     
     if (!contentType) {
       // Try to guess content type from URL
-      if (imageUrl.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
-      else if (imageUrl.match(/\.png$/i)) contentType = 'image/png';
-      else if (imageUrl.match(/\.gif$/i)) contentType = 'image/gif';
-      else if (imageUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
-      else if (imageUrl.match(/\.webp$/i)) contentType = 'image/webp';
-      else if (imageUrl.match(/\.mp4$/i)) contentType = 'video/mp4';
-      else if (imageUrl.match(/\.webm$/i)) contentType = 'video/webm';
+      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
+      else if (proxyUrl.match(/\.png$/i)) contentType = 'image/png';
+      else if (proxyUrl.match(/\.gif$/i)) contentType = 'image/gif';
+      else if (proxyUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
+      else if (proxyUrl.match(/\.webp$/i)) contentType = 'image/webp';
+      else if (proxyUrl.match(/\.mp4$/i)) contentType = 'video/mp4';
+      else if (proxyUrl.match(/\.webm$/i)) contentType = 'video/webm';
       else contentType = 'application/octet-stream';
     }
     
-    // Set appropriate cache headers
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    // Set headers
     res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
     
-    // If response was not successful, return placeholder
-    if (response.status >= 400) {
-      const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
-      res.setHeader('Content-Type', 'image/svg+xml');
-      return res.send(placeholder);
-    }
-    
+    // Return the image data
     return res.send(response.data);
   } catch (error) {
-    console.error('Image proxy error:', error.message);
+    console.error(`Error proxying image (${url}):`, error.message);
     
-    // Return placeholder image on error
     try {
       const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
       res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
       return res.send(placeholder);
     } catch (readError) {
-      return res.status(500).send('Error loading image and placeholder');
+      // Create a simple SVG placeholder if file can't be read
+      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect width="200" height="200" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      </svg>`);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.send(placeholderSvg);
     }
   }
 });

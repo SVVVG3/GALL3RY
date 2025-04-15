@@ -130,7 +130,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       pageSize: options.pageSize || 25,
       excludeSpam: options.excludeSpam !== false,
       orderBy: 'transferTime',
-      includeMedia: true
+      includeMedia: true // Always include media information
     });
     
     // Add pageKey if provided
