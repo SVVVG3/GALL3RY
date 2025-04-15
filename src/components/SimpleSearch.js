@@ -18,7 +18,6 @@ const SimpleSearch = ({ onSearch }) => {
   return (
     <div className="farcaster-search-container">
       <div className="search-header">
-        <h1>Search Farcaster Users</h1>
         <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
