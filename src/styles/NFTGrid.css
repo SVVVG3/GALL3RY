@@ -39,8 +39,9 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   background-color: white;
   width: 100%;
-  height: 100%;
   display: flex;
+  flex-direction: column;
+  aspect-ratio: 1 / 1.5; /* Card has 2:3 aspect ratio (account for image + info) */
 }
 
 .nft-item:hover {
@@ -54,23 +55,17 @@
   background: #fff;
   height: 100%;
   width: 100%;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
   display: flex;
   flex-direction: column;
 }
 
-.nft-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-}
-
+/* Square container for images */
 .nft-image {
   position: relative;
   width: 100%;
-  padding-bottom: 100%; /* Maintain square aspect ratio */
+  aspect-ratio: 1 / 1; /* Force square aspect ratio */
   overflow: hidden;
   background-color: #f5f5f5;
-  flex-shrink: 0;
 }
 
 .nft-image img, 
@@ -81,20 +76,19 @@
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Keeps the original proportions and ensures the entire image is visible */
-  object-position: center; /* Centers the image in the container */
-  transition: transform 0.3s ease;
-  max-height: 100%;
-  max-width: 100%;
+  object-fit: contain; /* Ensures the entire image is visible */
+  object-position: center;
+  background-color: #f5f5f5;
 }
 
 .nft-image img:hover {
   transform: scale(1.05);
+  transition: transform 0.3s ease;
 }
 
 .nft-info {
   padding: 15px;
-  flex-grow: 1;
+  flex-grow: 0; /* Don't let info section grow */
   display: flex;
   flex-direction: column;
 }
@@ -116,6 +110,14 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.nft-metadata {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  min-height: 24px;
 }
 
 .nft-price {
@@ -157,15 +159,9 @@
   color: #666;
 }
 
-/* Adjust image display quality */
-.nft-image img, 
-.nft-image video {
-  image-rendering: auto;
-}
-
 @media (max-width: 768px) {
   .nft-image {
-    padding-bottom: 100%; /* Maintain square aspect ratio on mobile */
+    aspect-ratio: 1 / 1; /* Ensure square aspect ratio on mobile too */
   }
   
   .nft-info {
@@ -179,12 +175,4 @@
   .nft-collection {
     font-size: 12px;
   }
-}
-
-.nft-metadata {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-  min-height: 24px;
 } 
