@@ -603,18 +603,32 @@ export const NFTProvider = ({ children }) => {
       let processedNFTs = [];
       try {
         processedNFTs = await processNFTs(allNFTs);
+        console.log(`Successfully processed ${processedNFTs.length} NFTs from raw data`);
+        
+        // Log a sample of processed NFTs if available
+        if (processedNFTs.length > 0) {
+          console.log('Sample processed NFT:', {
+            id: processedNFTs[0].id,
+            name: processedNFTs[0].name,
+            network: processedNFTs[0].network,
+            owner: processedNFTs[0].ownerAddress
+          });
+        }
       } catch (processError) {
         console.error('Error processing NFTs:', processError);
         processedNFTs = allNFTs; // Use raw NFTs if processing fails
+        console.log('Using raw NFTs instead of processed ones due to error');
       }
       
       // Apply filtering - handle errors gracefully
       let filteredNFTs = [];
       try {
         filteredNFTs = applyFilters(processedNFTs);
+        console.log(`After filtering: ${filteredNFTs.length} NFTs remain`);
       } catch (filterError) {
         console.error('Error filtering NFTs:', filterError);
         filteredNFTs = processedNFTs; // Use unfiltered NFTs if filtering fails
+        console.log('Using unfiltered NFTs due to error');
       }
       
       // Sort NFTs if needed
@@ -623,20 +637,27 @@ export const NFTProvider = ({ children }) => {
         sortedNFTs = sortOrder === 'asc' ? 
           [...filteredNFTs].sort((a, b) => (a.name || '').localeCompare(b.name || '')) : 
           [...filteredNFTs].sort((a, b) => (b.name || '').localeCompare(a.name || ''));
+        console.log(`Sorted ${sortedNFTs.length} NFTs by name (${sortOrder})`);
       } catch (sortError) {
         console.error('Error sorting NFTs:', sortError);
         sortedNFTs = filteredNFTs; // Use unsorted NFTs if sorting fails
+        console.log('Using unsorted NFTs due to error');
       }
       
       // Update state
       setNfts(sortedNFTs);
       setIsBatchLoading(false);
       
-      return {
+      // CRITICAL FIX: Return the actual NFTs we've gathered
+      const result = {
         nfts: sortedNFTs, 
         hasMore: false, 
         error: hasErrors ? "Some NFTs may not have been retrieved due to API errors" : null 
       };
+      
+      console.log(`Final result returning ${result.nfts.length} NFTs to caller`);
+      
+      return result;
     } catch (err) {
       console.error('Error in fetchAllNFTsForWallets:', err);
       setError('Failed to fetch NFTs. Please try again.');

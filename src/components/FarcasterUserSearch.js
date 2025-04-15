@@ -101,8 +101,25 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           try {
             const result = await fetchAllNFTsForWallets(addresses);
             
-            // Debug log to see what we're getting back
-            console.log('NFT fetch result:', result);
+            // Enhanced debugging logs
+            console.log('NFT fetch result:', {
+              resultExists: !!result,
+              hasNftsProperty: result ? 'nfts' in result : false,
+              nftsIsArray: result && result.nfts ? Array.isArray(result.nfts) : false,
+              nftsCount: result && result.nfts && Array.isArray(result.nfts) ? result.nfts.length : 0,
+              hasError: result && result.error ? true : false,
+              errorMessage: result && result.error ? result.error : null
+            });
+
+            // Direct debugging - show first NFT if available
+            if (result && result.nfts && Array.isArray(result.nfts) && result.nfts.length > 0) {
+              console.log('First NFT in results:', {
+                id: result.nfts[0].id,
+                name: result.nfts[0].name || 'Unnamed',
+                network: result.nfts[0].network || 'No network',
+                owner: result.nfts[0].ownerAddress || 'No owner'
+              });
+            }
             
             // Ensure result contains nfts array
             if (!result) {
@@ -124,13 +141,14 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               setSearchError('Could not fetch NFTs: Received invalid NFT data format');
             } else {
               console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);
-              setUserNfts(result.nfts);
+              
+              // CRITICAL: Actually use the NFTs we received
+              setUserNfts(result.nfts); 
               
               // Clear error if we got NFTs successfully
               if (result.nfts.length > 0) {
                 setSearchError(null);
-              } else if (searchError) {
-                // Keep existing error if we still have no NFTs
+                console.log(`Successfully set ${result.nfts.length} NFTs to state`);
               } else {
                 // Set a gentle message if there are no NFTs but no error
                 setSearchError(`No NFTs found for user ${searchQuery}. They might not own any NFTs on the supported chains.`);
