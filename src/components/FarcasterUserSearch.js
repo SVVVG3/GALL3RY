@@ -407,9 +407,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           </div>
         </div>
       )}
-      <div className="footer">
-        <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
-      </div>
     </div>
   );
 };
