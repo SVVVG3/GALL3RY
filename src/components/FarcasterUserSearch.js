@@ -7,6 +7,49 @@ import safeStorage from '../utils/storage';
 import SimpleNFTGrid from './SimpleNFTGrid';
 
 /**
+ * NFT Sort Controls Component
+ */
+const NFTSortControls = ({ sortBy, setSortBy, sortOrder, setSortOrder }) => {
+  const toggleSortOrder = () => {
+    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+  };
+
+  return (
+    <div className="nft-sort-controls">
+      <div className="sort-options">
+        <button
+          className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
+          onClick={() => setSortBy('recent')}
+        >
+          Recent
+        </button>
+        <button
+          className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
+          onClick={() => setSortBy('name')}
+        >
+          Name
+        </button>
+        <button
+          className={`sort-option ${sortBy === 'collection' ? 'active' : ''}`}
+          onClick={() => setSortBy('collection')}
+        >
+          Collection
+        </button>
+        <button
+          className={`sort-option ${sortBy === 'value' ? 'active' : ''}`}
+          onClick={() => setSortBy('value')}
+        >
+          Value
+        </button>
+      </div>
+      <button className="sort-order-toggle" onClick={toggleSortOrder}>
+        {sortOrder === 'asc' ? '↑ Asc' : '↓ Desc'}
+      </button>
+    </div>
+  );
+};
+
+/**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
  */
 const FarcasterUserSearch = ({ initialUsername }) => {
@@ -24,6 +67,64 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
+  
+  // Sorting state
+  const [sortBy, setSortBy] = useState('recent');
+  const [sortOrder, setSortOrder] = useState('desc');
+  
+  // Get sorted NFTs
+  const sortedNfts = useCallback(() => {
+    if (!userNfts || userNfts.length === 0) return [];
+    
+    const nftsCopy = [...userNfts];
+    
+    switch (sortBy) {
+      case 'name':
+        return nftsCopy.sort((a, b) => {
+          const nameA = (a.name || '').toLowerCase();
+          const nameB = (b.name || '').toLowerCase();
+          return sortOrder === 'asc' 
+            ? nameA.localeCompare(nameB) 
+            : nameB.localeCompare(nameA);
+        });
+        
+      case 'value':
+        return nftsCopy.sort((a, b) => {
+          const valueA = a.collection?.floorPrice?.valueUsd || 0;
+          const valueB = b.collection?.floorPrice?.valueUsd || 0;
+          return sortOrder === 'asc' 
+            ? valueA - valueB 
+            : valueB - valueA;
+        });
+        
+      case 'recent':
+        return nftsCopy.sort((a, b) => {
+          const timeA = a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp || 0;
+          const timeB = b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp || 0;
+          return sortOrder === 'asc' 
+            ? timeA - timeB 
+            : timeB - timeA;
+        });
+        
+      case 'collection':
+      default:
+        return nftsCopy.sort((a, b) => {
+          const collA = (a.collection?.name || '').toLowerCase();
+          const collB = (b.collection?.name || '').toLowerCase();
+          
+          if (collA === collB) {
+            // Sort by token ID within the same collection
+            const idA = parseInt(a.tokenId) || 0;
+            const idB = parseInt(b.tokenId) || 0;
+            return sortOrder === 'asc' ? idA - idB : idB - idA;
+          }
+          
+          return sortOrder === 'asc' 
+            ? collA.localeCompare(collB) 
+            : collB.localeCompare(collA);
+        });
+    }
+  }, [userNfts, sortBy, sortOrder]);
   
   // Wrap handleSearch in useCallback to use in useEffect
   const handleSearch = useCallback(async (e) => {
@@ -388,6 +489,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               <p className="nft-count">
                 Found {userNfts.length} NFTs
               </p>
+              
+              {/* Add sort controls if NFTs are available */}
+              {userNfts.length > 0 && (
+                <NFTSortControls 
+                  sortBy={sortBy} 
+                  setSortBy={setSortBy} 
+                  sortOrder={sortOrder} 
+                  setSortOrder={setSortOrder}
+                />
+              )}
             </div>
             
             {/* Use the existing NFTGallery component to display NFTs */}
@@ -396,7 +507,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             ) : (
               <div className="nft-display">
                 {userNfts.length > 0 ? (
-                  <SimpleNFTGrid nfts={userNfts} />
+                  <SimpleNFTGrid nfts={sortedNfts()} />
                 ) : (
                   <div className="no-nfts-message">
                     <p>No NFTs found for this user</p>

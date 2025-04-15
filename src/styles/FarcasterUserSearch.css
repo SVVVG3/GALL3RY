@@ -1471,4 +1471,89 @@
   .nft-count {
     margin-top: 5px;
   }
+}
+
+/* NFT Sort Controls */
+.nft-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.sort-options {
+  display: flex;
+  gap: 6px;
+}
+
+.sort-option {
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--secondary-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sort-option:hover {
+  background-color: #f3f4f6;
+  color: var(--accent-color);
+}
+
+.sort-option.active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.sort-order-toggle {
+  background: none;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--secondary-text);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sort-order-toggle:hover {
+  background-color: #f3f4f6;
+}
+
+.nft-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 1.5rem;
+}
+
+/* Responsive styles for sorting */
+@media (max-width: 600px) {
+  .nft-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .nft-sort-controls {
+    margin-left: 0;
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .sort-options {
+    width: 100%;
+    overflow-x: auto;
+    padding-bottom: 5px;
+  }
+  
+  .sort-option {
+    white-space: nowrap;
+  }
 } 
