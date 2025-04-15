@@ -18,7 +18,12 @@ const FarcasterSignInButton = ({ onSuccess, className, style }) => {
   };
   
   return (
-    <div className={className} style={style}>
+    <div className={className} style={{
+      ...style,
+      position: 'relative',
+      zIndex: 10,
+      cursor: 'pointer'
+    }}>
       <SignInButton onSuccess={handleSuccess} />
       {status === 'loading' && <div>Loading...</div>}
       {status === 'error' && <div>Error signing in. Please try again.</div>}
