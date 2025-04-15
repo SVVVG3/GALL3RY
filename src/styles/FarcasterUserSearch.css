@@ -86,65 +86,157 @@
   margin-right: auto;
 }
 
+.profile-info {
+  margin-bottom: 25px;
+}
+
 .profile-header {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
   text-align: center;
+  margin-bottom: 20px;
 }
 
-.profile-avatar {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-bottom: 16px;
-  border: 3px solid var(--color-primary-light);
+.profile-image-name {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.profile-image {
+  margin-right: 15px;
   flex-shrink: 0;
 }
 
-.profile-info {
-  text-align: center;
-  width: 100%;
+.profile-image img {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #f0f0f0;
 }
 
-.profile-info h3.display-name {
-  margin: 0 0 4px;
+.display-name {
+  margin: 0;
   font-size: 24px;
-  color: var(--color-gray-900);
-}
-
-.profile-info .username {
-  margin: 0;
-  font-size: 16px;
-  color: var(--color-primary);
-}
-
-/* Profile info styles */
-.profile-info .display-name {
-  margin: 0;
-  font-size: 1.5rem;
   font-weight: 600;
-  color: var(--color-gray-900);
-  line-height: 1.3;
+  color: #333;
 }
 
-.profile-info .username {
-  color: var(--color-gray-600);
-  font-size: 1rem;
-  margin-bottom: 0.3rem;
+.username-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 15px;
 }
 
-.warpcast-link {
-  color: var(--color-primary);
+.username-link {
+  color: #8b5cf6;
   text-decoration: none;
-  transition: color 0.2s ease;
+  font-size: 18px;
+  transition: color 0.2s;
 }
 
-.warpcast-link:hover {
-  color: var(--color-primary-dark);
+.username-link:hover {
+  color: #7c3aed;
+  text-decoration: underline;
+}
+
+.fid-display {
+  color: #666;
+  font-size: 14px;
+  padding: 3px 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.wallet-info {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.wallet-toggle {
+  display: flex;
+  align-items: center;
+  background-color: transparent;
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #555;
+  transition: all 0.2s;
+}
+
+.wallet-toggle:hover {
+  background-color: #f8f8f8;
+  border-color: #ccc;
+}
+
+.dropdown-arrow {
+  margin-left: 6px;
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.expanded {
+  transform: rotate(180deg);
+}
+
+.wallet-list {
+  list-style-type: none;
+  padding: 0;
+  margin: 10px 0 0 0;
+  width: 100%;
+  max-width: 400px;
+}
+
+.wallet-item {
+  margin-bottom: 5px;
+  font-size: 14px;
+  background-color: #f9f9f9;
+  padding: 6px 10px;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.nft-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 15px;
+}
+
+.nft-count {
+  font-size: 16px;
+  color: #666;
+  margin: 0;
+}
+
+.footer {
+  text-align: center;
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid #eaeaea;
+  color: #666;
+  font-size: 14px;
+}
+
+.footer p {
+  margin: 0;
+}
+
+.footer a {
+  color: #8b5cf6;
+  text-decoration: none;
+  margin-left: 5px;
+}
+
+.footer a:hover {
   text-decoration: underline;
 }
 
@@ -229,28 +321,6 @@
   margin: 0;
   font-size: 18px;
   color: var(--color-gray-800);
-}
-
-.dropdown-arrow {
-  font-size: 12px;
-  margin-left: 8px;
-  transition: transform 0.2s;
-}
-
-.dropdown-arrow.expanded {
-  transform: rotate(180deg);
-}
-
-.wallets-content {
-  margin-top: 12px;
-  padding-left: 16px;
-}
-
-.wallet-item {
-  margin-bottom: 8px;
-  font-family: monospace;
-  font-size: 14px;
-  color: var(--color-gray-700);
 }
 
 /* NFT section */

@@ -324,41 +324,44 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       {userProfile && (
         <div className="user-profile">
           <div className="profile-info">
-            <div className="profile-image">
-              {userProfile.metadata?.imageUrl ? (
-                <img 
-                  src={userProfile.metadata.imageUrl} 
-                  alt={`${userProfile.username}'s profile`} 
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = '/assets/placeholder-profile.png';
-                  }}
-                />
-              ) : (
-                <img src="/assets/placeholder-profile.png" alt="Default profile" />
-              )}
-            </div>
-            <div className="profile-details">
-              <div className="user-header">
-                <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
-                <div className="username-container">
-                  <a 
-                    href={`https://warpcast.com/${userProfile.username}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="username-link"
-                  >
-                    @{userProfile.username}
-                  </a>
-                  <span className="fid-display">FID: {userProfile.fid}</span>
+            <div className="profile-header">
+              <div className="profile-image-name">
+                <div className="profile-image">
+                  {userProfile.metadata?.imageUrl ? (
+                    <img 
+                      src={userProfile.metadata.imageUrl} 
+                      alt={`${userProfile.username}'s profile`} 
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = '/assets/placeholder-profile.png';
+                      }}
+                    />
+                  ) : (
+                    <img src="/assets/placeholder-profile.png" alt="Default profile" />
+                  )}
                 </div>
+                <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
+              </div>
+              <div className="username-container">
+                <a 
+                  href={`https://warpcast.com/${userProfile.username}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="username-link"
+                >
+                  @{userProfile.username}
+                </a>
+                <span className="fid-display">FID: {userProfile.fid}</span>
               </div>
               <div className="wallet-info">
                 <button 
                   className="wallet-toggle" 
                   onClick={() => setWalletsExpanded(!walletsExpanded)}
                 >
-                  {walletsExpanded ? 'Hide Connected Wallets' : 'Show Connected Wallets'} ({walletAddresses.length})
+                  {walletsExpanded ? 'Hide' : 'Connected Wallets'} ({walletAddresses.length})
+                  <span className={`dropdown-arrow ${walletsExpanded ? 'expanded' : ''}`}>
+                    ▼
+                  </span>
                 </button>
                 {walletsExpanded && (
                   <ul className="wallet-list">
@@ -382,7 +385,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           <div className="nft-container">
             <div className="nft-header">
-              <h2>NFT Collection</h2>
               <p className="nft-count">
                 Found {userNfts.length} NFTs
               </p>
