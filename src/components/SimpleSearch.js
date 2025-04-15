@@ -30,6 +30,9 @@ const SimpleSearch = ({ onSearch }) => {
             placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
             className="search-input"
             aria-label="Farcaster username"
+            autocapitalize="none"
+            autocorrect="off"
+            spellcheck="false"
           />
           <button 
             type="submit"
