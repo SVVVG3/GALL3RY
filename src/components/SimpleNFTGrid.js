@@ -15,20 +15,42 @@ const getImageUrl = (nft) => {
   console.log('Processing NFT for image:', {
     id: nft.id,
     name: nft.name,
-    image: nft.image,
-    media: nft.media,
-    tokenId: nft.tokenId || nft.token_id,
-    network: nft.network
+    contentType: nft.image && nft.image.contentType,
+    hasImage: !!nft.image,
+    hasAnimationUrl: !!(nft.animation && nft.animation.cachedUrl)
   });
   
-  // First, check if the NFT has an image object (from NFTContext processing)
-  if (nft.image && typeof nft.image === 'object') {
-    imageUrl = nft.image.url || nft.image.gateway || nft.image.originalUrl || 
-               nft.image.thumbnailUrl || nft.image.pngUrl || nft.image.cachedUrl || '';
-    console.log('Found image object:', imageUrl);
+  // PRIORITY 1: Alchemy's cached URLs (most reliable)
+  if (nft.image) {
+    // Prefer cached and CDN URLs from Alchemy as they're most reliable
+    if (nft.image.cachedUrl) {
+      imageUrl = nft.image.cachedUrl;
+      console.log('Using Alchemy cached URL:', imageUrl);
+    } 
+    // Next try thumbnail (good for performance)
+    else if (nft.image.thumbnailUrl) {
+      imageUrl = nft.image.thumbnailUrl;
+      console.log('Using Alchemy thumbnail URL:', imageUrl);
+    }
+    // For SVGs, the PNG conversion is often helpful
+    else if (nft.image.pngUrl) {
+      imageUrl = nft.image.pngUrl;
+      console.log('Using Alchemy PNG URL:', imageUrl);
+    }
+    // Finally try original
+    else if (nft.image.originalUrl) {
+      imageUrl = nft.image.originalUrl;
+      console.log('Using original URL:', imageUrl);
+    }
   }
   
-  // Check for media array (Alchemy format)
+  // PRIORITY 2: Animation URLs for NFTs that are videos or GIFs
+  if (!imageUrl && nft.animation && nft.animation.cachedUrl) {
+    imageUrl = nft.animation.cachedUrl;
+    console.log('Using animation cached URL:', imageUrl);
+  }
+  
+  // PRIORITY 3: Try media array (Alchemy format)
   if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
     // Try to find the best media format (gateway is usually more reliable)
     const mediaItem = nft.media.find(m => m.gateway) || 
@@ -40,103 +62,39 @@ const getImageUrl = (nft) => {
     if (mediaItem) {
       imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri || mediaItem.thumbnail || '';
       console.log('Found media array item:', imageUrl);
-      
-      // Check for format - Alchemy sometimes provides format data
-      if (mediaItem.format && (
-          mediaItem.format.toLowerCase() === 'gif' || 
-          mediaItem.format.toLowerCase() === 'mp4' ||
-          mediaItem.format.toLowerCase() === 'svg' ||
-          mediaItem.format.toLowerCase() === 'webp'
-      )) {
-        console.log(`Special media format detected: ${mediaItem.format}`);
-      }
     }
   }
   
-  // Try rawMetadata (Alchemy format)
-  if (!imageUrl && nft.rawMetadata) {
-    imageUrl = nft.rawMetadata.image || 
-               nft.rawMetadata.image_url || 
-               nft.rawMetadata.image_uri || 
-               nft.rawMetadata.animation_url ||
-               nft.rawMetadata.image_data || 
-               '';
-    if (imageUrl) console.log('Found image in rawMetadata:', imageUrl);
+  // PRIORITY 4: Direct image property string
+  if (!imageUrl && typeof nft.image === 'string') {
+    imageUrl = nft.image;
+    console.log('Using direct image string property:', imageUrl);
   }
   
-  // Try metadata (OpenSea format)
-  if (!imageUrl && nft.metadata) {
-    try {
-      // If metadata is a string, try to parse it as JSON
-      const metadata = typeof nft.metadata === 'string' 
-        ? JSON.parse(nft.metadata) 
-        : nft.metadata;
-        
-      imageUrl = metadata?.image || 
-                 metadata?.image_url || 
-                 metadata?.animation_url ||
-                 metadata?.image_uri || 
-                 metadata?.image_data || 
-                 '';
-      if (imageUrl) console.log('Found image in metadata:', imageUrl);
-    } catch (e) {
-      console.error('Error parsing NFT metadata', e);
-    }
+  // PRIORITY 5: Try raw metadata
+  if (!imageUrl && nft.raw && nft.raw.metadata) {
+    const metadata = nft.raw.metadata;
+    imageUrl = metadata.image || metadata.image_url || metadata.animation_url || '';
+    console.log('Found image in raw metadata:', imageUrl);
   }
   
-  // Try direct properties (OpenSea format)
+  // PRIORITY 6: Legacy/fallback checks
   if (!imageUrl) {
-    imageUrl = nft.image_url || 
-               nft.image || 
-               nft.image_preview_url || 
-               nft.thumbnail || 
-               nft.animation_url ||  // Animation URLs for GIFs
-               '';
-    if (imageUrl) console.log('Found image in direct properties:', imageUrl);
-  }
-  
-  // Special handling for cachedUrl, thumbnailUrl, pngUrl from Alchemy
-  if (!imageUrl && (nft.cachedUrl || nft.thumbnailUrl || nft.pngUrl)) {
-    imageUrl = nft.cachedUrl || nft.thumbnailUrl || nft.pngUrl || '';
-    console.log('Found Alchemy URL:', imageUrl);
-  }
-  
-  // Check for token URI direct property
-  if (!imageUrl && nft.tokenUri) {
-    // tokenUri is sometimes a direct link to the image
-    if (nft.tokenUri.gateway && typeof nft.tokenUri.gateway === 'string') {
-      if (nft.tokenUri.gateway.match(/\.(jpg|jpeg|png|gif|svg|webp)$/i)) {
-        imageUrl = nft.tokenUri.gateway;
-        console.log('Using tokenUri.gateway as image URL:', imageUrl);
-      }
-    } else if (typeof nft.tokenUri === 'string' && nft.tokenUri.match(/\.(jpg|jpeg|png|gif|svg|webp)$/i)) {
-      imageUrl = nft.tokenUri;
-      console.log('Using tokenUri as image URL:', imageUrl);
+    // Try other possible locations
+    if (nft.rawMetadata) {
+      imageUrl = nft.rawMetadata.image || 
+                nft.rawMetadata.image_url || 
+                nft.rawMetadata.animation_url || '';
+      if (imageUrl) console.log('Found image in rawMetadata:', imageUrl);
     }
-  }
-  
-  // Handle special cases from the console log
-  if (!imageUrl && nft.id && typeof nft.id === 'string') {
-    const idParts = nft.id.split(':');
     
-    if (idParts.length > 1) {
-      const network = idParts[0];
-      const tokenData = idParts[1];
-      
-      // Based on console output, we need specific handlers for certain networks
-      if (network === 'base') {
-        // For Base NFTs, try the fallback mock image
-        imageUrl = `https://placehold.co/600x400/222/fff?text=${encodeURIComponent(nft.name || 'Base NFT')}`;
-      } else if (network === 'polygon') {
-        // For Polygon NFTs, try the fallback mock image 
-        imageUrl = `https://placehold.co/600x400/624/fff?text=${encodeURIComponent(nft.name || 'Polygon NFT')}`;
-      }
+    // Try direct properties
+    if (!imageUrl) {
+      imageUrl = nft.image_url || 
+                nft.thumbnail || 
+                nft.animation_url || '';
+      if (imageUrl) console.log('Found image in direct properties:', imageUrl);
     }
-  }
-  
-  // Fallback for SHIB NFTs seen in the console
-  if (!imageUrl && nft.name && nft.name.includes('SHIB NFT')) {
-    imageUrl = `https://placehold.co/600x400/db6/222?text=${encodeURIComponent(nft.name)}`;
   }
   
   // Check if imageUrl is an object (like in the error logs), and extract the URL from it
@@ -153,11 +111,11 @@ const getImageUrl = (nft) => {
     return '';
   }
   
-  // Handle IPFS URLs - try multiple gateways
+  // Handle IPFS URLs - be smarter about gateway selection
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
-    // Use a more reliable IPFS gateway - try a combination of gateways for better success
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    imageUrl = `https://ipfs.io/ipfs/${ipfsHash}`; // Primary gateway
+    // Start with ipfs.io as primary gateway, but our retry logic will try others
+    imageUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
     console.log('Converted IPFS URL:', imageUrl);
   }
   
@@ -202,8 +160,7 @@ const NFTCard = React.memo(({ nft, style }) => {
   console.log(`NFT Card ${title} - Floor Price Data:`, {
     floorPrice,
     hasContractMetadata: !!nft.contractMetadata,
-    hasOpenSea: !!(nft.contractMetadata && nft.contractMetadata.openSea),
-    hasCollection: !!nft.collection,
+    hasOpenSeaMetadata: !!(nft.contract && nft.contract.openSeaMetadata),
     networkType: nft.network || 'unknown',
     id: nft.id
   });
@@ -231,11 +188,9 @@ const NFTCard = React.memo(({ nft, style }) => {
       imageUrl, 
       imageLoaded, 
       imageError,
-      retryCount,
-      floorPrice,
-      collection
+      retryCount
     });
-  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount, floorPrice, collection]);
+  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount]);
   
   // Handle image loading events
   const handleImageLoad = () => {
@@ -244,57 +199,93 @@ const NFTCard = React.memo(({ nft, style }) => {
     setImageError(false);
   };
   
+  // List of IPFS gateways to try in sequence
+  const IPFS_GATEWAYS = [
+    'https://ipfs.io/ipfs/',
+    'https://gateway.ipfs.io/ipfs/',
+    'https://dweb.link/ipfs/',
+    'https://cloudflare-ipfs.com/ipfs/',
+    'https://gateway.pinata.cloud/ipfs/'
+  ];
+  
   const handleImageError = () => {
-    console.error(`Image failed to load: ${title}, URL: ${imageUrl}`);
+    console.error(`Image failed to load: ${title}, URL: ${imageUrl}, retry: ${retryCount}`);
     
-    // Enhanced retry logic with multiple fallback strategies
-    if (retryCount === 0 && imageUrl && !imageUrl.includes('placehold.co')) {
-      // First retry with our proxy
-      setRetryCount(1);
-      console.log(`Retry #1: Using image proxy for ${title}`);
-    } 
-    else if (retryCount === 1 && imageUrl && !imageUrl.includes('placehold.co')) {
-      // Second retry with cloudflare IPFS gateway if it's an IPFS URL
-      if (imageUrl.includes('ipfs.io/ipfs/')) {
-        setRetryCount(2);
-        console.log(`Retry #2: Switching to Cloudflare IPFS gateway for ${title}`);
-      } else {
-        // If not IPFS, go straight to final retry attempt
-        setRetryCount(3);
-        console.log(`Skipping IPFS retry, moving to final retry for ${title}`);
+    // Check if this is an IPFS URL that can be tried with different gateways
+    const isIpfsUrl = imageUrl.includes('/ipfs/');
+    
+    if (isIpfsUrl) {
+      // Extract the IPFS hash from the URL
+      let ipfsHash = '';
+      for (const gateway of IPFS_GATEWAYS) {
+        if (imageUrl.includes(gateway)) {
+          ipfsHash = imageUrl.replace(gateway, '');
+          break;
+        }
+      }
+      
+      if (!ipfsHash && imageUrl.includes('/ipfs/')) {
+        // Get hash from general format
+        const parts = imageUrl.split('/ipfs/');
+        if (parts.length > 1) {
+          ipfsHash = parts[1];
+        }
+      }
+      
+      // If we have a valid IPFS hash, try the next gateway
+      if (ipfsHash && retryCount < IPFS_GATEWAYS.length) {
+        setRetryCount(retryCount + 1);
+        console.log(`IPFS retry #${retryCount + 1}: Switching gateway for ${title}`);
+        return;
       }
     }
-    else if (retryCount === 2 && imageUrl && !imageUrl.includes('placehold.co')) {
-      // Third retry with Pinata IPFS gateway if previous failed
-      setRetryCount(3);
-      console.log(`Retry #3: Switching to Pinata IPFS gateway for ${title}`);
+    
+    // If not IPFS or we've tried all gateways, try our proxy as last resort
+    if (retryCount === IPFS_GATEWAYS.length || (!isIpfsUrl && retryCount === 0)) {
+      setRetryCount(IPFS_GATEWAYS.length + 1); // Set to proxy retry
+      console.log(`Retry with proxy: ${title}`);
+      return;
     }
-    else {
-      // Give up after multiple retries
+    
+    // If proxy failed or all retries exhausted, give up
+    if (retryCount > IPFS_GATEWAYS.length) {
       setImageError(true);
       console.error(`All retries failed for ${title}`);
+      return;
     }
   };
   
   // Determine which URL to use based on retry state
   let displayUrl = imageUrl;
   
-  if (retryCount === 1 && !imageUrl.includes('placehold.co')) {
-    // First retry - use our proxy
-    displayUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-  } 
-  else if (retryCount === 2 && imageUrl.includes('ipfs.io/ipfs/')) {
-    // Second retry - use Cloudflare IPFS gateway if it's an IPFS URL
-    const ipfsHash = imageUrl.replace('https://ipfs.io/ipfs/', '');
-    displayUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
-  } 
-  else if (retryCount === 3 && imageUrl.includes('ipfs.io/ipfs/')) {
-    // Third retry - try Pinata gateway
-    const ipfsHash = imageUrl.replace('https://ipfs.io/ipfs/', '');
-    displayUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
+  // Handle IPFS gateway retries
+  if (retryCount > 0 && retryCount <= IPFS_GATEWAYS.length) {
+    // Extract the IPFS hash from original URL
+    let ipfsHash = '';
+    
+    for (const gateway of IPFS_GATEWAYS) {
+      if (imageUrl.includes(gateway)) {
+        ipfsHash = imageUrl.replace(gateway, '');
+        break;
+      }
+    }
+    
+    if (!ipfsHash && imageUrl.includes('/ipfs/')) {
+      // Get hash from general format
+      const parts = imageUrl.split('/ipfs/');
+      if (parts.length > 1) {
+        ipfsHash = parts[1];
+      }
+    }
+    
+    if (ipfsHash) {
+      // Use the gateway for the current retry count
+      const gatewayIndex = (retryCount - 1) % IPFS_GATEWAYS.length;
+      displayUrl = `${IPFS_GATEWAYS[gatewayIndex]}${ipfsHash}`;
+    }
   }
-  else if (retryCount === 3 && !imageUrl.includes('ipfs.io/ipfs/')) {
-    // Third retry for non-IPFS - try the proxy again with cache buster
+  // If we've tried all IPFS gateways or it's not an IPFS URL, try our proxy
+  else if (retryCount > IPFS_GATEWAYS.length) {
     displayUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}&t=${Date.now()}`;
   }
   

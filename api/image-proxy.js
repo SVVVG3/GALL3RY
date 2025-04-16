@@ -7,9 +7,10 @@ const fs = require('fs');
 // List of IPFS gateways to try in sequence for IPFS URLs
 const IPFS_GATEWAYS = [
   'https://ipfs.io/ipfs/',
+  'https://gateway.ipfs.io/ipfs/',
+  'https://dweb.link/ipfs/',
   'https://cloudflare-ipfs.com/ipfs/',
   'https://gateway.pinata.cloud/ipfs/',
-  'https://dweb.link/ipfs/',
   'https://ipfs.filebase.io/ipfs/'
 ];
 
@@ -25,10 +26,24 @@ async function tryMultipleGateways(ipfsHash) {
   let lastError;
   
   // Clean the IPFS hash by removing any gateway prefix
-  if (ipfsHash.startsWith('https://ipfs.io/ipfs/')) {
-    ipfsHash = ipfsHash.replace('https://ipfs.io/ipfs/', '');
-  } else if (ipfsHash.startsWith('ipfs://')) {
+  for (const gateway of IPFS_GATEWAYS) {
+    if (ipfsHash.startsWith(gateway)) {
+      ipfsHash = ipfsHash.replace(gateway, '');
+      break;
+    }
+  }
+  
+  // Also check for ipfs:// protocol
+  if (ipfsHash.startsWith('ipfs://')) {
     ipfsHash = ipfsHash.replace('ipfs://', '');
+  }
+  
+  // Also check for general /ipfs/ in the URL
+  if (ipfsHash.includes('/ipfs/')) {
+    const parts = ipfsHash.split('/ipfs/');
+    if (parts.length > 1) {
+      ipfsHash = parts[1];
+    }
   }
 
   console.log(`Trying multiple gateways for IPFS hash: ${ipfsHash}`);
@@ -74,6 +89,7 @@ function returnPlaceholder(res) {
     if (fs.existsSync(PLACEHOLDER_PATH)) {
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      res.setHeader('Access-Control-Allow-Origin', '*');
       return res.sendFile(PLACEHOLDER_PATH);
     }
     
@@ -130,7 +146,7 @@ async function handleImageProxy(req, res) {
     let response;
     
     // Special handling for IPFS URLs
-    if (url.includes('ipfs.io/ipfs/') || url.startsWith('ipfs://')) {
+    if (url.includes('/ipfs/') || url.startsWith('ipfs://')) {
       try {
         response = await tryMultipleGateways(url);
       } catch (error) {
@@ -144,7 +160,7 @@ async function handleImageProxy(req, res) {
           headers: {
             // Send a realistic user agent to avoid being blocked
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'image/*',
+            'Accept': '*/*',
             'Referer': 'https://gallery.xyz/'
           },
           timeout: 10000 // 10 second timeout
@@ -161,14 +177,34 @@ async function handleImageProxy(req, res) {
     }
     
     // Get content type and body
-    const contentType = response.headers.get('content-type');
+    let contentType = response.headers.get('content-type');
     
     try {
       const buffer = await response.buffer();
       
-      // Check if the response is actually an image
+      // If no content type or not image, try to detect from content or URL
       if (!contentType || !contentType.includes('image')) {
-        console.warn(`Response is not an image: ${contentType}`);
+        // Try to detect content type from URL
+        if (url.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
+        else if (url.match(/\.png$/i)) contentType = 'image/png';
+        else if (url.match(/\.gif$/i)) contentType = 'image/gif';
+        else if (url.match(/\.svg$/i)) contentType = 'image/svg+xml';
+        else if (url.match(/\.webp$/i)) contentType = 'image/webp';
+        else {
+          // Check if buffer starts with image magic numbers
+          if (buffer.length > 2) {
+            const header = buffer.slice(0, 4);
+            if (header.equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))) contentType = 'image/png';
+            else if (header.equals(Buffer.from([0xFF, 0xD8, 0xFF]))) contentType = 'image/jpeg';
+            else if (header.equals(Buffer.from([0x47, 0x49, 0x46]))) contentType = 'image/gif';
+            else if (buffer.toString('utf8', 0, 5) === '<?xml' || buffer.toString('utf8', 0, 4) === '<svg') contentType = 'image/svg+xml';
+          }
+        }
+      }
+      
+      // If still no content type or not an image, return placeholder
+      if (!contentType || !contentType.includes('image')) {
+        console.warn(`Response is not an image: ${contentType || 'unknown type'}`);
         return returnPlaceholder(res);
       }
       
@@ -179,7 +215,7 @@ async function handleImageProxy(req, res) {
       
       // Set proper cache headers
       res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-      res.setHeader('Content-Type', contentType || 'image/png');
+      res.setHeader('Content-Type', contentType);
       
       // Add CORS headers
       res.setHeader('Access-Control-Allow-Origin', '*');
