@@ -14,12 +14,13 @@ const getCORSProxyUrl = (url) => {
   const needsProxy = 
     url.includes('nft-cdn.alchemy.com') || 
     url.includes('i.seadn.io') ||
-    url.includes('cloudflare-ipfs.com');
+    url.includes('cloudflare-ipfs.com') ||
+    url.includes('ipfs.io') ||
+    url.startsWith('ipfs://');
   
   if (needsProxy) {
-    // Use a CORS proxy or refer to local proxy handler on your server
-    // Comment this out if you don't need a proxy or are having issues with it
-    // return `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    // Use our internal image proxy
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
   }
   
   return url;
@@ -66,6 +67,11 @@ const getImageUrl = (nft) => {
     else if (nft.image.originalUrl) {
       imageUrl = nft.image.originalUrl;
       console.log('Using original URL:', imageUrl);
+    }
+    // Try gateway URL
+    else if (nft.image.gateway) {
+      imageUrl = nft.image.gateway;
+      console.log('Using gateway URL:', imageUrl);
     }
   }
   
@@ -171,9 +177,10 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Use public IPFS gateway that generally works well
-    imageUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
-    console.log('Converted IPFS URL:', imageUrl);
+    // Use our image proxy to handle IPFS URLs
+    imageUrl = `/api/image-proxy?url=${encodeURIComponent(`ipfs://${ipfsHash}`)}`;
+    console.log('Converted IPFS URL through proxy:', imageUrl);
+    return imageUrl;
   }
   
   // Handle Arweave URLs
@@ -191,15 +198,17 @@ const getImageUrl = (nft) => {
   // Special handling for NFT CDN URLs 
   if (imageUrl && imageUrl.includes('nft-cdn.alchemy.com')) {
     // Add format if needed
-    if (!imageUrl.endsWith('.jpg') && !imageUrl.endsWith('.png') && 
-        !imageUrl.endsWith('.webp') && !imageUrl.endsWith('.gif') && 
+    if (!imageUrl.includes('/original') && !imageUrl.includes('/thumb') && 
+        !imageUrl.includes('.jpg') && !imageUrl.includes('.png') && 
         !imageUrl.includes('?')) {
-      imageUrl = `${imageUrl}/original.jpg`;
+      imageUrl = `${imageUrl}/original`;
+      console.log('Added format to Alchemy CDN URL:', imageUrl);
     }
     
-    // IMPORTANT: For Alchemy CDN URLs, we don't try to proxy - use direct with proper headers
-    console.log('Using direct Alchemy CDN URL:', imageUrl);
-    return imageUrl; // Return directly
+    // Use our image proxy for Alchemy CDN URLs
+    imageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    console.log('Using proxy for Alchemy CDN URL:', imageUrl);
+    return imageUrl;
   }
   
   // IPFS URLs and other problematic URLs need proxying
@@ -210,7 +219,9 @@ const getImageUrl = (nft) => {
       imageUrl.includes('ipfs.fleek.co') ||
       imageUrl.includes('i.seadn.io')) {
     
-    // For IPFS and OpenSea URLs - try direct access first as most current browsers handle CORS
+    // Route through our image proxy
+    imageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    console.log('Using proxy for potentially CORS-restricted URL:', imageUrl);
     return imageUrl;
   }
   
@@ -255,7 +266,15 @@ const NFTCard = ({ nft }) => {
     
     let urls = [baseUrl]; // Start with the original URL
     
-    // Add placeholder as fallback
+    // If the URL is not already using our proxy and it's an external URL that might have CORS issues,
+    // add a proxied version as a fallback
+    if (!baseUrl.startsWith('/api/image-proxy') && 
+        !baseUrl.startsWith('/') && 
+        !baseUrl.startsWith('data:')) {
+      urls.push(`/api/image-proxy?url=${encodeURIComponent(baseUrl)}`);
+    }
+    
+    // Add placeholder as final fallback
     urls.push('/placeholder.png');
     
     // Ensure no duplicates
@@ -337,7 +356,7 @@ const NFTCard = ({ nft }) => {
             });
             setCurrentImageUrl(`${origin}/placeholder.png`);
           }
-        }, 6000); // 6 second timeout for image loading
+        }, 7000); // 7 second timeout for image loading
         
         img.onload = () => {
           if (!isActive) return;
@@ -379,7 +398,7 @@ const NFTCard = ({ nft }) => {
         
         // Always set crossOrigin for external URLs to avoid CORS issues
         // This is important - we need to tell the browser to use CORS for these requests
-        if (!url.startsWith(window.location.origin)) {
+        if (!url.startsWith('/') && !url.startsWith('data:')) {
           img.crossOrigin = 'anonymous';
         }
         
