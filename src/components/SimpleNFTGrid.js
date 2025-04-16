@@ -198,6 +198,16 @@ const NFTCard = React.memo(({ nft, style }) => {
   const contractAddress = getContractAddress(nft);
   const tokenId = getTokenId(nft);
   
+  // Add detailed logging for floor price debugging
+  console.log(`NFT Card ${title} - Floor Price Data:`, {
+    floorPrice,
+    hasContractMetadata: !!nft.contractMetadata,
+    hasOpenSea: !!(nft.contractMetadata && nft.contractMetadata.openSea),
+    hasCollection: !!nft.collection,
+    networkType: nft.network || 'unknown',
+    id: nft.id
+  });
+  
   // Create OpenSea URL based on network
   let openSeaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
   
@@ -444,21 +454,14 @@ const getCollectionName = (nft) => {
 const getFloorPrice = (nft) => {
   if (!nft) return '';
   
-  // Debug floor price - log the possible locations to check
-  console.log('Checking floor price for:', {
-    title: getNftTitle(nft),
-    hasContractMetadata: !!nft.contractMetadata,
-    hasCollection: !!nft.collection,
-    hasFloorPrice: !!nft.floor_price,
-    hasOpenSea: !!(nft.contractMetadata && nft.contractMetadata.openSea),
-    hasContract: !!nft.contract
-  });
+  // Debug floor price - log the full NFT object to see structure
+  console.log('NFT object for floor price:', nft);
   
   // Try different price locations depending on the data source
   let price = null;
   let currency = 'ETH';
   
-  // Check for OpenSea floor price in contractMetadata
+  // Check for OpenSea floor price in contractMetadata (most common location)
   if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.floorPrice) {
     price = nft.contractMetadata.openSea.floorPrice;
     console.log(`Found floor price in contractMetadata.openSea: ${price}`);
@@ -478,26 +481,15 @@ const getFloorPrice = (nft) => {
     price = nft.contract.openSea.floorPrice;
     console.log(`Found floor price in contract.openSea: ${price}`);
   }
-  // Check in rawMetadata for OpenSea data (sometimes appears here)
-  else if (nft.rawMetadata && nft.rawMetadata.opensea && nft.rawMetadata.opensea.floor_price) {
-    price = nft.rawMetadata.opensea.floor_price;
-    console.log(`Found floor price in rawMetadata.opensea: ${price}`);
+  // Check in opensea property
+  else if (nft.opensea && nft.opensea.floorPrice) {
+    price = nft.opensea.floorPrice;
+    console.log(`Found direct opensea floorPrice: ${price}`);
   }
-  // Check in metadata if it contains OpenSea data
-  else if (nft.metadata) {
-    let metadata = nft.metadata;
-    if (typeof metadata === 'string') {
-      try {
-        metadata = JSON.parse(metadata);
-      } catch (e) {
-        console.error('Error parsing metadata for floor price:', e);
-      }
-    }
-    
-    if (metadata && metadata.opensea && metadata.opensea.floor_price) {
-      price = metadata.opensea.floor_price;
-      console.log(`Found floor price in parsed metadata: ${price}`);
-    }
+  // Check for opensea_data property
+  else if (nft.opensea_data && nft.opensea_data.floor_price) {
+    price = nft.opensea_data.floor_price;
+    console.log(`Found floor price in opensea_data: ${price}`);
   }
   
   // Determine currency based on network
@@ -507,16 +499,20 @@ const getFloorPrice = (nft) => {
     currency = 'ETH';
   }
   
-  // Adjust NaN price
-  if (price && isNaN(parseFloat(price))) {
-    console.log(`Invalid price format: ${price}`);
-    return '';
-  }
-  
-  // Format price if available
+  // Handle the price value - sometimes it's already a string
   if (price) {
-    // Convert to a readable format (4 decimals)
-    return `Floor: ${parseFloat(price).toFixed(4)} ${currency}`;
+    // If it's a string with ETH symbol, just return it directly
+    if (typeof price === 'string' && (price.includes('ETH') || price.includes('MATIC'))) {
+      return `Floor: ${price}`;
+    }
+    
+    // If it's a valid number
+    if (!isNaN(parseFloat(price))) {
+      return `Floor: ${parseFloat(price).toFixed(4)} ${currency}`;
+    }
+    
+    // If it's anything else, return it as is
+    return `Floor: ${price} ${currency}`;
   }
   
   return '';
