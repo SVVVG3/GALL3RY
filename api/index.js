@@ -39,6 +39,10 @@ app.post('/zapper', async (req, res) => {
     // Get Zapper API key from environment variables
     const apiKey = process.env.ZAPPER_API_KEY || '';
     
+    // Debug info about the API key (without revealing it)
+    console.log('ENV CHECK - ZAPPER_API_KEY exists:', !!apiKey);
+    console.log('ENV CHECK - Key length:', apiKey?.length || 0);
+    
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
@@ -70,28 +74,60 @@ app.post('/zapper', async (req, res) => {
       });
     }
     
-    // Set up headers with API key
+    // Set up headers with API key and proper User-Agent (updated to match browser-like user agent)
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Origin': 'https://zapper.xyz',
+      'Referer': 'https://zapper.xyz/'
     };
     
+    // Debug request details
+    console.log('REQUEST - GraphQL query:', req.body.query.replace(/\s+/g, ' ').trim().substring(0, 100) + '...');
+    console.log('REQUEST - Variables:', JSON.stringify(req.body.variables || {}));
+    
     // Forward the request to Zapper
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: req.body,
-      timeout: 10000 // 10 second timeout
-    });
+    let response;
+    try {
+      response = await axios({
+        method: 'post',
+        url: ZAPPER_API_URL,
+        headers: headers,
+        data: req.body,
+        timeout: 15000 // Extended timeout to 15 seconds
+      });
+      
+      console.log('ZAPPER RESPONSE - Status:', response.status);
+      console.log('ZAPPER RESPONSE - Success:', !!response.data);
+    } catch (axiosError) {
+      console.error('AXIOS ERROR - Message:', axiosError.message);
+      console.error('AXIOS ERROR - Code:', axiosError.code);
+      
+      if (axiosError.response) {
+        console.error('RESPONSE ERROR - Status:', axiosError.response.status);
+        console.error('RESPONSE ERROR - Headers:', JSON.stringify(axiosError.response.headers));
+        console.error('RESPONSE ERROR - Data:', JSON.stringify(axiosError.response.data));
+      } else if (axiosError.request) {
+        console.error('REQUEST ERROR - No response received');
+      }
+      
+      // Return a more helpful error message
+      return res.status(axiosError.response?.status || 500).json({
+        error: 'Error from Zapper API',
+        message: axiosError.message,
+        details: axiosError.response?.data,
+        hint: axiosError.response?.status === 403 ? 'This may be due to User-Agent restrictions' : undefined
+      });
+    }
     
     // Return the response from Zapper
     return res.status(response.status).json(response.data);
     
   } catch (error) {
     console.error('Error proxying to Zapper:', error.message);
+    console.error('Error stack:', error.stack);
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
@@ -116,6 +152,10 @@ app.get('/farcaster-profile', async (req, res) => {
   try {
     // Get Zapper API key from environment variables
     const apiKey = process.env.ZAPPER_API_KEY || '';
+    
+    // Debug info about the API key (without revealing it)
+    console.log('ENV CHECK - ZAPPER_API_KEY exists:', !!apiKey);
+    console.log('ENV CHECK - Key length:', apiKey?.length || 0);
     
     if (!apiKey) {
       console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
@@ -158,25 +198,56 @@ app.get('/farcaster-profile', async (req, res) => {
     // Build variables based on what was provided
     const variables = fid ? { fid: parseInt(fid, 10) } : { username };
 
-    // Set up headers with API key
+    // Debug request details
+    console.log('REQUEST - GraphQL query:', query.replace(/\s+/g, ' ').trim());
+    console.log('REQUEST - Variables:', JSON.stringify(variables));
+
+    // Set up headers with API key and proper User-Agent
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Origin': 'https://zapper.xyz',
+      'Referer': 'https://zapper.xyz/'
     };
     
-    // Make the GraphQL request to Zapper
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: {
-        query,
-        variables
-      },
-      timeout: 10000 // 10 second timeout
-    });
+    // Make the GraphQL request to Zapper with better error handling
+    let response;
+    try {
+      response = await axios({
+        method: 'post',
+        url: ZAPPER_API_URL,
+        headers: headers,
+        data: {
+          query,
+          variables
+        },
+        timeout: 15000 // Extended to 15 second timeout for better reliability
+      });
+      
+      console.log('ZAPPER RESPONSE - Status:', response.status);
+      console.log('ZAPPER RESPONSE - Data keys:', Object.keys(response.data || {}));
+    } catch (axiosError) {
+      console.error('AXIOS ERROR - Message:', axiosError.message);
+      console.error('AXIOS ERROR - Code:', axiosError.code);
+      
+      if (axiosError.response) {
+        console.error('RESPONSE ERROR - Status:', axiosError.response.status);
+        console.error('RESPONSE ERROR - Headers:', JSON.stringify(axiosError.response.headers));
+        console.error('RESPONSE ERROR - Data:', JSON.stringify(axiosError.response.data));
+      } else if (axiosError.request) {
+        console.error('REQUEST ERROR - No response received');
+      }
+      
+      // Return a more helpful error message
+      return res.status(axiosError.response?.status || 500).json({
+        error: 'Error from Zapper API',
+        message: axiosError.message,
+        details: axiosError.response?.data,
+        hint: axiosError.response?.status === 403 ? 'This may be due to User-Agent restrictions' : undefined
+      });
+    }
     
     // Check for GraphQL errors
     if (response.data?.errors) {
@@ -202,6 +273,7 @@ app.get('/farcaster-profile', async (req, res) => {
     
   } catch (error) {
     console.error('Error fetching Farcaster profile:', error.message);
+    console.error('Error stack:', error.stack);
     
     // Log the full error for debugging
     if (error.response) {
