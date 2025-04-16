@@ -12,9 +12,8 @@
 /* Virtualized grid container */
 .virtualized-grid-container {
   width: 100%;
-  height: 100%;
+  height: 70vh; /* Set fixed height for the grid container */
   min-height: 400px;
-  max-height: 1000px;
   margin: 0 auto;
   position: relative;
 }
@@ -201,6 +200,7 @@
 @media (max-width: 768px) {
   .virtualized-grid-container {
     height: 70vh;
+    width: 100%; /* Ensure full width on mobile */
   }
   
   .nft-image {

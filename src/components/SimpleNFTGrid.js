@@ -176,13 +176,24 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     
     const nft = items[index];
     
+    // Enhance the style with padding to create nice spacing
+    const enhancedStyle = {
+      ...style,
+      padding: '10px',
+      boxSizing: 'border-box',
+      width: style.width,
+      height: style.height
+    };
+    
     return (
-      <div style={style} className="nft-item">
-        <NFTCard 
-          nft={nft} 
-          onLoad={handleImageSuccess} 
-          onError={handleImageError}
-        />
+      <div style={enhancedStyle}>
+        <div className="nft-item" style={{ width: '100%', height: '100%' }}>
+          <NFTCard 
+            nft={nft} 
+            onLoad={handleImageSuccess} 
+            onError={handleImageError}
+          />
+        </div>
       </div>
     );
   }, [handleImageSuccess, handleImageError]);
@@ -208,21 +219,28 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   return (
     <div className="virtualized-grid-container">
       <AutoSizer>
-        {({ height, width }) => {
-          const columnCount = getColumnCount(width);
-          const rowCount = Math.ceil(nfts.length / columnCount);
+        {({ width, height }) => {
+          // Calculate columns based on viewport width 
+          const columnCount = width < 600 ? 2 : width < 900 ? 3 : width < 1200 ? 4 : 5;
+          
+          // Calculate width of each cell
           const columnWidth = width / columnCount;
-          const rowHeight = columnWidth * 1.4; // Card aspect ratio with info section
+          
+          // Keep cell aspect ratio close to 1:1 with some padding
+          const rowHeight = columnWidth;
+          
+          // Calculate how many rows we need
+          const rowCount = Math.ceil(nfts.length / columnCount);
           
           return (
             <FixedSizeGrid
-              className="nft-grid"
-              width={width}
-              height={height}
+              className="virtualized-grid"
               columnCount={columnCount}
               columnWidth={columnWidth}
+              height={height}
               rowCount={rowCount}
               rowHeight={rowHeight}
+              width={width}
               itemData={{
                 items: nfts,
                 columnCount
