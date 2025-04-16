@@ -8,12 +8,13 @@
 import axios from 'axios';
 
 export default async function handler(req, res) {
-  // Set CORS headers to allow cross-origin requests
+  // Set CORS headers to allow cross-origin requests - make sure these are comprehensive
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
   
-  // Handle OPTIONS requests
+  // Handle OPTIONS preflight requests immediately
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -27,14 +28,15 @@ export default async function handler(req, res) {
   const { url } = req.query;
   
   if (!url) {
+    console.error('Missing URL parameter');
     return res.status(400).json({ error: 'Missing url parameter' });
   }
-  
-  console.log(`Image proxy request for: ${decodeURIComponent(url)}`);
   
   try {
     // Always decode the URL to handle any encoded characters
     let proxyUrl = decodeURIComponent(url);
+    
+    console.log(`Image proxy request for: ${proxyUrl}`);
     
     // Default headers for most requests
     let customHeaders = {
@@ -45,14 +47,31 @@ export default async function handler(req, res) {
       'Pragma': 'no-cache'
     };
     
-    // Special handling for different URL types
+    // Handle IPFS URLs first as they're most problematic
+    if (proxyUrl.startsWith('ipfs://')) {
+      const ipfsHash = proxyUrl.replace('ipfs://', '');
+      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      console.log(`Converted IPFS URL: ${proxyUrl}`);
+    } 
+    else if (proxyUrl.includes('/ipfs/')) {
+      // Extract IPFS path from URL
+      let ipfsPath = '';
+      try {
+        ipfsPath = proxyUrl.split('/ipfs/')[1];
+        // Use Cloudflare IPFS gateway which tends to be more reliable
+        proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`;
+        console.log(`Using Cloudflare IPFS: ${proxyUrl}`);
+      } catch (error) {
+        console.error('Failed to extract IPFS path:', error);
+        // Continue with original URL if extraction fails
+      }
+    }
     
     // Handle Alchemy CDN URLs specifically
     if (proxyUrl.includes('nft-cdn.alchemy.com')) {
-      console.log('Detected Alchemy CDN URL, adding special headers');
+      // Add Alchemy specific headers
       customHeaders = {
         ...customHeaders,
-        'Cache-Control': 'no-cache',
         'Referer': 'https://alchemy.com/'
       };
       
@@ -63,52 +82,19 @@ export default async function handler(req, res) {
       }
     }
     
-    // Handle OpenSea's seadn.io URLs specifically
+    // Special handling for OpenSea's seadn.io URLs
     if (proxyUrl.includes('i.seadn.io')) {
-      console.log('Detected OpenSea seadn.io URL, adding special headers');
+      // Add OpenSea specific headers
       customHeaders = {
         ...customHeaders,
         'Origin': 'https://opensea.io',
         'Referer': 'https://opensea.io/'
       };
       
-      // Remove width parameter that might cause issues
+      // Remove width parameter that can cause issues
       if (proxyUrl.includes('w=')) {
         proxyUrl = proxyUrl.replace(/w=\d+(&|$)/, '');
         console.log(`Cleaned OpenSea URL: ${proxyUrl}`);
-      }
-    }
-    
-    // Special handling for IPFS URLs
-    if (proxyUrl.startsWith('ipfs://')) {
-      // Try multiple gateways instead of just one
-      const ipfsHash = proxyUrl.replace('ipfs://', '');
-      // Use Cloudflare IPFS gateway which tends to be more reliable
-      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
-      console.log(`Converted IPFS URL: ${proxyUrl}`);
-    }
-    
-    // Handle ipfs links that aren't using the ipfs:// protocol
-    if (proxyUrl.includes('/ipfs/')) {
-      console.log('Detected IPFS gateway URL');
-      // Remove unneeded headers for IPFS gateways
-      customHeaders = {
-        ...customHeaders,
-        'Origin': null,
-        'Referer': null
-      };
-      
-      // Extract IPFS path from URL
-      let ipfsPath = '';
-      if (proxyUrl.includes('/ipfs/')) {
-        ipfsPath = proxyUrl.split('/ipfs/')[1];
-      }
-      
-      // If we successfully extracted the IPFS path, try with a reliable gateway
-      if (ipfsPath) {
-        // Use Cloudflare IPFS gateway which tends to be more reliable for our proxy
-        proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`;
-        console.log(`Using Cloudflare IPFS: ${proxyUrl}`);
       }
     }
     
@@ -118,23 +104,18 @@ export default async function handler(req, res) {
       console.log(`Converted Arweave URL: ${proxyUrl}`);
     }
     
-    // Handle metadata URLs for NFT projects
-    if (proxyUrl.includes('metadata.goonzworld.com')) {
-      console.log('Detected Goonz metadata URL, adding special handling');
-      customHeaders = {
-        ...customHeaders,
-        'Origin': null,
-        'Referer': null,
-        'Accept': '*/*'
-      };
+    // Handle HTTP URLs - ensure they are HTTPS
+    if (proxyUrl.startsWith('http://')) {
+      proxyUrl = proxyUrl.replace('http://', 'https://');
+      console.log(`Converted HTTP to HTTPS: ${proxyUrl}`);
     }
     
-    console.log(`Fetching from final URL: ${proxyUrl}`);
+    console.log(`Fetching image from: ${proxyUrl}`);
     
     try {
       // Set a timeout for the request to prevent hanging
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
       
       // Implement retry logic
       let retryCount = 0;
@@ -147,29 +128,29 @@ export default async function handler(req, res) {
             console.log(`Retry ${retryCount}/${maxRetries} for ${proxyUrl}`);
           }
           
-          // Simpler fetch with improved error handling
+          // Fetch the image
           const response = await axios({
             method: 'get',
             url: proxyUrl,
             responseType: 'arraybuffer',
-            timeout: 8000, // 8 second timeout (shorter than the controller timeout)
+            timeout: 10000, // 10 second timeout
             headers: customHeaders,
-            validateStatus: null, // Allow any status code to handle it ourselves
+            validateStatus: null, // Allow any status code
             maxContentLength: 10 * 1024 * 1024, // 10MB max size
             maxRedirects: 5,
             signal: controller.signal
           });
           
-          // Clear the abort controller timeout
+          // Clear the timeout
           clearTimeout(timeoutId);
           
-          // Handle errors more gracefully
+          // Handle error responses
           if (!response || response.status >= 400) {
             console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
-            lastError = new Error(`Status ${response?.status || 'unknown'}`);
+            lastError = new Error(`HTTP ${response?.status || 'unknown'}`);
             retryCount++;
             
-            // Wait before retrying (exponential backoff)
+            // Wait before retrying with exponential backoff
             if (retryCount <= maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
               continue;
@@ -178,7 +159,7 @@ export default async function handler(req, res) {
             }
           }
           
-          // Set content type from response or guess from URL
+          // Set the content type header
           const contentType = response.headers['content-type'];
           if (contentType) {
             res.setHeader('Content-Type', contentType);
@@ -189,20 +170,20 @@ export default async function handler(req, res) {
             else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
             else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
             else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
-            else res.setHeader('Content-Type', 'application/octet-stream');
+            else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
           }
           
           // Set cache headers
           res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
           
           // Return the image data
-          return res.send(response.data);
+          return res.status(200).send(response.data);
         } catch (requestError) {
           console.error(`Error on attempt ${retryCount+1} for ${proxyUrl}:`, requestError.message);
           lastError = requestError;
           retryCount++;
           
-          // Wait before retrying (exponential backoff)
+          // Wait before retrying
           if (retryCount <= maxRetries) {
             await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
           }
@@ -212,31 +193,37 @@ export default async function handler(req, res) {
       // If we get here, all retries failed
       throw lastError || new Error('Failed after all retries');
     } catch (fetchError) {
-      console.error(`Error fetching ${proxyUrl}:`, fetchError.message);
+      console.error(`All attempts failed for ${proxyUrl}:`, fetchError.message);
       
       // Return a placeholder SVG image
+      const errorMsg = fetchError.message ? fetchError.message.substring(0, 30) : 'Unknown error';
       const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f0f0f0"/>
-        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
-        <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${fetchError.message.substring(0, 30)}</text>
+        <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image unavailable</text>
+        <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMsg}</text>
       </svg>`);
       
+      // Make sure these headers are set correctly
       res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600'); 
-      return res.send(placeholderSvg);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      return res.status(200).send(placeholderSvg);
     }
   } catch (error) {
-    console.error(`Error in image proxy for ${req.query.url}:`, error.message);
+    console.error(`Global error in image proxy:`, error.message);
     
     // Return a placeholder SVG image with error details
-    const errorMessage = error.message.substring(0, 30);
+    const errorMessage = error.message ? error.message.substring(0, 30) : 'Unknown error';
     const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
       <rect width="200" height="200" fill="#f0f0f0"/>
-      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image error: ${errorMessage}...</text>
+      <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image error</text>
+      <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
     </svg>`);
     
+    // Ensure proper headers even in error cases
     res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.send(placeholderSvg);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    return res.status(200).send(placeholderSvg);
   }
 } 

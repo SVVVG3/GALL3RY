@@ -164,15 +164,8 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Use multiple IPFS gateways for better reliability
-    const gateways = [
-      `https://ipfs.io/ipfs/${ipfsHash}`,
-      `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
-      `https://gateway.pinata.cloud/ipfs/${ipfsHash}`
-    ];
-    
-    // Use the first gateway and let fallback mechanism handle retries
-    imageUrl = gateways[0];
+    // Use Cloudflare IPFS gateway which tends to be more reliable
+    imageUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
     console.log('Converted IPFS URL:', imageUrl);
   }
   
@@ -192,6 +185,7 @@ const getImageUrl = (nft) => {
   if (!imageUrl) {
     imageUrl = '/placeholder.png'; // Use local placeholder instead of external service
     console.log('Using fallback placeholder - no image URL found');
+    return imageUrl;
   }
   
   // Special handling for NFT CDN URLs 
@@ -212,6 +206,24 @@ const getImageUrl = (nft) => {
     }
     
     console.log('Formatted NFT CDN URL:', imageUrl);
+  }
+  
+  // IMPORTANT: Always proxy problematic URLs to avoid CORS issues
+  // This is the key change - move the proxy logic here instead of in the fallback chain
+  if (imageUrl.includes('/ipfs/') || 
+      imageUrl.includes('ipfs.io') || 
+      imageUrl.includes('cloudflare-ipfs.com') || 
+      imageUrl.includes('gateway.pinata.cloud') || 
+      imageUrl.includes('ipfs.infura.io') || 
+      imageUrl.includes('ipfs.fleek.co') ||
+      imageUrl.includes('nft-cdn.alchemy.com') || 
+      imageUrl.includes('i.seadn.io')) {
+    
+    // Use absolute URL to avoid issues with different environments (dev vs production)
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    console.log('Using image proxy for', imageUrl, '->', proxyUrl);
+    return proxyUrl;
   }
   
   return imageUrl;
@@ -248,106 +260,31 @@ const NFTCard = ({ nft }) => {
   // Get token ID from various possible locations
   const tokenId = nft.token_id || nft.tokenId || getTokenId(nft);
 
-  // Generate fallback URLs for different image formats
+  // Generate fallback URLs for different image formats - simplify this to focus on formats rather than gateways
   const generateFallbackUrls = useCallback((baseUrl) => {
     if (!baseUrl) return [];
     
-    let urls = [];
+    let urls = [baseUrl]; // Always start with the original URL
+    
+    // If this is already a proxied URL, don't add more fallbacks
+    if (baseUrl.includes('/api/image-proxy')) {
+      return urls;
+    }
     
     // For Alchemy CDN URLs, try different formats
     if (baseUrl.includes('nft-cdn.alchemy.com/') && !baseUrl.includes('original.')) {
       const baseWithoutExt = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      urls = [
+      urls.push(
         `${baseWithoutExt}/original.jpg`,  // Try JPG first (most compatible)
-        `${baseWithoutExt}/original.png`,  // Then PNG
-        `${baseWithoutExt}/original.webp`  // Finally WEBP
-      ];
-    }
-    // For IPFS, try different gateways to avoid rate limiting
-    else if (baseUrl.includes('ipfs.io')) {
-      const ipfsPath = baseUrl.split('/ipfs/')[1];
-      urls = [
-        baseUrl, // Try original URL first
-        `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
-        `https://ipfs.io/ipfs/${ipfsPath}`,
-        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
-        `https://dweb.link/ipfs/${ipfsPath}`,
-        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
-        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
-        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
-        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
-      ];
-    }
-    // For Cloudflare IPFS
-    else if (baseUrl.includes('cloudflare-ipfs.com')) {
-      const ipfsPath = baseUrl.split('/ipfs/')[1];
-      urls = [
-        baseUrl, // Try original URL first
-        `https://ipfs.io/ipfs/${ipfsPath}`,
-        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
-        `https://dweb.link/ipfs/${ipfsPath}`,
-        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
-        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
-        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
-        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
-      ];
-    }
-    // For Pinata gateway
-    else if (baseUrl.includes('gateway.pinata.cloud')) {
-      const ipfsPath = baseUrl.split('/ipfs/')[1];
-      urls = [
-        baseUrl, // Try original URL first
-        `https://ipfs.io/ipfs/${ipfsPath}`,
-        `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
-        `https://dweb.link/ipfs/${ipfsPath}`,
-        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
-        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
-        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
-        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
-      ];
-    }
-    // For OpenSea's seadn.io, try direct URL and cleaned version without parameters
-    else if (baseUrl.includes('i.seadn.io')) {
-      urls = [baseUrl];
-      
-      // Also try without width parameter which can cause issues
-      if (baseUrl.includes('w=')) {
-        const cleanedUrl = baseUrl.replace(/w=\d+(&|$)/, '');
-        if (cleanedUrl !== baseUrl) {
-          urls.push(cleanedUrl);
-        }
-      }
-    }
-    // For Alchemy Cloudinary URLs
-    else if (baseUrl.includes('res.cloudinary.com/alchemyapi')) {
-      urls = [baseUrl];
-      
-      // Try both with and without format conversion parameters
-      if (baseUrl.includes('convert-png')) {
-        // Try without the conversion
-        const cleanedUrl = baseUrl.replace('convert-png/', '');
-        urls.push(cleanedUrl);
-      } else {
-        // Try with PNG conversion
-        const parts = baseUrl.split('/');
-        const networkAndAssetId = parts.slice(-2).join('/');
-        urls.push(`https://res.cloudinary.com/alchemyapi/image/upload/convert-png/${networkAndAssetId}`);
-      }
-    }
-    // Otherwise just use the original
-    else {
-      urls = [baseUrl];
+        `${baseWithoutExt}/original.png`   // Then PNG
+      );
     }
     
-    // Always add our custom proxy for IPFS URLs, not just as a last resort
-    // And add it at the beginning of the array for faster loading
-    if (baseUrl.includes('/ipfs/') || baseUrl.includes('nft-cdn.alchemy.com') || 
-        baseUrl.includes('i.seadn.io') || baseUrl.includes('cloudflare-ipfs.com')) {
-      // Use absolute URL to avoid issues with different environments
+    // Always add a proxy version as a fallback
+    if (!baseUrl.includes('/api/image-proxy')) {
       const origin = typeof window !== 'undefined' ? window.location.origin : '';
       const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(baseUrl)}`;
-      // Add the proxy URL to the beginning of the array
-      urls.unshift(proxyUrl);
+      urls.push(proxyUrl);
     }
     
     // Ensure no duplicates
@@ -389,8 +326,8 @@ const NFTCard = ({ nft }) => {
     
     // Function to try loading an image with exponential backoff
     const tryLoadImage = (url, attemptIndex) => {
-      // Add delay for retries to avoid rate limiting - more aggressive retries
-      const delayMs = attemptIndex === 0 ? 0 : Math.min(1000 * Math.pow(1.3, attemptIndex - 1), 5000);
+      // Add delay for retries to avoid rate limiting
+      const delayMs = attemptIndex === 0 ? 0 : Math.min(1000 * Math.pow(1.5, attemptIndex - 1), 5000);
       
       console.log(`Attempt ${attemptIndex+1}/${fallbackUrls.length}: Loading ${url} for ${nftTitle}${delayMs > 0 ? ` (delayed ${delayMs}ms)` : ''}`);
       
@@ -465,8 +402,9 @@ const NFTCard = ({ nft }) => {
           }
         };
         
-        // Check for CORS issues with IPFS URLs
-        if (url.includes('/ipfs/') && !url.includes('/api/image-proxy')) {
+        // Always set crossOrigin for external URLs to avoid CORS issues
+        // This is important - we need to tell the browser to use CORS for these requests
+        if (!url.includes(window.location.origin)) {
           img.crossOrigin = 'anonymous';
         }
         
@@ -503,6 +441,7 @@ const NFTCard = ({ nft }) => {
                 e.target.src = '';
               }}
               loading="lazy"
+              crossOrigin="anonymous"
             />
           )}
           {imageState.isLoading && !imageState.loaded && !imageState.error && (
