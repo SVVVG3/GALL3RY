@@ -7,6 +7,16 @@
 
 import axios from 'axios';
 
+// Add Vercel-specific configuration
+export const config = {
+  api: {
+    // Disable the default body parser
+    bodyParser: false,
+    // Disable response size limits
+    responseLimit: false,
+  },
+};
+
 export default async function handler(req, res) {
   // Set CORS headers to allow cross-origin requests - make sure these are comprehensive
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,7 +39,7 @@ export default async function handler(req, res) {
   
   if (!url) {
     console.error('Missing URL parameter');
-    return res.status(400).json({ error: 'Missing url parameter' });
+    return res.status(200).json({ error: 'Missing url parameter' });
   }
   
   try {
@@ -37,6 +47,12 @@ export default async function handler(req, res) {
     let proxyUrl = decodeURIComponent(url);
     
     console.log(`Image proxy request for: ${proxyUrl}`);
+    
+    // Check if the URL is too long or malformed
+    if (proxyUrl.length > 2000) {
+      console.error('URL too long');
+      return returnPlaceholder(res, 'URL too long');
+    }
     
     // Default headers for most requests
     let customHeaders = {
@@ -63,7 +79,8 @@ export default async function handler(req, res) {
         console.log(`Using Cloudflare IPFS: ${proxyUrl}`);
       } catch (error) {
         console.error('Failed to extract IPFS path:', error);
-        // Continue with original URL if extraction fails
+        // Return a placeholder instead of continuing with original URL
+        return returnPlaceholder(res, 'Invalid IPFS path');
       }
     }
     
@@ -113,117 +130,88 @@ export default async function handler(req, res) {
     console.log(`Fetching image from: ${proxyUrl}`);
     
     try {
-      // Set a timeout for the request to prevent hanging
+      // Set a strict timeout for the request to prevent hanging on Vercel
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for Vercel
       
-      // Implement retry logic
-      let retryCount = 0;
-      const maxRetries = 2;
-      let lastError = null;
-      
-      while (retryCount <= maxRetries) {
-        try {
-          if (retryCount > 0) {
-            console.log(`Retry ${retryCount}/${maxRetries} for ${proxyUrl}`);
-          }
-          
-          // Fetch the image
-          const response = await axios({
-            method: 'get',
-            url: proxyUrl,
-            responseType: 'arraybuffer',
-            timeout: 10000, // 10 second timeout
-            headers: customHeaders,
-            validateStatus: null, // Allow any status code
-            maxContentLength: 10 * 1024 * 1024, // 10MB max size
-            maxRedirects: 5,
-            signal: controller.signal
-          });
-          
-          // Clear the timeout
-          clearTimeout(timeoutId);
-          
-          // Handle error responses
-          if (!response || response.status >= 400) {
-            console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
-            lastError = new Error(`HTTP ${response?.status || 'unknown'}`);
-            retryCount++;
-            
-            // Wait before retrying with exponential backoff
-            if (retryCount <= maxRetries) {
-              await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
-              continue;
-            } else {
-              throw lastError;
-            }
-          }
-          
-          // Set the content type header
-          const contentType = response.headers['content-type'];
-          if (contentType) {
-            res.setHeader('Content-Type', contentType);
-          } else {
-            // Try to guess content type from URL
-            if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
-            else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
-            else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
-            else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
-            else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
-            else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
-          }
-          
-          // Set cache headers
-          res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
-          
-          // Return the image data
-          return res.status(200).send(response.data);
-        } catch (requestError) {
-          console.error(`Error on attempt ${retryCount+1} for ${proxyUrl}:`, requestError.message);
-          lastError = requestError;
-          retryCount++;
-          
-          // Wait before retrying
-          if (retryCount <= maxRetries) {
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount - 1)));
-          }
+      // Simpler approach with fewer retries for Vercel
+      try {
+        // Fetch the image
+        const response = await axios({
+          method: 'get',
+          url: proxyUrl,
+          responseType: 'arraybuffer',
+          timeout: 4500, // 4.5 second timeout (shorter than the controller timeout)
+          headers: customHeaders,
+          validateStatus: null, // Allow any status code
+          maxContentLength: 3 * 1024 * 1024, // 3MB max size for Vercel
+          maxRedirects: 3,
+          signal: controller.signal
+        });
+        
+        // Clear the timeout
+        clearTimeout(timeoutId);
+        
+        // Handle error responses
+        if (!response || response.status >= 400) {
+          console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+          return returnPlaceholder(res, `HTTP ${response?.status || 'unknown'}`);
         }
+        
+        // Check if the response is very small (likely an error page)
+        if (response.data.length < 100) {
+          console.error(`Response too small (${response.data.length} bytes)`);
+          return returnPlaceholder(res, 'Response too small');
+        }
+        
+        // Set the content type header
+        const contentType = response.headers['content-type'];
+        if (contentType) {
+          res.setHeader('Content-Type', contentType);
+        } else {
+          // Try to guess content type from URL
+          if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
+          else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
+          else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
+          else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
+          else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
+          else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
+        }
+        
+        // Set cache headers
+        res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+        
+        // Return the image data
+        return res.status(200).send(response.data);
+      } catch (requestError) {
+        console.error(`Error fetching image: ${requestError.message}`);
+        clearTimeout(timeoutId);
+        return returnPlaceholder(res, requestError.message.substring(0, 30));
       }
-      
-      // If we get here, all retries failed
-      throw lastError || new Error('Failed after all retries');
     } catch (fetchError) {
       console.error(`All attempts failed for ${proxyUrl}:`, fetchError.message);
-      
-      // Return a placeholder SVG image
-      const errorMsg = fetchError.message ? fetchError.message.substring(0, 30) : 'Unknown error';
-      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-        <rect width="200" height="200" fill="#f0f0f0"/>
-        <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image unavailable</text>
-        <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMsg}</text>
-      </svg>`);
-      
-      // Make sure these headers are set correctly
-      res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      return res.status(200).send(placeholderSvg);
+      // Return a placeholder for any error
+      return returnPlaceholder(res, fetchError.message.substring(0, 30));
     }
   } catch (error) {
     console.error(`Global error in image proxy:`, error.message);
-    
-    // Return a placeholder SVG image with error details
-    const errorMessage = error.message ? error.message.substring(0, 30) : 'Unknown error';
-    const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-      <rect width="200" height="200" fill="#f0f0f0"/>
-      <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image error</text>
-      <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
-    </svg>`);
-    
-    // Ensure proper headers even in error cases
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    
-    return res.status(200).send(placeholderSvg);
+    // Return a placeholder for any error
+    return returnPlaceholder(res, error.message.substring(0, 30));
   }
+}
+
+// Helper function to return a placeholder image
+function returnPlaceholder(res, errorMessage = 'Image unavailable') {
+  const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <rect width="200" height="200" fill="#f0f0f0"/>
+    <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image unavailable</text>
+    <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
+  </svg>`);
+  
+  // Ensure proper headers
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  
+  return res.status(200).send(placeholderSvg);
 } 

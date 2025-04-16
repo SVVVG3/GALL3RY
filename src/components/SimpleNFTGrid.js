@@ -161,6 +161,15 @@ const getImageUrl = (nft) => {
     }
   }
   
+  // Use a fallback placeholder if no image found
+  if (!imageUrl) {
+    // Use absolute path for placeholder - ensure it works across all environments
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    imageUrl = `${origin}/placeholder.png`;
+    console.log('Using fallback placeholder - no image URL found');
+    return imageUrl;
+  }
+  
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
@@ -179,13 +188,6 @@ const getImageUrl = (nft) => {
   if (imageUrl && imageUrl.startsWith('http://')) {
     imageUrl = imageUrl.replace('http://', 'https://');
     console.log('Converted HTTP to HTTPS:', imageUrl);
-  }
-  
-  // Use a fallback placeholder if no image found
-  if (!imageUrl) {
-    imageUrl = '/placeholder.png'; // Use local placeholder instead of external service
-    console.log('Using fallback placeholder - no image URL found');
-    return imageUrl;
   }
   
   // Special handling for NFT CDN URLs 
@@ -208,22 +210,33 @@ const getImageUrl = (nft) => {
     console.log('Formatted NFT CDN URL:', imageUrl);
   }
   
-  // IMPORTANT: Always proxy problematic URLs to avoid CORS issues
-  // This is the key change - move the proxy logic here instead of in the fallback chain
+  // IMPORTANT: Proxy problematic URLs to avoid CORS issues
+  // Modified approach: Try direct access for some URLs that should work without proxy
   if (imageUrl.includes('/ipfs/') || 
       imageUrl.includes('ipfs.io') || 
       imageUrl.includes('cloudflare-ipfs.com') || 
       imageUrl.includes('gateway.pinata.cloud') || 
       imageUrl.includes('ipfs.infura.io') || 
-      imageUrl.includes('ipfs.fleek.co') ||
-      imageUrl.includes('nft-cdn.alchemy.com') || 
-      imageUrl.includes('i.seadn.io')) {
+      imageUrl.includes('ipfs.fleek.co')) {
     
-    // Use absolute URL to avoid issues with different environments (dev vs production)
+    // IPFS URLs always need proxy
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-    console.log('Using image proxy for', imageUrl, '->', proxyUrl);
+    console.log('Using image proxy for IPFS URL:', imageUrl, '->', proxyUrl);
     return proxyUrl;
+  }
+  else if (imageUrl.includes('i.seadn.io')) {
+    // OpenSea URLs need proxy
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    console.log('Using image proxy for OpenSea URL:', imageUrl, '->', proxyUrl);
+    return proxyUrl;
+  }
+  // Try direct access for Alchemy CDN URLs which generally have good CORS support
+  else if (imageUrl.includes('nft-cdn.alchemy.com')) {
+    // Try direct first - Alchemy has proper CORS headers
+    console.log('Using direct Alchemy CDN URL:', imageUrl);
+    return imageUrl;
   }
   
   return imageUrl;
@@ -264,10 +277,14 @@ const NFTCard = ({ nft }) => {
   const generateFallbackUrls = useCallback((baseUrl) => {
     if (!baseUrl) return [];
     
+    // Get origin for absolute URL paths
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
     let urls = [baseUrl]; // Always start with the original URL
     
     // If this is already a proxied URL, don't add more fallbacks
     if (baseUrl.includes('/api/image-proxy')) {
+      // But do add the placeholder as a final fallback
+      urls.push(`${origin}/placeholder.png`);
       return urls;
     }
     
@@ -280,12 +297,14 @@ const NFTCard = ({ nft }) => {
       );
     }
     
-    // Always add a proxy version as a fallback
-    if (!baseUrl.includes('/api/image-proxy')) {
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    // Add a proxy as fallback for non-proxy URLs
+    if (!baseUrl.includes('/api/image-proxy') && !baseUrl.startsWith(origin)) {
       const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(baseUrl)}`;
       urls.push(proxyUrl);
     }
+    
+    // Always add the placeholder as a final fallback
+    urls.push(`${origin}/placeholder.png`);
     
     // Ensure no duplicates
     return [...new Set(urls)];
@@ -343,7 +362,7 @@ const NFTCard = ({ nft }) => {
         
         const img = new Image();
         
-        // Set a timeout to catch hanging requests
+        // Set a timeout to catch hanging requests - reduced for better UX
         const loadTimeoutId = setTimeout(() => {
           // Image is taking too long to load, consider it failed and move to next
           if (img.complete) return; // Already completed
@@ -355,16 +374,18 @@ const NFTCard = ({ nft }) => {
           if (attemptIndex < fallbackUrls.length - 1) {
             tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
           } else {
-            // All fallbacks failed
+            // All fallbacks failed - use placeholder
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
             setImageState({
-              loaded: false,
+              loaded: true, // Set to true to avoid showing loading state
               error: true,
               isLoading: false,
-              currentUrl: null,
+              currentUrl: `${origin}/placeholder.png`,
               attemptCount: attemptIndex + 1
             });
+            setCurrentImageUrl(`${origin}/placeholder.png`);
           }
-        }, 10000); // 10 second timeout for image loading
+        }, 6000); // 6 second timeout for image loading
         
         img.onload = () => {
           if (!isActive) return;
@@ -391,20 +412,22 @@ const NFTCard = ({ nft }) => {
           if (attemptIndex < fallbackUrls.length - 1) {
             tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
           } else {
-            // All fallbacks failed
+            // All fallbacks failed - use placeholder
+            const origin = typeof window !== 'undefined' ? window.location.origin : '';
             setImageState({
-              loaded: false,
+              loaded: true, // Set to true to avoid showing loading state
               error: true,
               isLoading: false,
-              currentUrl: null,
+              currentUrl: `${origin}/placeholder.png`,
               attemptCount: attemptIndex + 1
             });
+            setCurrentImageUrl(`${origin}/placeholder.png`);
           }
         };
         
         // Always set crossOrigin for external URLs to avoid CORS issues
         // This is important - we need to tell the browser to use CORS for these requests
-        if (!url.includes(window.location.origin)) {
+        if (!url.startsWith(window.location.origin)) {
           img.crossOrigin = 'anonymous';
         }
         
@@ -437,8 +460,15 @@ const NFTCard = ({ nft }) => {
               className={`nft-image ${imageState.loaded ? 'loaded' : 'loading'}`}
               onError={(e) => {
                 console.error(`Image load error for ${currentImageUrl}`);
-                // Set the source to an empty string to prevent repeated error events
+                // Set the source to empty string to prevent repeated error events
                 e.target.src = '';
+                // Don't set error state here as the useEffect fallback mechanism will handle it
+                // But we can set a placeholder immediately for better UX
+                if (typeof window !== 'undefined') {
+                  const origin = window.location.origin;
+                  e.target.src = `${origin}/placeholder.png`;
+                  e.target.className = 'nft-image fallback';
+                }
               }}
               loading="lazy"
               crossOrigin="anonymous"
@@ -452,7 +482,7 @@ const NFTCard = ({ nft }) => {
           {imageState.error && (
             <div className="nft-image-error">
               <img 
-                src="/placeholder.png" 
+                src={typeof window !== 'undefined' ? `${window.location.origin}/placeholder.png` : '/placeholder.png'}
                 alt={`${nftTitle} (unavailable)`}
                 className="nft-image fallback"
               />
