@@ -53,7 +53,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'contain',
+              objectFit: 'cover',
               objectPosition: 'center',
               backgroundColor: fallbackColor
             }}
