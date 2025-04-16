@@ -454,15 +454,25 @@ const getCollectionName = (nft) => {
 const getFloorPrice = (nft) => {
   if (!nft) return '';
   
-  // Debug floor price - log the full NFT object to see structure
-  console.log('NFT object for floor price:', nft);
+  // Debug floor price - log key paths
+  console.log('NFT floor price debug:', {
+    title: getNftTitle(nft),
+    hasContract: !!nft.contract,
+    hasOpenSeaMetadata: !!(nft.contract && nft.contract.openSeaMetadata),
+    openSeaMetadataFloorPrice: nft.contract && nft.contract.openSeaMetadata ? nft.contract.openSeaMetadata.floorPrice : null
+  });
   
   // Try different price locations depending on the data source
   let price = null;
   let currency = 'ETH';
   
-  // Check for OpenSea floor price in contractMetadata (most common location)
-  if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.floorPrice) {
+  // Primary location based on Alchemy API response example
+  if (nft.contract && nft.contract.openSeaMetadata && nft.contract.openSeaMetadata.floorPrice !== undefined) {
+    price = nft.contract.openSeaMetadata.floorPrice;
+    console.log(`Found floor price in contract.openSeaMetadata: ${price}`);
+  }
+  // Fallback to other possible locations for backward compatibility
+  else if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.floorPrice) {
     price = nft.contractMetadata.openSea.floorPrice;
     console.log(`Found floor price in contractMetadata.openSea: ${price}`);
   }
@@ -476,21 +486,6 @@ const getFloorPrice = (nft) => {
     price = nft.floor_price;
     console.log(`Found direct floor_price: ${price}`);
   }
-  // Check for pricing in contract object
-  else if (nft.contract && nft.contract.openSea && nft.contract.openSea.floorPrice) {
-    price = nft.contract.openSea.floorPrice;
-    console.log(`Found floor price in contract.openSea: ${price}`);
-  }
-  // Check in opensea property
-  else if (nft.opensea && nft.opensea.floorPrice) {
-    price = nft.opensea.floorPrice;
-    console.log(`Found direct opensea floorPrice: ${price}`);
-  }
-  // Check for opensea_data property
-  else if (nft.opensea_data && nft.opensea_data.floor_price) {
-    price = nft.opensea_data.floor_price;
-    console.log(`Found floor price in opensea_data: ${price}`);
-  }
   
   // Determine currency based on network
   if (nft.network === 'polygon' || (nft.id && typeof nft.id === 'string' && nft.id.startsWith('polygon:'))) {
@@ -499,11 +494,11 @@ const getFloorPrice = (nft) => {
     currency = 'ETH';
   }
   
-  // Handle the price value - sometimes it's already a string
-  if (price) {
-    // If it's a string with ETH symbol, just return it directly
-    if (typeof price === 'string' && (price.includes('ETH') || price.includes('MATIC'))) {
-      return `Floor: ${price}`;
+  // Handle the price value
+  if (price !== null && price !== undefined) {
+    // Don't show price if it's 0
+    if (price === 0 || price === '0') {
+      return '';
     }
     
     // If it's a valid number
