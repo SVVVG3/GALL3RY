@@ -11,21 +11,28 @@ const getImageUrl = (nft) => {
   
   let imageUrl = '';
   
-  // Debug the NFT structure to see what we're working with (limit debugging)
-  if (Math.random() < 0.05) { // Only log 5% of NFTs to avoid console flooding
-    console.log('NFT metadata structure:', {
-      id: nft.id,
-      name: nft.name,
-      media: nft.media,
-      tokenId: nft.tokenId || nft.token_id,
-      network: nft.network
-    });
+  // Debug the NFT structure to see what we're working with
+  console.log('Processing NFT for image:', {
+    id: nft.id,
+    name: nft.name,
+    image: nft.image,
+    media: nft.media,
+    tokenId: nft.tokenId || nft.token_id,
+    network: nft.network
+  });
+  
+  // First, check if the NFT has an image object (from NFTContext processing)
+  if (nft.image && typeof nft.image === 'object') {
+    imageUrl = nft.image.url || nft.image.gateway || nft.image.originalUrl || 
+               nft.image.thumbnailUrl || '';
+    console.log('Found image object:', imageUrl);
   }
   
-  // Check for media array first (Alchemy format)
-  if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+  // Check for media array (Alchemy format)
+  if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
     const mediaItem = nft.media.find(m => m.gateway) || nft.media[0];
     imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri || '';
+    console.log('Found media array item:', imageUrl);
   }
   
   // Try rawMetadata (Alchemy format)
@@ -36,6 +43,7 @@ const getImageUrl = (nft) => {
                nft.rawMetadata.animation_url ||
                nft.rawMetadata.image_data || 
                '';
+    if (imageUrl) console.log('Found image in rawMetadata:', imageUrl);
   }
   
   // Try metadata (OpenSea format)
@@ -52,6 +60,7 @@ const getImageUrl = (nft) => {
                  metadata?.image_uri || 
                  metadata?.image_data || 
                  '';
+      if (imageUrl) console.log('Found image in metadata:', imageUrl);
     } catch (e) {
       console.error('Error parsing NFT metadata', e);
     }
@@ -64,6 +73,13 @@ const getImageUrl = (nft) => {
                nft.image_preview_url || 
                nft.thumbnail || 
                '';
+    if (imageUrl) console.log('Found image in direct properties:', imageUrl);
+  }
+  
+  // Special handling for cachedUrl, thumbnailUrl, pngUrl from Alchemy
+  if (!imageUrl && (nft.cachedUrl || nft.thumbnailUrl || nft.pngUrl)) {
+    imageUrl = nft.cachedUrl || nft.thumbnailUrl || nft.pngUrl || '';
+    console.log('Found Alchemy URL:', imageUrl);
   }
   
   // Handle special cases from the console log
@@ -90,6 +106,14 @@ const getImageUrl = (nft) => {
     imageUrl = `https://placehold.co/600x400/db6/222?text=${encodeURIComponent(nft.name)}`;
   }
   
+  // Check if imageUrl is an object (like in the error logs), and extract the URL from it
+  if (imageUrl && typeof imageUrl === 'object') {
+    console.log('Image URL is an object, extracting string URL:', imageUrl);
+    // Try multiple possible properties where the URL might be
+    imageUrl = imageUrl.url || imageUrl.gateway || imageUrl.originalUrl || 
+              imageUrl.thumbnailUrl || imageUrl.pngUrl || imageUrl.cachedUrl || '';
+  }
+  
   // Ensure imageUrl is a string
   if (typeof imageUrl !== 'string') {
     console.warn('Invalid imageUrl type:', typeof imageUrl, imageUrl);
@@ -99,11 +123,19 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    console.log('Converted IPFS URL:', imageUrl);
   }
   
   // Handle Arweave URLs
   if (imageUrl && imageUrl.startsWith('ar://')) {
     imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+    console.log('Converted Arweave URL:', imageUrl);
+  }
+  
+  // Use a fallback placeholder if no image found
+  if (!imageUrl) {
+    imageUrl = 'https://placehold.co/600x400/ddd/333?text=No+Image';
+    console.log('Using fallback placeholder - no image URL found');
   }
   
   return imageUrl;
@@ -116,6 +148,7 @@ const getImageUrl = (nft) => {
 const NFTCard = React.memo(({ nft, style }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   
   const imageUrl = getImageUrl(nft);
   const title = getNftTitle(nft);
@@ -134,25 +167,47 @@ const NFTCard = React.memo(({ nft, style }) => {
     openSeaUrl = `https://opensea.io/assets/base/${contractAddress}/${tokenId}`;
   }
   
+  // Reset state when NFT changes
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageError(false);
+    setRetryCount(0);
+  }, [nft.id, nft.tokenId]);
+  
   // Debug NFT image loading issues
   useEffect(() => {
     console.log(`NFT ${title} (${tokenId}) image status:`, { 
       imageUrl, 
       imageLoaded, 
-      imageError 
+      imageError,
+      retryCount
     });
-  }, [imageLoaded, imageError, title, tokenId, imageUrl]);
+  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount]);
   
   // Handle image loading events
   const handleImageLoad = () => {
     console.log(`Image loaded successfully: ${title}`);
     setImageLoaded(true);
+    setImageError(false);
   };
   
   const handleImageError = () => {
     console.error(`Image failed to load: ${title}, URL: ${imageUrl}`);
-    setImageError(true);
+    
+    // Try a proxy URL if we haven't exceeded retry count
+    if (retryCount === 0 && imageUrl && !imageUrl.includes('placehold.co')) {
+      setRetryCount(1);
+      // We'll handle this in the render function
+    } else {
+      // Give up after retry
+      setImageError(true);
+    }
   };
+  
+  // Determine which URL to use based on retry state
+  const displayUrl = retryCount === 1 && !imageUrl.includes('placehold.co')
+    ? `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`
+    : imageUrl;
   
   return (
     <div className="nft-item-wrapper-fallback" style={style}>
@@ -176,14 +231,17 @@ const NFTCard = React.memo(({ nft, style }) => {
                   <rect x="3" y="3" width="18" height="18" rx="2" stroke="#999999" strokeWidth="2" />
                   <path d="M12 8v4m0 4h.01" stroke="#999999" strokeWidth="2" strokeLinecap="round" />
                 </svg>
+                <p className="error-text">Unable to load image</p>
               </div>
             ) : (
               <img
-                src={imageUrl}
+                src={displayUrl}
                 alt={title || 'NFT'}
                 className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
+                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
               />
             )}
           </div>
