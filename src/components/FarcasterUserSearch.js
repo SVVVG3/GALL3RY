@@ -509,7 +509,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             {isNftLoading ? (
               <div className="loading-spinner"></div>
             ) : (
-              <div className="nft-display">
+              <div className="nft-display" style={{ height: '70vh' }}>
                 {userNfts.length > 0 ? (
                   <SimpleNFTGrid nfts={sortedNfts()} />
                 ) : (

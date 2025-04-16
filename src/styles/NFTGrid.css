@@ -5,6 +5,18 @@
   width: 100%;
   margin: 20px 0;
   max-width: 100%;
+  will-change: transform; /* Optimize for GPU acceleration */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+/* Virtualized grid container */
+.virtualized-grid-container {
+  width: 100%;
+  height: 100%;
+  min-height: 400px;
+  max-height: 1000px;
+  margin: 0 auto;
+  position: relative;
 }
 
 /* Force specific column counts based on viewport width */
@@ -53,12 +65,12 @@
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
   background-color: white;
   width: 100%;
   display: flex;
   flex-direction: column;
-  aspect-ratio: 1 / 1.5; /* Card has 2:3 aspect ratio (account for image + info) */
+  contain: content; /* Improve performance by containing element effects */
 }
 
 .nft-item:hover {
@@ -96,6 +108,8 @@
   object-fit: contain; /* Ensures the entire image is visible */
   object-position: center;
   background-color: #f5f5f5;
+  backface-visibility: hidden; /* Prevent flickering during transitions */
+  transform: translateZ(0); /* Force GPU rendering */
 }
 
 .nft-image img:hover {
@@ -167,6 +181,12 @@
   left: 0;
 }
 
+.nft-placeholder span {
+  font-size: 32px;
+  font-weight: bold;
+  color: #fff;
+}
+
 .no-nfts-message {
   grid-column: 1 / -1;
   text-align: center;
@@ -174,9 +194,15 @@
   background-color: #f8f8f8;
   border-radius: 8px;
   color: #666;
+  width: 100%;
+  margin: 0 auto;
 }
 
 @media (max-width: 768px) {
+  .virtualized-grid-container {
+    height: 70vh;
+  }
+  
   .nft-image {
     aspect-ratio: 1 / 1; /* Ensure square aspect ratio on mobile too */
   }
