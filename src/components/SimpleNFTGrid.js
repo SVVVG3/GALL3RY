@@ -11,15 +11,47 @@ const getImageUrl = (nft) => {
   
   let imageUrl = '';
   
-  // Check for image in metadata
-  if (nft.metadata) {
+  // Debug the NFT structure to see what we're working with (limit debugging)
+  if (Math.random() < 0.05) { // Only log 5% of NFTs to avoid console flooding
+    console.log('NFT metadata structure:', {
+      id: nft.id,
+      name: nft.name,
+      media: nft.media,
+      tokenId: nft.tokenId || nft.token_id,
+      network: nft.network
+    });
+  }
+  
+  // Check for media array first (Alchemy format)
+  if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+    const mediaItem = nft.media.find(m => m.gateway) || nft.media[0];
+    imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri || '';
+  }
+  
+  // Try rawMetadata (Alchemy format)
+  if (!imageUrl && nft.rawMetadata) {
+    imageUrl = nft.rawMetadata.image || 
+               nft.rawMetadata.image_url || 
+               nft.rawMetadata.image_uri || 
+               nft.rawMetadata.animation_url ||
+               nft.rawMetadata.image_data || 
+               '';
+  }
+  
+  // Try metadata (OpenSea format)
+  if (!imageUrl && nft.metadata) {
     try {
       // If metadata is a string, try to parse it as JSON
       const metadata = typeof nft.metadata === 'string' 
         ? JSON.parse(nft.metadata) 
         : nft.metadata;
         
-      imageUrl = metadata?.image || metadata?.image_url || '';
+      imageUrl = metadata?.image || 
+                 metadata?.image_url || 
+                 metadata?.animation_url ||
+                 metadata?.image_uri || 
+                 metadata?.image_data || 
+                 '';
     } catch (e) {
       console.error('Error parsing NFT metadata', e);
     }
@@ -34,14 +66,33 @@ const getImageUrl = (nft) => {
                '';
   }
   
-  // Media field in other formats
-  if (!imageUrl && nft.media && nft.media.length > 0) {
-    const media = nft.media[0];
-    imageUrl = media.gateway || media.raw || media.thumbnail || '';
+  // Handle special cases from the console log
+  if (!imageUrl && nft.id && typeof nft.id === 'string') {
+    const idParts = nft.id.split(':');
+    
+    if (idParts.length > 1) {
+      const network = idParts[0];
+      const tokenData = idParts[1];
+      
+      // Based on console output, we need specific handlers for certain networks
+      if (network === 'base') {
+        // For Base NFTs, try the fallback mock image
+        imageUrl = `https://placehold.co/600x400/222/fff?text=${encodeURIComponent(nft.name || 'Base NFT')}`;
+      } else if (network === 'polygon') {
+        // For Polygon NFTs, try the fallback mock image 
+        imageUrl = `https://placehold.co/600x400/624/fff?text=${encodeURIComponent(nft.name || 'Polygon NFT')}`;
+      }
+    }
+  }
+  
+  // Fallback for SHIB NFTs seen in the console
+  if (!imageUrl && nft.name && nft.name.includes('SHIB NFT')) {
+    imageUrl = `https://placehold.co/600x400/db6/222?text=${encodeURIComponent(nft.name)}`;
   }
   
   // Ensure imageUrl is a string
   if (typeof imageUrl !== 'string') {
+    console.warn('Invalid imageUrl type:', typeof imageUrl, imageUrl);
     return '';
   }
   
@@ -73,15 +124,33 @@ const NFTCard = React.memo(({ nft, style }) => {
   const contractAddress = getContractAddress(nft);
   const tokenId = getTokenId(nft);
   
-  // Create OpenSea URL
-  const openSeaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
+  // Create OpenSea URL based on network
+  let openSeaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
+  
+  // Adjust OpenSea URL based on network
+  if (nft.network === 'polygon' || (nft.id && nft.id.startsWith('polygon:'))) {
+    openSeaUrl = `https://opensea.io/assets/matic/${contractAddress}/${tokenId}`;
+  } else if (nft.network === 'base' || (nft.id && nft.id.startsWith('base:'))) {
+    openSeaUrl = `https://opensea.io/assets/base/${contractAddress}/${tokenId}`;
+  }
+  
+  // Debug NFT image loading issues
+  useEffect(() => {
+    console.log(`NFT ${title} (${tokenId}) image status:`, { 
+      imageUrl, 
+      imageLoaded, 
+      imageError 
+    });
+  }, [imageLoaded, imageError, title, tokenId, imageUrl]);
   
   // Handle image loading events
   const handleImageLoad = () => {
+    console.log(`Image loaded successfully: ${title}`);
     setImageLoaded(true);
   };
   
   const handleImageError = () => {
+    console.error(`Image failed to load: ${title}, URL: ${imageUrl}`);
     setImageError(true);
   };
   
