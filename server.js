@@ -442,48 +442,98 @@ apiRouter.all('/alchemy', async (req, res) => {
 });
 */
 
-// Proxy endpoint for CORS-protected images
-apiRouter.get('/image-proxy', async (req, res) => {
+// IMAGE PROXY API - Used for loading NFT images across different providers
+app.get('/image-proxy', async (req, res) => {
+  // Set CORS headers to allow cross-origin requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Get image URL from query parameter
   const { url } = req.query;
   
   if (!url) {
-    return res.status(400).json({ error: 'URL parameter is required' });
+    return res.status(400).json({ error: 'Missing url parameter' });
   }
   
-  console.log(`Image proxy request for: ${url}`);
+  console.log(`Image proxy request for: ${decodeURIComponent(url)}`);
   
   try {
-    let proxyUrl = url;
+    // Always decode the URL to handle any encoded characters
+    let proxyUrl = decodeURIComponent(url);
+    
+    // Default headers for most requests
     let customHeaders = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-      'Referer': 'https://gall3ry.vercel.app/'
+      'Referer': 'https://gall3ry.vercel.app/',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br'
     };
     
     // Special handling for different URL types
     
-    // Handle Alchemy CDN URLs specifically
+    // Handle Alchemy CDN URLs specifically - this needs special attention
     if (proxyUrl.includes('nft-cdn.alchemy.com')) {
-      console.log('Detected Alchemy CDN URL, adding special headers');
+      console.log('Detected Alchemy CDN URL, adding special headers and API key');
+      
+      // Add Alchemy API key to the URL if not already present
+      if (!proxyUrl.includes('apiKey=')) {
+        const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+        if (alchemyApiKey) {
+          const separator = proxyUrl.includes('?') ? '&' : '?';
+          proxyUrl = `${proxyUrl}${separator}apiKey=${alchemyApiKey}`;
+          console.log('Added API key to Alchemy URL');
+        }
+      }
+      
+      // Use specific headers for Alchemy CDN that worked in testing
       customHeaders = {
-        ...customHeaders,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
         'Accept-Encoding': 'gzip, deflate, br',
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-site',
+        'If-None-Match': '', // Clear any conditional requests
         'Cache-Control': 'no-cache',
-        'Origin': 'https://gall3ry.vercel.app'
+        'Pragma': 'no-cache'
       };
+      
+      // For some Alchemy CDN URLs, we might need to fix the path format
+      if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb') && !proxyUrl.includes('.jpg') && !proxyUrl.includes('.png')) {
+        proxyUrl = `${proxyUrl}/original`;
+        console.log(`Fixed Alchemy URL format: ${proxyUrl}`);
+      }
     }
     
     // Special handling for IPFS URLs
     if (proxyUrl.startsWith('ipfs://')) {
-      const ipfsHash = proxyUrl.replace('ipfs://', '');
-      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      proxyUrl = proxyUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
       console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle ipfs links that aren't using the ipfs:// protocol
+    if (proxyUrl.includes('/ipfs/')) {
+      console.log('Detected standard IPFS gateway URL');
+      // Just keep the URL as is, but add special headers
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null
+      };
     }
     
     // Special handling for Arweave URLs
     if (proxyUrl.startsWith('ar://')) {
       proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
       console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle HTTP URLs - ensure they are HTTPS
+    if (proxyUrl.startsWith('http://')) {
+      proxyUrl = proxyUrl.replace('http://', 'https://');
+      console.log(`Converted HTTP to HTTPS: ${url} -> ${proxyUrl}`);
     }
     
     // Handle api.zora.co renderer URLs that include ipfs content
@@ -517,58 +567,118 @@ apiRouter.get('/image-proxy', async (req, res) => {
     
     console.log(`Fetching image: ${proxyUrl}`);
     
-    // Attempt to proxy the image
-    const response = await axios({
-      method: 'get',
-      url: proxyUrl,
-      responseType: 'arraybuffer',
-      timeout: 10000,
-      headers: customHeaders,
-      validateStatus: false // Allow non-200 status codes to process them below
-    });
-    
-    // If response wasn't successful, return placeholder
-    if (response.status >= 400) {
-      console.error(`Source returned error status ${response.status} for: ${proxyUrl}`);
+    // Function to attempt image fetch with retries
+    const fetchWithRetries = async (url, headers, maxRetries = 2) => {
+      let lastError;
       
-      try {
-        const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
-        res.setHeader('Content-Type', 'image/svg+xml');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        return res.send(placeholder);
-      } catch (readError) {
-        console.error('Error reading placeholder image:', readError);
-        
-        // Create a simple SVG placeholder if file can't be read
-        const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-          <rect width="200" height="200" fill="#f0f0f0"/>
-          <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
-        </svg>`);
-        
-        res.setHeader('Content-Type', 'image/svg+xml');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        return res.send(placeholderSvg);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'arraybuffer',
+            timeout: 10000,
+            headers: headers,
+            validateStatus: false // Allow non-200 status codes to process them below
+          });
+          
+          // If we got a successful response, return it
+          if (response.status < 400) {
+            return response;
+          }
+          
+          // If we got a 403 Forbidden specifically from Alchemy CDN
+          if (response.status === 403 && url.includes('nft-cdn.alchemy.com')) {
+            console.log(`Attempt ${attempt + 1}: Got 403 from Alchemy CDN, trying with different headers`);
+            
+            // Modify headers for next attempt
+            headers = {
+              ...headers,
+              'Referer': 'https://dashboard.alchemy.com/',
+              'Origin': 'https://dashboard.alchemy.com'
+            };
+            
+            // Add API key directly to URL as a different parameter format
+            if (!url.includes('api_key=') && !url.includes('apiKey=')) {
+              const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+              if (alchemyApiKey) {
+                const separator = url.includes('?') ? '&' : '?';
+                url = `${url}${separator}api_key=${alchemyApiKey}`;
+                console.log('Added API key in alternate format');
+              }
+            }
+            
+            // Wait briefly before retry
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+          
+          // For other error status codes, log and continue to next attempt
+          console.error(`Attempt ${attempt + 1}: Error status ${response.status} for: ${url}`);
+          lastError = new Error(`HTTP ${response.status}`);
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Attempt ${attempt + 1}: Network error fetching from ${url}:`, error.message);
+          lastError = error;
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
+      
+      // If we got here, all attempts failed
+      throw lastError || new Error('All retry attempts failed');
+    };
+    
+    // Attempt to proxy the image with retries
+    let response;
+    try {
+      response = await fetchWithRetries(proxyUrl, customHeaders);
+    } catch (error) {
+      console.error(`All attempts failed for ${proxyUrl}:`, error.message);
+      
+      // Create a simple SVG placeholder instead of returning JSON
+      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect width="200" height="200" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      </svg>`);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); 
+      return res.send(placeholderSvg);
     }
     
-    // Determine content type
-    let contentType = response.headers['content-type'];
+    // Check for non-successful status after all retries
+    if (!response || response.status >= 400) {
+      console.error(`Source returned error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+      
+      // Create a simple SVG placeholder instead of returning JSON
+      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect width="200" height="200" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      </svg>`);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); 
+      return res.send(placeholderSvg);
+    }
     
-    if (!contentType) {
+    // Set content type from response
+    const contentType = response.headers['content-type'];
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    } else {
       // Try to guess content type from URL
-      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
-      else if (proxyUrl.match(/\.png$/i)) contentType = 'image/png';
-      else if (proxyUrl.match(/\.gif$/i)) contentType = 'image/gif';
-      else if (proxyUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
-      else if (proxyUrl.match(/\.webp$/i)) contentType = 'image/webp';
-      else if (proxyUrl.match(/\.mp4$/i)) contentType = 'video/mp4';
-      else if (proxyUrl.match(/\.webm$/i)) contentType = 'video/webm';
-      else contentType = 'application/octet-stream';
+      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
+      else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
+      else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
+      else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
+      else res.setHeader('Content-Type', 'application/octet-stream');
     }
     
-    // Set headers
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Set cache headers for better performance
     res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
     
     // Return the image data
@@ -576,23 +686,146 @@ apiRouter.get('/image-proxy', async (req, res) => {
   } catch (error) {
     console.error(`Error proxying image (${url}):`, error.message);
     
-    try {
-      const placeholder = fs.readFileSync(path.join(__dirname, 'public', 'assets', 'placeholder-nft.svg'));
-      res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      return res.send(placeholder);
-    } catch (readError) {
-      // Create a simple SVG placeholder if file can't be read
-      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-        <rect width="200" height="200" fill="#f0f0f0"/>
-        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
-      </svg>`);
-      
-      res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-      return res.send(placeholderSvg);
-    }
+    // Return a placeholder SVG image instead of JSON
+    const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+      <rect width="200" height="200" fill="#f0f0f0"/>
+      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+    </svg>`);
+    
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); 
+    return res.send(placeholderSvg);
   }
+});
+
+// Add diagnostic route to test Alchemy NFT image loading
+app.get('/test-nft-image', async (req, res) => {
+  res.setHeader('Content-Type', 'text/html');
+  
+  let output = '<html><head><title>NFT Image Test</title></head><body style="font-family: monospace; white-space: pre-wrap;">';
+  output += '<h1>NFT Image Loading Diagnostic Tool</h1>';
+  
+  try {
+    // Check environment variables
+    const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+    output += `<p>Alchemy API Key: ${alchemyApiKey ? alchemyApiKey.substring(0, 4) + '...' : 'Not found'}</p>`;
+    
+    // Test contract and token for a known NFT
+    const testContract = req.query.contract || '0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d'; // BAYC by default
+    const testTokenId = req.query.tokenId || '1'; // Token ID 1 by default
+    
+    output += `<p>Testing with contract: ${testContract}, tokenId: ${testTokenId}</p>`;
+    
+    // Construct the Alchemy API URL
+    const apiUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/${alchemyApiKey}/getNFTMetadata?contractAddress=${testContract}&tokenId=${testTokenId}`;
+    
+    output += `<p>Fetching NFT metadata from Alchemy...</p>`;
+    
+    // Make the request to get NFT metadata
+    const response = await axios.get(apiUrl);
+    
+    // Extract image URL from the response
+    let imageUrl = null;
+    let gatewayUrl = null;
+    
+    if (response.data && response.data.media && response.data.media.length > 0) {
+      gatewayUrl = response.data.media[0].gateway;
+      const rawUrl = response.data.media[0].raw;
+      
+      output += `<p>Media found in response:</p>`;
+      output += `<p>Gateway URL: ${gatewayUrl || 'Not found'}</p>`;
+      output += `<p>Raw URL: ${rawUrl || 'Not found'}</p>`;
+      
+      imageUrl = gatewayUrl || rawUrl;
+    } else if (response.data && response.data.metadata && response.data.metadata.image) {
+      imageUrl = response.data.metadata.image;
+      output += `<p>Image URL found in metadata: ${imageUrl}</p>`;
+    } else {
+      output += `<p style="color:red">No image URL found in the NFT metadata</p>`;
+      output += `<p>Raw response data: ${JSON.stringify(response.data, null, 2)}</p>`;
+    }
+    
+    // If we have an image URL, try to fetch it directly and through our proxy
+    if (imageUrl) {
+      output += `<h2>Testing Image Loading</h2>`;
+      
+      // Test the image directly with custom headers
+      const directHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/',
+      };
+      
+      // First, test direct image loading
+      try {
+        output += `<p>Testing direct image loading from: ${imageUrl}</p>`;
+        const directResponse = await axios({
+          method: 'get',
+          url: imageUrl,
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          headers: directHeaders,
+          validateStatus: false
+        });
+        
+        output += `<p>Direct image loading status: ${directResponse.status}</p>`;
+        output += `<p>Content-Type: ${directResponse.headers['content-type'] || 'Not specified'}</p>`;
+        
+        if (directResponse.status >= 400) {
+          output += `<p style="color:red">Direct image loading failed with status ${directResponse.status}</p>`;
+        } else {
+          output += `<p style="color:green">Successfully loaded image directly!</p>`;
+          const base64Image = Buffer.from(directResponse.data).toString('base64');
+          const contentType = directResponse.headers['content-type'] || 'image/jpeg';
+          output += `<p>Direct image preview:</p><img src="data:${contentType};base64,${base64Image}" style="max-width:300px; border:1px solid #ccc;" />`;
+        }
+      } catch (directError) {
+        output += `<p style="color:red">Error loading image directly: ${directError.message}</p>`;
+      }
+      
+      // Then, test loading through our proxy
+      try {
+        const proxyUrl = `http://localhost:${PORT}/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+        output += `<p>Testing image loading through proxy: ${proxyUrl}</p>`;
+        
+        const proxyResponse = await axios({
+          method: 'get',
+          url: proxyUrl,
+          responseType: 'arraybuffer',
+          timeout: 10000,
+          validateStatus: false
+        });
+        
+        output += `<p>Proxy image loading status: ${proxyResponse.status}</p>`;
+        output += `<p>Content-Type: ${proxyResponse.headers['content-type'] || 'Not specified'}</p>`;
+        
+        if (proxyResponse.status >= 400) {
+          output += `<p style="color:red">Proxy image loading failed with status ${proxyResponse.status}</p>`;
+        } else {
+          output += `<p style="color:green">Successfully loaded image through proxy!</p>`;
+          const base64Image = Buffer.from(proxyResponse.data).toString('base64');
+          const contentType = proxyResponse.headers['content-type'] || 'image/jpeg';
+          output += `<p>Proxy image preview:</p><img src="data:${contentType};base64,${base64Image}" style="max-width:300px; border:1px solid #ccc;" />`;
+        }
+      } catch (proxyError) {
+        output += `<p style="color:red">Error loading image through proxy: ${proxyError.message}</p>`;
+      }
+      
+      // Show an IMG tag that uses our proxy directly - this will show how the browser loads it
+      const browserProxyUrl = `/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+      output += `<p>Browser loading through proxy:</p>`;
+      output += `<img src="${browserProxyUrl}" style="max-width:300px; border:1px solid #333;" onerror="this.onerror=null; this.src='/assets/placeholder-nft.svg'; this.style.border='1px solid red';" />`;
+    }
+    
+  } catch (error) {
+    output += `<p style="color:red">Error during testing: ${error.message}</p>`;
+    output += `<pre>${error.stack}</pre>`;
+  }
+  
+  output += '</body></html>';
+  res.send(output);
 });
 
 // Mount API routes

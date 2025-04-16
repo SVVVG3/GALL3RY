@@ -41,162 +41,96 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     processImageUrl(src, rawSrc, 0);
   }, [src, rawSrc]);
 
-  // Process image URL with different fallback strategies
-  const processImageUrl = (originalSrc, rawSrc, attempt) => {
-    // Special case: null/undefined/empty src - try rawSrc directly
-    if (!originalSrc && rawSrc) {
-      console.log(`Original src is empty, trying rawSrc directly: ${rawSrc.substring(0, 50)}...`);
-      attemptLoading(rawSrc, attempt);
+  // Helper to properly format and process URLs
+  const processImageUrl = (originalUrl, rawUrl, attemptNumber) => {
+    if (!originalUrl && !rawUrl) {
+      console.warn('No URLs provided to processImageUrl');
+      useDefaultPlaceholder();
       return;
-    }
-    
-    // Log the attempt
-    console.log(`Processing image URL (attempt ${attempt + 1}):`, 
-      originalSrc ? (originalSrc.substring(0, 50) + '...') : 'null/undefined');
-    
-    if (urlsAttempted.includes(originalSrc)) {
-      console.log(`Already attempted this URL, skipping to next fallback`);
-      if (attempt < 3) { // Increased max attempts to 4
-        processImageUrl(rawSrc, null, attempt + 1);
-      } else {
-        useDefaultPlaceholder();
-      }
-      return;
-    }
-    
-    let processedSrc = originalSrc;
-    let shouldSkip = false;
-    
-    // Different strategies based on attempt number
-    if (attempt === 0) {
-      // First attempt: Check if it's an Alchemy gateway URL (preferred)
-      if (originalSrc && (
-          originalSrc.includes('nft-cdn.alchemy.com') || 
-          originalSrc.includes('nft.alchemyapi.io')
-      )) {
-        console.log(`Using Alchemy gateway URL directly: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc;
-      } 
-      // Handle IPFS/AR URLs
-      else if (originalSrc && originalSrc.startsWith('ipfs://')) {
-        console.log(`Converting IPFS URL: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[0]);
-      } else if (originalSrc && originalSrc.startsWith('ar://')) {
-        console.log(`Converting Arweave URL: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ar://', 'https://arweave.net/');
-      } 
-      // Check for potentially problematic URLs
-      else if (originalSrc && (
-        originalSrc.includes('placeholder') ||
-        originalSrc.startsWith('data:') ||
-        !originalSrc.startsWith('http')
-      )) {
-        console.log(`Potentially problematic URL, skipping to rawSrc: ${originalSrc.substring(0, 50)}...`);
-        shouldSkip = true;
-        if (rawSrc) {
-          processImageUrl(rawSrc, null, 0);
-        } else {
-          processImageUrl(originalSrc, null, 1);
-        }
-      } else if (originalSrc) {
-        // Use original source as-is for valid URLs
-        console.log(`Using original URL as-is: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc;
-      } else {
-        shouldSkip = true;
-        processImageUrl(null, rawSrc, 1);
-      }
-    } else if (attempt === 1) {
-      // Second attempt: try with alternative gateways
-      if (originalSrc && originalSrc.startsWith('ipfs://')) {
-        console.log(`Trying alternative IPFS gateway for: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[1]);
-      } else if (originalSrc && originalSrc.includes('ipfs.io')) {
-        console.log(`Switching IPFS gateway from ipfs.io to Cloudflare: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('https://ipfs.io/ipfs/', IPFS_GATEWAYS[1]);
-      } else if (rawSrc && !urlsAttempted.includes(rawSrc)) {
-        console.log(`Trying rawSrc as fallback: ${rawSrc.substring(0, 50)}...`);
-        processedSrc = rawSrc;
-      } else if (originalSrc) {
-        console.log(`Using original source on second attempt: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc;
-      } else {
-        shouldSkip = true;
-        processImageUrl(null, null, 2);
-      }
-    } else if (attempt === 2) {
-      // Third attempt: try another IPFS gateway or alternative
-      if (originalSrc && originalSrc.startsWith('ipfs://')) {
-        console.log(`Trying another IPFS gateway: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[2]);
-      } else if (originalSrc && (originalSrc.includes('ipfs.io') || originalSrc.includes('cloudflare-ipfs'))) {
-        console.log(`Trying Infura IPFS gateway: ${originalSrc.substring(0, 50)}...`);
-        const ipfsHash = originalSrc.split('/ipfs/')[1];
-        if (ipfsHash) {
-          processedSrc = `${IPFS_GATEWAYS[2]}${ipfsHash}`;
-        } else {
-          processedSrc = originalSrc;
-        }
-      } else if (originalSrc && !originalSrc.startsWith('data:')) {
-        // For non-IPFS URLs, try adding a cache-busting query param
-        console.log(`Adding cache-buster to URL: ${originalSrc.substring(0, 50)}...`);
-        const separator = originalSrc.includes('?') ? '&' : '?';
-        processedSrc = `${originalSrc}${separator}cacheBuster=${Date.now()}`;
-      } else {
-        shouldSkip = true;
-        processImageUrl(null, null, 3);
-      }
-    } else {
-      // Final attempt - try last IPFS gateway or use placeholder
-      if (originalSrc && originalSrc.startsWith('ipfs://')) {
-        console.log(`Trying final IPFS gateway: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc.replace('ipfs://', IPFS_GATEWAYS[3]);
-      } else if (originalSrc && (originalSrc.includes('/ipfs/'))) {
-        // Try one last IPFS gateway
-        const ipfsHash = originalSrc.split('/ipfs/')[1];
-        if (ipfsHash) {
-          processedSrc = `${IPFS_GATEWAYS[3]}${ipfsHash}`;
-          console.log(`Final IPFS attempt with Pinata gateway: ${processedSrc.substring(0, 50)}...`);
-        } else {
-          useDefaultPlaceholder();
-          return;
-        }
-      } else if (originalSrc && !originalSrc.startsWith('data:') && !urlsAttempted.includes(originalSrc)) {
-        console.log(`Last attempt with original URL: ${originalSrc.substring(0, 50)}...`);
-        processedSrc = originalSrc;
-      } else {
-        useDefaultPlaceholder();
-        return;
-      }
     }
 
-    if (!shouldSkip) {
-      attemptLoading(processedSrc, attempt);
-    }
-  };
-  
-  // Helper to add URL to attempted list and set media source
-  const attemptLoading = (url, attempt) => {
-    if (!url) {
-      console.warn('Empty URL provided to attemptLoading');
-      if (attempt < 3) {
-        processImageUrl(null, null, attempt + 1);
+    let currentUrl = originalUrl || rawUrl;
+    console.log(`Processing image URL (attempt ${attemptNumber + 1}): ${currentUrl}`);
+    
+    try {
+      // Only process if we have a valid string URL
+      if (currentUrl && typeof currentUrl === 'string') {
+        
+        // Handle different URL formats based on attempt number
+        
+        // Special handling for Alchemy CDN URLs
+        if (currentUrl.includes('nft-cdn.alchemy.com')) {
+          console.log('Detected Alchemy CDN URL');
+          
+          // Make sure we have a format specified
+          if (!currentUrl.includes('/original') && !currentUrl.includes('/thumb') &&
+              !currentUrl.includes('.jpg') && !currentUrl.includes('.png')) {
+            if (attemptNumber === 0) {
+              // First attempt with original size
+              currentUrl = `${currentUrl}/original`;
+              console.log(`Modified to original format: ${currentUrl}`);
+            } else {
+              // Try thumbnail on retry
+              currentUrl = `${currentUrl}/thumb`;
+              console.log(`Modified to thumbnail format: ${currentUrl}`);
+            }
+          }
+          
+          // Use image proxy for all Alchemy URLs to avoid CORS issues
+          currentUrl = `/api/image-proxy?url=${encodeURIComponent(currentUrl)}`;
+          console.log(`Using proxy for Alchemy URL: ${currentUrl}`);
+        }
+        // Special handling for IPFS URLs
+        else if (currentUrl.startsWith('ipfs://')) {
+          // On different attempts, try different IPFS gateways
+          const ipfsHash = currentUrl.replace('ipfs://', '');
+          const gateway = IPFS_GATEWAYS[attemptNumber % IPFS_GATEWAYS.length];
+          currentUrl = `${gateway}${ipfsHash}`;
+          console.log(`Using IPFS gateway: ${currentUrl}`);
+        }
+        // Handle generic HTTP URLs
+        else if (currentUrl.startsWith('http://')) {
+          // Try HTTPS version instead
+          currentUrl = currentUrl.replace('http://', 'https://');
+          console.log(`Using HTTPS version: ${currentUrl}`);
+        }
+        
+        // Check if URL is external and needs proxy
+        // Use proxy only for external URLs on failures or for domains known to have CORS issues
+        const needsProxy = (
+          attemptNumber > 0 || // Use proxy on retry attempts
+          currentUrl.includes('nft-cdn.alchemy.com') || // Always proxy Alchemy
+          currentUrl.includes('ipfs.io') || // Always proxy IPFS
+          currentUrl.includes('opensea') || // Always proxy OpenSea
+          currentUrl.includes('seadn.io') // Always proxy OpenSea CDN
+        );
+        
+        if (needsProxy && !currentUrl.includes('/api/image-proxy') && 
+            !currentUrl.startsWith('/') && !currentUrl.startsWith('data:')) {
+          currentUrl = `/api/image-proxy?url=${encodeURIComponent(currentUrl)}`;
+          console.log(`Applied proxy to URL: ${currentUrl}`);
+        }
+        
+        // Set image type based on URL or file extension
+        if (currentUrl.match(/\.(mp4|webm|ogv)$/i)) {
+          setIsVideo(true);
+          console.log('Detected video content');
+        } else {
+          setIsVideo(false);
+        }
+        
+        // Update the media source
+        setMediaSrc(currentUrl);
+        // Track the URLs we've tried
+        setUrlsAttempted(prev => [...prev, currentUrl]);
       } else {
+        console.warn('Invalid URL format', currentUrl);
         useDefaultPlaceholder();
       }
-      return;
+    } catch (error) {
+      console.error('Error processing image URL:', error);
+      useDefaultPlaceholder();
     }
-    
-    // Check if the media is a video based on extension or content type
-    const isVideoFile = /\.(mp4|webm|ogg|mov)(\?|$)/i.test(url);
-    setIsVideo(isVideoFile);
-    
-    // Update attempted URLs list
-    setUrlsAttempted(prev => [...prev, url]);
-    
-    // Update the media source and attempt count
-    setMediaSrc(url);
-    setAttemptCount(attempt);
   };
   
   // Helper to use default placeholder

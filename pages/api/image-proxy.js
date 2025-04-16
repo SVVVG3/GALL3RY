@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   
   if (!url) {
     console.error('Missing URL parameter');
-    return res.status(200).json({ error: 'Missing url parameter' });
+    return returnPlaceholder(res, 'Missing URL parameter');
   }
   
   try {
@@ -56,12 +56,51 @@ export default async function handler(req, res) {
     
     // Default headers for most requests
     let customHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br',
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache'
     };
+    
+    // Handle different URL types - prioritize Alchemy CDN URLs
+    
+    // Special handling for Alchemy CDN URLs
+    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+      console.log('Detected Alchemy CDN URL, adding special headers and API key');
+      
+      // Add Alchemy API key to the URL if not already present
+      if (!proxyUrl.includes('apiKey=')) {
+        const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+        if (alchemyApiKey) {
+          const separator = proxyUrl.includes('?') ? '&' : '?';
+          proxyUrl = `${proxyUrl}${separator}apiKey=${alchemyApiKey}`;
+          console.log('Added API key to Alchemy URL');
+        }
+      }
+      
+      // Use specific headers for Alchemy CDN that worked in testing
+      customHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-site',
+        'If-None-Match': '', // Clear any conditional requests
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      };
+      
+      // For some Alchemy CDN URLs, we might need to fix the path format
+      if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb') && 
+          !proxyUrl.includes('.jpg') && !proxyUrl.includes('.png')) {
+        proxyUrl = `${proxyUrl}/original`;
+        console.log(`Fixed Alchemy URL format: ${proxyUrl}`);
+      }
+    }
     
     // Handle IPFS URLs first as they're most problematic
     if (proxyUrl.startsWith('ipfs://')) {
@@ -81,21 +120,6 @@ export default async function handler(req, res) {
         console.error('Failed to extract IPFS path:', error);
         // Return a placeholder instead of continuing with original URL
         return returnPlaceholder(res, 'Invalid IPFS path');
-      }
-    }
-    
-    // Handle Alchemy CDN URLs specifically
-    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
-      // Add Alchemy specific headers
-      customHeaders = {
-        ...customHeaders,
-        'Referer': 'https://alchemy.com/'
-      };
-      
-      // Ensure correctly formatted URL for Alchemy CDN
-      if (!proxyUrl.includes('original.') && !proxyUrl.includes('?')) {
-        proxyUrl = `${proxyUrl}/original.jpg`;
-        console.log(`Formatted Alchemy URL: ${proxyUrl}`);
       }
     }
     
@@ -129,70 +153,123 @@ export default async function handler(req, res) {
     
     console.log(`Fetching image from: ${proxyUrl}`);
     
-    try {
-      // Set a strict timeout for the request to prevent hanging on Vercel
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for Vercel
+    // Implement retry logic for failed requests
+    const fetchWithRetries = async (url, headers, maxRetries = 2) => {
+      let lastError;
       
-      // Simpler approach with fewer retries for Vercel
-      try {
-        // Fetch the image
-        const response = await axios({
-          method: 'get',
-          url: proxyUrl,
-          responseType: 'arraybuffer',
-          timeout: 4500, // 4.5 second timeout (shorter than the controller timeout)
-          headers: customHeaders,
-          validateStatus: null, // Allow any status code
-          maxContentLength: 3 * 1024 * 1024, // 3MB max size for Vercel
-          maxRedirects: 3,
-          signal: controller.signal
-        });
-        
-        // Clear the timeout
-        clearTimeout(timeoutId);
-        
-        // Handle error responses
-        if (!response || response.status >= 400) {
-          console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
-          return returnPlaceholder(res, `HTTP ${response?.status || 'unknown'}`);
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          // Set a strict timeout for the request to prevent hanging on Vercel
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5 second timeout for Vercel
+          
+          // Fetch the image
+          const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'arraybuffer',
+            timeout: 4000, // 4 second timeout (shorter than the controller timeout)
+            headers: headers,
+            validateStatus: null, // Allow any status code
+            maxContentLength: 3 * 1024 * 1024, // 3MB max size for Vercel
+            maxRedirects: 3,
+            signal: controller.signal
+          });
+          
+          // Clear the timeout
+          clearTimeout(timeoutId);
+          
+          // If we got a successful response, return it
+          if (response.status < 400) {
+            return response;
+          }
+          
+          // If we got a 403 Forbidden specifically from Alchemy CDN
+          if (response.status === 403 && url.includes('nft-cdn.alchemy.com')) {
+            console.log(`Attempt ${attempt + 1}: Got 403 from Alchemy CDN, trying with different headers`);
+            
+            // Modify headers for next attempt
+            headers = {
+              ...headers,
+              'Referer': 'https://dashboard.alchemy.com/',
+              'Origin': 'https://dashboard.alchemy.com'
+            };
+            
+            // Add API key directly to URL as a different parameter format
+            if (!url.includes('api_key=') && !url.includes('apiKey=')) {
+              const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+              if (alchemyApiKey) {
+                const separator = url.includes('?') ? '&' : '?';
+                url = `${url}${separator}api_key=${alchemyApiKey}`;
+                console.log('Added API key in alternate format');
+              }
+            }
+            
+            // Wait briefly before retry
+            await new Promise(resolve => setTimeout(resolve, 300));
+            continue;
+          }
+          
+          // For other error status codes, log and continue to next attempt
+          console.error(`Attempt ${attempt + 1}: Error status ${response.status} for: ${url}`);
+          lastError = response;
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 300));
+        } catch (error) {
+          console.error(`Network error on attempt ${attempt + 1}: ${error.message}`);
+          clearTimeout?.timeoutId;
+          lastError = error;
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
-        
-        // Check if the response is very small (likely an error page)
-        if (response.data.length < 100) {
-          console.error(`Response too small (${response.data.length} bytes)`);
-          return returnPlaceholder(res, 'Response too small');
-        }
-        
-        // Set the content type header
-        const contentType = response.headers['content-type'];
-        if (contentType) {
-          res.setHeader('Content-Type', contentType);
-        } else {
-          // Try to guess content type from URL
-          if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
-          else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
-          else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
-          else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
-          else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
-          else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
-        }
-        
-        // Set cache headers
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
-        
-        // Return the image data
-        return res.status(200).send(response.data);
-      } catch (requestError) {
-        console.error(`Error fetching image: ${requestError.message}`);
-        clearTimeout(timeoutId);
-        return returnPlaceholder(res, requestError.message.substring(0, 30));
       }
+      
+      // If we got here, all attempts failed
+      throw lastError || new Error('All retry attempts failed');
+    };
+    
+    // Use our retry logic to fetch the image
+    let response;
+    try {
+      response = await fetchWithRetries(proxyUrl, customHeaders);
     } catch (fetchError) {
       console.error(`All attempts failed for ${proxyUrl}:`, fetchError.message);
-      // Return a placeholder for any error
       return returnPlaceholder(res, fetchError.message.substring(0, 30));
     }
+    
+    // Handle error responses after all retries
+    if (!response || response.status >= 400) {
+      console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+      return returnPlaceholder(res, `HTTP ${response?.status || 'unknown'}`);
+    }
+    
+    // Check if the response is very small (likely an error page)
+    if (response.data.length < 100) {
+      console.error(`Response too small (${response.data.length} bytes)`);
+      return returnPlaceholder(res, 'Response too small');
+    }
+    
+    // Set the content type header
+    const contentType = response.headers['content-type'];
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    } else {
+      // Try to guess content type from URL
+      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
+      else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
+      else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
+      else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
+      else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
+      else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
+    }
+    
+    // Set cache headers
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+    
+    // Return the image data
+    return res.status(200).send(response.data);
   } catch (error) {
     console.error(`Global error in image proxy:`, error.message);
     // Return a placeholder for any error

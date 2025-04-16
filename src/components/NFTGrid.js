@@ -167,63 +167,152 @@ const NFTGrid = ({ nfts = [] }) => {
     console.log(`Processing NFT media for ${nft.name || nft.tokenId}:`, {
       hasImage: !!nft.image,
       imageType: nft.image ? typeof nft.image : 'none',
-      mediaCount: nft.media ? nft.media.length : 0
+      mediaCount: nft.media ? nft.media.length : 0,
+      rawData: nft.alchemyData ? true : false,
+      contractAddress: nft.contractAddress || (nft.contract ? nft.contract.address : 'unknown'),
+      tokenId: nft.tokenId
     });
     
     // Handle Alchemy v3 API structure first - most reliable source
     if (nft.image) {
       if (typeof nft.image === 'object') {
         // Process object structure: Alchemy v3 API 
-        if (nft.image.cachedUrl) urlCandidates.push(nft.image.cachedUrl);
-        if (nft.image.thumbnailUrl) urlCandidates.push(nft.image.thumbnailUrl);
-        if (nft.image.pngUrl) urlCandidates.push(nft.image.pngUrl);
-        if (nft.image.originalUrl) urlCandidates.push(nft.image.originalUrl);
-        if (nft.image.gateway) urlCandidates.push(nft.image.gateway);
+        if (nft.image.cachedUrl) {
+          urlCandidates.push(nft.image.cachedUrl);
+          console.log(`Found cached URL: ${nft.image.cachedUrl}`);
+        }
+        if (nft.image.thumbnailUrl) {
+          urlCandidates.push(nft.image.thumbnailUrl);
+          console.log(`Found thumbnail URL: ${nft.image.thumbnailUrl}`);
+        }
+        if (nft.image.pngUrl) {
+          urlCandidates.push(nft.image.pngUrl);
+          console.log(`Found PNG URL: ${nft.image.pngUrl}`);
+        }
+        if (nft.image.originalUrl) {
+          urlCandidates.push(nft.image.originalUrl);
+          console.log(`Found original URL: ${nft.image.originalUrl}`);
+        }
+        if (nft.image.gateway) {
+          urlCandidates.push(nft.image.gateway);
+          console.log(`Found gateway URL: ${nft.image.gateway}`);
+        }
+        if (nft.image.url) {
+          urlCandidates.push(nft.image.url);
+          console.log(`Found direct URL: ${nft.image.url}`);
+        }
       } else if (typeof nft.image === 'string') {
         // Direct image URL
         urlCandidates.push(nft.image);
+        console.log(`Found string image URL: ${nft.image}`);
+      }
+    }
+    
+    // Check for Alchemy NFT data container
+    if (nft.alchemyData) {
+      console.log(`Found Alchemy raw data object, extracting media`);
+      
+      // Extract image URL from Alchemy data
+      if (nft.alchemyData.media && Array.isArray(nft.alchemyData.media) && nft.alchemyData.media.length > 0) {
+        nft.alchemyData.media.forEach((media, index) => {
+          if (media.gateway) {
+            urlCandidates.push(media.gateway);
+            console.log(`Found Alchemy media[${index}] gateway: ${media.gateway}`);
+          }
+          if (media.raw) {
+            urlCandidates.push(media.raw);
+            console.log(`Found Alchemy media[${index}] raw: ${media.raw}`);
+          }
+        });
+      }
+      
+      // Try image from token metadata
+      if (nft.alchemyData.metadata && nft.alchemyData.metadata.image) {
+        urlCandidates.push(nft.alchemyData.metadata.image);
+        console.log(`Found Alchemy metadata.image: ${nft.alchemyData.metadata.image}`);
       }
     }
     
     // Check media array for videos or additional formats - Alchemy v3 specific
     if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
-      nft.media.forEach(mediaItem => {
+      nft.media.forEach((mediaItem, index) => {
         if (!mediaItem) return;
         
         // Traverse all potential media URLs
-        if (mediaItem.gateway) urlCandidates.push(mediaItem.gateway);
-        if (mediaItem.thumbnailUrl) urlCandidates.push(mediaItem.thumbnailUrl);
-        if (mediaItem.cachedUrl) urlCandidates.push(mediaItem.cachedUrl);
-        if (mediaItem.raw) urlCandidates.push(mediaItem.raw);
-        if (mediaItem.uri) urlCandidates.push(mediaItem.uri);
+        if (mediaItem.gateway) {
+          urlCandidates.push(mediaItem.gateway);
+          console.log(`Found media[${index}] gateway: ${mediaItem.gateway}`);
+        }
+        if (mediaItem.thumbnailUrl) {
+          urlCandidates.push(mediaItem.thumbnailUrl);
+          console.log(`Found media[${index}] thumbnailUrl: ${mediaItem.thumbnailUrl}`);
+        }
+        if (mediaItem.cachedUrl) {
+          urlCandidates.push(mediaItem.cachedUrl);
+          console.log(`Found media[${index}] cachedUrl: ${mediaItem.cachedUrl}`);
+        }
+        if (mediaItem.raw) {
+          urlCandidates.push(mediaItem.raw);
+          console.log(`Found media[${index}] raw: ${mediaItem.raw}`);
+        }
+        if (mediaItem.uri) {
+          urlCandidates.push(mediaItem.uri);
+          console.log(`Found media[${index}] uri: ${mediaItem.uri}`);
+        }
       });
     }
     
     // Check raw metadata which often contains the original URLs
     if (nft.raw && nft.raw.metadata) {
-      if (nft.raw.metadata.image) urlCandidates.push(nft.raw.metadata.image);
-      if (nft.raw.metadata.animation_url) urlCandidates.push(nft.raw.metadata.animation_url);
-      if (nft.raw.metadata.image_url) urlCandidates.push(nft.raw.metadata.image_url);
+      if (nft.raw.metadata.image) {
+        urlCandidates.push(nft.raw.metadata.image);
+        console.log(`Found raw.metadata.image: ${nft.raw.metadata.image}`);
+      }
+      if (nft.raw.metadata.animation_url) {
+        urlCandidates.push(nft.raw.metadata.animation_url);
+        console.log(`Found raw.metadata.animation_url: ${nft.raw.metadata.animation_url}`);
+      }
+      if (nft.raw.metadata.image_url) {
+        urlCandidates.push(nft.raw.metadata.image_url);
+        console.log(`Found raw.metadata.image_url: ${nft.raw.metadata.image_url}`);
+      }
     }
     
     // Add other potential sources
-    if (nft.imageUrl) urlCandidates.push(nft.imageUrl);
-    if (nft.rawImageUrl) urlCandidates.push(nft.rawImageUrl);
+    if (nft.imageUrl) {
+      urlCandidates.push(nft.imageUrl);
+      console.log(`Found imageUrl: ${nft.imageUrl}`);
+    }
+    if (nft.rawImageUrl) {
+      urlCandidates.push(nft.rawImageUrl);
+      console.log(`Found rawImageUrl: ${nft.rawImageUrl}`);
+    }
     
     // Metadata image URLs
     if (nft.metadata) {
-      if (nft.metadata.image) urlCandidates.push(nft.metadata.image);
-      if (nft.metadata.image_url) urlCandidates.push(nft.metadata.image_url);
-      if (nft.metadata.animation_url) urlCandidates.push(nft.metadata.animation_url);
+      if (nft.metadata.image) {
+        urlCandidates.push(nft.metadata.image);
+        console.log(`Found metadata.image: ${nft.metadata.image}`);
+      }
+      if (nft.metadata.image_url) {
+        urlCandidates.push(nft.metadata.image_url);
+        console.log(`Found metadata.image_url: ${nft.metadata.image_url}`);
+      }
+      if (nft.metadata.animation_url) {
+        urlCandidates.push(nft.metadata.animation_url);
+        console.log(`Found metadata.animation_url: ${nft.metadata.animation_url}`);
+      }
     }
     
     // OpenSea or collection data
     if (nft.contract && nft.contract.openSea && nft.contract.openSea.imageUrl) {
       urlCandidates.push(nft.contract.openSea.imageUrl);
+      console.log(`Found contract.openSea.imageUrl: ${nft.contract.openSea.imageUrl}`);
     }
     
     if (nft.contractMetadata?.openSea?.imageUrl) {
       urlCandidates.push(nft.contractMetadata.openSea.imageUrl);
+      console.log(`Found contractMetadata.openSea.imageUrl: ${nft.contractMetadata.openSea.imageUrl}`);
     }
     
     // Filter out null/undefined and deduplicate
@@ -234,22 +323,40 @@ const NFTGrid = ({ nfts = [] }) => {
       return null; // We'll handle this in the rendering
     }
     
+    // Summary of found URLs
+    console.log(`Found ${uniqueUrls.length} unique URLs for NFT: ${nft.name || nft.tokenId}`);
+    
     // Get the first URL and process it to fix common issues
     let selectedUrl = uniqueUrls[0];
+    
+    // Handle specific URL patterns
     
     // Fix IPFS URLs - try Cloudflare gateway
     if (selectedUrl.startsWith('ipfs://')) {
       selectedUrl = selectedUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      console.log(`Fixed IPFS URL: ${selectedUrl}`);
     }
     
     // Fix Arweave URLs
     if (selectedUrl.startsWith('ar://')) {
       selectedUrl = selectedUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Fixed Arweave URL: ${selectedUrl}`);
     }
     
     // Fix HTTP URLs - Try HTTPS version to avoid mixed content issues
     if (selectedUrl.startsWith('http://')) {
       selectedUrl = selectedUrl.replace('http://', 'https://');
+      console.log(`Fixed HTTP URL: ${selectedUrl}`);
+    }
+    
+    // If URL is from Alchemy CDN, ensure we have a direct gateway URL
+    if (selectedUrl.includes('nft-cdn.alchemy.com')) {
+      // Make sure we have a complete URL with format information
+      if (!selectedUrl.includes('/original') && !selectedUrl.includes('/thumb') && 
+          !selectedUrl.includes('.jpg') && !selectedUrl.includes('.png')) {
+        selectedUrl = `${selectedUrl}/original`;
+        console.log(`Fixed Alchemy CDN URL: ${selectedUrl}`);
+      }
     }
     
     console.log(`Selected media URL for ${nft.name || nft.tokenId}: ${selectedUrl}`);
