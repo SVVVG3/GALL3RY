@@ -9,6 +9,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
   const imageUrl = getImageUrl(nft);
   const title = getNftTitle(nft);
   const collection = getCollectionName(nft);
+  const floorPrice = getFloorPrice(nft);
   const [imageError, setImageError] = useState(false);
   
   // Generate fallback color based on NFT id for consistent placeholders
@@ -118,6 +119,12 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
       <div className="nft-info">
         <h3 className="nft-name">{title}</h3>
         <p className="nft-collection">{collection}</p>
+        {floorPrice && (
+          <div className="nft-metadata">
+            <p className="nft-price">{floorPrice}</p>
+            <span className="nft-price-label">Floor</span>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -220,14 +227,18 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     <div className="virtualized-grid-container">
       <AutoSizer>
         {({ width, height }) => {
-          // Calculate columns based on viewport width 
-          const columnCount = width < 600 ? 2 : width < 900 ? 3 : width < 1200 ? 4 : 5;
+          // Calculate columns based on viewport width - use more columns for wider screens
+          const columnCount = width < 600 ? 2 : 
+                             width < 900 ? 3 : 
+                             width < 1200 ? 4 : 
+                             width < 1600 ? 5 : 6; // Add more columns for very wide screens
           
           // Calculate width of each cell
           const columnWidth = width / columnCount;
           
           // Keep cell aspect ratio close to 1:1 with some padding
-          const rowHeight = columnWidth;
+          // Make the row height slightly taller to accommodate the info section
+          const rowHeight = columnWidth * 1.4; // Add extra height for NFT details
           
           // Calculate how many rows we need
           const rowCount = Math.ceil(nfts.length / columnCount);
@@ -245,6 +256,7 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
                 items: nfts,
                 columnCount
               }}
+              overscanCount={2} // Pre-render additional rows for smoother scrolling
             >
               {Cell}
             </FixedSizeGrid>
@@ -421,6 +433,46 @@ function getCollectionName(nft) {
   }
   
   return 'Unknown Collection';
+}
+
+function getFloorPrice(nft) {
+  if (!nft) return null;
+  
+  // Try various price formats that might exist in the NFT data
+  let price = null;
+  
+  // Check for OpenSea floor price format
+  if (nft.contract && nft.contract.openSeaMetadata && nft.contract.openSeaMetadata.floorPrice) {
+    price = nft.contract.openSeaMetadata.floorPrice;
+  }
+  
+  // Check for direct floor price
+  else if (nft.floorPrice) {
+    price = nft.floorPrice;
+  }
+  
+  // Check in marketplace data
+  else if (nft.marketplace && nft.marketplace.floorPrice) {
+    price = nft.marketplace.floorPrice;
+  }
+  
+  // Format the price if we have one
+  if (price) {
+    // If price is already a string with ETH symbol, return as is
+    if (typeof price === 'string' && price.includes('Ξ')) {
+      return price;
+    }
+    
+    // Convert number to string with ETH symbol
+    if (typeof price === 'number') {
+      return `Ξ ${price.toFixed(3)}`;
+    }
+    
+    // Just return the price as is
+    return `Ξ ${price}`;
+  }
+  
+  return null;
 }
 
 export default SimpleNFTGrid; 
