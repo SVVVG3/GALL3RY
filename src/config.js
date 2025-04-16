@@ -49,7 +49,7 @@ const config = {
   API_BASE_URL: process.env.API_BASE_URL || '/api',
   ALCHEMY_PROXY_URL: process.env.REACT_APP_API_URL 
     ? `${process.env.REACT_APP_API_URL}/alchemy` 
-    : '/api/alchemy',
+    : '/alchemy',
   OPENSEA_PROXY_URL: '/api/opensea',
   ZAPPER_PROXY_URL: process.env.REACT_APP_ZAPPER_PROXY_URL || '/api/zapper',
   
@@ -89,8 +89,8 @@ if (config.IS_VERCEL) {
   console.log('Running in Vercel environment, configuring API paths');
   
   // In Vercel, ensure we're always using relative API paths
-  if (!config.ALCHEMY_PROXY_URL.startsWith('/api/')) {
-    config.ALCHEMY_PROXY_URL = '/api/alchemy';
+  if (!config.ALCHEMY_PROXY_URL.startsWith('/')) {
+    config.ALCHEMY_PROXY_URL = '/alchemy';
   }
   
   // Force directAlchemy as the NFT service in production
