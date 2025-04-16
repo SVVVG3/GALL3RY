@@ -16,25 +16,44 @@ const NFTCard = React.memo(({ nft }) => {
   const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
   const openseaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
   
-  // Get image URL with CORS protection
+  // Get image URL - make sure we get a string URL, not an object
   const rawImageUrl = getImageUrl(nft);
-  // First try with proxy, and fall back to direct URL if needed
-  const imageUrl = !useDirectUrl && rawImageUrl 
-    ? `/api/image-proxy?url=${encodeURIComponent(rawImageUrl)}` 
+  
+  // Only use the proxy if we have a valid string URL
+  const imageUrl = !useDirectUrl && rawImageUrl && typeof rawImageUrl === 'string'
+    ? `/api/image-proxy?url=${encodeURIComponent(rawImageUrl)}`
     : rawImageUrl;
+  
+  // Debug logging
+  useEffect(() => {
+    console.log('NFT card rendering:', {
+      title,
+      rawImageUrl,
+      imageUrl,
+      useDirectUrl
+    });
+  }, [title, rawImageUrl, imageUrl, useDirectUrl]);
   
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
   
   const handleImageError = () => {
+    console.error('Image failed to load:', imageUrl);
+    
     // If proxy failed, try direct URL
-    if (!useDirectUrl && rawImageUrl) {
+    if (!useDirectUrl && typeof rawImageUrl === 'string') {
+      console.log('Trying direct URL as fallback:', rawImageUrl);
       setUseDirectUrl(true);
     } else {
       setImageError(true);
     }
   };
+  
+  // Don't try to render with invalid image URL
+  const validImageUrl = typeof imageUrl === 'string' ? 
+    imageUrl : 
+    `https://via.placeholder.com/300?text=${encodeURIComponent(title || 'NFT')}`;
   
   return (
     <div className="nft-item-wrapper-fallback">
@@ -49,7 +68,7 @@ const NFTCard = React.memo(({ nft }) => {
               <div className="nft-image-error">Image unavailable</div>
             ) : (
               <img
-                src={imageUrl || 'https://via.placeholder.com/300?text=No+Image'}
+                src={validImageUrl}
                 alt={title || 'NFT Image'}
                 className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
                 onLoad={handleImageLoad}
@@ -148,20 +167,49 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
 const getImageUrl = (nft) => {
   if (!nft) return '';
   
+  // Check if the image is already a complex object with multiple URL options
+  if (nft.media?.[0] && typeof nft.media[0] === 'object') {
+    const mediaObj = nft.media[0];
+    
+    // Handle object with multiple URL options
+    if (mediaObj.cachedUrl) return mediaObj.cachedUrl;
+    if (mediaObj.gateway) return mediaObj.gateway;
+    if (mediaObj.thumbnailUrl) return mediaObj.thumbnailUrl;
+    if (mediaObj.pngUrl) return mediaObj.pngUrl;
+    if (mediaObj.originalUrl) return mediaObj.originalUrl;
+    if (mediaObj.raw) {
+      const rawUrl = mediaObj.raw;
+      if (typeof rawUrl === 'string' && rawUrl.startsWith('ipfs://')) {
+        return rawUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+      }
+      return rawUrl;
+    }
+  }
+  
+  // For cases where rawImageUrl might be an object itself 
+  if (typeof nft.rawImageUrl === 'object' && nft.rawImageUrl !== null) {
+    const imgObj = nft.rawImageUrl;
+    if (imgObj.cachedUrl) return imgObj.cachedUrl;
+    if (imgObj.thumbnailUrl) return imgObj.thumbnailUrl;
+    if (imgObj.pngUrl) return imgObj.pngUrl;
+    if (imgObj.originalUrl) return imgObj.originalUrl;
+    return ''; // No valid URL found in the object
+  }
+  
   // Try Alchemy v3 format first (preferred)
   if (nft.media && nft.media.length > 0) {
     // Gateway is the cached, normalized version
-    if (nft.media[0].gateway) {
+    if (nft.media[0].gateway && typeof nft.media[0].gateway === 'string') {
       return nft.media[0].gateway;
     }
     
     // Thumbnail is a smaller version
-    if (nft.media[0].thumbnail) {
+    if (nft.media[0].thumbnail && typeof nft.media[0].thumbnail === 'string') {
       return nft.media[0].thumbnail;
     }
     
     // Raw might be an IPFS URL
-    if (nft.media[0].raw) {
+    if (nft.media[0].raw && typeof nft.media[0].raw === 'string') {
       const rawUrl = nft.media[0].raw;
       if (rawUrl.startsWith('ipfs://')) {
         return rawUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
