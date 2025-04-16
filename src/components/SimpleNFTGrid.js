@@ -184,7 +184,7 @@ const NFTCard = ({ nft, collectionName }) => {
               className={`nft-bg-image ${isImageLoaded ? 'loaded' : ''}`}
               style={{
                 backgroundImage: isImageLoaded ? `url(${imageUrl})` : 'none',
-                backgroundSize: 'contain'
+                backgroundSize: 'cover'
               }}
             ></div>
             
