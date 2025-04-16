@@ -87,13 +87,23 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
     const resizeObserver = new ResizeObserver(entries => {
       for (let entry of entries) {
         const { width, height } = entry.contentRect;
-        setDimensions({ width, height });
+        setDimensions({ width, height: height || window.innerHeight * 0.8 });
       }
     });
     
     resizeObserver.observe(gridRef.current);
     return () => resizeObserver.disconnect();
   }, []);
+
+  // Default dimensions if the ResizeObserver hasn't fired yet
+  useEffect(() => {
+    if (dimensions.width === 0) {
+      setDimensions({
+        width: gridRef.current?.clientWidth || window.innerWidth * 0.9,
+        height: window.innerHeight * 0.8
+      });
+    }
+  }, [dimensions.width]);
   
   // Calculate row count based on column count and NFT count
   const rowCount = nfts.length ? Math.ceil(nfts.length / columnCount) : 0;
@@ -135,7 +145,7 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
         <FixedSizeGrid
           className="virtualized-grid"
           width={dimensions.width}
-          height={Math.min(dimensions.height || window.innerHeight * 0.8, window.innerHeight * 0.8)}
+          height={dimensions.height}
           columnCount={columnCount}
           rowCount={rowCount}
           columnWidth={cellWidth}
