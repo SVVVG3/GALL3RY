@@ -262,10 +262,11 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
       return res.status(400).json({ error: 'Missing endpoint parameter' });
     }
     
-    // Define Alchemy V3 NFT endpoints
+    // Define Alchemy V3 NFT endpoints - format based on official docs
+    // See: https://docs.alchemy.com/reference/getnftsforowner-v3
     const ENDPOINTS = {
-      // Use consistent lowercase keys for the endpoints
-      getnftsforowner: (apiKey, chain = 'eth') => {
+      // Map endpoint keys to functions that build the correct URL
+      'getnftsforowner': (apiKey, chain = 'eth') => {
         // Map chain IDs to their correct Alchemy URL formats
         const chainUrlMap = {
           'eth': 'eth-mainnet',
@@ -277,63 +278,17 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
           'zora': 'zora-mainnet'
         };
         
-        // Special handling for 'all' chain - default to eth-mainnet
-        // The client side will handle multiple chain requests separately
-        if (chain.toLowerCase() === 'all') {
-          console.log('Request for "all" chains - defaulting to eth-mainnet');
-          const baseUrl = `https://eth-mainnet.g.alchemy.com/nft/v3/`;
-          return `${baseUrl}${apiKey}/getNFTsForOwner`;
-        }
-        
         // Get the correct chain URL or default to eth-mainnet
         const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
         
         // Build the full URL with the correct format
+        // Using the format from Alchemy docs: https://docs.alchemy.com/reference/getnftsforowner-v3
         const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
         console.log(`Using Alchemy URL for ${chain}: ${baseUrl}${apiKey}/getNFTsForOwner`);
         
         return `${baseUrl}${apiKey}/getNFTsForOwner`;
       },
-      getnftmetadata: (apiKey, chain = 'eth') => {
-        // Map chain IDs to their correct Alchemy URL formats
-        const chainUrlMap = {
-          'eth': 'eth-mainnet',
-          'ethereum': 'eth-mainnet',
-          'polygon': 'polygon-mainnet',
-          'arbitrum': 'arb-mainnet',
-          'optimism': 'opt-mainnet',
-          'base': 'base-mainnet',
-          'zora': 'zora-mainnet'
-        };
-        
-        // Get the correct chain URL or default to eth-mainnet
-        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
-        
-        // Build the full URL with the correct format
-        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
-        
-        return `${baseUrl}${apiKey}/getNFTMetadata`;
-      },
-      getnftsforcollection: (apiKey, chain = 'eth') => {
-        // Map chain IDs to their correct Alchemy URL formats
-        const chainUrlMap = {
-          'eth': 'eth-mainnet',
-          'ethereum': 'eth-mainnet',
-          'polygon': 'polygon-mainnet',
-          'arbitrum': 'arb-mainnet',
-          'optimism': 'opt-mainnet',
-          'base': 'base-mainnet',
-          'zora': 'zora-mainnet'
-        };
-        
-        // Get the correct chain URL or default to eth-mainnet
-        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
-        
-        // Build the full URL with the correct format
-        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
-        
-        return `${baseUrl}${apiKey}/getNFTsForCollection`;
-      }
+      // Add other endpoints with the same pattern as needed...
     };
     
     // Normalize the endpoint name to lowercase for case-insensitive comparison
@@ -352,7 +307,12 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
     const endpointUrl = ENDPOINTS[normalizedEndpoint](apiKey, chain);
     
     // Prepare request parameters according to Alchemy v3 API format
+    // Clone query params to avoid modifying the original
     const requestParams = { ...req.query };
+    
+    // Remove our custom parameters so they don't get sent to Alchemy
+    delete requestParams.endpoint;
+    delete requestParams.chain;
     
     // Enhanced handling for getNFTsForOwner
     if (normalizedEndpoint === 'getnftsforowner') {
@@ -366,98 +326,52 @@ app.all('/alchemy', cors(corsOptions), async (req, res) => {
         } catch (e) {
           console.error('Error processing excludeFilters:', e);
         }
-      } else if (requestParams.excludeSpam === 'true') {
-        // Convert excludeSpam parameter to the correct excludeFilters format
+      } else {
+        // Default to excluding spam NFTs
         requestParams.excludeFilters = ['SPAM'];
       }
       
       // Ensure proper boolean parameters
       requestParams.withMetadata = requestParams.withMetadata !== 'false';
-      requestParams.includeContract = requestParams.includeContract !== 'false';
       
-      // Alchemy V3 image params - ensure these are set to get full image URLs
-      requestParams.includeMedia = true;
-      
-      // Set page size with default
+      // These parameters must be explicitly set according to Alchemy docs
       requestParams.pageSize = parseInt(requestParams.pageSize || '100', 10);
+      requestParams.includeMedia = true;
       
       console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
     }
     
     // Make the API request
-    let response;
-    if (req.method === 'GET') {
-      console.log(`GET request to ${endpointUrl}`, { params: requestParams });
-      response = await axios.get(endpointUrl, { params: requestParams });
-    } else if (req.method === 'POST') {
-      console.log(`POST request to ${endpointUrl}`, { body: req.body });
-      
-      // Handle special case for batch owners request
-      if (normalizedEndpoint === 'getnftsforowner' && req.body.owners && Array.isArray(req.body.owners)) {
-        console.log(`Batch request for multiple owners: ${req.body.owners.length} addresses`);
-        
-        // For multiple owners, we need to make separate requests
-        const allNfts = [];
-        let totalCount = 0;
-        
-        // Process each owner address
-        for (const owner of req.body.owners) {
-          try {
-            const ownerParams = { 
-              ...requestParams, 
-              owner,
-              withMetadata: req.body.withMetadata !== false,
-              excludeFilters: req.body.excludeFilters || ['SPAM'],
-              includeMedia: true // Ensure we get media/image data
-            };
-            
-            console.log(`Fetching NFTs for owner: ${owner}`);
-            const ownerResponse = await axios.get(endpointUrl, { params: ownerParams });
-            
-            if (ownerResponse.data?.ownedNfts) {
-              // Add owner address to each NFT before adding to results
-              const nftsWithOwner = ownerResponse.data.ownedNfts.map(nft => ({
-                ...nft,
-                ownerAddress: owner  // Explicitly add the owner address
-              }));
-              
-              allNfts.push(...nftsWithOwner);
-              totalCount += ownerResponse.data.totalCount || 0;
-            }
-          } catch (e) {
-            console.error(`Error fetching NFTs for ${owner}:`, e.message);
-          }
-        }
-        
-        // Return combined results
-        return res.status(200).json({
-          ownedNfts: allNfts,
-          totalCount,
-          pageKey: null // No pagination for batch requests
-        });
-      }
-      
-      // Regular POST request
-      response = await axios.post(endpointUrl, req.body);
-    } else {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
+    console.log(`GET request to ${endpointUrl}`, { params: requestParams });
+    const response = await axios.get(endpointUrl, { 
+      params: requestParams,
+      timeout: 15000 // 15 second timeout
+    });
     
     // Debug: Log the response structure (not the full data)
-    console.log(`Alchemy response status: ${response.status}, data keys: ${Object.keys(response.data || {})}`);
+    console.log(`Alchemy response status: ${response.status}, data keys: ${Object.keys(response.data || {})}, NFTs count: ${response.data?.ownedNfts?.length || 0}`);
     
     // If this is a getNftsForOwner request, ensure ownerAddress is set on each NFT
     if (normalizedEndpoint === 'getnftsforowner' && response.data?.ownedNfts && requestParams.owner) {
-      // Add owner address to each NFT
+      // Add owner address to each NFT for easier filtering later
       response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
         ...nft,
-        ownerAddress: requestParams.owner // Explicitly add the owner address
+        ownerAddress: requestParams.owner
       }));
     }
     
     return res.status(200).json(response.data);
   } catch (error) {
     console.error('Alchemy API error:', error.message);
+    
+    // Enhanced error reporting
+    if (error.response) {
+      console.error('Alchemy API error details:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    }
     
     return res.status(error.response?.status || 500).json({
       error: 'Error from Alchemy API',
@@ -586,71 +500,4 @@ app.get('/image-proxy', async (req, res) => {
       console.error(`Source returned error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
       
       // Create a simple SVG placeholder instead of returning JSON
-      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-        <rect width="200" height="200" fill="#f0f0f0"/>
-        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
-      </svg>`);
-      
-      res.setHeader('Content-Type', 'image/svg+xml');
-      res.setHeader('Cache-Control', 'public, max-age=3600'); 
-      return res.send(placeholderSvg);
-    }
-    
-    // Set content type from response
-    const contentType = response.headers['content-type'];
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    } else {
-      // Try to guess content type from URL
-      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
-      else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
-      else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
-      else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
-      else res.setHeader('Content-Type', 'application/octet-stream');
-    }
-    
-    // Set cache headers for better performance
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-    
-    // Return the image data
-    return res.send(response.data);
-  } catch (error) {
-    console.error(`Error proxying image (${url}):`, error.message);
-    
-    // Return a placeholder SVG image instead of JSON
-    const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-      <rect width="200" height="200" fill="#f0f0f0"/>
-      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
-    </svg>`);
-    
-    res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Cache-Control', 'public, max-age=3600'); 
-    return res.send(placeholderSvg);
-  }
-});
-
-// Catch-all route for unmatched API endpoints
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    error: 'Not Found',
-    message: 'The requested API endpoint does not exist'
-  });
-});
-
-// Vercel serverless function handler
-module.exports = (req, res) => {
-  // Get the path from the URL
-  const url = new URL(req.url, `https://${req.headers.host}`);
-  // Remove any '/api' prefix that Vercel might add
-  req.url = url.pathname.replace(/^\/api/, '');
-  if (req.url === '') req.url = '/';
-  
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-  
-  // Process the request with Express
-  return app(req, res);
-}; 
+      const placeholderSvg = Buffer.from(`
