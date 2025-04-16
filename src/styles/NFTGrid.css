@@ -442,34 +442,34 @@
   padding: 20px;
 }
 
-/* Fallback grid layout using flexbox */
+/* Update the fallback grid styling to fix image layout issues */
 .fallback-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
   gap: 20px;
-  padding: 16px;
   width: 100%;
+  margin: 0 auto;
+  padding: 20px;
 }
 
-/* NFT item wrapper for consistent sizing */
 .nft-item-wrapper-fallback {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1.4;
-  margin-bottom: 10px;
-}
-
-/* NFT item styles */
-.nft-item {
-  height: 100%;
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-  background-color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.nft-item {
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  height: 100%;
+  width: 100%;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .nft-link {
@@ -480,26 +480,24 @@
   color: inherit;
 }
 
-/* NFT image container */
 .nft-image-container {
   position: relative;
   width: 100%;
-  flex: 1;
-  min-height: 65%;
-  background-color: #f5f5f5;
+  padding-top: 100%; /* Square aspect ratio */
   overflow: hidden;
+  background-color: #f5f5f5;
 }
 
 .nft-image {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
+  width: 100%; 
   height: 100%;
   object-fit: cover;
-  object-position: center;
+  transition: opacity 0.3s ease;
   opacity: 0;
-  transition: opacity 0.3s ease-in-out;
+  z-index: 1; /* Ensure image is above placeholder */
 }
 
 .nft-image.loaded {
@@ -510,50 +508,66 @@
 .nft-image-error {
   position: absolute;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  background-color: #f5f5f5;
-  color: #999;
+  background-color: #f0f0f0;
+  color: #888;
   font-size: 14px;
+  text-align: center;
+  padding: 10px;
+  z-index: 0; /* Behind the actual image */
 }
 
-/* NFT info section */
+.nft-image-error {
+  z-index: 2; /* Above the image when there's an error */
+}
+
+.error-text {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #666;
+}
+
 .nft-info {
   padding: 12px;
-  min-height: 30%;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  flex-shrink: 0;
+  flex-grow: 1;
   background-color: #ffffff;
+  min-height: 80px;
+  z-index: 3; /* Ensure info is always on top */
 }
 
 .nft-title {
-  margin: 0 0 4px 0;
   font-size: 14px;
   font-weight: 600;
-  white-space: nowrap;
+  margin: 0 0 4px 0;
+  color: #333;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: #333;
+  white-space: nowrap;
 }
 
 .nft-collection {
-  margin: 0 0 4px 0;
   font-size: 12px;
   color: #666;
-  white-space: nowrap;
+  margin: 0 0 6px 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .nft-price {
-  margin: 0;
   font-size: 12px;
   font-weight: 500;
   color: #0070f3;
+  margin-top: auto;
+  margin-bottom: 0;
 }
 
 /* Loading and Empty States */
@@ -606,4 +620,55 @@
   .nft-price {
     font-size: 12px;
   }
+}
+
+/* Add styles for the new container class */
+.nft-card-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-bottom: 20px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.nft-card-container:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Background image that will always display correctly */
+.nft-bg-image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0;
+  z-index: 1;
+  transition: opacity 0.3s ease;
+}
+
+.nft-bg-image.loaded {
+  opacity: 1;
+}
+
+/* Hide the actual image but keep it for onLoad/onError events */
+.nft-image {
+  visibility: hidden;
+  position: absolute;
+  z-index: 0;
+  width: 1px;
+  height: 1px;
+}
+
+/* Make sure info area is clearly separated from image */
+.nft-info {
+  background-color: white;
+  border-top: 1px solid #eee;
 } 

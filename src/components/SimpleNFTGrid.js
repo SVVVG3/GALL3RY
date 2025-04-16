@@ -210,7 +210,7 @@ const NFTCard = React.memo(({ nft, style }) => {
     : imageUrl;
   
   return (
-    <div className="nft-item-wrapper-fallback" style={style}>
+    <div className="nft-card-container" style={style}>
       <div className="nft-item">
         <a 
           href={openSeaUrl} 
@@ -234,15 +234,21 @@ const NFTCard = React.memo(({ nft, style }) => {
                 <p className="error-text">Unable to load image</p>
               </div>
             ) : (
-              <img
-                src={displayUrl}
-                alt={title || 'NFT'}
-                className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
-                onLoad={handleImageLoad}
-                onError={handleImageError}
-                crossOrigin="anonymous"
-                referrerPolicy="no-referrer"
-              />
+              <>
+                <div 
+                  className={`nft-bg-image ${imageLoaded ? 'loaded' : ''}`} 
+                  style={{ backgroundImage: `url(${displayUrl})` }}
+                ></div>
+                <img
+                  src={displayUrl}
+                  alt={title || 'NFT'}
+                  className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
+                  onLoad={handleImageLoad}
+                  onError={handleImageError}
+                  crossOrigin="anonymous"
+                  referrerPolicy="no-referrer"
+                />
+              </>
             )}
           </div>
           
