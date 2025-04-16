@@ -15,11 +15,12 @@
 }
 
 .nft-item-wrapper {
-  padding: 10px;
   box-sizing: border-box;
+  padding: 12px;
   width: 100% !important; /* Force width to stay within container */
   max-width: 100%;
   overflow: hidden; /* Prevent overflow */
+  position: absolute; /* Make sure the position is correctly applied */
 }
 
 .nft-item {
@@ -33,6 +34,7 @@
   cursor: pointer;
   height: 100%;
   position: relative;
+  width: 100%; /* Ensure full width */
 }
 
 .nft-item:hover {
@@ -41,8 +43,7 @@
 }
 
 .nft-link {
-  display: flex;
-  flex-direction: column;
+  display: block;
   height: 100%;
   text-decoration: none;
   color: inherit;
@@ -71,7 +72,8 @@
   opacity: 1;
 }
 
-.nft-image-placeholder {
+.nft-image-placeholder,
+.nft-image-error {
   position: absolute;
   display: flex;
   align-items: center;
@@ -83,20 +85,6 @@
   background-color: #f0f0f0;
   color: #888;
   font-size: 14px;
-}
-
-.nft-image-error {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: #f8f8f8;
-  color: #888;
-  font-size: 14px;
   text-align: center;
   padding: 10px;
 }
@@ -105,27 +93,27 @@
   padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: 100%;
-  background-color: rgba(25, 25, 25, 0.9);
-  border-bottom-left-radius: 12px;
-  border-bottom-right-radius: 12px;
+  flex-grow: 1;
+  background-color: #ffffff;
+  height: auto;
+  min-height: 80px;
+  overflow: hidden;
 }
 
 .nft-title {
   font-size: 14px;
   font-weight: 600;
-  margin: 0;
+  margin: 0 0 4px 0;
+  color: #333;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: #ffffff;
 }
 
 .nft-collection {
   font-size: 12px;
-  margin: 0;
-  color: #cccccc;
+  color: #666;
+  margin: 0 0 6px 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -134,8 +122,8 @@
 .nft-price {
   font-size: 12px;
   font-weight: 500;
+  color: #0070f3;
   margin: 0;
-  color: #32d74b;
 }
 
 .nft-empty-message {
@@ -412,4 +400,47 @@
     grid-template-columns: repeat(2, 1fr);
   }
 } 
-*/ 
+*/
+
+/* Add loader styles for infinite scrolling */
+.nft-grid-loader {
+  width: 100%;
+  padding: 20px;
+  text-align: center;
+  height: 60px;
+}
+
+.loader {
+  display: inline-block;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #0070f3;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  animation: spin 1s linear infinite;
+  margin-right: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Empty state styles */
+.nft-grid-empty {
+  width: 100%;
+  height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f8f8;
+  border-radius: 8px;
+  color: #666;
+  font-size: 16px;
+  text-align: center;
+  padding: 20px;
+}
+
+.nft-grid-loading, .nft-grid-no-results {
+  padding: 20px;
+} 
