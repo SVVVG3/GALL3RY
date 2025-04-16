@@ -117,12 +117,14 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
         )}
       </div>
       <div className="nft-info">
-        <h3 className="nft-name">{title}</h3>
-        <p className="nft-collection">{collection}</p>
+        <h3 className="nft-name" title={title}>{title}</h3>
+        <p className="nft-collection" title={collection}>{collection}</p>
         {floorPrice && (
           <div className="nft-metadata">
-            <p className="nft-price">{floorPrice}</p>
-            <span className="nft-price-label">Floor</span>
+            <div className="nft-price-container">
+              <p className="nft-price">{floorPrice}</p>
+            </div>
+            <span className="nft-price-label">Floor Price</span>
           </div>
         )}
       </div>
@@ -183,10 +185,10 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     
     const nft = items[index];
     
-    // Enhance the style with padding to create nice spacing
+    // Use less padding to maximize card size
     const enhancedStyle = {
       ...style,
-      padding: '10px',
+      padding: '8px',
       boxSizing: 'border-box',
       width: style.width,
       height: style.height
@@ -205,14 +207,6 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     );
   }, [handleImageSuccess, handleImageError]);
   
-  // Adjust the number of columns based on screen width
-  const getColumnCount = (width) => {
-    if (width >= 1200) return 4;
-    if (width >= 768) return 3; 
-    if (width >= 480) return 2;
-    return 1;
-  };
-  
   // If we have no NFTs, show a message
   if (nfts.length === 0) {
     return (
@@ -227,21 +221,22 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     <div className="virtualized-grid-container">
       <AutoSizer>
         {({ width, height }) => {
-          // Calculate columns based on viewport width - use more columns for wider screens
+          // Force more columns on desktop - minimum 4 columns on larger screens
           const columnCount = width < 600 ? 2 : 
                              width < 900 ? 3 : 
                              width < 1200 ? 4 : 
-                             width < 1600 ? 5 : 6; // Add more columns for very wide screens
+                             width < 1600 ? 5 : 6;
           
           // Calculate width of each cell
           const columnWidth = width / columnCount;
           
-          // Keep cell aspect ratio close to 1:1 with some padding
-          // Make the row height slightly taller to accommodate the info section
-          const rowHeight = columnWidth * 1.4; // Add extra height for NFT details
+          // Make rows taller to accommodate text and floor price
+          const rowHeight = columnWidth * 1.6; // Increase height ratio for details
           
           // Calculate how many rows we need
           const rowCount = Math.ceil(nfts.length / columnCount);
+          
+          console.log(`Grid dimensions: ${width}px wide, ${columnCount} columns, ${rowCount} rows`);
           
           return (
             <FixedSizeGrid
@@ -256,7 +251,7 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
                 items: nfts,
                 columnCount
               }}
-              overscanCount={2} // Pre-render additional rows for smoother scrolling
+              overscanCount={2}
             >
               {Cell}
             </FixedSizeGrid>
