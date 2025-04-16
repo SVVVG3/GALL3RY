@@ -217,5 +217,8 @@ export default {
     return fetchNFTsViaProxy(owner, options);
   },
   
+  // Add getNFTsForMultipleOwners to the exported object
+  getNFTsForMultipleOwners,
+  
   // Additional methods can be added here
 }; 
