@@ -160,6 +160,17 @@ const getImageUrl = (nft) => {
     console.log('Using fallback placeholder - no image URL found');
   }
   
+  // After PRIORITY 1, add this handling for Alchemy CDN URLs
+  if (imageUrl && (
+      imageUrl.includes('nft-cdn.alchemy.com/matic-mainnet/') || 
+      imageUrl.includes('nft-cdn.alchemy.com/base-mainnet/') ||
+      imageUrl.includes('nft-cdn.alchemy.com/eth-mainnet/')
+    ) && !imageUrl.includes('?')) {
+    // Alchemy CDN URLs need the format parameter
+    imageUrl = `${imageUrl}/original.webp`;
+    console.log('Added extension to Alchemy CDN URL:', imageUrl);
+  }
+  
   return imageUrl;
 };
 
@@ -197,12 +208,24 @@ const NFTCard = ({ nft }) => {
       isLoading: true
     });
     
+    console.log(`Attempting to load image for NFT: ${nftTitle}`, {
+      imageUrl,
+      nftData: {
+        id: nft.id,
+        contractAddress,
+        tokenId
+      }
+    });
+    
     // Preload image
     if (imageUrl) {
       const img = new Image();
-      img.src = imageUrl;
       
       img.onload = () => {
+        console.log(`✅ Successfully loaded image: ${imageUrl}`, {
+          width: img.width,
+          height: img.height
+        });
         setImageState({
           loaded: true,
           error: false,
@@ -210,16 +233,47 @@ const NFTCard = ({ nft }) => {
         });
       };
       
-      img.onerror = () => {
-        setImageState({
-          loaded: false,
-          error: true,
-          isLoading: false
-        });
-        console.error("Failed to load image", imageUrl);
+      img.onerror = (e) => {
+        console.error(`❌ Failed to load image: ${imageUrl}`, e);
+        
+        // Try with a different extension if it's an Alchemy URL
+        if (imageUrl.includes('nft-cdn.alchemy.com') && imageUrl.includes('/original.webp')) {
+          const fallbackUrl = imageUrl.replace('/original.webp', '/original.png');
+          console.log(`Trying fallback URL: ${fallbackUrl}`);
+          
+          const fallbackImg = new Image();
+          fallbackImg.onload = () => {
+            console.log(`✅ Successfully loaded fallback image: ${fallbackUrl}`);
+            setImageState({
+              loaded: true,
+              error: false,
+              isLoading: false
+            });
+          };
+          
+          fallbackImg.onerror = () => {
+            console.error(`❌ Failed to load fallback image: ${fallbackUrl}`);
+            setImageState({
+              loaded: false,
+              error: true,
+              isLoading: false
+            });
+          };
+          
+          fallbackImg.src = fallbackUrl;
+        } else {
+          setImageState({
+            loaded: false,
+            error: true,
+            isLoading: false
+          });
+        }
       };
+      
+      // Start loading the image
+      img.src = imageUrl;
     }
-  }, [imageUrl, nft]);
+  }, [imageUrl, nft, nftTitle, contractAddress, tokenId]);
 
   // Debugging NFT data
   console.log('NFT Data:', {
@@ -240,13 +294,29 @@ const NFTCard = ({ nft }) => {
               src={imageUrl}
               alt={nftTitle}
               className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
+              onLoad={() => {
+                // Additional on-load handler just to be safe
+                if (!imageState.loaded) {
+                  setImageState(prev => ({ ...prev, loaded: true, isLoading: false }));
+                }
+              }}
+              onError={() => {
+                // Additional on-error handler just to be safe
+                if (!imageState.error) {
+                  setImageState(prev => ({ ...prev, error: true, isLoading: false }));
+                }
+              }}
             />
           )}
           {imageState.isLoading && !imageState.error && (
-            <div className="nft-image-placeholder">Loading...</div>
+            <div className="nft-image-placeholder">
+              Loading image...
+            </div>
           )}
           {imageState.error && (
-            <div className="nft-image-error">Failed to load</div>
+            <div className="nft-image-error">
+              Image failed to load
+            </div>
           )}
         </div>
         <div className="nft-info">
