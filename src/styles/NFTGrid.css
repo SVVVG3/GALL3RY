@@ -1,14 +1,14 @@
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 16px;
   width: 100%;
   margin: 10px auto;
-  max-width: 760px; /* Further reduce width for MacBook Air */
+  max-width: 760px;
   box-sizing: border-box;
   padding: 0 10px;
-  will-change: transform; /* Optimize for GPU acceleration */
-  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+  will-change: transform;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Item wrapper with minimal dimensions */
@@ -16,7 +16,7 @@
   width: 100%;
   padding: 0;
   box-sizing: border-box;
-  aspect-ratio: 1 / 1.15; /* Slightly taller to fit info */
+  aspect-ratio: 1 / 1.15;
   max-width: 100%;
 }
 
@@ -27,15 +27,15 @@
   min-height: 200px;
   margin: 0 auto;
   position: relative;
-  max-width: 780px; /* Match grid + padding */
+  max-width: 780px;
   padding: 0;
-  overflow-x: hidden;
+  overflow-x: hidden !important; /* Force no horizontal overflow */
 }
 
 /* Force exactly 4 columns on MacBook Air */
 @media (min-width: 1280px) and (max-width: 1440px) {
   .nft-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     max-width: 760px;
     gap: 16px;
   }
@@ -48,7 +48,7 @@
 /* 4 columns for other desktop sizes */
 @media (min-width: 900px) and (max-width: 1279px) {
   .nft-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     max-width: 760px;
     gap: 12px;
   }
@@ -61,15 +61,15 @@
 /* 5 columns for very large screens */
 @media (min-width: 1600px) {
   .nft-grid {
-    grid-template-columns: repeat(5, 1fr);
-    max-width: 1100px; /* Wider but still constrained */
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    max-width: 1100px;
   }
 }
 
 /* 3 columns for smaller screens/tablets */
 @media (min-width: 600px) and (max-width: 899px) {
   .nft-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
     max-width: 700px;
   }
@@ -78,17 +78,17 @@
 /* 2 columns for mobile landscape */
 @media (min-width: 481px) and (max-width: 599px) {
   .nft-grid {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 10px;
     max-width: 450px;
     padding: 0 10px;
   }
 }
 
-/* 1 column for mobile portrait */
+/* At least 2 columns for mobile portrait */
 @media (max-width: 480px) {
   .nft-grid {
-    grid-template-columns: repeat(1, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 12px;
     max-width: 280px;
     padding: 0 8px;
@@ -252,6 +252,7 @@
     width: 100%;
     height: auto;
     max-width: 100%;
+    overflow-x: hidden !important;
   }
   
   .nft-item-wrapper {

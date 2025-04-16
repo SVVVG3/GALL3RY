@@ -174,39 +174,6 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
     }));
   }, []);
   
-  // Grid cell renderer - only renders what's visible
-  const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
-    const { items, columnCount } = data;
-    const index = rowIndex * columnCount + columnIndex;
-    
-    if (index >= items.length) {
-      return <div style={style} />;
-    }
-    
-    const nft = items[index];
-    
-    // Use less padding to maximize card size
-    const enhancedStyle = {
-      ...style,
-      padding: '8px',
-      boxSizing: 'border-box',
-      width: style.width,
-      height: style.height
-    };
-    
-    return (
-      <div style={enhancedStyle}>
-        <div className="nft-item" style={{ width: '100%', height: '100%' }}>
-          <NFTCard 
-            nft={nft} 
-            onLoad={handleImageSuccess} 
-            onError={handleImageError}
-          />
-        </div>
-      </div>
-    );
-  }, [handleImageSuccess, handleImageError]);
-  
   // If loading, show a loading spinner instead of "No NFTs" message
   if (isLoading) {
     return (
@@ -226,7 +193,7 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
     );
   }
   
-  // Render the virtualized grid
+  // Render the standard responsive grid layout
   return (
     <div className="virtualized-grid-container">
       <div className="nft-grid">
