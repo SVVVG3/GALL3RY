@@ -19,8 +19,14 @@ const NFTCard = React.memo(({ nft }) => {
   // Get image URL - make sure we get a string URL, not an object
   const rawImageUrl = getImageUrl(nft);
   
-  // Only use the proxy if we have a valid string URL
-  const imageUrl = !useDirectUrl && rawImageUrl && typeof rawImageUrl === 'string'
+  // Determine if we should use the image proxy
+  // Skip proxy for Alchemy and Cloudinary URLs which are already cached/proxied
+  const isAlchemyCdn = typeof rawImageUrl === 'string' && 
+    (rawImageUrl.includes('nft-cdn.alchemy.com') || 
+     rawImageUrl.includes('res.cloudinary.com'));
+  
+  // Either use the direct URL for Alchemy CDN, or proxy for other sources
+  const imageUrl = (!useDirectUrl && !isAlchemyCdn && rawImageUrl && typeof rawImageUrl === 'string')
     ? `/api/image-proxy?url=${encodeURIComponent(rawImageUrl)}`
     : rawImageUrl;
   
@@ -30,9 +36,10 @@ const NFTCard = React.memo(({ nft }) => {
       title,
       rawImageUrl,
       imageUrl,
+      isAlchemyCdn,
       useDirectUrl
     });
-  }, [title, rawImageUrl, imageUrl, useDirectUrl]);
+  }, [title, rawImageUrl, imageUrl, isAlchemyCdn, useDirectUrl]);
   
   const handleImageLoad = () => {
     setImageLoaded(true);
@@ -50,10 +57,11 @@ const NFTCard = React.memo(({ nft }) => {
     }
   };
   
+  // Use a data URI for the fallback instead of placeholder.com to avoid certificate issues
+  const fallbackImage = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='24' text-anchor='middle' dominant-baseline='middle' fill='%23999'%3E${encodeURIComponent(title || 'NFT')}%3C/text%3E%3C/svg%3E`;
+  
   // Don't try to render with invalid image URL
-  const validImageUrl = typeof imageUrl === 'string' ? 
-    imageUrl : 
-    `https://via.placeholder.com/300?text=${encodeURIComponent(title || 'NFT')}`;
+  const validImageUrl = typeof imageUrl === 'string' ? imageUrl : fallbackImage;
   
   return (
     <div className="nft-item-wrapper-fallback">
@@ -74,6 +82,7 @@ const NFTCard = React.memo(({ nft }) => {
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 loading="lazy"
+                crossOrigin="anonymous"
               />
             )}
           </div>
@@ -167,6 +176,24 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
 const getImageUrl = (nft) => {
   if (!nft) return '';
   
+  // Special case for NFTs with rawImageUrl as an object (common in Alchemy responses)
+  if (typeof nft.rawImageUrl === 'object' && nft.rawImageUrl !== null) {
+    const imgObj = nft.rawImageUrl;
+    
+    // Prioritize Alchemy CDN URLs which are more reliable
+    if (imgObj.cachedUrl) return imgObj.cachedUrl;
+    if (imgObj.thumbnailUrl) return imgObj.thumbnailUrl;
+    if (imgObj.pngUrl) return imgObj.pngUrl;
+    if (imgObj.originalUrl) return imgObj.originalUrl;
+    
+    // If we have a content type but no URLs, log for debugging
+    if (imgObj.contentType) {
+      console.log('Image object has content type but no URLs:', imgObj.contentType);
+    }
+    
+    return ''; // No valid URL found in the object
+  }
+  
   // Check if the image is already a complex object with multiple URL options
   if (nft.media?.[0] && typeof nft.media[0] === 'object') {
     const mediaObj = nft.media[0];
@@ -184,16 +211,6 @@ const getImageUrl = (nft) => {
       }
       return rawUrl;
     }
-  }
-  
-  // For cases where rawImageUrl might be an object itself 
-  if (typeof nft.rawImageUrl === 'object' && nft.rawImageUrl !== null) {
-    const imgObj = nft.rawImageUrl;
-    if (imgObj.cachedUrl) return imgObj.cachedUrl;
-    if (imgObj.thumbnailUrl) return imgObj.thumbnailUrl;
-    if (imgObj.pngUrl) return imgObj.pngUrl;
-    if (imgObj.originalUrl) return imgObj.originalUrl;
-    return ''; // No valid URL found in the object
   }
   
   // Try Alchemy v3 format first (preferred)
@@ -263,13 +280,7 @@ const getImageUrl = (nft) => {
     return `https://api.opensea.io/api/v1/asset/${contractAddress}/${tokenId}/image`;
   }
   
-  // Fallback to a placeholder with the token ID if available
-  if (tokenId) {
-    return `https://via.placeholder.com/300?text=NFT+%23${tokenId}`;
-  }
-  
-  // Default placeholder
-  return 'https://via.placeholder.com/300?text=No+Image';
+  return ''; // No valid image URL found
 };
 
 const getNftTitle = (nft) => {
