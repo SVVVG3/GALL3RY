@@ -155,6 +155,9 @@ export const NFTProvider = ({ children }) => {
     fetchNFTsForMultipleAddresses,
     loadMoreNFTs,
     resetState,
+    
+    // Alias for backward compatibility with other components
+    fetchAllNFTsForWallets: fetchNFTsForMultipleAddresses
   };
   
   return (
