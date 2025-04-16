@@ -4,7 +4,7 @@
   gap: 16px;
   width: 100%;
   margin: 10px auto;
-  max-width: 760px;
+  max-width: 100%;
   box-sizing: border-box;
   padding: 0 10px;
   will-change: transform;
@@ -16,7 +16,7 @@
   width: 100%;
   padding: 0;
   box-sizing: border-box;
-  aspect-ratio: 1 / 1.15;
+  aspect-ratio: 1 / 1.25;
   max-width: 100%;
 }
 
@@ -27,129 +27,47 @@
   min-height: 200px;
   margin: 0 auto;
   position: relative;
-  max-width: 780px;
+  max-width: 100%;
   padding: 0;
-  overflow-x: hidden !important; /* Force no horizontal overflow */
+  overflow-x: hidden !important;
 }
 
-/* Force exactly 4 columns on MacBook Air */
-@media (min-width: 1280px) and (max-width: 1440px) {
-  .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    max-width: 760px;
-    gap: 16px;
-  }
-  
-  .nft-item-wrapper {
-    max-width: 170px;
-  }
-}
-
-/* 4 columns for other desktop sizes */
-@media (min-width: 900px) and (max-width: 1279px) {
-  .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    max-width: 760px;
-    gap: 12px;
-  }
-  
-  .nft-item-wrapper {
-    max-width: 160px;
-  }
-}
-
-/* 5 columns for very large screens */
+/* Responsive column setup */
 @media (min-width: 1600px) {
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    max-width: 1100px;
   }
 }
 
-/* 3 columns for smaller screens/tablets */
+@media (min-width: 1280px) and (max-width: 1599px) {
+  .nft-grid {
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1279px) {
+  .nft-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+}
+
 @media (min-width: 600px) and (max-width: 899px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-    max-width: 700px;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
 }
 
-/* 2 columns for mobile landscape */
 @media (min-width: 481px) and (max-width: 599px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 10px;
-    max-width: 450px;
-    padding: 0 10px;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   }
 }
 
-/* At least 2 columns for mobile portrait */
 @media (max-width: 480px) {
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 12px;
-    max-width: 280px;
-    padding: 0 8px;
-  }
-  
-  .nft-item {
-    max-width: 100%;
-    margin: 0 auto;
   }
 }
-
-@media (max-width: 768px) {
-  .virtualized-grid-container {
-    width: 100%;
-    height: auto;
-    max-width: 100%;
-    overflow-x: hidden !important;
-  }
-  
-  .nft-item-wrapper {
-    aspect-ratio: 1 / 1.2; /* Increased to accommodate larger info section */
-  }
-  
-  .nft-image {
-    height: 65%; /* Reduced height to give more space to info on mobile */
-  }
-  
-  .nft-info {
-    padding: 6px 8px;
-    height: 35%; /* Increased height for info section */
-    min-height: 50px; /* Ensure minimum height */
-  }
-  
-  .nft-name {
-    font-size: 11px;
-    margin-bottom: 3px;
-  }
-  
-  .nft-collection {
-    font-size: 10px;
-    margin-bottom: 3px;
-  }
-  
-  .nft-metadata {
-    margin-top: 1px;
-  }
-  
-  .nft-network-badge {
-    font-size: 8px;
-    padding: 1px 4px;
-  }
-}
-
-/* Responsive layout for tablets and phones handled by media queries above */
-/* Removing this conflicting query that overrides the more specific rules:
-@media (max-width: 900px) {
-  .nft-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-} 
-*/ 
 
 .nft-item {
   border-radius: 8px;
@@ -161,7 +79,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  contain: content; /* Improve performance by containing element effects */
+  contain: content;
 }
 
 .nft-item:hover {
@@ -183,7 +101,7 @@
 .nft-image {
   position: relative;
   width: 100%;
-  height: 70%; /* Reduced from 75% to 70% to give more space to info */
+  height: 65%;
   overflow: hidden;
   background-color: #f5f5f5;
   flex-shrink: 0;
@@ -194,10 +112,10 @@
 .nft-image object {
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Back to contain for visibility */
+  object-fit: cover;
   object-position: center;
   background-color: #f5f5f5;
-  display: block; /* Remove any extra space */
+  display: block;
 }
 
 .nft-image img:hover {
@@ -207,19 +125,22 @@
 
 /* Expanded info section */
 .nft-info {
-  padding: 8px 10px; /* Increased padding */
-  height: 30%; /* Increased from 25% to 30% */
+  padding: 8px 10px;
+  height: 35%;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   background-color: white;
   overflow: hidden;
-  font-size: 11px; /* Slightly larger base font */
+  font-size: 11px;
+  flex-grow: 1;
 }
 
+/* Make sure text is clearly visible */
 .nft-name {
-  font-size: 12px; /* Increased from 11px */
+  font-size: 12px;
   font-weight: 600;
-  margin: 0 0 4px; /* Increased bottom margin */
+  margin: 0 0 3px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -227,9 +148,9 @@
 }
 
 .nft-collection {
-  font-size: 11px; /* Increased from 10px */
+  font-size: 11px;
   color: #666;
-  margin: 0 0 4px; /* Increased bottom margin */
+  margin: 0 0 4px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,7 +162,7 @@
   align-items: center;
   margin-top: 2px;
   padding-top: 2px;
-  font-size: 10px; /* Increased from 9px */
+  font-size: 10px;
 }
 
 .nft-price-container {
@@ -252,13 +173,13 @@
 
 .nft-price {
   margin: 0;
-  font-size: 11px; /* Increased from 9px */
+  font-size: 11px;
   font-weight: 600;
   color: #0066cc;
 }
 
 .nft-price-label {
-  font-size: 9px; /* Increased from 8px */
+  font-size: 9px;
   color: #888;
   font-weight: normal;
 }
@@ -271,7 +192,7 @@
   border-radius: 3px;
   color: white;
   font-weight: 600;
-  margin-left: auto; /* Push to the right */
+  margin-left: auto;
 }
 
 .nft-type {
@@ -312,4 +233,47 @@
   color: #666;
   width: 100%;
   margin: 0 auto;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .nft-item-wrapper {
+    aspect-ratio: 1 / 1.25;
+  }
+  
+  .nft-image {
+    height: 65%;
+  }
+  
+  .nft-info {
+    height: 35%;
+    min-height: 60px;
+  }
+  
+  .nft-name {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+  
+  .nft-collection {
+    font-size: 10px;
+    margin-bottom: 3px;
+  }
+  
+  .nft-metadata {
+    margin-top: 1px;
+  }
+  
+  .nft-network-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+  }
+}
+
+/* Removing this conflicting query that overrides the more specific rules:
+@media (max-width: 900px) {
+  .nft-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 } 
+*/ 
