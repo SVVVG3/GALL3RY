@@ -488,7 +488,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             <div className="nft-header">
               <div className="nft-header-left">
                 <p className="nft-count">
-                  <span role="img" aria-label="NFT collection">🖼️</span> Found {userNfts.length} NFTs
+                  Found {userNfts.length} NFTs
                 </p>
               </div>
               

@@ -23,12 +23,29 @@
 @media (min-width: 481px) and (max-width: 767px) {
   .nft-grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  .nft-image {
+    aspect-ratio: 1 / 1;
   }
 }
 
 @media (max-width: 480px) {
   .nft-grid {
     grid-template-columns: repeat(1, 1fr);
+    gap: 16px;
+  }
+  
+  .nft-image {
+    aspect-ratio: 1 / 1;
+    max-height: 300px;
+  }
+  
+  .nft-item {
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
   }
 }
 
@@ -165,14 +182,16 @@
   }
   
   .nft-info {
-    padding: 12px;
+    padding: 14px;
   }
   
   .nft-name {
-    font-size: 14px;
+    font-size: 15px;
+    margin-bottom: 6px;
   }
   
   .nft-collection {
-    font-size: 12px;
+    font-size: 13px;
+    margin-bottom: 6px;
   }
 } 

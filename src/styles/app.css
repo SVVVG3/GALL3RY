@@ -152,16 +152,26 @@ a:hover {
 }
 
 .app-footer {
-  background-color: #f3f4f6;
-  padding: 2rem 0;
+  background-color: #f9fafb;
+  padding: 20px 0;
   border-top: 1px solid #e5e7eb;
-  margin-top: 3rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
 }
 
-.app-footer p {
-  color: #6b7280;
-  font-size: 0.875rem;
+.app-footer .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px;
   text-align: center;
+}
+
+.app-footer p, .app-footer span {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.9rem;
 }
 
 /* Home Page Styles */
