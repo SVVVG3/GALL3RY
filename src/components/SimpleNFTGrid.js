@@ -163,9 +163,7 @@ const getImageUrl = (nft) => {
   
   // Use a fallback placeholder if no image found
   if (!imageUrl) {
-    // Use absolute path for placeholder - ensure it works across all environments
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    imageUrl = `${origin}/placeholder.png`;
+    imageUrl = `/placeholder.png`; // Use relative path that works on both dev/prod
     console.log('Using fallback placeholder - no image URL found');
     return imageUrl;
   }
@@ -173,7 +171,7 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Use Cloudflare IPFS gateway which tends to be more reliable
+    // Use public IPFS gateway that generally works well
     imageUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
     console.log('Converted IPFS URL:', imageUrl);
   }
@@ -191,54 +189,32 @@ const getImageUrl = (nft) => {
   }
   
   // Special handling for NFT CDN URLs 
-  if (imageUrl && (
-      imageUrl.includes('nft-cdn.alchemy.com/') ||
-      imageUrl.includes('res.cloudinary.com/')
-    ) && !imageUrl.includes('?') && !imageUrl.endsWith('.jpg') && 
-       !imageUrl.endsWith('.png') && !imageUrl.endsWith('.webp') && 
-       !imageUrl.endsWith('.gif')) {
-    
-    // Store the original URL for fallbacks
-    const originalUrl = imageUrl;
-    
-    // For Alchemy CDN, we need to add the format
-    if (imageUrl.includes('nft-cdn.alchemy.com/')) {
-      // First try jpg - often more compatible
-      imageUrl = `${originalUrl}/original.jpg`;
+  if (imageUrl && imageUrl.includes('nft-cdn.alchemy.com')) {
+    // Add format if needed
+    if (!imageUrl.endsWith('.jpg') && !imageUrl.endsWith('.png') && 
+        !imageUrl.endsWith('.webp') && !imageUrl.endsWith('.gif') && 
+        !imageUrl.includes('?')) {
+      imageUrl = `${imageUrl}/original.jpg`;
     }
     
-    console.log('Formatted NFT CDN URL:', imageUrl);
+    // IMPORTANT: For Alchemy CDN URLs, we don't try to proxy - use direct with proper headers
+    console.log('Using direct Alchemy CDN URL:', imageUrl);
+    return imageUrl; // Return directly
   }
   
-  // IMPORTANT: Proxy problematic URLs to avoid CORS issues
-  // Modified approach: Try direct access for some URLs that should work without proxy
+  // IPFS URLs and other problematic URLs need proxying
   if (imageUrl.includes('/ipfs/') || 
       imageUrl.includes('ipfs.io') || 
-      imageUrl.includes('cloudflare-ipfs.com') || 
       imageUrl.includes('gateway.pinata.cloud') || 
       imageUrl.includes('ipfs.infura.io') || 
-      imageUrl.includes('ipfs.fleek.co')) {
+      imageUrl.includes('ipfs.fleek.co') ||
+      imageUrl.includes('i.seadn.io')) {
     
-    // IPFS URLs always need proxy
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-    console.log('Using image proxy for IPFS URL:', imageUrl, '->', proxyUrl);
-    return proxyUrl;
-  }
-  else if (imageUrl.includes('i.seadn.io')) {
-    // OpenSea URLs need proxy
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-    console.log('Using image proxy for OpenSea URL:', imageUrl, '->', proxyUrl);
-    return proxyUrl;
-  }
-  // Try direct access for Alchemy CDN URLs which generally have good CORS support
-  else if (imageUrl.includes('nft-cdn.alchemy.com')) {
-    // Try direct first - Alchemy has proper CORS headers
-    console.log('Using direct Alchemy CDN URL:', imageUrl);
+    // For IPFS and OpenSea URLs - try direct access first as most current browsers handle CORS
     return imageUrl;
   }
   
+  // Default - return the URL directly
   return imageUrl;
 };
 
@@ -277,34 +253,10 @@ const NFTCard = ({ nft }) => {
   const generateFallbackUrls = useCallback((baseUrl) => {
     if (!baseUrl) return [];
     
-    // Get origin for absolute URL paths
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    let urls = [baseUrl]; // Always start with the original URL
+    let urls = [baseUrl]; // Start with the original URL
     
-    // If this is already a proxied URL, don't add more fallbacks
-    if (baseUrl.includes('/api/image-proxy')) {
-      // But do add the placeholder as a final fallback
-      urls.push(`${origin}/placeholder.png`);
-      return urls;
-    }
-    
-    // For Alchemy CDN URLs, try different formats
-    if (baseUrl.includes('nft-cdn.alchemy.com/') && !baseUrl.includes('original.')) {
-      const baseWithoutExt = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-      urls.push(
-        `${baseWithoutExt}/original.jpg`,  // Try JPG first (most compatible)
-        `${baseWithoutExt}/original.png`   // Then PNG
-      );
-    }
-    
-    // Add a proxy as fallback for non-proxy URLs
-    if (!baseUrl.includes('/api/image-proxy') && !baseUrl.startsWith(origin)) {
-      const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(baseUrl)}`;
-      urls.push(proxyUrl);
-    }
-    
-    // Always add the placeholder as a final fallback
-    urls.push(`${origin}/placeholder.png`);
+    // Add placeholder as fallback
+    urls.push('/placeholder.png');
     
     // Ensure no duplicates
     return [...new Set(urls)];
@@ -460,18 +412,13 @@ const NFTCard = ({ nft }) => {
               className={`nft-image ${imageState.loaded ? 'loaded' : 'loading'}`}
               onError={(e) => {
                 console.error(`Image load error for ${currentImageUrl}`);
-                // Set the source to empty string to prevent repeated error events
-                e.target.src = '';
-                // Don't set error state here as the useEffect fallback mechanism will handle it
-                // But we can set a placeholder immediately for better UX
-                if (typeof window !== 'undefined') {
-                  const origin = window.location.origin;
-                  e.target.src = `${origin}/placeholder.png`;
-                  e.target.className = 'nft-image fallback';
-                }
+                // Set fallback image directly
+                e.target.src = '/placeholder.png';
+                e.target.className = 'nft-image fallback';
               }}
               loading="lazy"
-              crossOrigin="anonymous"
+              crossOrigin="anonymous" 
+              referrerPolicy="no-referrer" // Add this to prevent referrer issues
             />
           )}
           {imageState.isLoading && !imageState.loaded && !imageState.error && (
@@ -482,7 +429,7 @@ const NFTCard = ({ nft }) => {
           {imageState.error && (
             <div className="nft-image-error">
               <img 
-                src={typeof window !== 'undefined' ? `${window.location.origin}/placeholder.png` : '/placeholder.png'}
+                src="/placeholder.png"
                 alt={`${nftTitle} (unavailable)`}
                 className="nft-image fallback"
               />
