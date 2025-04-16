@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
-import NFTGallery from './NFTGallery';
+import SimpleNFTGrid from './SimpleNFTGrid';
+import { FaSort } from 'react-icons/fa';
 import '../styles/FarcasterUserSearch.css';
 import '../styles/FarcasterProfile.css';
 import safeStorage from '../utils/storage';
-import SimpleNFTGrid from './SimpleNFTGrid';
 import NFTSortControls from './NFTSortControls';
 import { fetchFarcasterUser, fetchAddressesForFid } from '../services/farcasterService';
 import { fetchNftsForAddresses } from '../services/alchemyService';
