@@ -124,7 +124,7 @@
 }
 
 .profile-info {
-  padding: 2rem;
+  padding: 1.5rem 1rem; /* Reduced padding */
   background-color: var(--profile-header-bg);
   color: var(--text-color);
   width: 100%;
@@ -146,7 +146,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem; /* Reduced margin */
   width: 100%;
 }
 
@@ -155,7 +155,7 @@
   height: 120px;
   border-radius: 50%;
   overflow: hidden;
-  margin-bottom: 1rem;
+  margin: 0 auto 0.75rem; /* Center horizontally and reduce bottom margin */
   border: 4px solid white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
@@ -169,7 +169,7 @@
 .display-name {
   font-size: 2rem;
   font-weight: 700;
-  margin: 0.5rem 0;
+  margin: 0.25rem 0; /* Reduced margin */
   color: var(--heading-color);
   text-align: center;
 }
@@ -179,7 +179,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem; /* Reduced margin */
 }
 
 .username-link {
@@ -206,7 +206,7 @@
 .wallet-info {
   width: 100%;
   max-width: 350px;
-  margin: 1rem auto 0;
+  margin: 0.5rem auto 0; /* Reduced top margin */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -247,7 +247,7 @@
 .wallet-list {
   list-style-type: none;
   padding: 0;
-  margin: 12px 0 0 0;
+  margin: 8px 0 0 0; /* Reduced top margin */
   width: 100%;
 }
 
@@ -280,9 +280,10 @@
 .nft-container {
   width: 100%;
   max-width: 100%;
-  padding: 0.75rem;
+  padding: 0.5rem; /* Reduced padding */
   box-sizing: border-box;
   overflow-x: hidden;
+  margin-top: 0.5rem; /* Reduced top margin */
 }
 
 .nft-header {
@@ -291,7 +292,7 @@
   align-items: center;
   flex-wrap: nowrap;
   gap: 10px;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem; /* Reduced margin */
   padding: 0.75rem 1rem;
   background-color: #f9fafb;
   border-radius: 8px;
@@ -1600,8 +1601,8 @@
   display: flex;
   justify-content: center;
   align-items: center;
-  margin: 12px auto 8px;
-  padding: 6px 12px;
+  margin: 6px auto 6px; /* Reduced margin */
+  padding: 4px 10px; /* Reduced padding */
   background-color: #f5f7fa;
   border-radius: 8px;
   color: #333;
