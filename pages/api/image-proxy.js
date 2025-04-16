@@ -39,7 +39,6 @@ export default async function handler(req, res) {
     // Default headers for most requests
     let customHeaders = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-      'Referer': 'https://gall3ry.vercel.app/',
       'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
       'Accept-Encoding': 'gzip, deflate, br'
     };
@@ -51,9 +50,14 @@ export default async function handler(req, res) {
       console.log('Detected Alchemy CDN URL, adding special headers');
       customHeaders = {
         ...customHeaders,
-        'Cache-Control': 'no-cache',
-        'Origin': 'https://gall3ry.vercel.app'
+        'Cache-Control': 'no-cache'
       };
+      
+      // Ensure correctly formatted URL for Alchemy CDN
+      if (!proxyUrl.includes('original.') && !proxyUrl.includes('?')) {
+        proxyUrl = `${proxyUrl}/original.jpg`;
+        console.log(`Formatted Alchemy URL: ${proxyUrl}`);
+      }
     }
     
     // Handle OpenSea's seadn.io URLs specifically
@@ -61,111 +65,113 @@ export default async function handler(req, res) {
       console.log('Detected OpenSea seadn.io URL, adding special headers');
       customHeaders = {
         ...customHeaders,
-        'Origin': 'https://opensea.io',
-        'Referer': 'https://opensea.io/'
+        'Origin': 'https://opensea.io'
       };
+      
+      // Remove width parameter that might cause issues
+      if (proxyUrl.includes('w=')) {
+        proxyUrl = proxyUrl.replace(/w=\d+(&|$)/, '');
+        console.log(`Cleaned OpenSea URL: ${proxyUrl}`);
+      }
     }
     
     // Special handling for IPFS URLs
     if (proxyUrl.startsWith('ipfs://')) {
-      proxyUrl = proxyUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
-      console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
+      // Try multiple gateways instead of just one
+      const ipfsHash = proxyUrl.replace('ipfs://', '');
+      // Use Cloudflare IPFS gateway which tends to be more reliable
+      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      console.log(`Converted IPFS URL: ${proxyUrl}`);
     }
     
     // Handle ipfs links that aren't using the ipfs:// protocol
     if (proxyUrl.includes('/ipfs/')) {
-      console.log('Detected standard IPFS gateway URL');
-      // Just keep the URL as is, but add special headers
-      customHeaders = {
-        ...customHeaders,
-        'Origin': null
-      };
-    }
-    
-    // Special handling for Arweave URLs
-    if (proxyUrl.startsWith('ar://')) {
-      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
-      console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
-    }
-    
-    // Handle S3 URLs for AWS
-    if (proxyUrl.includes('amazonaws.com')) {
-      console.log('Detected AWS S3 URL, using direct access');
+      console.log('Detected IPFS gateway URL');
+      // Remove unneeded headers for IPFS gateways
       customHeaders = {
         ...customHeaders,
         'Origin': null,
         'Referer': null
       };
+      
+      // If using ipfs.io and getting errors, try cloudflare-ipfs instead
+      if (proxyUrl.includes('ipfs.io') && proxyUrl.includes('/ipfs/')) {
+        const ipfsPath = proxyUrl.split('/ipfs/')[1];
+        proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`;
+        console.log(`Switched to Cloudflare IPFS: ${proxyUrl}`);
+      }
+    }
+    
+    // Special handling for Arweave URLs
+    if (proxyUrl.startsWith('ar://')) {
+      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Converted Arweave URL: ${proxyUrl}`);
+    }
+    
+    // Handle metadata URLs for NFT projects
+    if (proxyUrl.includes('metadata.goonzworld.com')) {
+      console.log('Detected Goonz metadata URL, adding special handling');
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null,
+        'Referer': null,
+        'Accept': '*/*'
+      };
     }
     
     console.log(`Fetching from final URL: ${proxyUrl}`);
     
-    // Fetch the image with retries
-    let response;
-    let retries = 0;
-    const maxRetries = 2;
-    
-    while (retries <= maxRetries) {
-      try {
-        console.log(`Fetching image (attempt ${retries + 1}): ${proxyUrl}`);
-        
-        response = await axios({
-          method: 'get',
-          url: proxyUrl,
-          responseType: 'arraybuffer',
-          timeout: 10000, // 10 second timeout
-          headers: customHeaders,
-          // Allow non-2xx status codes to handle them manually
-          validateStatus: null
-        });
-        
-        // If successful, break out of retry loop
-        if (response.status >= 200 && response.status < 300) {
-          break;
-        }
-        
-        console.log(`Received status ${response.status} from ${proxyUrl}`);
-        
-        // If this is Alchemy CDN and we got an error, try an alternative URL format
-        if (proxyUrl.includes('nft-cdn.alchemy.com') && retries === 0) {
-          // Try removing any query parameters that might be causing issues
-          const urlWithoutParams = proxyUrl.split('?')[0];
-          if (urlWithoutParams !== proxyUrl) {
-            console.log(`Retrying with cleaned URL: ${urlWithoutParams}`);
-            proxyUrl = urlWithoutParams;
-            retries++;
-            continue;
-          }
-        }
-        
-        // For seadn.io URLs, try removing the w=500 parameter
-        if (proxyUrl.includes('i.seadn.io') && proxyUrl.includes('w=')) {
-          const cleanedUrl = proxyUrl.replace(/w=\d+(&|$)/, '');
-          if (cleanedUrl !== proxyUrl) {
-            console.log(`Retrying seadn.io without width parameter: ${cleanedUrl}`);
-            proxyUrl = cleanedUrl;
-            retries++;
-            continue;
-          }
-        }
-        
-        retries++;
-      } catch (retryError) {
-        console.error(`Error on attempt ${retries + 1}:`, retryError.message);
-        retries++;
-        
-        // If we've exhausted retries, propagate the error
-        if (retries > maxRetries) {
-          throw retryError;
-        }
-      }
-    }
-    
-    // Check for non-successful status after all retries
-    if (!response || response.status >= 400) {
-      console.error(`Source returned error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+    try {
+      // Simpler fetch with fewer retries but better error handling
+      const response = await axios({
+        method: 'get',
+        url: proxyUrl,
+        responseType: 'arraybuffer',
+        timeout: 15000, // 15 second timeout
+        headers: customHeaders,
+        validateStatus: null, // Allow any status code to handle it ourselves
+        maxContentLength: 10 * 1024 * 1024, // 10MB max size
+        maxRedirects: 5
+      });
       
-      // Create a simple SVG placeholder instead of returning JSON
+      // Handle errors more gracefully
+      if (!response || response.status >= 400) {
+        console.error(`Error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+        
+        // Return a placeholder image with proper headers
+        const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+          <rect width="200" height="200" fill="#f0f0f0"/>
+          <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        </svg>`);
+        
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        return res.send(placeholderSvg);
+      }
+      
+      // Set content type from response or guess from URL
+      const contentType = response.headers['content-type'];
+      if (contentType) {
+        res.setHeader('Content-Type', contentType);
+      } else {
+        // Try to guess content type from URL
+        if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
+        else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
+        else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
+        else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
+        else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
+        else res.setHeader('Content-Type', 'application/octet-stream');
+      }
+      
+      // Set cache headers
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+      
+      // Return the image data
+      return res.send(response.data);
+    } catch (fetchError) {
+      console.error(`Error fetching ${proxyUrl}:`, fetchError.message);
+      
+      // Return a placeholder SVG image
       const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f0f0f0"/>
         <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
@@ -175,36 +181,18 @@ export default async function handler(req, res) {
       res.setHeader('Cache-Control', 'public, max-age=3600'); 
       return res.send(placeholderSvg);
     }
-    
-    // Set content type from response
-    const contentType = response.headers['content-type'];
-    if (contentType) {
-      res.setHeader('Content-Type', contentType);
-    } else {
-      // Try to guess content type from URL
-      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
-      else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
-      else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
-      else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
-      else res.setHeader('Content-Type', 'application/octet-stream');
-    }
-    
-    // Set cache headers for better performance
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-    
-    // Return the image data
-    return res.send(response.data);
   } catch (error) {
-    console.error(`Error proxying image (${url}):`, error.message);
+    console.error(`Error in image proxy for ${req.query.url}:`, error.message);
     
-    // Return a placeholder SVG image instead of JSON
+    // Return a placeholder SVG image with error details
+    const errorMessage = error.message.substring(0, 30);
     const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
       <rect width="200" height="200" fill="#f0f0f0"/>
-      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image error: ${errorMessage}...</text>
     </svg>`);
     
     res.setHeader('Content-Type', 'image/svg+xml');
-    res.setHeader('Cache-Control', 'public, max-age=3600'); 
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.send(placeholderSvg);
   }
 } 

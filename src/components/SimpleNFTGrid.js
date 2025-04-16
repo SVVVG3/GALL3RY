@@ -456,21 +456,30 @@ const NFTCard = ({ nft }) => {
     <div className="nft-card-container">
       <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link">
         <div className="nft-image-container">
-          {currentImageUrl && !imageState.error && (
+          {!imageState.error && (
             <img
               src={currentImageUrl}
               alt={nftTitle}
-              className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
+              className={`nft-image ${imageState.loaded ? 'loaded' : 'loading'}`}
+              onError={(e) => {
+                console.error(`Image load error for ${currentImageUrl}`);
+                // Don't set error state here as the useEffect fallback mechanism will handle it
+              }}
+              loading="lazy"
             />
           )}
-          {imageState.isLoading && !imageState.error && (
+          {imageState.isLoading && !imageState.loaded && !imageState.error && (
             <div className="nft-image-placeholder">
               Loading image...
             </div>
           )}
           {imageState.error && (
             <div className="nft-image-error">
-              Image failed to load
+              <img 
+                src="/placeholder.png" 
+                alt={`${nftTitle} (unavailable)`}
+                className="nft-image fallback"
+              />
             </div>
           )}
         </div>
