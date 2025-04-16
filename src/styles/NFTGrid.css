@@ -1,41 +1,46 @@
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); /* Force exactly 4 columns */
-  gap: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   width: 100%;
-  margin: 10px auto; /* Center grid */
-  max-width: 1000px; /* Ensure it fits without scrolling */
+  margin: 10px auto;
+  max-width: 800px; /* Reduce max width */
   box-sizing: border-box;
-  padding: 0 12px;
+  padding: 0 8px;
   will-change: transform; /* Optimize for GPU acceleration */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
+/* Item wrapper with minimal dimensions */
 .nft-item-wrapper {
   width: 100%;
   padding: 0;
   box-sizing: border-box;
-  aspect-ratio: 1 / 1.1; /* Much shorter cards */
+  aspect-ratio: 1; /* Square cards */
   max-width: 100%;
 }
 
-/* Virtualized grid container */
+/* Absolutely constrain container width */
 .virtualized-grid-container {
   width: 100%;
   height: auto;
   min-height: 200px;
   margin: 0 auto;
   position: relative;
-  max-width: 1200px; /* Limit maximum width */
+  max-width: 840px; /* Match grid + padding */
   padding: 0;
   overflow-x: hidden;
 }
 
-/* Force exactly 4 columns on most common desktop sizes */
-@media (min-width: 900px) and (max-width: 1599px) {
+/* Force exactly 4 columns on desktop */
+@media (min-width: 900px) {
   .nft-grid {
     grid-template-columns: repeat(4, 1fr);
-    max-width: 900px; /* Constrain width based on screen size */
+    max-width: 800px;
+  }
+  
+  .nft-item-wrapper {
+    max-width: 180px; /* Force small fixed width */
   }
 }
 
@@ -113,25 +118,22 @@
 .nft-image {
   position: relative;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  aspect-ratio: 1; /* Square aspect ratio */
   overflow: hidden;
   background-color: #f5f5f5;
+  max-height: 180px; /* Limit height */
   flex-shrink: 0;
 }
 
 .nft-image img, 
 .nft-image video,
 .nft-image object {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover; /* Cover to fill the space */
+  object-fit: contain; /* Back to contain for visibility */
   object-position: center;
   background-color: #f5f5f5;
-  backface-visibility: hidden; /* Prevent flickering during transitions */
-  transform: translateZ(0); /* Force GPU rendering */
+  display: block; /* Remove any extra space */
 }
 
 .nft-image img:hover {
@@ -139,13 +141,16 @@
   transition: transform 0.3s ease;
 }
 
+/* Minimal info section */
 .nft-info {
-  padding: 8px;
+  padding: 6px;
   flex-grow: 0;
   display: flex;
   flex-direction: column;
   background-color: white;
-  min-height: 50px; /* Much smaller info section */
+  min-height: 40px; /* Shorter info area */
+  max-height: 60px; /* Limit max height */
+  overflow: hidden;
 }
 
 .nft-name {

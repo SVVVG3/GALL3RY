@@ -3,9 +3,9 @@
   flex-direction: column;
   gap: 24px;
   width: 100%;
-  max-width: 100%;
+  max-width: 840px;
   margin: 0 auto;
-  padding: 10px 20px;
+  padding: 10px;
   font-family: Arial, sans-serif;
   box-sizing: border-box;
   overflow-x: hidden;

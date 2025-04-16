@@ -108,10 +108,10 @@
   border: 1px solid var(--color-error);
 }
 
-/* User profile section */
+/* User profile section with strict width constraints */
 .user-profile {
   width: 100%;
-  max-width: 1200px;
+  max-width: 840px; /* Match grid container width */
   margin: 0 auto;
   background-color: var(--component-bg);
   border-radius: 12px;
@@ -276,9 +276,11 @@
   text-decoration: underline;
 }
 
+/* NFT container with matching constraints */
 .nft-container {
   width: 100%;
-  padding: 1rem;
+  max-width: 100%;
+  padding: 0.75rem;
   box-sizing: border-box;
   overflow-x: hidden;
 }
@@ -331,12 +333,10 @@
   text-decoration: underline;
 }
 
-/* NFT display */
+/* NFT display area */
 .nft-display {
   width: 100%;
-  margin-top: 1rem;
-  min-height: 200px;
-  height: auto;
+  margin: 0 auto;
   position: relative;
   overflow: visible;
 }
