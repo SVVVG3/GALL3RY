@@ -72,6 +72,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const [sortBy, setSortBy] = useState('recent');
   const [sortOrder, setSortOrder] = useState('desc');
   
+  // Add state for NFT filtering
+  const [nftSearchQuery, setNftSearchQuery] = useState('');
+  
   // Get sorted NFTs
   const sortedNfts = useCallback(() => {
     if (!userNfts || userNfts.length === 0) return [];
@@ -125,6 +128,26 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         });
     }
   }, [userNfts, sortBy, sortOrder]);
+  
+  // Function to filter NFTs by search term
+  const filterNftsBySearch = useCallback((nfts) => {
+    if (!nftSearchQuery.trim()) return nfts;
+    
+    const searchTerm = nftSearchQuery.toLowerCase();
+    return nfts.filter(nft => {
+      const name = (nft.name || nft.title || `#${nft.tokenId || '0'}`).toLowerCase();
+      const collection = ((nft.collection && nft.collection.name) || 
+                          (nft.collectionName) || 
+                          (nft.contract && nft.contract.name) || '').toLowerCase();
+      
+      return name.includes(searchTerm) || collection.includes(searchTerm);
+    });
+  }, [nftSearchQuery]);
+
+  // Apply filter to sorted NFTs
+  const filteredAndSortedNfts = useCallback(() => {
+    return filterNftsBySearch(sortedNfts());
+  }, [filterNftsBySearch, sortedNfts]);
   
   // Wrap handleSearch in useCallback to use in useEffect
   const handleSearch = useCallback(async (e) => {
@@ -453,6 +476,11 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   </a>
                   <span className="fid-display">FID: {userProfile.fid}</span>
                 </div>
+                
+                {/* NFT count between username and wallets */}
+                <div className="nft-total-count">
+                  <p>🖼️ Found {userNfts.length} NFTs</p>
+                </div>
               </div>
               <div className="wallet-info">
                 <button 
@@ -487,9 +515,24 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           <div className="nft-container">
             <div className="nft-header">
               <div className="nft-header-left">
-                <p className="nft-count">
-                  Found {userNfts.length} NFTs
-                </p>
+                <div className="nft-search-bar">
+                  <input
+                    type="text"
+                    placeholder="Search NFTs by name or collection..."
+                    value={nftSearchQuery}
+                    onChange={(e) => setNftSearchQuery(e.target.value)}
+                    className="nft-filter-input"
+                  />
+                  {nftSearchQuery && (
+                    <button 
+                      className="nft-filter-clear" 
+                      onClick={() => setNftSearchQuery('')}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
               
               {/* Add sort controls if NFTs are available */}
@@ -511,7 +554,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             ) : (
               <div className="nft-display">
                 <SimpleNFTGrid 
-                  nfts={sortedNfts()} 
+                  nfts={filteredAndSortedNfts()} 
                   isLoading={isSearching && userNfts.length === 0}
                 />
               </div>

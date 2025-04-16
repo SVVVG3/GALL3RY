@@ -1593,4 +1593,72 @@
   margin-top: 1rem;
   color: #6b7280;
   font-size: 1rem;
+}
+
+/* NFT total count styling - centered between username and wallet toggle */
+.nft-total-count {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 12px auto 8px;
+  padding: 6px 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nft-total-count p {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* NFT filter input styling - in the header section */
+.nft-search-bar {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+}
+
+.nft-filter-input {
+  width: 100%;
+  padding: 8px 14px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 14px;
+  background-color: white;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.nft-filter-input:focus {
+  outline: none;
+  border-color: #8b5cf6;
+  box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.2);
+}
+
+.nft-filter-clear {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nft-filter-clear:hover {
+  color: #333;
 } 
