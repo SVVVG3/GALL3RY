@@ -8,6 +8,7 @@ const NFTCard = React.memo(({ nft, style }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   
+  // Extract NFT data with additional logging for debugging
   const title = getNftTitle(nft);
   const collection = getCollectionName(nft);
   const floorPrice = getFloorPrice(nft);
@@ -15,6 +16,16 @@ const NFTCard = React.memo(({ nft, style }) => {
   const contractAddress = getContractAddress(nft);
   const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
   const openseaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
+  
+  // Debug log the NFT structure
+  useEffect(() => {
+    console.log('Rendering NFT card:', { 
+      title, 
+      collection, 
+      contractAddress, 
+      tokenId 
+    });
+  }, [title, collection, contractAddress, tokenId]);
   
   const handleImageLoad = () => {
     setImageLoaded(true);
@@ -24,8 +35,15 @@ const NFTCard = React.memo(({ nft, style }) => {
     setImageError(true);
   };
   
+  // Create a modified style object that ensures the card stays within its container
+  const cardStyle = {
+    ...style,
+    width: style.width ? Math.min(style.width, window.innerWidth - 40) : style.width,
+    overflow: 'hidden',
+  };
+  
   return (
-    <div className="nft-item-wrapper" style={style}>
+    <div className="nft-item-wrapper" style={cardStyle}>
       <div className="nft-item">
         <a href={openseaUrl} target="_blank" rel="noopener noreferrer" className="nft-link">
           <div className="nft-image-container">
@@ -108,9 +126,21 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
   // Calculate row count based on column count and NFT count
   const rowCount = nfts.length ? Math.ceil(nfts.length / columnCount) : 0;
   
-  // Calculate ideal cell size based on column count and container width
-  const cellWidth = dimensions.width ? Math.floor(dimensions.width / columnCount) : 250;
-  const cellHeight = Math.floor(cellWidth * 1.5); // 3:2 aspect ratio for cells
+  // Calculate ideal cell size based on container width with margins
+  const calculateCellWidth = () => {
+    if (!dimensions.width) return 250;
+    
+    // Calculate available width after accounting for margins and padding
+    const containerPadding = 20; // 10px padding on each side
+    const cellMargin = 20; // 10px margin on each side of cells
+    const availableWidth = dimensions.width - containerPadding;
+    
+    // Calculate cell width with margins
+    return Math.floor((availableWidth / columnCount) - cellMargin);
+  };
+
+  const cellWidth = calculateCellWidth();
+  const cellHeight = Math.floor(cellWidth * 1.4); // Shorter aspect ratio for better viewing
   
   // Intersection observer for infinite loading
   const loaderRef = useCallback(node => {
@@ -204,12 +234,27 @@ const getNftKey = (nft) => {
 const getImageUrl = (nft) => {
   if (!nft) return '';
   
+  // Add console log to debug what data we're getting
+  console.log('NFT data structure:', {
+    hasMedia: !!nft.media,
+    mediaLength: nft.media?.length,
+    mediaGateway: nft.media?.[0]?.gateway,
+    metadata: nft.metadata?.image,
+    image_url: nft.image_url,
+    image: nft.image,
+    tokenId: nft.tokenId || nft.id?.tokenId || nft.token_id
+  });
+  
   // Try various possible image locations in NFT metadata
   if (nft.media && nft.media.length > 0 && nft.media[0].gateway) {
     return nft.media[0].gateway;
   }
   
   if (nft.metadata && nft.metadata.image) {
+    // Handle IPFS URLs in metadata.image
+    if (typeof nft.metadata.image === 'string' && nft.metadata.image.startsWith('ipfs://')) {
+      return nft.metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    }
     return nft.metadata.image;
   }
   
@@ -221,12 +266,17 @@ const getImageUrl = (nft) => {
     return nft.image;
   }
   
-  // For IPFS URLs, make sure they're properly formatted
-  if (nft.metadata && nft.metadata.image && nft.metadata.image.startsWith('ipfs://')) {
-    return nft.metadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+  // Additional fallbacks for different API formats
+  if (nft.rawMetadata && nft.rawMetadata.image) {
+    // Handle IPFS URLs in rawMetadata.image
+    if (typeof nft.rawMetadata.image === 'string' && nft.rawMetadata.image.startsWith('ipfs://')) {
+      return nft.rawMetadata.image.replace('ipfs://', 'https://ipfs.io/ipfs/');
+    }
+    return nft.rawMetadata.image;
   }
   
-  return '';
+  // Fallback to a placeholder image if nothing found
+  return 'https://via.placeholder.com/300?text=No+Image';
 };
 
 const getNftTitle = (nft) => {

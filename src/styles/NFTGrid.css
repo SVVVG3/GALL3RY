@@ -17,6 +17,9 @@
 .nft-item-wrapper {
   padding: 10px;
   box-sizing: border-box;
+  width: 100% !important; /* Force width to stay within container */
+  max-width: 100%;
+  overflow: hidden; /* Prevent overflow */
 }
 
 .nft-item {
@@ -247,12 +250,16 @@
   min-height: 500px;
   position: relative;
   margin: 0 auto;
+  overflow-x: hidden; /* Prevent horizontal scrolling */
+  box-sizing: border-box;
+  padding: 0 10px; /* Add padding to keep items from touching the edge */
 }
 
 .virtualized-grid {
   width: 100%;
   height: 100%;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden; /* Prevent horizontal scrolling */
 }
 
 .nft-card {
