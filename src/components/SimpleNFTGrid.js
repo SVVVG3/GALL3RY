@@ -1,94 +1,126 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import '../styles/NFTGrid.css';
 
-// NFT Card Component
-const NFTCard = React.memo(({ nft }) => {
+/**
+ * Get a safe image URL from the NFT data
+ * @param {Object} nft - The NFT data object
+ * @returns {string} - A valid image URL or empty string if none found
+ */
+const getImageUrl = (nft) => {
+  if (!nft) return '';
+  
+  let imageUrl = '';
+  
+  // Check for image in metadata
+  if (nft.metadata) {
+    try {
+      // If metadata is a string, try to parse it as JSON
+      const metadata = typeof nft.metadata === 'string' 
+        ? JSON.parse(nft.metadata) 
+        : nft.metadata;
+        
+      imageUrl = metadata?.image || metadata?.image_url || '';
+    } catch (e) {
+      console.error('Error parsing NFT metadata', e);
+    }
+  }
+  
+  // Try direct properties (OpenSea format)
+  if (!imageUrl) {
+    imageUrl = nft.image_url || 
+               nft.image || 
+               nft.image_preview_url || 
+               nft.thumbnail || 
+               '';
+  }
+  
+  // Media field in other formats
+  if (!imageUrl && nft.media && nft.media.length > 0) {
+    const media = nft.media[0];
+    imageUrl = media.gateway || media.raw || media.thumbnail || '';
+  }
+  
+  // Ensure imageUrl is a string
+  if (typeof imageUrl !== 'string') {
+    return '';
+  }
+  
+  // Handle IPFS URLs
+  if (imageUrl && imageUrl.startsWith('ipfs://')) {
+    imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
+  }
+  
+  // Handle Arweave URLs
+  if (imageUrl && imageUrl.startsWith('ar://')) {
+    imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
+  }
+  
+  return imageUrl;
+};
+
+/**
+ * NFT Card Component
+ * Displays an individual NFT with image and metadata
+ */
+const NFTCard = React.memo(({ nft, style }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   
-  // Extract NFT data
+  const imageUrl = getImageUrl(nft);
   const title = getNftTitle(nft);
   const collection = getCollectionName(nft);
   const floorPrice = getFloorPrice(nft);
-  
   const contractAddress = getContractAddress(nft);
-  const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
-  const openseaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
+  const tokenId = getTokenId(nft);
   
-  // Get the image URL directly from the NFT data
-  let imageUrl = '';
+  // Create OpenSea URL
+  const openSeaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
   
-  // Try to get the image from media (Alchemy's standard format)
-  if (nft.media && nft.media.length > 0 && nft.media[0]) {
-    if (nft.media[0].gateway) {
-      imageUrl = nft.media[0].gateway;
-    } else if (nft.media[0].thumbnail) {
-      imageUrl = nft.media[0].thumbnail;
-    } else if (nft.media[0].raw) {
-      imageUrl = nft.media[0].raw;
-      // Handle IPFS URLs
-      if (imageUrl.startsWith('ipfs://')) {
-        imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
-      }
-    }
-  }
-  
-  // Fallbacks if no media
-  if (!imageUrl) {
-    if (nft.rawMetadata && nft.rawMetadata.image) {
-      imageUrl = nft.rawMetadata.image;
-    } else if (nft.metadata && nft.metadata.image) {
-      imageUrl = nft.metadata.image;
-    } else if (nft.image_url) {
-      imageUrl = nft.image_url;
-    } else if (nft.image) {
-      imageUrl = nft.image;
-    }
-    
-    // Handle IPFS URLs
-    if (imageUrl && imageUrl.startsWith('ipfs://')) {
-      imageUrl = imageUrl.replace('ipfs://', 'https://ipfs.io/ipfs/');
-    }
-  }
-  
+  // Handle image loading events
   const handleImageLoad = () => {
     setImageLoaded(true);
   };
   
   const handleImageError = () => {
-    console.error('Image failed to load:', imageUrl);
     setImageError(true);
   };
   
-  // Create a fallback SVG with title
-  const fallbackImage = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Crect width='300' height='300' fill='%23f0f0f0'/%3E%3Ctext x='50%25' y='50%25' font-family='Arial' font-size='16' text-anchor='middle' dominant-baseline='middle' fill='%23999'%3E${encodeURIComponent(title || 'NFT')}%3C/text%3E%3C/svg%3E`;
-  
   return (
-    <div className="nft-item-wrapper-fallback">
+    <div className="nft-item-wrapper-fallback" style={style}>
       <div className="nft-item">
-        <a href={openseaUrl} target="_blank" rel="noopener noreferrer" className="nft-link">
+        <a 
+          href={openSeaUrl} 
+          target="_blank" 
+          rel="noopener noreferrer" 
+          className="nft-link"
+        >
           <div className="nft-image-container">
             {!imageLoaded && !imageError && (
-              <div className="nft-image-placeholder">Loading...</div>
+              <div className="nft-image-placeholder">
+                <span>Loading...</span>
+              </div>
             )}
             
             {imageError ? (
-              <div className="nft-image-error">Image unavailable</div>
+              <div className="nft-image-error">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="#999999" strokeWidth="2" />
+                  <path d="M12 8v4m0 4h.01" stroke="#999999" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </div>
             ) : (
               <img
-                src={imageUrl || fallbackImage}
-                alt={title || 'NFT Image'}
+                src={imageUrl}
+                alt={title || 'NFT'}
                 className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
                 onLoad={handleImageLoad}
                 onError={handleImageError}
-                loading="lazy"
-                referrerPolicy="no-referrer"
               />
             )}
           </div>
           
           <div className="nft-info">
-            <h3 className="nft-title">{title || 'Unnamed NFT'}</h3>
+            <h3 className="nft-title">{title || 'Untitled NFT'}</h3>
             {collection && <p className="nft-collection">{collection}</p>}
             {floorPrice && <p className="nft-price">{floorPrice}</p>}
           </div>
@@ -101,78 +133,34 @@ const NFTCard = React.memo(({ nft }) => {
 /**
  * Simplified NFT Grid component 
  */
-const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
-  // Deduplicate NFTs by using a unique ID
-  const uniqueNfts = useMemo(() => {
-    if (!nfts || nfts.length === 0) return [];
-    
-    // Generate a unique key for each NFT
-    const seen = new Set();
-    const unique = [];
-    
-    nfts.forEach(nft => {
-      const key = getUniqueNftKey(nft);
-      if (!seen.has(key)) {
-        seen.add(key);
-        unique.push(nft);
-      }
-    });
-    
-    // Log the first NFT to see its structure
-    if (unique.length > 0) {
-      console.log('NFT structure sample:', JSON.stringify(unique[0]));
-    }
-    
-    return unique;
-  }, [nfts]);
-  
-  // Get a unique key for an NFT to deduplicate
-  function getUniqueNftKey(nft) {
-    const contract = getContractAddress(nft);
-    const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
-    return `${contract}-${tokenId}`;
-  }
-  
-  // Intersection observer for infinite loading
-  const loaderRef = useCallback(node => {
-    if (!node || !hasNextPage || isLoading) return;
-    
-    const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && loadMore) {
-        loadMore();
-      }
-    }, { threshold: 0.1 });
-    
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasNextPage, isLoading, loadMore]);
-  
-  // If there are no NFTs, show empty state
-  if (!uniqueNfts || uniqueNfts.length === 0) {
+const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
+  if (isLoading && (!nfts || nfts.length === 0)) {
     return (
-      <div className="nft-grid-empty">
-        {isLoading ? 
-          <div className="nft-grid-loading">Loading NFTs...</div> : 
-          <div className="nft-grid-no-results">No NFTs found</div>
-        }
+      <div className="nft-grid-loader">
+        <div className="loader"></div>
+        <p>Loading NFTs...</p>
       </div>
     );
   }
-  
-  // Render the grid
+
+  if (!nfts || nfts.length === 0) {
+    return (
+      <div className="nft-grid-empty">
+        <p className="nft-grid-no-results">No NFTs found</p>
+      </div>
+    );
+  }
+
   return (
     <div className="nft-grid-container">
       <div className="fallback-grid">
-        {uniqueNfts.map((nft) => (
-          <NFTCard key={`nft-${getUniqueNftKey(nft)}`} nft={nft} />
+        {nfts.map((nft, index) => (
+          <NFTCard 
+            key={getNftKey(nft) || index} 
+            nft={nft} 
+          />
         ))}
       </div>
-        
-      {hasNextPage && (
-        <div ref={loaderRef} className="nft-grid-loader">
-          {isLoading && <div className="loader">Loading more NFTs...</div>}
-        </div>
-      )}
     </div>
   );
 };
@@ -290,6 +278,32 @@ const getContractAddress = (nft) => {
   
   // If we can't find a contract address, return an empty string
   return '';
+};
+
+const getTokenId = (nft) => {
+  if (!nft) return '';
+  
+  if (nft.tokenId) {
+    return nft.tokenId;
+  }
+  
+  if (nft.id && nft.id.tokenId) {
+    return nft.id.tokenId;
+  }
+  
+  if (nft.token_id) {
+    return nft.token_id;
+  }
+  
+  return '';
+};
+
+const getNftKey = (nft) => {
+  if (!nft) return '';
+  
+  const contract = getContractAddress(nft);
+  const tokenId = getTokenId(nft);
+  return `${contract}-${tokenId}`;
 };
 
 export default SimpleNFTGrid; 
