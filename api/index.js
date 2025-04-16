@@ -79,9 +79,7 @@ app.post('/zapper', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Origin': 'https://zapper.xyz',
-      'Referer': 'https://zapper.xyz/'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     };
     
     // Debug request details
@@ -207,9 +205,7 @@ app.get('/farcaster-profile', async (req, res) => {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Origin': 'https://zapper.xyz',
-      'Referer': 'https://zapper.xyz/'
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     };
     
     // Make the GraphQL request to Zapper with better error handling
