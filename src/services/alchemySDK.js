@@ -11,7 +11,7 @@ import axios from 'axios';
 const apiKey = 'unused-client-side-key';
 
 // Define the base URL for the proxy endpoint
-const PROXY_URL = '/api/alchemy';
+const PROXY_URL = '/alchemy';
 
 // Configure the Alchemy SDK with improved reliability settings
 const config = {

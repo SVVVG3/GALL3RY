@@ -116,11 +116,28 @@ export const SimpleNFTProvider = ({ children }) => {
     if (!searchQuery) return nfts;
     
     const query = searchQuery.toLowerCase();
-    return nfts.filter(nft => 
-      (nft.title && nft.title.toLowerCase().includes(query)) ||
-      (nft.description && nft.description.toLowerCase().includes(query)) ||
-      (nft.contract?.name && nft.contract.name.toLowerCase().includes(query))
-    );
+    return nfts.filter(nft => {
+      // Get NFT title the same way as SimpleNFTGrid does
+      const title = nft.name || nft.title || `#${nft.tokenId || '0'}`;
+      
+      // Get collection name the same way as SimpleNFTGrid does
+      let collection = '';
+      if (nft.collection && nft.collection.name) {
+        collection = nft.collection.name;
+      } else if (nft.contract) {
+        collection = nft.contract.name || 
+          (nft.contract.openSeaMetadata?.collectionName) || 
+          (nft.contract.address ? `${nft.contract.address.slice(0, 6)}...${nft.contract.address.slice(-4)}` : '');
+      } else if (nft.contractAddress) {
+        collection = `${nft.contractAddress.slice(0, 6)}...${nft.contractAddress.slice(-4)}`;
+      }
+      
+      return (
+        title.toLowerCase().includes(query) ||
+        collection.toLowerCase().includes(query) ||
+        (nft.description && nft.description.toLowerCase().includes(query))
+      );
+    });
   }, [nfts, searchQuery]);
   
   // Context value
