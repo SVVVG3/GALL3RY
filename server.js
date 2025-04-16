@@ -832,7 +832,8 @@ app.get('/test-nft-image', async (req, res) => {
 app.use('/api', apiRouter);
 
 // Mount API routes from the imported module (replaces the apiRouter)
-app.use('/api', apiRoutes);
+// Commenting this out to prevent it from overriding our apiRouter paths
+// app.use('/api', apiRoutes);
 
 // Serve static files from the public directory with appropriate headers
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {
