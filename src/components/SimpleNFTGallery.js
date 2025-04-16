@@ -161,12 +161,12 @@ const SimpleNFTGallery = () => {
         <p>{nfts.length} NFTs found</p>
       </div>
       
-      <SimpleNFTGrid nfts={nfts} />
+      <SimpleNFTGrid nfts={nfts} isLoading={isLoading && nfts.length === 0} />
       
-      {isLoading && (
+      {isLoading && nfts.length > 0 && (
         <div className="loading-indicator">
           <div className="loading-spinner"></div>
-          <p>Loading NFTs... This may take a moment</p>
+          <p>Loading more NFTs... This may take a moment</p>
           <p className="loading-tip">Using a real Alchemy API key will improve performance</p>
         </div>
       )}

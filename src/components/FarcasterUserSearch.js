@@ -442,17 +442,17 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                   )}
                 </div>
                 <p className="display-name">{userProfile.metadata?.displayName || ''}</p>
-              </div>
-              <div className="username-container">
-                <a 
-                  href={`https://warpcast.com/${userProfile.username}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="username-link"
-                >
-                  @{userProfile.username}
-                </a>
-                <span className="fid-display">FID: {userProfile.fid}</span>
+                <div className="username-fid-container">
+                  <a 
+                    href={`https://warpcast.com/${userProfile.username}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="username-link"
+                  >
+                    @{userProfile.username}
+                  </a>
+                  <span className="fid-display">FID: {userProfile.fid}</span>
+                </div>
               </div>
               <div className="wallet-info">
                 <button 
@@ -510,13 +510,10 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               <div className="loading-spinner"></div>
             ) : (
               <div className="nft-display" style={{ height: '70vh' }}>
-                {userNfts.length > 0 ? (
-                  <SimpleNFTGrid nfts={sortedNfts()} />
-                ) : (
-                  <div className="no-nfts-message">
-                    <p>No NFTs found for this user</p>
-                  </div>
-                )}
+                <SimpleNFTGrid 
+                  nfts={sortedNfts()} 
+                  isLoading={isSearching && userNfts.length === 0}
+                />
               </div>
             )}
           </div>

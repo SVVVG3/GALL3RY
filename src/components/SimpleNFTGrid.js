@@ -135,7 +135,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
 /**
  * Optimized NFT Grid component with virtualization for better performance
  */
-const SimpleNFTGrid = ({ nfts = [] }) => {
+const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
   // Track image loading state
   const [loadedImages, setLoadedImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
@@ -207,7 +207,17 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
     );
   }, [handleImageSuccess, handleImageError]);
   
-  // If we have no NFTs, show a message
+  // If loading, show a loading spinner instead of "No NFTs" message
+  if (isLoading) {
+    return (
+      <div className="loading-spinner-container">
+        <div className="loading-spinner"></div>
+        <p>Loading NFTs...</p>
+      </div>
+    );
+  }
+  
+  // If we have no NFTs and not loading, show a message
   if (nfts.length === 0) {
     return (
       <div className="no-nfts-message">
