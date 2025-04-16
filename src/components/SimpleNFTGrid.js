@@ -12,46 +12,58 @@ const getImageUrl = (nft) => {
   
   let imageUrl = '';
   
-  // Debug the NFT structure to see what we're working with
+  // Debug the NFT structure
   console.log('Processing NFT for image:', {
     id: nft.id,
-    name: nft.name,
-    contentType: nft.image && nft.image.contentType,
+    name: nft.name || nft.title,
     hasImage: !!nft.image,
-    hasAnimationUrl: !!(nft.animation && nft.animation.cachedUrl)
+    imageType: nft.image ? typeof nft.image : 'undefined',
+    hasMetadata: !!nft.metadata,
+    hasTokenMetadata: !!(nft.tokenMetadata || nft.tokenURI),
+    hasMediaArray: !!(nft.media && Array.isArray(nft.media))
   });
   
-  // PRIORITY 1: Alchemy's cached URLs (most reliable)
-  if (nft.image) {
-    // Prefer cached and CDN URLs from Alchemy as they're most reliable
+  // PRIORITY 1: Direct image URL (if string)
+  if (typeof nft.image === 'string') {
+    imageUrl = nft.image;
+    console.log('Using direct image string:', imageUrl);
+  }
+  
+  // PRIORITY 2: Structured image object with URLs
+  else if (nft.image && typeof nft.image === 'object') {
+    // Try cached URL first (most reliable)
     if (nft.image.cachedUrl) {
       imageUrl = nft.image.cachedUrl;
-      console.log('Using Alchemy cached URL:', imageUrl);
+      console.log('Using cached URL:', imageUrl);
     } 
     // Next try thumbnail (good for performance)
     else if (nft.image.thumbnailUrl) {
       imageUrl = nft.image.thumbnailUrl;
-      console.log('Using Alchemy thumbnail URL:', imageUrl);
+      console.log('Using thumbnail URL:', imageUrl);
     }
     // For SVGs, the PNG conversion is often helpful
     else if (nft.image.pngUrl) {
       imageUrl = nft.image.pngUrl;
-      console.log('Using Alchemy PNG URL:', imageUrl);
+      console.log('Using PNG URL:', imageUrl);
     }
     // Finally try original
-    else if (nft.image.originalUrl) {
-      imageUrl = nft.image.originalUrl;
+    else if (nft.image.originalUrl || nft.image.url) {
+      imageUrl = nft.image.originalUrl || nft.image.url;
       console.log('Using original URL:', imageUrl);
     }
   }
   
-  // PRIORITY 2: Animation URLs for NFTs that are videos or GIFs
-  if (!imageUrl && nft.animation && nft.animation.cachedUrl) {
+  // PRIORITY 3: Animation URLs for NFTs that are videos or GIFs
+  if (!imageUrl && nft.animation_url) {
+    imageUrl = nft.animation_url;
+    console.log('Using animation URL:', imageUrl);
+  }
+  else if (!imageUrl && nft.animation && nft.animation.cachedUrl) {
     imageUrl = nft.animation.cachedUrl;
     console.log('Using animation cached URL:', imageUrl);
   }
   
-  // PRIORITY 3: Try media array (Alchemy format)
+  // PRIORITY 4: Try media array 
   if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
     // Try to find the best media format (gateway is usually more reliable)
     const mediaItem = nft.media.find(m => m.gateway) || 
@@ -66,20 +78,31 @@ const getImageUrl = (nft) => {
     }
   }
   
-  // PRIORITY 4: Direct image property string
-  if (!imageUrl && typeof nft.image === 'string') {
-    imageUrl = nft.image;
-    console.log('Using direct image string property:', imageUrl);
+  // PRIORITY 5: Try metadata
+  if (!imageUrl && nft.metadata) {
+    // Try image properties in metadata
+    if (nft.metadata.image) {
+      imageUrl = nft.metadata.image;
+      console.log('Found image in metadata:', imageUrl);
+    } 
+    else if (nft.metadata.image_url) {
+      imageUrl = nft.metadata.image_url;
+      console.log('Found image_url in metadata:', imageUrl);
+    }
+    else if (nft.metadata.animation_url) {
+      imageUrl = nft.metadata.animation_url;
+      console.log('Found animation_url in metadata:', imageUrl);
+    }
   }
   
-  // PRIORITY 5: Try raw metadata
+  // PRIORITY 6: Try raw metadata
   if (!imageUrl && nft.raw && nft.raw.metadata) {
     const metadata = nft.raw.metadata;
     imageUrl = metadata.image || metadata.image_url || metadata.animation_url || '';
     console.log('Found image in raw metadata:', imageUrl);
   }
   
-  // PRIORITY 6: Legacy/fallback checks
+  // PRIORITY 7: Legacy/fallback checks
   if (!imageUrl) {
     // Try other possible locations
     if (nft.rawMetadata) {
@@ -98,25 +121,24 @@ const getImageUrl = (nft) => {
     }
   }
   
-  // Check if imageUrl is an object (like in the error logs), and extract the URL from it
-  if (imageUrl && typeof imageUrl === 'object') {
-    console.log('Image URL is an object, extracting string URL:', imageUrl);
-    // Try multiple possible properties where the URL might be
-    imageUrl = imageUrl.url || imageUrl.gateway || imageUrl.originalUrl || 
-              imageUrl.thumbnailUrl || imageUrl.pngUrl || imageUrl.cachedUrl || '';
-  }
-  
   // Ensure imageUrl is a string
   if (typeof imageUrl !== 'string') {
-    console.warn('Invalid imageUrl type:', typeof imageUrl, imageUrl);
-    return '';
+    if (imageUrl && typeof imageUrl === 'object') {
+      console.log('Image URL is an object, extracting string URL:', imageUrl);
+      // Try multiple possible properties where the URL might be
+      imageUrl = imageUrl.url || imageUrl.gateway || imageUrl.originalUrl || 
+                imageUrl.thumbnailUrl || imageUrl.pngUrl || imageUrl.cachedUrl || '';
+    } else {
+      console.warn('Invalid imageUrl type:', typeof imageUrl, imageUrl);
+      imageUrl = '';
+    }
   }
   
-  // Handle IPFS URLs - be smarter about gateway selection
+  // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Start with ipfs.io as primary gateway, but our retry logic will try others
-    imageUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
+    // Try Cloudflare IPFS gateway (often more reliable)
+    imageUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
     console.log('Converted IPFS URL:', imageUrl);
   }
   
@@ -134,7 +156,7 @@ const getImageUrl = (nft) => {
   
   // Use a fallback placeholder if no image found
   if (!imageUrl) {
-    imageUrl = 'https://placehold.co/600x400/ddd/333?text=No+Image';
+    imageUrl = 'https://placehold.co/600x600/eee/999?text=No+Image';
     console.log('Using fallback placeholder - no image URL found');
   }
   
@@ -151,41 +173,74 @@ const NFTCard = ({ nft }) => {
     error: false,
     isLoading: true
   });
+  
+  // Extract image URL using our utility function
   const imageUrl = getImageUrl(nft);
-  const nftTitle = nft.metadata?.name || nft.name || `NFT #${nft.token_id}`;
+  
+  // Get the NFT title
+  const nftTitle = nft.metadata?.name || nft.name || `NFT #${nft.token_id || nft.tokenId}`;
+  
+  // Get contract address from various possible locations
+  const contractAddress = nft.contract_address || 
+                          nft.contractAddress || 
+                          (nft.contract && nft.contract.address) || 
+                          getContractAddress(nft);
+  
+  // Get token ID from various possible locations
+  const tokenId = nft.token_id || nft.tokenId || getTokenId(nft);
 
-  const handleLoad = () => {
-    console.log("Image loaded successfully", imageUrl);
-    setImageState({
-      loaded: true,
-      error: false,
-      isLoading: false
-    });
-  };
-
-  const handleError = () => {
-    console.error("Failed to load image", imageUrl);
+  useEffect(() => {
+    // Reset state when NFT changes
     setImageState({
       loaded: false,
-      error: true,
-      isLoading: false
+      error: false,
+      isLoading: true
     });
-  };
+    
+    // Preload image
+    if (imageUrl) {
+      const img = new Image();
+      img.src = imageUrl;
+      
+      img.onload = () => {
+        setImageState({
+          loaded: true,
+          error: false,
+          isLoading: false
+        });
+      };
+      
+      img.onerror = () => {
+        setImageState({
+          loaded: false,
+          error: true,
+          isLoading: false
+        });
+        console.error("Failed to load image", imageUrl);
+      };
+    }
+  }, [imageUrl, nft]);
+
+  // Debugging NFT data
+  console.log('NFT Data:', {
+    title: nftTitle,
+    imageUrl,
+    contractAddress,
+    tokenId,
+    hasMetadata: !!nft.metadata,
+    rawNft: nft
+  });
 
   return (
     <div className="nft-card-container">
-      <Link to={`/nft/${nft.contract_address}/${nft.token_id}`} className="nft-link">
+      <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link">
         <div className="nft-image-container">
           {imageUrl && !imageState.error && (
-            <>
-              <img
-                src={imageUrl}
-                alt={nftTitle}
-                className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
-                onLoad={handleLoad}
-                onError={handleError}
-              />
-            </>
+            <img
+              src={imageUrl}
+              alt={nftTitle}
+              className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
+            />
           )}
           {imageState.isLoading && !imageState.error && (
             <div className="nft-image-placeholder">Loading...</div>
