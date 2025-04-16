@@ -3,8 +3,12 @@ import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
 import NFTGallery from './NFTGallery';
 import '../styles/FarcasterUserSearch.css';
+import '../styles/FarcasterProfile.css';
 import safeStorage from '../utils/storage';
 import SimpleNFTGrid from './SimpleNFTGrid';
+import NFTSortControls from './NFTSortControls';
+import { fetchFarcasterUser, fetchAddressesForFid } from '../services/farcasterService';
+import { fetchNftsForAddresses } from '../services/alchemyService';
 
 /**
  * NFT Sort Controls Component
