@@ -74,12 +74,10 @@ app.post('/zapper', async (req, res) => {
       });
     }
     
-    // Set up headers with API key and proper User-Agent (updated to match browser-like user agent)
+    // Set up headers with API key according to documentation
     const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'x-zapper-api-key': apiKey,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      'x-zapper-api-key': apiKey
     };
     
     // Debug request details
@@ -200,12 +198,10 @@ app.get('/farcaster-profile', async (req, res) => {
     console.log('REQUEST - GraphQL query:', query.replace(/\s+/g, ' ').trim());
     console.log('REQUEST - Variables:', JSON.stringify(variables));
 
-    // Set up headers with API key and proper User-Agent
+    // Set up headers with API key according to documentation
     const headers = {
       'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'x-zapper-api-key': apiKey,
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      'x-zapper-api-key': apiKey
     };
     
     // Make the GraphQL request to Zapper with better error handling
@@ -568,4 +564,33 @@ app.get('/image-proxy', async (req, res) => {
       console.error(`Source returned error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
       
       // Create a simple SVG placeholder instead of returning JSON
-      const placeholderSvg = Buffer.from(`
+      const placeholderSvg = Buffer.from(`<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="400" height="400" fill="#cccccc"/>
+        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#666666">
+          Image Not Available
+        </text>
+      </svg>`, 'utf-8');
+      
+      return new Response(placeholderSvg, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/svg+xml'
+        }
+      });
+    }
+    
+    return response;
+  } catch (error) {
+    console.error(`Error proxying image: ${error.message}`);
+    return new Response(JSON.stringify({ error: 'Failed to proxy image' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+});
+
+// Start the server
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
