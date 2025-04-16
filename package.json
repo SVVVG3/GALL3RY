@@ -23,6 +23,8 @@
     "react-icons": "^5.0.1",
     "react-router-dom": "^6.30.0",
     "react-scripts": "5.0.1",
+    "react-virtualized-auto-sizer": "^1.0.26",
+    "react-window": "^1.8.11",
     "stream-browserify": "^3.0.0",
     "styled-components": "^6.1.1",
     "viem": "^1.21.4",
