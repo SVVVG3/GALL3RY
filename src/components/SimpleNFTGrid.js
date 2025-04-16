@@ -178,7 +178,6 @@ const NFTCard = ({ nft }) => {
         <div className="nft-image-container">
           {imageUrl && !imageState.error && (
             <>
-              <div className="nft-bg-image" style={{ backgroundImage: `url(${imageUrl})` }} />
               <img
                 src={imageUrl}
                 alt={nftTitle}

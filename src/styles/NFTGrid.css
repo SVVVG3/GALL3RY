@@ -79,8 +79,9 @@
 .nft-image-container {
   position: relative;
   width: 100%;
-  padding-bottom: 100%; /* This creates a perfect square */
+  padding-bottom: 100%; /* Creates a perfect square */
   overflow: hidden;
+  background-color: #f8f8f8;
 }
 
 /* NFT Image */
@@ -90,10 +91,10 @@
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: contain; /* Changed from cover to contain */
+  object-fit: contain; /* Keeps aspect ratio */
+  z-index: 2;
   opacity: 0;
   transition: opacity 0.3s ease;
-  z-index: 2;
 }
 
 .nft-image.loaded {
@@ -109,10 +110,8 @@
   bottom: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(20px);
-  opacity: 0.3;
-  transform: scale(1.1);
-  transition: opacity 0.3s ease;
+  filter: blur(0px); /* Remove blur completely */
+  opacity: 1;
   z-index: 1;
 }
 
