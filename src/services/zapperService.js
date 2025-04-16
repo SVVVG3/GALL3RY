@@ -21,10 +21,11 @@ const zapperAxios = axios.create({
 });
 
 // Constants
-const SERVER_URL = process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : '';
+// Use window.location.origin to ensure this works in both development and production
+const SERVER_URL = window.location.origin;
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
 const ZAPPER_API_ENDPOINTS = [
-  `${SERVER_URL}/api/zapper`,             // Environment-specific endpoint (localhost in dev, relative in prod)
+  `${SERVER_URL}/api/zapper`,             // Use absolute URL (either localhost or production)
   'https://public.zapper.xyz/graphql'     // Direct Zapper API endpoint as last resort
 ];
 // Direct endpoint is removed to prevent 404s - all requests should go through our proxy
@@ -147,6 +148,13 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // Clean up the username - remove @, trim whitespace
   let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
   
+  // NEW FIX: Remove .eth suffix for Farcaster API calls
+  // Farcaster doesn't support .eth in usernames directly
+  if (cleanInput.endsWith('.eth')) {
+    console.log(`Input contains .eth suffix, removing for Farcaster API compatibility`);
+    cleanInput = cleanInput.replace(/\.eth$/, '');
+  }
+  
   // Determine if input is a FID (number) or username (string)
   const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
   
@@ -169,6 +177,12 @@ export const getFarcasterProfile = async (usernameOrFid) => {
       }
     } catch (dedicatedEndpointError) {
       console.error('Dedicated endpoint failed:', dedicatedEndpointError.message);
+      
+      // Check if this is an API key issue
+      if (dedicatedEndpointError.response?.status === 403 || 
+          dedicatedEndpointError.message.includes('ERR_BAD_REQUEST')) {
+        console.error('API authorization issue detected. Please check your Zapper API key');
+      }
       // Continue to try the GraphQL endpoint
     }
     
@@ -200,7 +214,14 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     
     const graphqlResponse = await zapperAxios.post(
       ZAPPER_ENDPOINT,
-      { query, variables }
+      { query, variables },
+      { 
+        headers: {
+          'Content-Type': 'application/json',
+          // Explicitly add API key for direct GraphQL endpoint
+          ...(ZAPPER_API_KEY && { 'x-zapper-api-key': ZAPPER_API_KEY })
+        }
+      }
     );
     
     // Check for GraphQL errors

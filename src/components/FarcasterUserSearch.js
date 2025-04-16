@@ -124,20 +124,43 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setUserNfts([]);
     setWalletAddresses([]);
 
+    // Message to users with .eth usernames
+    const originalQuery = searchQuery.trim();
+    const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
+    const isWarpcastLink = originalQuery.includes('warpcast.com/');
+    
     try {
-      console.log(`Searching for Farcaster user: ${searchQuery}`);
+      // Extract username from Warpcast URLs
+      let cleanQuery = originalQuery;
+      
+      if (isWarpcastLink) {
+        // Extract username from warpcast.com/username format
+        const matches = originalQuery.match(/warpcast\.com\/([^\/\?#]+)/i);
+        if (matches && matches[1]) {
+          cleanQuery = matches[1].trim();
+          console.log(`Extracted username '${cleanQuery}' from Warpcast URL`);
+        }
+      }
+      
+      console.log(`Searching for Farcaster user: ${cleanQuery}`);
       
       // Try to find the Farcaster profile using Zapper API
       let profile;
       try {
-        profile = await getFarcasterProfile(searchQuery);
+        profile = await getFarcasterProfile(cleanQuery);
       } catch (profileError) {
         console.error('Profile search error:', profileError);
-        throw new Error(`Could not find Farcaster user "${searchQuery}". Please check the username and try again.`);
+        
+        if (isEthDomain) {
+          // Special handling for .eth domains
+          throw new Error(`Could not find Farcaster user "${originalQuery}". Try searching without the .eth suffix.`);
+        } else {
+          throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+        }
       }
       
       if (!profile) {
-        throw new Error(`Could not find Farcaster user "${searchQuery}". Please check the username and try again.`);
+        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
       }
       
       console.log('Farcaster profile found:', profile);
@@ -161,8 +184,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       );
       
       if (addresses.length === 0) {
-        console.warn(`No valid addresses found for user ${searchQuery}`);
-        throw new Error(`Found profile for ${searchQuery} but no wallet addresses are connected.`);
+        console.warn(`No valid addresses found for user ${cleanQuery}`);
+        throw new Error(`Found profile for ${cleanQuery} but no wallet addresses are connected.`);
       }
       
       setUserProfile(profile);
@@ -226,7 +249,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               setUserNfts([]);
               setSearchError('Could not fetch NFTs: Received invalid NFT data format');
             } else {
-              console.log(`Fetched ${result.nfts.length} NFTs for user ${searchQuery}`);
+              console.log(`Fetched ${result.nfts.length} NFTs for user ${cleanQuery}`);
               
               // CRITICAL: Actually use the NFTs we received
               setUserNfts(result.nfts); 
@@ -237,7 +260,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                 console.log(`Successfully set ${result.nfts.length} NFTs to state`);
               } else {
                 // Set a gentle message if there are no NFTs but no error
-                setSearchError(`No NFTs found for user ${searchQuery}. They might not own any NFTs on the supported chains.`);
+                setSearchError(`No NFTs found for user ${cleanQuery}. They might not own any NFTs on the supported chains.`);
               }
             }
           } catch (nftAPIError) {
