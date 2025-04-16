@@ -2,7 +2,7 @@
   width: 100%;
   position: relative;
   margin: 0 auto;
-  padding: 0;
+  padding: 10px;
 }
 
 .nft-grid {
@@ -16,25 +16,21 @@
 
 .nft-item-wrapper {
   box-sizing: border-box;
-  padding: 12px;
-  width: 100% !important; /* Force width to stay within container */
-  max-width: 100%;
-  overflow: hidden; /* Prevent overflow */
-  position: absolute; /* Make sure the position is correctly applied */
+  padding: 10px;
+  overflow: hidden;
+  position: absolute;
+  will-change: transform;
 }
 
 .nft-item {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
-  overflow: hidden;
-  background-color: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   height: 100%;
-  position: relative;
-  width: 100%; /* Ensure full width */
+  width: 100%;
+  background-color: white;
+  overflow: hidden;
 }
 
 .nft-item:hover {
@@ -234,20 +230,21 @@
 /* Additional styles for virtualized grid */
 .virtualized-grid-container {
   width: 100%;
-  height: 80vh; /* Add default height */
-  min-height: 500px;
+  height: 80vh !important; /* Force height to be visible */
+  min-height: 800px;
   position: relative;
   margin: 0 auto;
   overflow-x: hidden; /* Prevent horizontal scrolling */
   box-sizing: border-box;
   padding: 0 10px; /* Add padding to keep items from touching the edge */
+  border: 1px solid #eee; /* Add visible border for debugging */
 }
 
 .virtualized-grid {
-  width: 100%;
-  height: 100%;
-  overflow-y: auto;
-  overflow-x: hidden; /* Prevent horizontal scrolling */
+  width: 100% !important;
+  height: 100% !important;
+  overflow: auto;
+  background-color: #fafafa; /* Light background color for visibility */
 }
 
 .nft-card {
@@ -443,4 +440,22 @@
 
 .nft-grid-loading, .nft-grid-no-results {
   padding: 20px;
+}
+
+/* Fallback grid layout */
+.fallback-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+  padding: 10px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.nft-item-wrapper-fallback {
+  position: relative;
+  margin-bottom: 20px;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
 } 
