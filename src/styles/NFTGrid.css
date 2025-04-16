@@ -1,12 +1,12 @@
 .nft-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  gap: 16px;
   width: 100%;
   margin: 10px auto;
-  max-width: 800px; /* Reduce max width */
+  max-width: 760px; /* Further reduce width for MacBook Air */
   box-sizing: border-box;
-  padding: 0 8px;
+  padding: 0 10px;
   will-change: transform; /* Optimize for GPU acceleration */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
@@ -16,7 +16,7 @@
   width: 100%;
   padding: 0;
   box-sizing: border-box;
-  aspect-ratio: 1; /* Square cards */
+  aspect-ratio: 1 / 1.15; /* Slightly taller to fit info */
   max-width: 100%;
 }
 
@@ -27,20 +27,34 @@
   min-height: 200px;
   margin: 0 auto;
   position: relative;
-  max-width: 840px; /* Match grid + padding */
+  max-width: 780px; /* Match grid + padding */
   padding: 0;
   overflow-x: hidden;
 }
 
-/* Force exactly 4 columns on desktop */
-@media (min-width: 900px) {
+/* Force exactly 4 columns on MacBook Air */
+@media (min-width: 1280px) and (max-width: 1440px) {
   .nft-grid {
     grid-template-columns: repeat(4, 1fr);
-    max-width: 800px;
+    max-width: 760px;
+    gap: 16px;
   }
   
   .nft-item-wrapper {
-    max-width: 180px; /* Force small fixed width */
+    max-width: 170px;
+  }
+}
+
+/* 4 columns for other desktop sizes */
+@media (min-width: 900px) and (max-width: 1279px) {
+  .nft-grid {
+    grid-template-columns: repeat(4, 1fr);
+    max-width: 760px;
+    gap: 12px;
+  }
+  
+  .nft-item-wrapper {
+    max-width: 160px;
   }
 }
 
@@ -118,10 +132,9 @@
 .nft-image {
   position: relative;
   width: 100%;
-  aspect-ratio: 1; /* Square aspect ratio */
+  height: 75%; /* 75% of the card for image */
   overflow: hidden;
   background-color: #f5f5f5;
-  max-height: 180px; /* Limit height */
   flex-shrink: 0;
 }
 
@@ -144,26 +157,21 @@
 /* Minimal info section */
 .nft-info {
   padding: 6px;
-  flex-grow: 0;
+  height: 25%; /* 25% of card for info */
   display: flex;
   flex-direction: column;
   background-color: white;
-  min-height: 40px; /* Shorter info area */
-  max-height: 60px; /* Limit max height */
   overflow: hidden;
+  font-size: 10px;
 }
 
 .nft-name {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   margin: 0 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-  line-height: 1.2;
-  max-height: 15px;
+  white-space: nowrap;
   color: #333;
 }
 
@@ -173,31 +181,30 @@
   margin: 0 0 2px;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
 }
 
 .nft-metadata {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: auto;
-  padding-top: 2px;
-  border-top: 1px solid #f0f0f0;
+  margin-top: 1px;
+  padding-top: 1px;
+  font-size: 9px;
 }
 
 .nft-price {
   margin: 0;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 600;
   color: #0066cc;
 }
 
 .nft-price-label {
-  font-size: 9px;
+  font-size: 8px;
   color: #888;
   font-weight: normal;
+  margin-left: 3px;
 }
 
 .nft-type {

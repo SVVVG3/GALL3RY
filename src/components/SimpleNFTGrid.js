@@ -76,7 +76,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             }}
           >
             <span style={{ 
-              fontSize: '32px', 
+              fontSize: '24px', 
               fontWeight: 'bold',
               color: 'rgba(0,0,0,0.5)'
             }}>
@@ -85,15 +85,15 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             {imageError && (
               <div style={{
                 position: 'absolute',
-                bottom: '5px',
-                right: '5px',
+                bottom: '2px',
+                right: '2px',
                 background: 'rgba(255,255,255,0.7)',
-                borderRadius: '4px',
-                padding: '2px 6px',
-                fontSize: '10px',
+                borderRadius: '2px',
+                padding: '1px 3px',
+                fontSize: '8px',
                 color: '#e74c3c'
               }}>
-                Image unavailable
+                !
               </div>
             )}
           </div>
@@ -103,13 +103,13 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
         {nft.network && (
           <div style={{
             position: 'absolute',
-            top: '5px',
-            right: '5px',
+            top: '2px',
+            right: '2px',
             background: networkBadgeColor,
             color: 'white',
-            borderRadius: '4px',
-            padding: '2px 6px',
-            fontSize: '10px',
+            borderRadius: '2px',
+            padding: '1px 3px',
+            fontSize: '8px',
             fontWeight: 'bold'
           }}>
             {nft.network}
@@ -117,14 +117,14 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
         )}
       </div>
       <div className="nft-info">
-        <h3 className="nft-name" title={title}>{title}</h3>
-        <p className="nft-collection" title={collection}>{collection}</p>
+        <div className="nft-name" title={title}>{title}</div>
+        <div className="nft-collection" title={collection}>{collection}</div>
         {floorPrice && (
           <div className="nft-metadata">
             <div className="nft-price-container">
-              <p className="nft-price">{floorPrice}</p>
+              <span className="nft-price">{floorPrice}</span>
+              <span className="nft-price-label">Floor</span>
             </div>
-            <span className="nft-price-label">Floor</span>
           </div>
         )}
       </div>
