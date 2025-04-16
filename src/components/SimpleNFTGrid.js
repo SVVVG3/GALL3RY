@@ -1,6 +1,5 @@
-import React, { useState, useCallback, useMemo, memo, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { FixedSizeGrid } from 'react-window';
-import AutoSizer from 'react-virtualized-auto-sizer';
 import '../styles/NFTGrid.css';
 
 // NFT Card Component - Enhanced for virtualization
@@ -25,18 +24,14 @@ const NFTCard = React.memo(({ nft, style }) => {
     ? `/api/image-proxy?url=${encodeURIComponent(rawImageUrl)}` 
     : rawImageUrl;
   
-  // Debug log the NFT structure
+  // Debug log once per NFT render
   useEffect(() => {
-    console.log('Rendering NFT card:', { 
-      title, 
-      collection, 
-      contractAddress, 
-      tokenId,
-      imageUrl: imageUrl,
-      rawImageUrl: rawImageUrl,
-      useDirectUrl: useDirectUrl
+    console.log('NFT image URL:', { 
+      title,
+      rawImageUrl,
+      imageUrl: !useDirectUrl ? `/api/image-proxy?url=${encodeURIComponent(rawImageUrl)}` : rawImageUrl
     });
-  }, [title, collection, contractAddress, tokenId, imageUrl, rawImageUrl, useDirectUrl]);
+  }, [title, rawImageUrl, useDirectUrl]);
   
   const handleImageLoad = () => {
     setImageLoaded(true);
@@ -70,7 +65,7 @@ const NFTCard = React.memo(({ nft, style }) => {
           )}
           
           {imageError ? (
-            <div className="nft-image-error">Unable to load image</div>
+            <div className="nft-image-error">Image unavailable</div>
           ) : (
             <img
               src={imageUrl || 'https://via.placeholder.com/300?text=No+Image'}
@@ -79,14 +74,13 @@ const NFTCard = React.memo(({ nft, style }) => {
               onLoad={handleImageLoad}
               onError={handleImageError}
               loading="lazy"
-              crossOrigin="anonymous"
             />
           )}
         </div>
         
         <div className="nft-info">
           <h3 className="nft-title">{title || 'Unnamed NFT'}</h3>
-          <p className="nft-collection">{collection || 'Unknown Collection'}</p>
+          {collection && <p className="nft-collection">{collection}</p>}
           {floorPrice && <p className="nft-price">{floorPrice}</p>}
         </div>
       </a>
@@ -117,15 +111,42 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
   const gridRef = useRef(null);
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [columnCount, setColumnCount] = useState(4);
-  const [useVirtualization, setUseVirtualization] = useState(true);
+  const [useVirtualization, setUseVirtualization] = useState(false); // Start with fallback grid
+  
+  // Deduplicate NFTs by using a unique ID
+  const uniqueNfts = useMemo(() => {
+    if (!nfts || nfts.length === 0) return [];
+    
+    // Generate a unique key for each NFT
+    const seen = new Set();
+    const unique = [];
+    
+    nfts.forEach(nft => {
+      const key = getUniqueNftKey(nft);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(nft);
+      }
+    });
+    
+    console.log(`Deduplicated ${nfts.length} NFTs to ${unique.length} unique NFTs`);
+    return unique;
+  }, [nfts]);
+  
+  // Get a unique key for an NFT to deduplicate
+  function getUniqueNftKey(nft) {
+    const contract = getContractAddress(nft);
+    const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
+    return `${contract}-${tokenId}`;
+  }
   
   // Log NFT count for debugging
   useEffect(() => {
-    console.log(`SimpleNFTGrid rendering with ${nfts?.length || 0} NFTs, isLoading: ${isLoading}`);
-    if (nfts?.length > 0) {
-      console.log('First NFT sample:', nfts[0]);
+    console.log(`SimpleNFTGrid rendering with ${uniqueNfts.length} unique NFTs, isLoading: ${isLoading}`);
+    if (uniqueNfts.length > 0) {
+      console.log('First NFT sample:', uniqueNfts[0]);
     }
-  }, [nfts, isLoading]);
+  }, [uniqueNfts, isLoading]);
   
   // Calculate column count based on viewport width
   useEffect(() => {
@@ -135,10 +156,6 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
       else if (width < 800) setColumnCount(2);
       else if (width < 1200) setColumnCount(3);
       else setColumnCount(4);
-      
-      console.log(`Window width: ${width}px, setting column count to ${
-        width < 500 ? 1 : width < 800 ? 2 : width < 1200 ? 3 : 4
-      }`);
     };
     
     updateColumnCount();
@@ -154,8 +171,6 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
     const initialWidth = gridRef.current.clientWidth || window.innerWidth * 0.9;
     const initialHeight = window.innerHeight * 0.8;
     
-    console.log(`Initial grid dimensions: ${initialWidth}x${initialHeight}px`);
-    
     setDimensions({
       width: initialWidth,
       height: initialHeight
@@ -167,7 +182,6 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
         // Ensure we have a reasonable height
         const newHeight = height || window.innerHeight * 0.8;
         
-        console.log(`Grid container resized: ${width}x${newHeight}px`);
         setDimensions({ width, height: newHeight });
       }
     });
@@ -178,10 +192,9 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
   
   // Calculate row count based on column count and NFT count
   const rowCount = useMemo(() => {
-    const calculatedRowCount = nfts && nfts.length ? Math.ceil(nfts.length / columnCount) : 0;
-    console.log(`Calculated rowCount: ${calculatedRowCount} based on ${nfts?.length || 0} NFTs and ${columnCount} columns`);
+    const calculatedRowCount = uniqueNfts && uniqueNfts.length ? Math.ceil(uniqueNfts.length / columnCount) : 0;
     return calculatedRowCount;
-  }, [nfts, columnCount]);
+  }, [uniqueNfts, columnCount]);
   
   // Calculate cell sizes for grid
   const { cellWidth, cellHeight } = useMemo(() => {
@@ -198,8 +211,6 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
     // Calculate cell dimensions with gaps
     const width = Math.floor((availableWidth / columnCount) - cellGap);
     const height = Math.floor(width * 1.4); // 1.4:1 aspect ratio
-    
-    console.log(`Calculated cell dimensions: ${width}x${height}px from available width ${availableWidth}px and ${columnCount} columns`);
     
     return { cellWidth: width, cellHeight: height };
   }, [dimensions.width, columnCount]);
@@ -219,28 +230,8 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
     return () => observer.disconnect();
   }, [hasNextPage, isLoading, loadMore]);
   
-  // Debug effect to check why the grid isn't rendering
-  useEffect(() => {
-    console.log('Grid rendering conditions:', {
-      hasNfts: !!nfts && nfts.length > 0,
-      dimensionsWidth: dimensions.width,
-      dimensionsHeight: dimensions.height,
-      rowCount,
-      columnCount,
-      cellWidth,
-      cellHeight,
-      useVirtualization
-    });
-    
-    // If we have rendering issues, switch to the fallback grid
-    if ((!dimensions.width || !dimensions.height) && nfts?.length > 0) {
-      console.log('Switching to fallback grid because dimensions are not set properly');
-      setUseVirtualization(false);
-    }
-  }, [nfts, dimensions, rowCount, columnCount, cellWidth, cellHeight]);
-  
   // If there are no NFTs, show empty state
-  if (!nfts || nfts.length === 0) {
+  if (!uniqueNfts || uniqueNfts.length === 0) {
     return (
       <div className="nft-grid-empty">
         {isLoading ? 
@@ -251,57 +242,15 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
     );
   }
   
-  // Fallback non-virtualized grid layout
-  if (!useVirtualization) {
-    return (
-      <div className="nft-grid-container">
-        <div className="nft-grid fallback-grid">
-          {nfts.map((nft, index) => (
-            <NFTCard key={`nft-${index}`} nft={nft} />
-          ))}
-        </div>
-        
-        {hasNextPage && (
-          <div ref={loaderRef} className="nft-grid-loader">
-            {isLoading && <div className="loader">Loading more NFTs...</div>}
-          </div>
-        )}
-      </div>
-    );
-  }
-  
-  // Render a virtualized grid
+  // Use fallback non-virtualized grid by default
   return (
-    <div className="virtualized-grid-container" ref={gridRef} style={{ height: '80vh', minHeight: '800px' }}>
-      <FixedSizeGrid
-        className="virtualized-grid"
-        width={dimensions.width || window.innerWidth * 0.9}
-        height={dimensions.height || window.innerHeight * 0.8}
-        columnCount={columnCount}
-        rowCount={rowCount}
-        columnWidth={cellWidth}
-        rowHeight={cellHeight}
-        itemData={{
-          nfts,
-          columnCount
-        }}
-      >
-        {({ columnIndex, rowIndex, style, data }) => {
-          const { nfts, columnCount } = data;
-          const index = rowIndex * columnCount + columnIndex;
-          
-          if (index >= nfts.length) return null;
-          
-          const nft = nfts[index];
-          return (
-            <NFTCard
-              nft={nft}
-              style={style}
-            />
-          );
-        }}
-      </FixedSizeGrid>
-      
+    <div className="nft-grid-container">
+      <div className="fallback-grid">
+        {uniqueNfts.map((nft, index) => (
+          <NFTCard key={`nft-${getUniqueNftKey(nft)}`} nft={nft} />
+        ))}
+      </div>
+        
       {hasNextPage && (
         <div ref={loaderRef} className="nft-grid-loader">
           {isLoading && <div className="loader">Loading more NFTs...</div>}
@@ -312,44 +261,8 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
 };
 
 // Utility functions to handle NFT data
-const getNftKey = (nft) => {
-  if (!nft) return null;
-  
-  // Handle different NFT data formats
-  if (nft.id && nft.id.tokenId) {
-    return `${nft.contract.address}-${nft.id.tokenId}`;
-  }
-  
-  if (nft.contract && nft.tokenId) {
-    return `${nft.contract.address}-${nft.tokenId}`;
-  }
-  
-  if (nft.token_address && nft.token_id) {
-    return `${nft.token_address}-${nft.token_id}`;
-  }
-  
-  return nft.id || `${nft.contract?.address || nft.token_address}-${nft.tokenId || nft.token_id}`;
-};
-
 const getImageUrl = (nft) => {
   if (!nft) return '';
-  
-  // More detailed debug logging to understand NFT structure
-  console.log('NFT data structure:', {
-    id: nft.id,
-    tokenId: nft.tokenId || nft.id?.tokenId || nft.token_id,
-    contractAddress: getContractAddress(nft),
-    hasMedia: !!nft.media,
-    mediaLength: nft.media?.length,
-    mediaGateway: nft.media?.[0]?.gateway,
-    mediaThumbnail: nft.media?.[0]?.thumbnail,
-    mediaRaw: nft.media?.[0]?.raw,
-    metadata: nft.metadata?.image,
-    rawMetadata: nft.rawMetadata?.image,
-    image_url: nft.image_url,
-    image: nft.image,
-    chain: nft.chain || 'unknown'
-  });
   
   // Try Alchemy v3 format first (preferred)
   if (nft.media && nft.media.length > 0) {

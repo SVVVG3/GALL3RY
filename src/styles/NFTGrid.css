@@ -26,20 +26,22 @@
   display: flex;
   flex-direction: column;
   border-radius: 12px;
+  overflow: hidden;
+  background-color: white;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   height: 100%;
   width: 100%;
-  background-color: white;
-  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .nft-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
 }
 
 .nft-link {
-  display: block;
+  display: flex;
+  flex-direction: column;
   height: 100%;
   text-decoration: none;
   color: inherit;
@@ -48,7 +50,7 @@
 .nft-image-container {
   position: relative;
   width: 100%;
-  padding-top: 100%; /* 1:1 Aspect Ratio */
+  padding-top: 100%; /* Square aspect ratio */
   overflow: hidden;
   background-color: #f5f5f5;
 }
@@ -60,8 +62,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: opacity 0.3s ease, transform 0.3s ease;
   opacity: 0;
-  transition: opacity 0.3s ease;
 }
 
 .nft-image.loaded {
@@ -91,9 +93,7 @@
   flex-direction: column;
   flex-grow: 1;
   background-color: #ffffff;
-  height: auto;
   min-height: 80px;
-  overflow: hidden;
 }
 
 .nft-title {
@@ -119,7 +119,8 @@
   font-size: 12px;
   font-weight: 500;
   color: #0070f3;
-  margin: 0;
+  margin-top: auto;
+  margin-bottom: 0;
 }
 
 .nft-empty-message {
@@ -454,8 +455,8 @@
 
 .nft-item-wrapper-fallback {
   position: relative;
-  margin-bottom: 20px;
   overflow: hidden;
   height: 100%;
   width: 100%;
+  box-sizing: border-box;
 } 
