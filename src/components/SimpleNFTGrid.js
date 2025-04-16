@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import '../styles/NFTGrid.css';
+import { Link } from 'react-router-dom';
 
 /**
  * Get a safe image URL from the NFT data
@@ -144,208 +145,67 @@ const getImageUrl = (nft) => {
  * NFT Card Component
  * Displays an individual NFT with image and metadata
  */
-const NFTCard = React.memo(({ nft, style }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
+const NFTCard = ({ nft, collectionName }) => {
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
+  const [isImageError, setIsImageError] = useState(false);
   
+  // Get the image URL using our helper function
   const imageUrl = getImageUrl(nft);
-  const title = getNftTitle(nft);
-  const collection = getCollectionName(nft);
-  const floorPrice = getFloorPrice(nft);
-  const contractAddress = getContractAddress(nft);
-  const tokenId = getTokenId(nft);
   
-  // Add detailed logging for floor price debugging
-  console.log(`NFT Card ${title} - Floor Price Data:`, {
-    floorPrice,
-    hasContractMetadata: !!nft.contractMetadata,
-    hasOpenSeaMetadata: !!(nft.contract && nft.contract.openSeaMetadata),
-    networkType: nft.network || 'unknown',
-    id: nft.id
-  });
-  
-  // Create OpenSea URL based on network
-  let openSeaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
-  
-  // Adjust OpenSea URL based on network
-  if (nft.network === 'polygon' || (nft.id && nft.id.startsWith('polygon:'))) {
-    openSeaUrl = `https://opensea.io/assets/matic/${contractAddress}/${tokenId}`;
-  } else if (nft.network === 'base' || (nft.id && nft.id.startsWith('base:'))) {
-    openSeaUrl = `https://opensea.io/assets/base/${contractAddress}/${tokenId}`;
-  }
-  
-  // Reset state when NFT changes
-  useEffect(() => {
-    setImageLoaded(false);
-    setImageError(false);
-    setRetryCount(0);
-  }, [nft.id, nft.tokenId]);
-  
-  // Debug NFT image loading issues
-  useEffect(() => {
-    console.log(`NFT ${title} (${tokenId}) image status:`, { 
-      imageUrl, 
-      imageLoaded, 
-      imageError,
-      retryCount
-    });
-  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount]);
-  
-  // Handle image loading events
+  // Handle image load
   const handleImageLoad = () => {
-    console.log(`Image loaded successfully: ${title}`);
-    setImageLoaded(true);
-    setImageError(false);
+    console.log("Image loaded:", imageUrl);
+    setIsImageLoaded(true);
+    setIsImageError(false);
   };
   
-  // List of IPFS gateways to try in sequence
-  const IPFS_GATEWAYS = [
-    'https://ipfs.io/ipfs/',
-    'https://gateway.ipfs.io/ipfs/',
-    'https://dweb.link/ipfs/',
-    'https://cloudflare-ipfs.com/ipfs/',
-    'https://gateway.pinata.cloud/ipfs/'
-  ];
-  
+  // Handle image error
   const handleImageError = () => {
-    console.error(`Image failed to load: ${title}, URL: ${imageUrl}, retry: ${retryCount}`);
-    
-    // Check if this is an IPFS URL that can be tried with different gateways
-    const isIpfsUrl = imageUrl.includes('/ipfs/');
-    
-    if (isIpfsUrl) {
-      // Extract the IPFS hash from the URL
-      let ipfsHash = '';
-      for (const gateway of IPFS_GATEWAYS) {
-        if (imageUrl.includes(gateway)) {
-          ipfsHash = imageUrl.replace(gateway, '');
-          break;
-        }
-      }
-      
-      if (!ipfsHash && imageUrl.includes('/ipfs/')) {
-        // Get hash from general format
-        const parts = imageUrl.split('/ipfs/');
-        if (parts.length > 1) {
-          ipfsHash = parts[1];
-        }
-      }
-      
-      // If we have a valid IPFS hash, try the next gateway
-      if (ipfsHash && retryCount < IPFS_GATEWAYS.length) {
-        setRetryCount(retryCount + 1);
-        console.log(`IPFS retry #${retryCount + 1}: Switching gateway for ${title}`);
-        return;
-      }
-    }
-    
-    // If not IPFS or we've tried all gateways, try our proxy as last resort
-    if (retryCount === IPFS_GATEWAYS.length || (!isIpfsUrl && retryCount === 0)) {
-      setRetryCount(IPFS_GATEWAYS.length + 1); // Set to proxy retry
-      console.log(`Retry with proxy: ${title}`);
-      return;
-    }
-    
-    // If proxy failed or all retries exhausted, give up
-    if (retryCount > IPFS_GATEWAYS.length) {
-      setImageError(true);
-      console.error(`All retries failed for ${title}`);
-      return;
-    }
+    console.log("Image error:", imageUrl);
+    setIsImageLoaded(false);
+    setIsImageError(true);
   };
-  
-  // Determine which URL to use based on retry state
-  let displayUrl = imageUrl;
-  
-  // Handle IPFS gateway retries
-  if (retryCount > 0 && retryCount <= IPFS_GATEWAYS.length) {
-    // Extract the IPFS hash from original URL
-    let ipfsHash = '';
-    
-    for (const gateway of IPFS_GATEWAYS) {
-      if (imageUrl.includes(gateway)) {
-        ipfsHash = imageUrl.replace(gateway, '');
-        break;
-      }
-    }
-    
-    if (!ipfsHash && imageUrl.includes('/ipfs/')) {
-      // Get hash from general format
-      const parts = imageUrl.split('/ipfs/');
-      if (parts.length > 1) {
-        ipfsHash = parts[1];
-      }
-    }
-    
-    if (ipfsHash) {
-      // Use the gateway for the current retry count
-      const gatewayIndex = (retryCount - 1) % IPFS_GATEWAYS.length;
-      displayUrl = `${IPFS_GATEWAYS[gatewayIndex]}${ipfsHash}`;
-    }
-  }
-  // If we've tried all IPFS gateways or it's not an IPFS URL, try our proxy
-  else if (retryCount > IPFS_GATEWAYS.length) {
-    displayUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}&t=${Date.now()}`;
-  }
   
   return (
-    <div className="nft-card-container" style={style}>
-      <div className="nft-item">
-        <a 
-          href={openSeaUrl} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="nft-link"
-        >
+    <div className="nft-item">
+      <Link to={`/nft/${nft.contract_address}/${nft.token_id}`} className="nft-link">
+        <div className="nft-card-container">
           <div className="nft-image-container">
-            {!imageLoaded && !imageError && (
-              <div className="nft-image-placeholder">
-                <span>Loading...</span>
-              </div>
-            )}
-            
-            {imageError ? (
+            {isImageError ? (
               <div className="nft-image-error">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="#999999" strokeWidth="2" />
-                  <path d="M12 8v4m0 4h.01" stroke="#999999" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <p className="error-text">Unable to load image</p>
+                <span>Failed to load image</span>
+                <div className="error-text">{nft.token_id}</div>
               </div>
-            ) : (
-              <>
-                <div 
-                  className={`nft-bg-image ${imageLoaded ? 'loaded' : ''}`} 
-                  style={{ backgroundImage: `url(${displayUrl})` }}
-                ></div>
-                <img
-                  src={displayUrl}
-                  alt={title || 'NFT'}
-                  className={`nft-image ${imageLoaded ? 'loaded' : ''}`}
-                  onLoad={handleImageLoad}
-                  onError={handleImageError}
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
-                />
-              </>
-            )}
+            ) : !isImageLoaded ? (
+              <div className="nft-image-placeholder">Loading...</div>
+            ) : null}
+            
+            <div 
+              className={`nft-bg-image ${isImageLoaded ? 'loaded' : ''}`}
+              style={{
+                backgroundImage: isImageLoaded ? `url(${imageUrl})` : 'none',
+                backgroundSize: 'contain'
+              }}
+            ></div>
+            
+            <img
+              src={imageUrl}
+              alt={`${nft.name || nft.token_id || ''}`}
+              className="nft-image"
+              onLoad={handleImageLoad}
+              onError={handleImageError}
+            />
           </div>
           
           <div className="nft-info">
-            <h3 className="nft-title">{title || 'Untitled NFT'}</h3>
-            {collection && <p className="nft-collection">{collection}</p>}
-            {floorPrice ? (
-              <p className="nft-price">{floorPrice}</p>
-            ) : (
-              <p className="nft-price-unavailable">Floor price unavailable</p>
-            )}
+            <h3>{nft.name || `#${nft.token_id}`}</h3>
+            {collectionName && <div className="collection-name">{collectionName}</div>}
           </div>
-        </a>
-      </div>
+        </div>
+      </Link>
     </div>
   );
-});
+};
 
 /**
  * Simplified NFT Grid component 
