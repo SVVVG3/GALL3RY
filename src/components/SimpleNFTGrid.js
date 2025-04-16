@@ -45,47 +45,59 @@ const getImageUrl = (nft) => {
     hasTokenMetadata: !!(nft.tokenMetadata || nft.tokenURI)
   });
   
-  // PRIORITY 1: Direct image URL (if string)
-  if (typeof nft.image === 'string') {
-    imageUrl = nft.image;
-    console.log('Using direct image string:', imageUrl);
-  }
-  
-  // PRIORITY 2: Structured image object with URLs
-  else if (nft.image && typeof nft.image === 'object') {
-    // Try cached URL first (most reliable)
+  // PRIORITY 1: Alchemy structured image object from API response example
+  if (nft.image && typeof nft.image === 'object') {
+    // Try cached URL first (most reliable from Alchemy API)
     if (nft.image.cachedUrl) {
       imageUrl = nft.image.cachedUrl;
       console.log('Using cached URL:', imageUrl);
     } 
-    // Next try thumbnail (good for performance)
-    else if (nft.image.thumbnailUrl) {
-      imageUrl = nft.image.thumbnailUrl;
-      console.log('Using thumbnail URL:', imageUrl);
-    }
-    // For SVGs, the PNG conversion is often helpful
+    // Try PNG URL (good for SVG conversions)
     else if (nft.image.pngUrl) {
       imageUrl = nft.image.pngUrl;
       console.log('Using PNG URL:', imageUrl);
     }
+    // Try thumbnail (good for performance)
+    else if (nft.image.thumbnailUrl) {
+      imageUrl = nft.image.thumbnailUrl;
+      console.log('Using thumbnail URL:', imageUrl);
+    }
     // Finally try original
-    else if (nft.image.originalUrl || nft.image.url) {
-      imageUrl = nft.image.originalUrl || nft.image.url;
+    else if (nft.image.originalUrl) {
+      imageUrl = nft.image.originalUrl;
       console.log('Using original URL:', imageUrl);
     }
   }
   
+  // PRIORITY 2: Direct image URL (if string)
+  else if (typeof nft.image === 'string') {
+    imageUrl = nft.image;
+    console.log('Using direct image string:', imageUrl);
+  }
+  
   // PRIORITY 3: Animation URLs for NFTs that are videos or GIFs
-  if (!imageUrl && nft.animation_url) {
+  if (!imageUrl && nft.animation) {
+    if (nft.animation.cachedUrl) {
+      imageUrl = nft.animation.cachedUrl;
+      console.log('Using animation cached URL:', imageUrl);
+    }
+  }
+  else if (!imageUrl && nft.animation_url) {
     imageUrl = nft.animation_url;
     console.log('Using animation URL:', imageUrl);
   }
-  else if (!imageUrl && nft.animation && nft.animation.cachedUrl) {
-    imageUrl = nft.animation.cachedUrl;
-    console.log('Using animation cached URL:', imageUrl);
+  
+  // PRIORITY 4: Try raw metadata structures based on the Alchemy API response
+  if (!imageUrl && nft.raw) {
+    // Try the new raw.metadata structure from Alchemy API
+    if (nft.raw.metadata) {
+      const metadata = nft.raw.metadata;
+      imageUrl = metadata.image || metadata.image_url || metadata.image_data || '';
+      if (imageUrl) console.log('Found image in raw.metadata:', imageUrl);
+    }
   }
   
-  // PRIORITY 4: Try media array 
+  // PRIORITY 5: Try media array 
   if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
     // Try to find the best media format (gateway is usually more reliable)
     const mediaItem = nft.media.find(m => m.gateway) || 
@@ -100,7 +112,7 @@ const getImageUrl = (nft) => {
     }
   }
   
-  // PRIORITY 5: Try metadata
+  // PRIORITY 6: Try metadata
   if (!imageUrl && nft.metadata) {
     // Try image properties in metadata
     if (nft.metadata.image) {
@@ -115,13 +127,6 @@ const getImageUrl = (nft) => {
       imageUrl = nft.metadata.animation_url;
       console.log('Found animation_url in metadata:', imageUrl);
     }
-  }
-  
-  // PRIORITY 6: Try raw metadata
-  if (!imageUrl && nft.raw && nft.raw.metadata) {
-    const metadata = nft.raw.metadata;
-    imageUrl = metadata.image || metadata.image_url || metadata.animation_url || '';
-    console.log('Found image in raw metadata:', imageUrl);
   }
   
   // PRIORITY 7: Legacy/fallback checks
@@ -159,8 +164,15 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Try multiple IPFS gateways for better reliability
-    imageUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
+    // Use multiple IPFS gateways for better reliability
+    const gateways = [
+      `https://ipfs.io/ipfs/${ipfsHash}`,
+      `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`,
+      `https://gateway.pinata.cloud/ipfs/${ipfsHash}`
+    ];
+    
+    // Use the first gateway and let fallback mechanism handle retries
+    imageUrl = gateways[0];
     console.log('Converted IPFS URL:', imageUrl);
   }
   
@@ -178,18 +190,18 @@ const getImageUrl = (nft) => {
   
   // Use a fallback placeholder if no image found
   if (!imageUrl) {
-    imageUrl = 'https://placehold.co/600x600/eee/999?text=No+Image';
+    imageUrl = '/placeholder.png'; // Use local placeholder instead of external service
     console.log('Using fallback placeholder - no image URL found');
   }
   
   // Special handling for NFT CDN URLs 
-  // Format detection based on the console logs
   if (imageUrl && (
       imageUrl.includes('nft-cdn.alchemy.com/') ||
       imageUrl.includes('res.cloudinary.com/')
     ) && !imageUrl.includes('?') && !imageUrl.endsWith('.jpg') && 
        !imageUrl.endsWith('.png') && !imageUrl.endsWith('.webp') && 
        !imageUrl.endsWith('.gif')) {
+    
     // Store the original URL for fallbacks
     const originalUrl = imageUrl;
     
@@ -251,26 +263,86 @@ const NFTCard = ({ nft }) => {
         `${baseWithoutExt}/original.webp`  // Finally WEBP
       ];
     }
-    // For IPFS, try different gateways
+    // For IPFS, try different gateways to avoid rate limiting
     else if (baseUrl.includes('ipfs.io')) {
       const ipfsPath = baseUrl.split('/ipfs/')[1];
       urls = [
+        baseUrl, // Try original URL first
         `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
         `https://ipfs.io/ipfs/${ipfsPath}`,
-        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`
+        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
+        `https://dweb.link/ipfs/${ipfsPath}`, // Additional gateway
+        `https://ipfs.4everland.io/ipfs/${ipfsPath}`, // Additional gateway
       ];
     }
-    // For i.seadn.io (OpenSea), add direct URL first
+    // For Cloudflare IPFS
+    else if (baseUrl.includes('cloudflare-ipfs.com')) {
+      const ipfsPath = baseUrl.split('/ipfs/')[1];
+      urls = [
+        baseUrl, // Try original URL first
+        `https://ipfs.io/ipfs/${ipfsPath}`,
+        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
+        `https://dweb.link/ipfs/${ipfsPath}`,
+        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
+      ];
+    }
+    // For Pinata gateway
+    else if (baseUrl.includes('gateway.pinata.cloud')) {
+      const ipfsPath = baseUrl.split('/ipfs/')[1];
+      urls = [
+        baseUrl, // Try original URL first
+        `https://ipfs.io/ipfs/${ipfsPath}`,
+        `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
+        `https://dweb.link/ipfs/${ipfsPath}`,
+        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
+      ];
+    }
+    // For OpenSea's seadn.io, try direct URL and cleaned version without parameters
     else if (baseUrl.includes('i.seadn.io')) {
       urls = [baseUrl];
+      
+      // Also try without width parameter which can cause issues
+      if (baseUrl.includes('w=')) {
+        const cleanedUrl = baseUrl.replace(/w=\d+(&|$)/, '');
+        if (cleanedUrl !== baseUrl) {
+          urls.push(cleanedUrl);
+        }
+      }
+    }
+    // For Alchemy Cloudinary URLs
+    else if (baseUrl.includes('res.cloudinary.com/alchemyapi')) {
+      urls = [baseUrl];
+      
+      // Try both with and without format conversion parameters
+      if (baseUrl.includes('convert-png')) {
+        // Try without the conversion
+        const cleanedUrl = baseUrl.replace('convert-png/', '');
+        urls.push(cleanedUrl);
+      } else {
+        // Try with PNG conversion
+        const parts = baseUrl.split('/');
+        const networkAndAssetId = parts.slice(-2).join('/');
+        urls.push(`https://res.cloudinary.com/alchemyapi/image/upload/convert-png/${networkAndAssetId}`);
+      }
     }
     // Otherwise just use the original
     else {
       urls = [baseUrl];
     }
     
-    // Also try with CORS proxy for troublesome services
-    urls = [...urls];
+    // Add proxy route for troublesome URLs if we're on the same domain
+    // But only do this as a last resort
+    if (window.location.hostname !== 'localhost') {
+      const shouldAddProxy = 
+        baseUrl.includes('ipfs.io') || 
+        baseUrl.includes('gateway.pinata.cloud') || 
+        baseUrl.includes('i.seadn.io') ||
+        baseUrl.includes('cloudflare-ipfs.com');
+      
+      if (shouldAddProxy) {
+        urls.push(`/api/image-proxy?url=${encodeURIComponent(baseUrl)}`);
+      }
+    }
     
     // Ensure no duplicates
     return [...new Set(urls)];
@@ -305,49 +377,79 @@ const NFTCard = ({ nft }) => {
     const fallbackUrls = generateFallbackUrls(primaryImageUrl);
     console.log(`Generated ${fallbackUrls.length} fallback URLs for ${nftTitle}:`, fallbackUrls);
     
-    // Function to try loading an image
+    // Track active attempts and timeouts for cleanup
+    let isActive = true;
+    let timeoutId = null;
+    
+    // Function to try loading an image with exponential backoff
     const tryLoadImage = (url, attemptIndex) => {
-      console.log(`Attempt ${attemptIndex+1}/${fallbackUrls.length}: Loading ${url} for ${nftTitle}`);
+      // Add delay for retries to avoid rate limiting
+      const delayMs = attemptIndex === 0 ? 0 : Math.min(1000 * Math.pow(1.5, attemptIndex - 1), 5000);
       
-      const img = new Image();
+      console.log(`Attempt ${attemptIndex+1}/${fallbackUrls.length}: Loading ${url} for ${nftTitle}${delayMs > 0 ? ` (delayed ${delayMs}ms)` : ''}`);
       
-      img.onload = () => {
-        console.log(`✅ Successfully loaded image ${url} for ${nftTitle}`);
-        setImageState({
-          loaded: true,
-          error: false,
-          isLoading: false,
-          currentUrl: url,
-          attemptCount: attemptIndex + 1
-        });
-        setCurrentImageUrl(url);
-      };
+      // Clear any existing timeout
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       
-      img.onerror = () => {
-        console.error(`❌ Failed to load image ${url} for ${nftTitle}`);
+      // Use timeout for delay (even for first attempt for consistency)
+      timeoutId = setTimeout(() => {
+        if (!isActive) return;
         
-        // Try next fallback if available
-        if (attemptIndex < fallbackUrls.length - 1) {
-          tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
-        } else {
-          // All fallbacks failed
+        const img = new Image();
+        
+        img.onload = () => {
+          if (!isActive) return;
+          
+          console.log(`✅ Successfully loaded image ${url} for ${nftTitle}`);
           setImageState({
-            loaded: false,
-            error: true,
+            loaded: true,
+            error: false,
             isLoading: false,
-            currentUrl: null,
+            currentUrl: url,
             attemptCount: attemptIndex + 1
           });
-        }
-      };
-      
-      img.src = url;
+          setCurrentImageUrl(url);
+        };
+        
+        img.onerror = () => {
+          if (!isActive) return;
+          
+          console.error(`❌ Failed to load image ${url} for ${nftTitle}`);
+          
+          // Try next fallback if available
+          if (attemptIndex < fallbackUrls.length - 1) {
+            tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
+          } else {
+            // All fallbacks failed
+            setImageState({
+              loaded: false,
+              error: true,
+              isLoading: false,
+              currentUrl: null,
+              attemptCount: attemptIndex + 1
+            });
+          }
+        };
+        
+        img.src = url;
+      }, delayMs);
     };
     
     // Start trying with the first URL
     if (fallbackUrls.length > 0) {
       tryLoadImage(fallbackUrls[0], 0);
     }
+    
+    // Cleanup function
+    return () => {
+      isActive = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [primaryImageUrl, nftTitle, generateFallbackUrls]);
 
   return (
