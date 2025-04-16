@@ -1,17 +1,42 @@
 {
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/$1"
+    }
+  ],
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "api/index.js": {
+    "api/zapper.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/farcaster-profile.js": {
       "memory": 1024,
       "maxDuration": 10
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.js"
+      "source": "/api/zapper",
+      "destination": "/api/zapper.js"
+    },
+    {
+      "source": "/api/farcaster-profile",
+      "destination": "/api/farcaster-profile.js"
     },
     {
       "source": "/(.*)",
