@@ -271,8 +271,11 @@ const NFTCard = ({ nft }) => {
         `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
         `https://ipfs.io/ipfs/${ipfsPath}`,
         `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
-        `https://dweb.link/ipfs/${ipfsPath}`, // Additional gateway
-        `https://ipfs.4everland.io/ipfs/${ipfsPath}`, // Additional gateway
+        `https://dweb.link/ipfs/${ipfsPath}`,
+        `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
+        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
+        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
+        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
       ];
     }
     // For Cloudflare IPFS
@@ -284,6 +287,9 @@ const NFTCard = ({ nft }) => {
         `https://gateway.pinata.cloud/ipfs/${ipfsPath}`,
         `https://dweb.link/ipfs/${ipfsPath}`,
         `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
+        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
+        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
+        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
       ];
     }
     // For Pinata gateway
@@ -295,6 +301,9 @@ const NFTCard = ({ nft }) => {
         `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
         `https://dweb.link/ipfs/${ipfsPath}`,
         `https://ipfs.4everland.io/ipfs/${ipfsPath}`,
+        `https://gateway.ipfs.io/ipfs/${ipfsPath}`,  // Added new gateway
+        `https://ipfs.infura.io/ipfs/${ipfsPath}`,   // Added new gateway
+        `https://ipfs.fleek.co/ipfs/${ipfsPath}`,    // Added new gateway
       ];
     }
     // For OpenSea's seadn.io, try direct URL and cleaned version without parameters
@@ -330,18 +339,15 @@ const NFTCard = ({ nft }) => {
       urls = [baseUrl];
     }
     
-    // Add proxy route for troublesome URLs if we're on the same domain
-    // But only do this as a last resort
-    if (window.location.hostname !== 'localhost') {
-      const shouldAddProxy = 
-        baseUrl.includes('ipfs.io') || 
-        baseUrl.includes('gateway.pinata.cloud') || 
-        baseUrl.includes('i.seadn.io') ||
-        baseUrl.includes('cloudflare-ipfs.com');
-      
-      if (shouldAddProxy) {
-        urls.push(`/api/image-proxy?url=${encodeURIComponent(baseUrl)}`);
-      }
+    // Always add our custom proxy for IPFS URLs, not just as a last resort
+    // And add it at the beginning of the array for faster loading
+    if (baseUrl.includes('/ipfs/') || baseUrl.includes('nft-cdn.alchemy.com') || 
+        baseUrl.includes('i.seadn.io') || baseUrl.includes('cloudflare-ipfs.com')) {
+      // Use absolute URL to avoid issues with different environments
+      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const proxyUrl = `${origin}/api/image-proxy?url=${encodeURIComponent(baseUrl)}`;
+      // Add the proxy URL to the beginning of the array
+      urls.unshift(proxyUrl);
     }
     
     // Ensure no duplicates
@@ -383,8 +389,8 @@ const NFTCard = ({ nft }) => {
     
     // Function to try loading an image with exponential backoff
     const tryLoadImage = (url, attemptIndex) => {
-      // Add delay for retries to avoid rate limiting
-      const delayMs = attemptIndex === 0 ? 0 : Math.min(1000 * Math.pow(1.5, attemptIndex - 1), 5000);
+      // Add delay for retries to avoid rate limiting - more aggressive retries
+      const delayMs = attemptIndex === 0 ? 0 : Math.min(1000 * Math.pow(1.3, attemptIndex - 1), 5000);
       
       console.log(`Attempt ${attemptIndex+1}/${fallbackUrls.length}: Loading ${url} for ${nftTitle}${delayMs > 0 ? ` (delayed ${delayMs}ms)` : ''}`);
       
@@ -400,9 +406,33 @@ const NFTCard = ({ nft }) => {
         
         const img = new Image();
         
+        // Set a timeout to catch hanging requests
+        const loadTimeoutId = setTimeout(() => {
+          // Image is taking too long to load, consider it failed and move to next
+          if (img.complete) return; // Already completed
+          
+          console.error(`⏱️ Image load timeout for ${url}`);
+          img.src = ''; // Cancel the current request
+
+          // Try next fallback if available
+          if (attemptIndex < fallbackUrls.length - 1) {
+            tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
+          } else {
+            // All fallbacks failed
+            setImageState({
+              loaded: false,
+              error: true,
+              isLoading: false,
+              currentUrl: null,
+              attemptCount: attemptIndex + 1
+            });
+          }
+        }, 10000); // 10 second timeout for image loading
+        
         img.onload = () => {
           if (!isActive) return;
           
+          clearTimeout(loadTimeoutId);
           console.log(`✅ Successfully loaded image ${url} for ${nftTitle}`);
           setImageState({
             loaded: true,
@@ -417,6 +447,7 @@ const NFTCard = ({ nft }) => {
         img.onerror = () => {
           if (!isActive) return;
           
+          clearTimeout(loadTimeoutId);
           console.error(`❌ Failed to load image ${url} for ${nftTitle}`);
           
           // Try next fallback if available
@@ -433,6 +464,11 @@ const NFTCard = ({ nft }) => {
             });
           }
         };
+        
+        // Check for CORS issues with IPFS URLs
+        if (url.includes('/ipfs/') && !url.includes('/api/image-proxy')) {
+          img.crossOrigin = 'anonymous';
+        }
         
         img.src = url;
       }, delayMs);
@@ -463,7 +499,8 @@ const NFTCard = ({ nft }) => {
               className={`nft-image ${imageState.loaded ? 'loaded' : 'loading'}`}
               onError={(e) => {
                 console.error(`Image load error for ${currentImageUrl}`);
-                // Don't set error state here as the useEffect fallback mechanism will handle it
+                // Set the source to an empty string to prevent repeated error events
+                e.target.src = '';
               }}
               loading="lazy"
             />
