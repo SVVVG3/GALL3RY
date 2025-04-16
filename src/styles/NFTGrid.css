@@ -1,21 +1,21 @@
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(4, 1fr); /* Force exactly 4 columns */
   gap: 20px;
   width: 100%;
   margin: 20px 0;
   max-width: 100%;
   box-sizing: border-box;
-  padding: 0 10px;
+  padding: 0 20px;
   will-change: transform; /* Optimize for GPU acceleration */
   -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .nft-item-wrapper {
   width: 100%;
-  padding: 8px;
+  padding: 0;
   box-sizing: border-box;
-  aspect-ratio: 1 / 1.4; /* Set a consistent aspect ratio for the NFT item */
+  aspect-ratio: 1 / 1.5; /* Fixed aspect ratio for all cards */
 }
 
 /* Virtualized grid container */
@@ -260,5 +260,12 @@
   .nft-collection {
     font-size: 13px;
     margin-bottom: 6px;
+  }
+}
+
+/* Responsive layout - only change for tablets and mobile */
+@media (max-width: 900px) {
+  .nft-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 } 

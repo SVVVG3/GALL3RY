@@ -71,7 +71,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: '8px',
+              borderRadius: '0',
               overflow: 'hidden'
             }}
           >
@@ -124,7 +124,7 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             <div className="nft-price-container">
               <p className="nft-price">{floorPrice}</p>
             </div>
-            <span className="nft-price-label">Floor Price</span>
+            <span className="nft-price-label">Floor</span>
           </div>
         )}
       </div>

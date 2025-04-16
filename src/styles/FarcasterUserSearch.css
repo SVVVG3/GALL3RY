@@ -278,7 +278,7 @@
 
 .nft-container {
   width: 100%;
-  padding: 1.5rem;
+  padding: 1rem;
   box-sizing: border-box;
   overflow-x: hidden;
 }
@@ -334,7 +334,7 @@
 /* NFT display */
 .nft-display {
   width: 100%;
-  margin-top: 1.5rem;
+  margin-top: 1rem;
   min-height: 200px;
   height: auto;
   position: relative;
