@@ -229,45 +229,19 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
   // Render the virtualized grid
   return (
     <div className="virtualized-grid-container">
-      <AutoSizer>
-        {({ width, height }) => {
-          // Force more columns on desktop - minimum 4 columns on larger screens
-          const columnCount = width < 600 ? 2 : 
-                             width < 900 ? 3 : 
-                             width < 1200 ? 4 : 
-                             width < 1600 ? 5 : 6;
-          
-          // Calculate width of each cell
-          const columnWidth = width / columnCount;
-          
-          // Make rows taller to accommodate text and floor price
-          const rowHeight = columnWidth * 1.6; // Increase height ratio for details
-          
-          // Calculate how many rows we need
-          const rowCount = Math.ceil(nfts.length / columnCount);
-          
-          console.log(`Grid dimensions: ${width}px wide, ${columnCount} columns, ${rowCount} rows`);
-          
-          return (
-            <FixedSizeGrid
-              className="virtualized-grid"
-              columnCount={columnCount}
-              columnWidth={columnWidth}
-              height={height}
-              rowCount={rowCount}
-              rowHeight={rowHeight}
-              width={width}
-              itemData={{
-                items: nfts,
-                columnCount
-              }}
-              overscanCount={2}
-            >
-              {Cell}
-            </FixedSizeGrid>
-          );
-        }}
-      </AutoSizer>
+      <div className="nft-grid">
+        {nfts.map((nft, index) => (
+          <div key={getNftKey(nft) || index} className="nft-item-wrapper">
+            <div className="nft-item">
+              <NFTCard 
+                nft={nft} 
+                onLoad={handleImageSuccess} 
+                onError={handleImageError}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };

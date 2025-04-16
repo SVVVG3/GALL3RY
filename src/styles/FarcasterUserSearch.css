@@ -331,8 +331,7 @@
   width: 100%;
   margin-top: 1.5rem;
   min-height: 200px;
-  height: 70vh;
-  max-height: 800px;
+  height: auto;
   position: relative;
   overflow: visible;
 }
