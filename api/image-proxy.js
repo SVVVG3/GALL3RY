@@ -3,6 +3,7 @@
 const fetch = require('node-fetch');
 const path = require('path');
 const fs = require('fs');
+const axios = require('axios');
 
 // List of IPFS gateways to try in sequence for IPFS URLs
 const IPFS_GATEWAYS = [
@@ -18,68 +19,6 @@ const IPFS_GATEWAYS = [
 const PLACEHOLDER_PATH = path.join(__dirname, '../public/assets/placeholder-nft.png');
 
 /**
- * Try to fetch from multiple IPFS gateways
- * @param {string} ipfsHash - The IPFS hash/path
- * @returns {Promise<Response>} - The successful response or the last error
- */
-async function tryMultipleGateways(ipfsHash) {
-  let lastError;
-  
-  // Clean the IPFS hash by removing any gateway prefix
-  for (const gateway of IPFS_GATEWAYS) {
-    if (ipfsHash.startsWith(gateway)) {
-      ipfsHash = ipfsHash.replace(gateway, '');
-      break;
-    }
-  }
-  
-  // Also check for ipfs:// protocol
-  if (ipfsHash.startsWith('ipfs://')) {
-    ipfsHash = ipfsHash.replace('ipfs://', '');
-  }
-  
-  // Also check for general /ipfs/ in the URL
-  if (ipfsHash.includes('/ipfs/')) {
-    const parts = ipfsHash.split('/ipfs/');
-    if (parts.length > 1) {
-      ipfsHash = parts[1];
-    }
-  }
-
-  console.log(`Trying multiple gateways for IPFS hash: ${ipfsHash}`);
-  
-  // Try each gateway
-  for (const gateway of IPFS_GATEWAYS) {
-    const url = `${gateway}${ipfsHash}`;
-    try {
-      console.log(`Trying IPFS gateway: ${url}`);
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': '*/*',
-          'Referer': 'https://gallery.xyz/'
-        },
-        timeout: 5000 // 5 second timeout per gateway
-      });
-      
-      if (response.ok) {
-        console.log(`Successfully fetched from gateway: ${gateway}`);
-        return response;
-      }
-      
-      console.log(`Gateway ${gateway} failed with status: ${response.status}`);
-      lastError = response;
-    } catch (error) {
-      console.log(`Gateway ${gateway} error: ${error.message}`);
-      lastError = error;
-    }
-  }
-  
-  // If all gateways fail, throw the last error
-  throw new Error(`All IPFS gateways failed. Last error: ${lastError}`);
-}
-
-/**
  * Return a static placeholder image
  * @param {Object} res - Express response object
  */
@@ -93,23 +32,29 @@ function returnPlaceholder(res) {
       return res.sendFile(PLACEHOLDER_PATH);
     }
     
-    // If the file doesn't exist, send a transparent pixel
-    const transparentPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    // If the file doesn't exist, generate a simple SVG placeholder
+    const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+      <rect width="200" height="200" fill="#f0f0f0"/>
+      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+    </svg>`);
     
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET');
-    return res.status(200).send(transparentPixel);
+    return res.status(200).send(placeholderSvg);
   } catch (error) {
     console.error('Error returning placeholder:', error);
     
-    // Last resort - send a small transparent PNG directly
-    const transparentPixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
+    // Last resort - generate an SVG directly
+    const transparentSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+      <rect width="200" height="200" fill="#f5f5f5"/>
+      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image Error</text>
+    </svg>`);
     
-    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('Content-Type', 'image/svg+xml');
     res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.status(200).send(transparentPixel);
+    return res.status(200).send(transparentSvg);
   }
 }
 
@@ -119,11 +64,22 @@ function returnPlaceholder(res) {
  * @param {Object} res - Express response object
  */
 async function handleImageProxy(req, res) {
+  // Set CORS headers early
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle OPTIONS requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
   try {
     // Get the URL from the query parameter
     const url = req.query.url;
     
     if (!url) {
+      console.error('No URL parameter provided');
       return returnPlaceholder(res);
     }
     
@@ -143,92 +99,105 @@ async function handleImageProxy(req, res) {
       return returnPlaceholder(res);
     }
     
-    let response;
+    // Determine which method to use for fetching
+    let proxyUrl = url;
+    let customHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Referer': 'https://gall3ry.vercel.app/',
+      'Accept': 'image/*,*/*;q=0.8'
+    };
     
-    // Special handling for IPFS URLs
-    if (url.includes('/ipfs/') || url.startsWith('ipfs://')) {
-      try {
-        response = await tryMultipleGateways(url);
-      } catch (error) {
-        console.error('IPFS gateway error:', error.message);
-        return returnPlaceholder(res);
-      }
-    } else {
-      // For non-IPFS URLs, use normal fetch with timeout
-      try {
-        response = await fetch(url, {
-          headers: {
-            // Send a realistic user agent to avoid being blocked
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': '*/*',
-            'Referer': 'https://gallery.xyz/'
-          },
-          timeout: 10000 // 10 second timeout
-        });
-      } catch (error) {
-        console.error('Fetch error:', error.message);
-        return returnPlaceholder(res);
-      }
+    // Handle special URLs
+    
+    // Handle IPFS URLs
+    if (proxyUrl.startsWith('ipfs://')) {
+      const ipfsHash = proxyUrl.replace('ipfs://', '');
+      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
     }
     
-    if (!response.ok) {
-      console.error(`Error fetching image: ${response.status} ${response.statusText}`);
+    // Handle Arweave URLs
+    if (proxyUrl.startsWith('ar://')) {
+      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle HTTP URLs to ensure they're HTTPS
+    if (proxyUrl.startsWith('http://')) {
+      proxyUrl = proxyUrl.replace('http://', 'https://');
+      console.log(`Converted HTTP to HTTPS: ${url} -> ${proxyUrl}`);
+    }
+    
+    console.log(`Attempting to fetch: ${proxyUrl}`);
+    
+    // Try to fetch the image with axios instead of fetch
+    let response;
+    try {
+      response = await axios({
+        method: 'get',
+        url: proxyUrl,
+        responseType: 'arraybuffer',
+        timeout: 10000, // 10 second timeout
+        headers: customHeaders,
+        // Don't throw on non-200 status codes
+        validateStatus: () => true
+      });
+    } catch (error) {
+      console.error(`Axios error for ${proxyUrl}:`, error.message);
       return returnPlaceholder(res);
     }
     
-    // Get content type and body
-    let contentType = response.headers.get('content-type');
+    // Check the status code
+    if (response.status >= 400) {
+      console.error(`Error status ${response.status} from ${proxyUrl}`);
+      return returnPlaceholder(res);
+    }
     
-    try {
-      const buffer = await response.buffer();
-      
-      // If no content type or not image, try to detect from content or URL
-      if (!contentType || !contentType.includes('image')) {
-        // Try to detect content type from URL
-        if (url.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
-        else if (url.match(/\.png$/i)) contentType = 'image/png';
-        else if (url.match(/\.gif$/i)) contentType = 'image/gif';
-        else if (url.match(/\.svg$/i)) contentType = 'image/svg+xml';
-        else if (url.match(/\.webp$/i)) contentType = 'image/webp';
-        else {
-          // Check if buffer starts with image magic numbers
-          if (buffer.length > 2) {
+    // Get content type
+    let contentType = response.headers['content-type'];
+    
+    // If no content type, try to infer from URL or data
+    if (!contentType || !contentType.includes('image')) {
+      if (proxyUrl.match(/\.jpg$|\.jpeg$/i)) contentType = 'image/jpeg';
+      else if (proxyUrl.match(/\.png$/i)) contentType = 'image/png';
+      else if (proxyUrl.match(/\.gif$/i)) contentType = 'image/gif';
+      else if (proxyUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
+      else if (proxyUrl.match(/\.webp$/i)) contentType = 'image/webp';
+      else {
+        console.warn(`Response from ${proxyUrl} does not have image content type`);
+        // Check if the response looks like an image anyway
+        if (response.data && response.data.length > 0) {
+          // Try to detect from content
+          const buffer = Buffer.from(response.data);
+          if (buffer.length > 4) {
             const header = buffer.slice(0, 4);
-            if (header.equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))) contentType = 'image/png';
-            else if (header.equals(Buffer.from([0xFF, 0xD8, 0xFF]))) contentType = 'image/jpeg';
-            else if (header.equals(Buffer.from([0x47, 0x49, 0x46]))) contentType = 'image/gif';
-            else if (buffer.toString('utf8', 0, 5) === '<?xml' || buffer.toString('utf8', 0, 4) === '<svg') contentType = 'image/svg+xml';
+            if (Buffer.compare(header, Buffer.from([0x89, 0x50, 0x4E, 0x47])) === 0) {
+              contentType = 'image/png';
+            } else if (Buffer.compare(header.slice(0, 2), Buffer.from([0xFF, 0xD8])) === 0) {
+              contentType = 'image/jpeg';
+            } else if (Buffer.compare(header.slice(0, 3), Buffer.from([0x47, 0x49, 0x46])) === 0) {
+              contentType = 'image/gif';
+            } else {
+              // Default to octet-stream if we can't detect
+              contentType = 'application/octet-stream';
+            }
           }
+        } else {
+          console.error('Empty or invalid response data');
+          return returnPlaceholder(res);
         }
       }
-      
-      // If still no content type or not an image, return placeholder
-      if (!contentType || !contentType.includes('image')) {
-        console.warn(`Response is not an image: ${contentType || 'unknown type'}`);
-        return returnPlaceholder(res);
-      }
-      
-      if (buffer.length === 0) {
-        console.warn('Empty response buffer');
-        return returnPlaceholder(res);
-      }
-      
-      // Set proper cache headers
-      res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-      res.setHeader('Content-Type', contentType);
-      
-      // Add CORS headers
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET');
-      
-      // Send the image data
-      return res.send(buffer);
-    } catch (error) {
-      console.error('Error processing response:', error);
-      return returnPlaceholder(res);
     }
+    
+    // Set response headers
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    
+    // Send the data
+    return res.send(response.data);
   } catch (error) {
-    console.error('Image proxy error:', error);
+    console.error('Image proxy error:', error.message);
     return returnPlaceholder(res);
   }
 }
