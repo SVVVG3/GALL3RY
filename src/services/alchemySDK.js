@@ -109,39 +109,12 @@ export const getNFTsForOwner = async (owner, options = {}) => {
   }
 
   try {
-    console.log(`Fetching NFTs for ${owner} using Alchemy SDK (apiKey: ${apiKey.substring(0, 4)}...)`);
+    console.log(`Fetching NFTs for ${owner} via proxy endpoint`);
     
-    // Set default options
-    const fetchOptions = {
-      pageSize: options.pageSize || 50,      // Reduced from 100 to 50 for better performance
-      pageKey: options.pageKey || undefined,
-      excludeFilters: ['SPAM'],
-      omitMetadata: false,                   // Always include metadata
-      refreshCache: false                    // Use cached data when available for performance
-    };
-    
-    // Make the API call using the SDK
-    console.time('Alchemy API Call');
-    const nftsData = await alchemy.nft.getNftsForOwner(owner, fetchOptions);
-    console.timeEnd('Alchemy API Call');
-    
-    console.log(`Successfully fetched ${nftsData.ownedNfts.length} NFTs for ${owner}`);
-    
-    // Return consistently structured data
-    return {
-      nfts: nftsData.ownedNfts,
-      pageKey: nftsData.pageKey,
-      totalCount: nftsData.totalCount,
-      hasMore: !!nftsData.pageKey,
-    };
+    // Always use the proxy endpoint instead of direct Alchemy API calls
+    return fetchNFTsViaProxy(owner, options);
   } catch (error) {
-    console.error('Error fetching NFTs from Alchemy:', error);
-    
-    // Provide more helpful error message
-    if (apiKey === 'demo') {
-      throw new Error('Demo API key is causing rate limiting. Please use a real Alchemy API key.');
-    }
-    
+    console.error(`Error fetching NFTs for ${owner}:`, error);
     throw error;
   }
 };
@@ -158,11 +131,11 @@ export const getNFTsForMultipleOwners = async (addresses, options = {}) => {
   }
 
   try {
-    console.log(`Fetching NFTs for ${addresses.length} addresses using Alchemy SDK`);
+    console.log(`Fetching NFTs for ${addresses.length} addresses via proxy endpoint`);
     
     // Make API calls in parallel for better performance
     const requests = addresses.map(address => 
-      getNFTsForOwner(address, options)
+      fetchNFTsViaProxy(address, options)
         .then(result => ({
           ...result,
           // Add owner address to each NFT for filtering later
