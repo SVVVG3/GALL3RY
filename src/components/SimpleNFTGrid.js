@@ -17,6 +17,22 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
     return `hsl(${hash % 360}, 70%, 80%)`;
   }, [nftId]);
   
+  // Generate network-based badge color 
+  const networkBadgeColor = useMemo(() => {
+    if (!nft.network) return '#888';
+    
+    const networkColors = {
+      'ethereum': '#62688F',
+      'polygon': '#8247E5',
+      'arbitrum': '#28A0F0',
+      'optimism': '#FF0420',
+      'base': '#0052FF',
+      'zora': '#909090'
+    };
+    
+    return networkColors[nft.network] || '#888';
+  }, [nft.network]);
+  
   // Handle image errors internally first
   const handleImageError = () => {
     setImageError(true);
@@ -81,6 +97,23 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             )}
           </div>
         )}
+        
+        {/* Chain badge */}
+        {nft.network && (
+          <div style={{
+            position: 'absolute',
+            top: '5px',
+            right: '5px',
+            background: networkBadgeColor,
+            color: 'white',
+            borderRadius: '4px',
+            padding: '2px 6px',
+            fontSize: '10px',
+            fontWeight: 'bold'
+          }}>
+            {nft.network}
+          </div>
+        )}
       </div>
       <div className="nft-info">
         <h3 className="nft-name">{title}</h3>
@@ -97,6 +130,14 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
   // Track image loading state
   const [loadedImages, setLoadedImages] = useState({});
   const [failedImages, setFailedImages] = useState({});
+  
+  // Debug the NFT structure
+  useEffect(() => {
+    if (nfts && nfts.length > 0) {
+      console.log(`SimpleNFTGrid received ${nfts.length} NFTs`);
+      console.log('Sample NFT structure:', nfts[0]);
+    }
+  }, [nfts]);
   
   // Reset tracking when NFTs change
   useEffect(() => {
@@ -199,13 +240,35 @@ const SimpleNFTGrid = ({ nfts = [] }) => {
 // Helper functions - moved outside component and optimized
 function getNftKey(nft) {
   if (!nft) return 'unknown';
-  return nft.id || 
-         `${nft.contractAddress || nft.contract?.address || ''}_${nft.tokenId || ''}` || 
-         String(Math.random());
+  
+  // Handle new Farcaster context format
+  if (nft.id) return nft.id;
+  
+  // Handle older format
+  if (nft.contractAddress && nft.tokenId) {
+    return `${nft.contractAddress}_${nft.tokenId}`;
+  }
+  
+  // Handle Alchemy format
+  if (nft.contract && nft.contract.address && nft.tokenId) {
+    return `${nft.contract.address}_${nft.tokenId}`;
+  }
+  
+  // Fallback to random ID
+  return String(Math.random());
 }
 
 function getImageUrl(nft) {
   if (!nft) return null;
+  
+  // Special console log for debugging image URL extraction
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Getting image URL for NFT:', nft.id || nft.tokenId);
+  }
+  
+  // Handle Farcaster format first
+  if (nft.imageUrl) return nft.imageUrl;
+  if (nft.previewUrl) return nft.previewUrl;
   
   // Try all possible image paths in order of reliability
   let imageUrl = null;
@@ -296,16 +359,25 @@ function getImageUrl(nft) {
 
 function getNftTitle(nft) {
   if (!nft) return 'Unknown NFT';
-  return nft.name || nft.title || `#${nft.tokenId || '0'}`;
+  
+  // Try various name fields
+  return nft.name || nft.title || nft.tokenName || `#${nft.tokenId || '0'}`;
 }
 
 function getCollectionName(nft) {
   if (!nft) return 'Unknown Collection';
   
+  // Try collection name from Farcaster format
+  if (nft.collectionName) {
+    return nft.collectionName;
+  }
+  
+  // Try collection object
   if (nft.collection && nft.collection.name) {
     return nft.collection.name;
   }
   
+  // Try contract formats
   if (nft.contract) {
     if (nft.contract.name) {
       return nft.contract.name;
@@ -320,8 +392,14 @@ function getCollectionName(nft) {
     }
   }
   
+  // Try contractAddress directly
   if (nft.contractAddress) {
     return `${nft.contractAddress.slice(0, 6)}...${nft.contractAddress.slice(-4)}`;
+  }
+  
+  // Handle network info if all else fails
+  if (nft.network) {
+    return `Unknown on ${nft.network}`;
   }
   
   return 'Unknown Collection';
