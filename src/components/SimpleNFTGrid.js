@@ -145,66 +145,61 @@ const getImageUrl = (nft) => {
  * NFT Card Component
  * Displays an individual NFT with image and metadata
  */
-const NFTCard = ({ nft, collectionName }) => {
-  const [isImageLoaded, setIsImageLoaded] = useState(false);
-  const [isImageError, setIsImageError] = useState(false);
-  
-  // Get the image URL using our helper function
+const NFTCard = ({ nft }) => {
+  const [imageState, setImageState] = useState({
+    loaded: false,
+    error: false,
+    isLoading: true
+  });
   const imageUrl = getImageUrl(nft);
-  
-  // Get title and collection name
-  const title = nft.name || nft.title || `NFT #${nft.token_id || nft.tokenId || ''}`;
-  const collection = collectionName || getCollectionName(nft) || '';
-  
-  // Handle image load
-  const handleImageLoad = () => {
-    console.log("Image loaded:", imageUrl);
-    setIsImageLoaded(true);
-    setIsImageError(false);
+  const nftTitle = nft.metadata?.name || nft.name || `NFT #${nft.token_id}`;
+
+  const handleLoad = () => {
+    console.log("Image loaded successfully", imageUrl);
+    setImageState({
+      loaded: true,
+      error: false,
+      isLoading: false
+    });
   };
-  
-  // Handle image error
-  const handleImageError = () => {
-    console.log("Image error:", imageUrl);
-    setIsImageLoaded(false);
-    setIsImageError(true);
+
+  const handleError = () => {
+    console.error("Failed to load image", imageUrl);
+    setImageState({
+      loaded: false,
+      error: true,
+      isLoading: false
+    });
   };
-  
+
   return (
-    <div className="nft-item">
-      <Link to={`/nft/${nft.contract_address || nft.contractAddress || ''}/${nft.token_id || nft.tokenId || ''}`} className="nft-link">
-        <div className="nft-card-container">
-          <div className="nft-image-container">
-            {isImageError ? (
-              <div className="nft-image-error">
-                <span>Failed to load image</span>
-                <div className="error-text">{nft.token_id || nft.tokenId || ''}</div>
-              </div>
-            ) : !isImageLoaded ? (
-              <div className="nft-image-placeholder">Loading...</div>
-            ) : null}
-            
-            <div 
-              className={`nft-bg-image ${isImageLoaded ? 'loaded' : ''}`}
-              style={{
-                backgroundImage: isImageLoaded ? `url(${imageUrl})` : 'none',
-                backgroundSize: 'contain'
-              }}
-            ></div>
-            
-            <img
-              src={imageUrl}
-              alt={title}
-              className="nft-image"
-              onLoad={handleImageLoad}
-              onError={handleImageError}
-            />
-          </div>
-          
-          <div className="nft-info">
-            <h3>{title}</h3>
-            {collection && <div className="collection-name">{collection}</div>}
-          </div>
+    <div className="nft-card-container">
+      <Link to={`/nft/${nft.contract_address}/${nft.token_id}`} className="nft-link">
+        <div className="nft-image-container">
+          {imageUrl && !imageState.error && (
+            <>
+              <div className="nft-bg-image" style={{ backgroundImage: `url(${imageUrl})` }} />
+              <img
+                src={imageUrl}
+                alt={nftTitle}
+                className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
+                onLoad={handleLoad}
+                onError={handleError}
+              />
+            </>
+          )}
+          {imageState.isLoading && !imageState.error && (
+            <div className="nft-image-placeholder">Loading...</div>
+          )}
+          {imageState.error && (
+            <div className="nft-image-error">Failed to load</div>
+          )}
+        </div>
+        <div className="nft-info">
+          <h3 className="nft-title">{nftTitle}</h3>
+          {nft.collection_name && (
+            <p className="nft-collection">{nft.collection_name}</p>
+          )}
         </div>
       </Link>
     </div>
@@ -234,16 +229,17 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
 
   return (
     <div className="nft-grid-container">
-      <div className="fallback-grid">
+      <div className="nft-grid">
         {nfts.map((nft, index) => {
-          // Extract collection name when available
-          const collectionName = getCollectionName(nft);
+          // Ensure collection_name is set on the nft object if not already present
+          if (!nft.collection_name) {
+            nft.collection_name = getCollectionName(nft);
+          }
           
           return (
             <NFTCard 
               key={getNftKey(nft) || index} 
               nft={nft}
-              collectionName={collectionName}
             />
           );
         })}
