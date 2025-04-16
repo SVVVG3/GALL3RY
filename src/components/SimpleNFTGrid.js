@@ -180,9 +180,11 @@ const NFTCard = React.memo(({ nft, style }) => {
       imageUrl, 
       imageLoaded, 
       imageError,
-      retryCount
+      retryCount,
+      floorPrice,
+      collection
     });
-  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount]);
+  }, [imageLoaded, imageError, title, tokenId, imageUrl, retryCount, floorPrice, collection]);
   
   // Handle image loading events
   const handleImageLoad = () => {
@@ -363,19 +365,42 @@ const getFloorPrice = (nft) => {
   
   // Try different price locations depending on the data source
   let price = null;
+  let currency = 'ETH';
   
-  if (nft.collection && nft.collection.floorPrice) {
-    price = nft.collection.floorPrice;
-  } else if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.floorPrice) {
+  // Check for OpenSea floor price in contractMetadata
+  if (nft.contractMetadata && nft.contractMetadata.openSea && nft.contractMetadata.openSea.floorPrice) {
     price = nft.contractMetadata.openSea.floorPrice;
-  } else if (nft.floor_price) {
+  }
+  // Check for floor price in collection data
+  else if (nft.collection && nft.collection.floorPrice) {
+    price = nft.collection.floorPrice;
+  }
+  // Check for direct floor_price property
+  else if (nft.floor_price) {
     price = nft.floor_price;
+  }
+  // Check for pricing in contract object
+  else if (nft.contract && nft.contract.openSea && nft.contract.openSea.floorPrice) {
+    price = nft.contract.openSea.floorPrice;
+  }
+  
+  // Determine currency based on network
+  if (nft.network === 'polygon' || (nft.id && typeof nft.id === 'string' && nft.id.startsWith('polygon:'))) {
+    currency = 'MATIC';
+  } else if (nft.network === 'base' || (nft.id && typeof nft.id === 'string' && nft.id.startsWith('base:'))) {
+    currency = 'ETH';
+  }
+  
+  // Adjust NaN price
+  if (price && isNaN(parseFloat(price))) {
+    console.log(`Invalid price format: ${price}`);
+    return '';
   }
   
   // Format price if available
   if (price) {
     // Convert to a readable format (2 decimals)
-    return `Floor: ${parseFloat(price).toFixed(2)} ETH`;
+    return `Floor: ${parseFloat(price).toFixed(4)} ${currency}`;
   }
   
   return '';
