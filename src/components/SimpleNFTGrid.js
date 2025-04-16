@@ -3,6 +3,29 @@ import '../styles/NFTGrid.css';
 import { Link } from 'react-router-dom';
 
 /**
+ * Potentially routes an image through a CORS proxy if needed
+ * @param {string} url - The original image URL 
+ * @returns {string} - URL potentially routed through proxy
+ */
+const getCORSProxyUrl = (url) => {
+  if (!url) return '';
+  
+  // Check if we should use a proxy
+  const needsProxy = 
+    url.includes('nft-cdn.alchemy.com') || 
+    url.includes('i.seadn.io') ||
+    url.includes('cloudflare-ipfs.com');
+  
+  if (needsProxy) {
+    // Use a CORS proxy or refer to local proxy handler on your server
+    // Comment this out if you don't need a proxy or are having issues with it
+    // return `https://corsproxy.io/?${encodeURIComponent(url)}`;
+  }
+  
+  return url;
+};
+
+/**
  * Get a safe image URL from the NFT data
  * @param {Object} nft - The NFT data object
  * @returns {string} - A valid image URL or empty string if none found
@@ -19,8 +42,7 @@ const getImageUrl = (nft) => {
     hasImage: !!nft.image,
     imageType: nft.image ? typeof nft.image : 'undefined',
     hasMetadata: !!nft.metadata,
-    hasTokenMetadata: !!(nft.tokenMetadata || nft.tokenURI),
-    hasMediaArray: !!(nft.media && Array.isArray(nft.media))
+    hasTokenMetadata: !!(nft.tokenMetadata || nft.tokenURI)
   });
   
   // PRIORITY 1: Direct image URL (if string)
@@ -137,8 +159,8 @@ const getImageUrl = (nft) => {
   // Handle IPFS URLs
   if (imageUrl && imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
-    // Try Cloudflare IPFS gateway (often more reliable)
-    imageUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+    // Try multiple IPFS gateways for better reliability
+    imageUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
     console.log('Converted IPFS URL:', imageUrl);
   }
   
@@ -160,15 +182,24 @@ const getImageUrl = (nft) => {
     console.log('Using fallback placeholder - no image URL found');
   }
   
-  // After PRIORITY 1, add this handling for Alchemy CDN URLs
+  // Special handling for NFT CDN URLs 
+  // Format detection based on the console logs
   if (imageUrl && (
-      imageUrl.includes('nft-cdn.alchemy.com/matic-mainnet/') || 
-      imageUrl.includes('nft-cdn.alchemy.com/base-mainnet/') ||
-      imageUrl.includes('nft-cdn.alchemy.com/eth-mainnet/')
-    ) && !imageUrl.includes('?')) {
-    // Alchemy CDN URLs need the format parameter
-    imageUrl = `${imageUrl}/original.webp`;
-    console.log('Added extension to Alchemy CDN URL:', imageUrl);
+      imageUrl.includes('nft-cdn.alchemy.com/') ||
+      imageUrl.includes('res.cloudinary.com/')
+    ) && !imageUrl.includes('?') && !imageUrl.endsWith('.jpg') && 
+       !imageUrl.endsWith('.png') && !imageUrl.endsWith('.webp') && 
+       !imageUrl.endsWith('.gif')) {
+    // Store the original URL for fallbacks
+    const originalUrl = imageUrl;
+    
+    // For Alchemy CDN, we need to add the format
+    if (imageUrl.includes('nft-cdn.alchemy.com/')) {
+      // First try jpg - often more compatible
+      imageUrl = `${originalUrl}/original.jpg`;
+    }
+    
+    console.log('Formatted NFT CDN URL:', imageUrl);
   }
   
   return imageUrl;
@@ -182,11 +213,16 @@ const NFTCard = ({ nft }) => {
   const [imageState, setImageState] = useState({
     loaded: false,
     error: false,
-    isLoading: true
+    isLoading: true,
+    currentUrl: null,
+    attemptCount: 0
   });
   
-  // Extract image URL using our utility function
-  const imageUrl = getImageUrl(nft);
+  // Get primary image URL
+  const primaryImageUrl = getImageUrl(nft);
+  
+  // Track the current URL being used
+  const [currentImageUrl, setCurrentImageUrl] = useState(primaryImageUrl);
   
   // Get the NFT title
   const nftTitle = nft.metadata?.name || nft.name || `NFT #${nft.token_id || nft.tokenId}`;
@@ -200,112 +236,129 @@ const NFTCard = ({ nft }) => {
   // Get token ID from various possible locations
   const tokenId = nft.token_id || nft.tokenId || getTokenId(nft);
 
+  // Generate fallback URLs for different image formats
+  const generateFallbackUrls = useCallback((baseUrl) => {
+    if (!baseUrl) return [];
+    
+    let urls = [];
+    
+    // For Alchemy CDN URLs, try different formats
+    if (baseUrl.includes('nft-cdn.alchemy.com/') && !baseUrl.includes('original.')) {
+      const baseWithoutExt = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+      urls = [
+        `${baseWithoutExt}/original.jpg`,  // Try JPG first (most compatible)
+        `${baseWithoutExt}/original.png`,  // Then PNG
+        `${baseWithoutExt}/original.webp`  // Finally WEBP
+      ];
+    }
+    // For IPFS, try different gateways
+    else if (baseUrl.includes('ipfs.io')) {
+      const ipfsPath = baseUrl.split('/ipfs/')[1];
+      urls = [
+        `https://cloudflare-ipfs.com/ipfs/${ipfsPath}`,
+        `https://ipfs.io/ipfs/${ipfsPath}`,
+        `https://gateway.pinata.cloud/ipfs/${ipfsPath}`
+      ];
+    }
+    // For i.seadn.io (OpenSea), add direct URL first
+    else if (baseUrl.includes('i.seadn.io')) {
+      urls = [baseUrl];
+    }
+    // Otherwise just use the original
+    else {
+      urls = [baseUrl];
+    }
+    
+    // Also try with CORS proxy for troublesome services
+    urls = [...urls];
+    
+    // Ensure no duplicates
+    return [...new Set(urls)];
+  }, []);
+
+  // Try all fallbacks in sequence
   useEffect(() => {
-    // Reset state when NFT changes
+    if (!primaryImageUrl) {
+      setImageState({
+        loaded: false, 
+        error: true,
+        isLoading: false,
+        currentUrl: null,
+        attemptCount: 0
+      });
+      return;
+    }
+    
+    // Reset state when primary URL changes
     setImageState({
       loaded: false,
       error: false,
-      isLoading: true
+      isLoading: true,
+      currentUrl: primaryImageUrl,
+      attemptCount: 0
     });
     
-    console.log(`Attempting to load image for NFT: ${nftTitle}`, {
-      imageUrl,
-      nftData: {
-        id: nft.id,
-        contractAddress,
-        tokenId
-      }
-    });
+    // Initialize with the primary URL
+    setCurrentImageUrl(primaryImageUrl);
     
-    // Preload image
-    if (imageUrl) {
+    // Generate fallback URLs
+    const fallbackUrls = generateFallbackUrls(primaryImageUrl);
+    console.log(`Generated ${fallbackUrls.length} fallback URLs for ${nftTitle}:`, fallbackUrls);
+    
+    // Function to try loading an image
+    const tryLoadImage = (url, attemptIndex) => {
+      console.log(`Attempt ${attemptIndex+1}/${fallbackUrls.length}: Loading ${url} for ${nftTitle}`);
+      
       const img = new Image();
       
       img.onload = () => {
-        console.log(`✅ Successfully loaded image: ${imageUrl}`, {
-          width: img.width,
-          height: img.height
-        });
+        console.log(`✅ Successfully loaded image ${url} for ${nftTitle}`);
         setImageState({
           loaded: true,
           error: false,
-          isLoading: false
+          isLoading: false,
+          currentUrl: url,
+          attemptCount: attemptIndex + 1
         });
+        setCurrentImageUrl(url);
       };
       
-      img.onerror = (e) => {
-        console.error(`❌ Failed to load image: ${imageUrl}`, e);
+      img.onerror = () => {
+        console.error(`❌ Failed to load image ${url} for ${nftTitle}`);
         
-        // Try with a different extension if it's an Alchemy URL
-        if (imageUrl.includes('nft-cdn.alchemy.com') && imageUrl.includes('/original.webp')) {
-          const fallbackUrl = imageUrl.replace('/original.webp', '/original.png');
-          console.log(`Trying fallback URL: ${fallbackUrl}`);
-          
-          const fallbackImg = new Image();
-          fallbackImg.onload = () => {
-            console.log(`✅ Successfully loaded fallback image: ${fallbackUrl}`);
-            setImageState({
-              loaded: true,
-              error: false,
-              isLoading: false
-            });
-          };
-          
-          fallbackImg.onerror = () => {
-            console.error(`❌ Failed to load fallback image: ${fallbackUrl}`);
-            setImageState({
-              loaded: false,
-              error: true,
-              isLoading: false
-            });
-          };
-          
-          fallbackImg.src = fallbackUrl;
+        // Try next fallback if available
+        if (attemptIndex < fallbackUrls.length - 1) {
+          tryLoadImage(fallbackUrls[attemptIndex + 1], attemptIndex + 1);
         } else {
+          // All fallbacks failed
           setImageState({
             loaded: false,
             error: true,
-            isLoading: false
+            isLoading: false,
+            currentUrl: null,
+            attemptCount: attemptIndex + 1
           });
         }
       };
       
-      // Start loading the image
-      img.src = imageUrl;
+      img.src = url;
+    };
+    
+    // Start trying with the first URL
+    if (fallbackUrls.length > 0) {
+      tryLoadImage(fallbackUrls[0], 0);
     }
-  }, [imageUrl, nft, nftTitle, contractAddress, tokenId]);
-
-  // Debugging NFT data
-  console.log('NFT Data:', {
-    title: nftTitle,
-    imageUrl,
-    contractAddress,
-    tokenId,
-    hasMetadata: !!nft.metadata,
-    rawNft: nft
-  });
+  }, [primaryImageUrl, nftTitle, generateFallbackUrls]);
 
   return (
     <div className="nft-card-container">
       <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link">
         <div className="nft-image-container">
-          {imageUrl && !imageState.error && (
+          {currentImageUrl && !imageState.error && (
             <img
-              src={imageUrl}
+              src={currentImageUrl}
               alt={nftTitle}
               className={`nft-image ${imageState.loaded ? 'loaded' : ''}`}
-              onLoad={() => {
-                // Additional on-load handler just to be safe
-                if (!imageState.loaded) {
-                  setImageState(prev => ({ ...prev, loaded: true, isLoading: false }));
-                }
-              }}
-              onError={() => {
-                // Additional on-error handler just to be safe
-                if (!imageState.error) {
-                  setImageState(prev => ({ ...prev, error: true, isLoading: false }));
-                }
-              }}
             />
           )}
           {imageState.isLoading && !imageState.error && (
