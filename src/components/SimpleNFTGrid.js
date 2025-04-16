@@ -98,35 +98,31 @@ const NFTCard = memo(({ nft, onLoad, onError }) => {
             )}
           </div>
         )}
-        
-        {/* Chain badge */}
-        {nft.network && (
-          <div style={{
-            position: 'absolute',
-            top: '2px',
-            right: '2px',
-            background: networkBadgeColor,
-            color: 'white',
-            borderRadius: '2px',
-            padding: '1px 3px',
-            fontSize: '8px',
-            fontWeight: 'bold'
-          }}>
-            {nft.network}
-          </div>
-        )}
       </div>
       <div className="nft-info">
         <div className="nft-name" title={title}>{title}</div>
         <div className="nft-collection" title={collection}>{collection}</div>
-        {floorPrice && (
-          <div className="nft-metadata">
+        
+        <div className="nft-metadata">
+          {floorPrice && (
             <div className="nft-price-container">
               <span className="nft-price">{floorPrice}</span>
               <span className="nft-price-label">Floor</span>
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Moved network badge to the info area */}
+          {nft.network && (
+            <div 
+              className="nft-network-badge"
+              style={{
+                backgroundColor: networkBadgeColor
+              }}
+            >
+              {nft.network}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
