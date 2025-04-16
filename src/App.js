@@ -18,8 +18,7 @@ import HomePage from './pages/HomePage'; // Import HomePage from the correct loc
 import safeStorage from './utils/storage';
 
 // Import our new components
-import { SimpleNFTProvider } from './contexts/SimpleNFTContext';
-import SimpleNFTGallery from './components/SimpleNFTGallery';
+import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 
 // Loading component for suspense fallback

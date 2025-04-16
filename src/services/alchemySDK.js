@@ -35,19 +35,62 @@ const fetchNFTsViaProxy = async (address, options = {}) => {
       throw new Error('Address is required');
     }
     
-    // Use the proxy endpoint
-    const response = await axios.get(PROXY_URL, {
-      params: {
-        endpoint: 'getnftsforowner',
-        chain: options.chain || 'eth',
-        owner: address,
-        pageSize: options.pageSize || 100,
-        withMetadata: true,
-        includeMedia: true
-      }
-    });
+    // Define chains to fetch from
+    const chains = options.chains || ['eth', 'polygon', 'arbitrum', 'optimism', 'base'];
+    let allNfts = [];
     
-    return response.data;
+    // For each chain, fetch NFTs and process pagination
+    for (const chain of chains) {
+      console.log(`Fetching NFTs for ${address} on ${chain}`);
+      let pageKey = null;
+      let hasMore = true;
+      
+      // Continue fetching pages until no more NFTs
+      while (hasMore) {
+        // Use the proxy endpoint
+        const response = await axios.get(PROXY_URL, {
+          params: {
+            endpoint: 'getnftsforowner',
+            chain: chain,
+            owner: address,
+            pageSize: options.pageSize || 100,
+            pageKey: pageKey,
+            withMetadata: true,
+            includeMedia: true
+          }
+        });
+        
+        // Process the response
+        const data = response.data;
+        
+        // Add chain identifier to each NFT
+        const nftsWithChain = (data.ownedNfts || []).map(nft => ({
+          ...nft,
+          chain: chain
+        }));
+        
+        // Add NFTs to our collection
+        allNfts = [...allNfts, ...nftsWithChain];
+        console.log(`Fetched ${nftsWithChain.length} NFTs for ${address} on ${chain}. Total: ${allNfts.length}`);
+        
+        // Check if there are more pages
+        pageKey = data.pageKey;
+        hasMore = !!pageKey && options.fetchAllPages !== false;
+        
+        // Safety limit - don't fetch more than 5 pages per chain
+        if (allNfts.length > 500 && options.fetchAllPages !== true) {
+          console.log(`Reached safety limit of 500 NFTs on ${chain}. Use options.fetchAllPages=true to override.`);
+          hasMore = false;
+        }
+      }
+    }
+    
+    // Return consolidated results
+    return {
+      nfts: allNfts,
+      totalCount: allNfts.length,
+      hasMore: false // All pages have been fetched
+    };
   } catch (error) {
     console.error('Error fetching NFTs via proxy:', error);
     throw error;

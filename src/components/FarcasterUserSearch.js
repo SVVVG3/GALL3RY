@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
-import SimpleNFTGrid from './SimpleNFTGrid';
+import NFTGrid from './NFTGrid';
 import { FaSort } from 'react-icons/fa';
 import '../styles/FarcasterUserSearch.css';
 import '../styles/FarcasterProfile.css';
@@ -514,10 +514,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
               <div className="loading-spinner"></div>
             ) : (
               <div className="nft-display">
-                <SimpleNFTGrid 
-                  nfts={filteredAndSortedNfts()} 
-                  isLoading={isSearching && userNfts.length === 0}
-                />
+                <NFTGrid nfts={filteredAndSortedNfts()} isLoading={isSearching && userNfts.length === 0} />
               </div>
             )}
           </div>

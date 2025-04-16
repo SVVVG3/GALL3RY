@@ -18,6 +18,29 @@ A web application for creating, organizing, and sharing NFT collections with Far
 - **Authentication**: Farcaster Auth Kit
 - **NFT Data**: Zapper API
 
+## Component Inventory
+
+This project follows standardized naming conventions for components. Here are the key components:
+
+### Core Components
+
+- **NFTGrid**: Displays a grid of NFTs with images and metadata. Handles loading states and supports various NFT data formats.
+- **NFTCard**: Individual NFT card display with image and metadata (used within NFTGrid).
+- **NFTGallery**: Main gallery container component that enables adding wallet addresses and searching NFTs.
+
+### Contexts
+
+- **NFTContext**: Provides NFT data fetching and management for complex use cases.
+- **SimpleNFTContext**: Simplified NFT context for basic NFT gallery functionality.
+- **AuthContext**: Handles user authentication state.
+- **WalletContext**: Manages connected wallet information.
+
+### Utility Functions
+
+- **getImageUrl**: Extracts and processes image URLs from NFT data.
+- **getCORSProxyUrl**: Handles CORS issues with certain image sources.
+- **getContractAddress/getTokenId**: Extract standardized data from various NFT formats.
+
 ## Getting Started
 
 ### Prerequisites

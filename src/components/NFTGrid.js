@@ -467,9 +467,21 @@ const NFTCard = ({ nft }) => {
 };
 
 /**
- * Simplified NFT Grid component 
+ * NFT Grid component 
+ * Primary component for displaying NFTs in a grid layout
+ * 
+ * Features:
+ * - Displays a grid of NFT cards with images and metadata
+ * - Handles loading states and empty states
+ * - Supports various NFT data formats from different sources
+ * - Automatically extracts collection names and other metadata
+ * 
+ * @param {Object[]} nfts - Array of NFT objects to display
+ * @param {boolean} isLoading - Whether NFTs are currently being loaded
+ * @param {string} emptyMessage - Optional custom message to show when no NFTs are found
+ * @returns {JSX.Element} The rendered NFT grid component
  */
-const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
+const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
   if (isLoading && (!nfts || nfts.length === 0)) {
     return (
       <div className="nft-grid-loader">
@@ -482,7 +494,7 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
   if (!nfts || nfts.length === 0) {
     return (
       <div className="nft-grid-empty">
-        <p className="nft-grid-no-results">No NFTs found</p>
+        <p className="nft-grid-no-results">{emptyMessage}</p>
       </div>
     );
   }
@@ -688,4 +700,4 @@ const getNftKey = (nft) => {
   return `${contract}-${tokenId}`;
 };
 
-export default SimpleNFTGrid; 
+export default NFTGrid; 

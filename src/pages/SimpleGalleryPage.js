@@ -1,17 +1,20 @@
 import React from 'react';
-import { SimpleNFTProvider } from '../contexts/SimpleNFTContext';
-import SimpleNFTGallery from '../components/SimpleNFTGallery';
+import { NFTProvider } from '../contexts/NFTContext';
+import NFTGallery from '../components/NFTGallery';
+import '../styles/Page.css';
 
 /**
- * SimpleGalleryPage - A minimal page that directly uses the new simplified NFT components
- * This avoids modifying the existing app structure while letting us test the new approach
+ * Simple Gallery Page
+ * Wrapper component that provides the page structure for the NFT Gallery
  */
 const SimpleGalleryPage = () => {
   return (
-    <div className="simple-gallery-page">
-      <SimpleNFTProvider>
-        <SimpleNFTGallery />
-      </SimpleNFTProvider>
+    <div className="page-container">
+      <div className="page-content">
+        <NFTProvider>
+          <NFTGallery />
+        </NFTProvider>
+      </div>
     </div>
   );
 };
