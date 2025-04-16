@@ -5,7 +5,7 @@ import '../styles/NFTGrid.css';
 const NFTCard = React.memo(({ nft }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [useDirectUrl, setUseDirectUrl] = useState(false);
+  const [useDirectUrl, setUseDirectUrl] = useState(true); // Start with direct URLs instead of proxy
   
   // Extract NFT data
   const title = getNftTitle(nft);
@@ -16,28 +16,18 @@ const NFTCard = React.memo(({ nft }) => {
   const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
   const openseaUrl = `https://opensea.io/assets/ethereum/${contractAddress}/${tokenId}`;
   
-  // Check for Alchemy media format first
-  const cachedImageUrl = getCachedImageUrl(nft);
+  // Extract image URL from NFT data - OpenSea URLs and IPFS URLs will be correctly handled
+  const rawImageUrl = getImageUrl(nft);
   
-  // Debug - log the NFT object
+  // For debugging - log the actual image URL being used
   useEffect(() => {
-    if (nft.media && nft.media.length > 0) {
-      console.log('NFT media object:', JSON.stringify(nft.media[0]));
-    }
-  }, [nft]);
+    console.log(`NFT (${title}) image source:`, rawImageUrl);
+    if (nft.metadata) console.log('NFT metadata:', nft.metadata);
+    if (nft.rawMetadata) console.log('NFT rawMetadata:', nft.rawMetadata);
+  }, [nft, title, rawImageUrl]);
   
-  // Get image URL - make sure we get a string URL, not an object
-  const imageUrl = cachedImageUrl || (useDirectUrl ? getImageUrl(nft) : `/api/image-proxy?url=${encodeURIComponent(getImageUrl(nft))}`);
-  
-  // Debug logging
-  useEffect(() => {
-    console.log('NFT card rendering:', {
-      title,
-      cachedImageUrl,
-      imageUrl,
-      useDirectUrl
-    });
-  }, [title, cachedImageUrl, imageUrl, useDirectUrl]);
+  // Use direct URL - proxy is causing issues
+  const imageUrl = rawImageUrl;
   
   const handleImageLoad = () => {
     setImageLoaded(true);
@@ -45,14 +35,7 @@ const NFTCard = React.memo(({ nft }) => {
   
   const handleImageError = () => {
     console.error('Image failed to load:', imageUrl);
-    
-    // If proxy failed, try direct URL
-    if (!useDirectUrl) {
-      console.log('Trying direct URL as fallback');
-      setUseDirectUrl(true);
-    } else {
-      setImageError(true);
-    }
+    setImageError(true);
   };
   
   // Create a fallback SVG with title
@@ -77,6 +60,7 @@ const NFTCard = React.memo(({ nft }) => {
                 onLoad={handleImageLoad}
                 onError={handleImageError}
                 loading="lazy"
+                referrerPolicy="no-referrer"
               />
             )}
           </div>
@@ -91,29 +75,6 @@ const NFTCard = React.memo(({ nft }) => {
     </div>
   );
 });
-
-// Function to get cached image URL directly from Alchemy CDN
-function getCachedImageUrl(nft) {
-  // Check for Alchemy's media format first (most reliable)
-  if (nft.media && nft.media.length > 0 && nft.media[0]) {
-    const media = nft.media[0];
-    
-    // String URL properties
-    if (typeof media.gateway === 'string') return media.gateway;
-    if (typeof media.thumbnail === 'string') return media.thumbnail;
-    
-    // Object properties that might contain URLs
-    if (media.gateway && typeof media.gateway.cachedUrl === 'string') return media.gateway.cachedUrl;
-    if (media.raw && typeof media.raw === 'string') {
-      if (media.raw.startsWith('ipfs://')) {
-        return media.raw.replace('ipfs://', 'https://ipfs.io/ipfs/');
-      }
-      return media.raw;
-    }
-  }
-  
-  return null;
-}
 
 /**
  * Simplified NFT Grid component 
@@ -198,42 +159,55 @@ const SimpleNFTGrid = ({ nfts, isLoading, loadMore, hasNextPage }) => {
 const getImageUrl = (nft) => {
   if (!nft) return '';
   
-  // Try to extract from metadata directly
-  if (nft.rawMetadata && nft.rawMetadata.image) {
-    const rawImage = nft.rawMetadata.image;
-    if (typeof rawImage === 'string') {
-      if (rawImage.startsWith('ipfs://')) {
-        return rawImage.replace('ipfs://', 'https://ipfs.io/ipfs/');
-      }
-      return rawImage;
-    }
-  }
-  
-  // Try standard fields first
-  if (typeof nft.image === 'string') return nft.image;
-  if (typeof nft.image_url === 'string') return nft.image_url;
-  if (typeof nft.imageUrl === 'string') return nft.imageUrl;
-  if (typeof nft.image_preview_url === 'string') return nft.image_preview_url;
-  
-  // Try direct metadata image if it exists
-  if (nft.metadata && typeof nft.metadata.image === 'string') {
-    const metadataImage = nft.metadata.image;
-    if (metadataImage.startsWith('ipfs://')) {
-      return metadataImage.replace('ipfs://', 'https://ipfs.io/ipfs/');
-    }
-    return metadataImage;
-  }
-  
-  // Last resort: try to generate an OpenSea URL if we have contract and token ID
+  // OpenSea Asset URL Generation (for images that are only on OpenSea)
+  // This is often the most reliable source
   const contractAddress = getContractAddress(nft);
   const tokenId = nft.tokenId || nft.id?.tokenId || nft.token_id;
   
   if (contractAddress && tokenId) {
-    return `https://api.opensea.io/api/v1/asset/${contractAddress}/${tokenId}/image`;
+    // Use this URL format for OpenSea assets
+    return `https://assets.coingecko.com/nft_images/ethereum/${contractAddress}/${tokenId}.png`;
   }
   
-  return ''; // No valid image URL found
+  // Extract URLs from various metadata formats
+  // Check for raw URLs in top-level properties first - most reliable
+  if (typeof nft.image === 'string' && nft.image) return cleanUrl(nft.image);
+  if (typeof nft.image_url === 'string' && nft.image_url) return cleanUrl(nft.image_url);
+  if (typeof nft.imageUrl === 'string' && nft.imageUrl) return cleanUrl(nft.imageUrl);
+  
+  // Check rawMetadata (used in some Alchemy responses)
+  if (nft.rawMetadata && typeof nft.rawMetadata.image === 'string' && nft.rawMetadata.image) {
+    return cleanUrl(nft.rawMetadata.image);
+  }
+  
+  // Check standard metadata format
+  if (nft.metadata && typeof nft.metadata.image === 'string' && nft.metadata.image) {
+    return cleanUrl(nft.metadata.image);
+  }
+  
+  // Try to get image from media
+  if (nft.media && nft.media.length > 0) {
+    const media = nft.media[0];
+    if (typeof media.gateway === 'string' && media.gateway) return media.gateway;
+    if (typeof media.raw === 'string' && media.raw) return cleanUrl(media.raw);
+    if (media.gateway && typeof media.gateway.cachedUrl === 'string') return media.gateway.cachedUrl;
+  }
+  
+  // Fall back to an image placeholder
+  return '';
 };
+
+// Helper to clean URLs (convert IPFS, etc)
+function cleanUrl(url) {
+  if (!url) return '';
+  
+  // Convert IPFS URLs to HTTP URLs
+  if (url.startsWith('ipfs://')) {
+    return url.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+  }
+  
+  return url;
+}
 
 const getNftTitle = (nft) => {
   if (!nft) return '';
