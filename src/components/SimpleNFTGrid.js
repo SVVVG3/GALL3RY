@@ -152,6 +152,10 @@ const NFTCard = ({ nft, collectionName }) => {
   // Get the image URL using our helper function
   const imageUrl = getImageUrl(nft);
   
+  // Get title and collection name
+  const title = nft.name || nft.title || `NFT #${nft.token_id || nft.tokenId || ''}`;
+  const collection = collectionName || getCollectionName(nft) || '';
+  
   // Handle image load
   const handleImageLoad = () => {
     console.log("Image loaded:", imageUrl);
@@ -168,13 +172,13 @@ const NFTCard = ({ nft, collectionName }) => {
   
   return (
     <div className="nft-item">
-      <Link to={`/nft/${nft.contract_address}/${nft.token_id}`} className="nft-link">
+      <Link to={`/nft/${nft.contract_address || nft.contractAddress || ''}/${nft.token_id || nft.tokenId || ''}`} className="nft-link">
         <div className="nft-card-container">
           <div className="nft-image-container">
             {isImageError ? (
               <div className="nft-image-error">
                 <span>Failed to load image</span>
-                <div className="error-text">{nft.token_id}</div>
+                <div className="error-text">{nft.token_id || nft.tokenId || ''}</div>
               </div>
             ) : !isImageLoaded ? (
               <div className="nft-image-placeholder">Loading...</div>
@@ -190,7 +194,7 @@ const NFTCard = ({ nft, collectionName }) => {
             
             <img
               src={imageUrl}
-              alt={`${nft.name || nft.token_id || ''}`}
+              alt={title}
               className="nft-image"
               onLoad={handleImageLoad}
               onError={handleImageError}
@@ -198,8 +202,8 @@ const NFTCard = ({ nft, collectionName }) => {
           </div>
           
           <div className="nft-info">
-            <h3>{nft.name || `#${nft.token_id}`}</h3>
-            {collectionName && <div className="collection-name">{collectionName}</div>}
+            <h3>{title}</h3>
+            {collection && <div className="collection-name">{collection}</div>}
           </div>
         </div>
       </Link>
@@ -231,12 +235,18 @@ const SimpleNFTGrid = ({ nfts = [], isLoading = false }) => {
   return (
     <div className="nft-grid-container">
       <div className="fallback-grid">
-        {nfts.map((nft, index) => (
-          <NFTCard 
-            key={getNftKey(nft) || index} 
-            nft={nft} 
-          />
-        ))}
+        {nfts.map((nft, index) => {
+          // Extract collection name when available
+          const collectionName = getCollectionName(nft);
+          
+          return (
+            <NFTCard 
+              key={getNftKey(nft) || index} 
+              nft={nft}
+              collectionName={collectionName}
+            />
+          );
+        })}
       </div>
     </div>
   );

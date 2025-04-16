@@ -19,7 +19,7 @@
   padding: 20px;
 }
 
-/* Card container styling */
+/* Card container styling - rectangular with proper aspect ratio */
 .nft-card-container {
   display: flex;
   flex-direction: column;
@@ -29,7 +29,7 @@
   transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
   height: 100%;
-  margin-bottom: 16px;
+  /* Card has natural proportions, not forced to be square */
 }
 
 .nft-card-container:hover {
@@ -53,7 +53,7 @@
   height: 100%;
 }
 
-/* Force square aspect ratio for image containers */
+/* Force square aspect ratio ONLY for image containers */
 .nft-image-container {
   position: relative;
   width: 100%;
@@ -63,7 +63,7 @@
   background-color: #f5f5f5;
 }
 
-/* Ensure background image fills the square */
+/* Ensure background image fills the square properly */
 .nft-bg-image {
   position: absolute;
   top: 0;
@@ -121,16 +121,18 @@
   font-size: 12px;
 }
 
-/* NFT info area */
+/* NFT info area - Give it specific styling to match design */
 .nft-info {
   padding: 12px 16px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
   background-color: #ffffff;
+  border-top: 1px solid #f0f0f0;
+  min-height: 50px; /* Ensure there's space for the text */
 }
 
-.nft-title {
+.nft-info h3 {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 4px 0;
@@ -140,7 +142,7 @@
   white-space: nowrap;
 }
 
-.nft-collection {
+.collection-name {
   font-size: 12px;
   color: #666;
   margin: 0 0 6px 0;
@@ -210,13 +212,13 @@
     padding: 8px;
   }
   
-  .nft-title {
-    font-size: 14px;
+  .nft-info h3 {
+    font-size: 13px;
   }
   
-  .nft-collection, 
+  .collection-name, 
   .nft-price {
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 
@@ -364,12 +366,12 @@
     min-height: 60px;
   }
   
-  .nft-title {
+  .nft-info h3 {
     font-size: 11px;
     margin-bottom: 3px;
   }
   
-  .nft-collection {
+  .collection-name {
     font-size: 10px;
     margin-bottom: 3px;
   }
@@ -528,7 +530,7 @@
   z-index: 3; /* Ensure info is always on top */
 }
 
-.nft-title {
+.nft-info h3 {
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 4px 0;
@@ -538,7 +540,7 @@
   white-space: nowrap;
 }
 
-.nft-collection {
+.collection-name {
   font-size: 12px;
   color: #666;
   margin: 0 0 6px 0;
@@ -597,13 +599,13 @@
     padding: 8px;
   }
   
-  .nft-title {
-    font-size: 14px;
+  .nft-info h3 {
+    font-size: 13px;
   }
   
-  .nft-collection, 
+  .collection-name, 
   .nft-price {
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 
