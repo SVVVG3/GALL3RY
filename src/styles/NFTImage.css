@@ -7,6 +7,8 @@
   background-color: #f8fafc;
   border-radius: 12px 12px 0 0;
   transition: all 0.3s ease;
+  width: 100%;
+  min-height: 200px; /* Ensure there's always space for the image */
 }
 
 /* Size variations */
@@ -46,14 +48,19 @@
   transition: opacity 0.3s ease;
   padding: 4px;
   max-height: 100%;
+  display: block !important; /* Force display */
+  opacity: 1 !important; /* Force visibility */
+  z-index: 1; /* Ensure it's above other elements */
 }
 
+/* Remove hidden class effect */
 .nft-image.hidden {
-  opacity: 0;
+  opacity: 1 !important;
 }
 
 /* Loading animation */
-.loading-indicator {
+.loading-indicator,
+.nft-media-loader {
   position: absolute;
   top: 0;
   left: 0;
@@ -63,6 +70,7 @@
   align-items: center;
   justify-content: center;
   background-color: rgba(248, 250, 252, 0.7);
+  z-index: 2; /* Place above the image but only when needed */
 }
 
 .spinner {
@@ -84,7 +92,8 @@
 }
 
 /* Error placeholder */
-.error-placeholder {
+.error-placeholder,
+.nft-media-error {
   position: absolute;
   top: 0;
   left: 0;
@@ -97,6 +106,20 @@
   color: #a0aec0;
   font-size: 32px;
   font-weight: bold;
+  z-index: 2; /* Place above the image when needed */
+}
+
+.placeholder-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  background-color: #f8fafc;
+  color: #a0aec0;
+  font-size: 16px;
+  text-align: center;
+  padding: 1rem;
 }
 
 /* State variations */
@@ -113,4 +136,25 @@
 /* Hover interactions */
 .nft-image-container:not(.loading):not(.error):hover {
   cursor: pointer;
+}
+
+/* Ensure the media container is properly sized */
+.nft-media-container {
+  position: relative;
+  width: 100%;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ensure media is visible */
+.nft-media {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 } 

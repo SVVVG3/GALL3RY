@@ -351,7 +351,7 @@ const NFTCard = ({ nft }) => {
             </div>
           )}
           
-          {media.status === 'loaded' && media.type === 'image' && (
+          {media.type === 'image' && (
             <img
               src={media.url}
               alt={title}
@@ -361,10 +361,11 @@ const NFTCard = ({ nft }) => {
               loading="lazy"
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
+              style={{ display: 'block', visibility: 'visible' }}
             />
           )}
           
-          {media.status === 'loaded' && media.type === 'video' && (
+          {media.type === 'video' && (
             <video
               src={media.url}
               className="nft-video-content loaded"
@@ -375,6 +376,7 @@ const NFTCard = ({ nft }) => {
               onLoadedData={handleMediaLoad}
               onError={handleMediaError}
               crossOrigin="anonymous"
+              style={{ display: 'block', visibility: 'visible' }}
             />
           )}
           

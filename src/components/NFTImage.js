@@ -31,6 +31,8 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
       return;
     }
 
+    console.log('NFTImage source changed:', { src, rawSrc });
+    
     // Reset states for new src
     setLoading(true);
     setError(false);
@@ -123,6 +125,16 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
         setMediaSrc(currentUrl);
         // Track the URLs we've tried
         setUrlsAttempted(prev => [...prev, currentUrl]);
+        
+        // Create a test image to check if URL is accessible directly
+        const testImg = new Image();
+        testImg.onload = () => {
+          console.log(`Test image loaded successfully: ${currentUrl}`);
+        };
+        testImg.onerror = () => {
+          console.warn(`Test image failed to load: ${currentUrl}`);
+        };
+        testImg.src = currentUrl;
       } else {
         console.warn('Invalid URL format', currentUrl);
         useDefaultPlaceholder();
@@ -151,6 +163,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
 
   const handleMediaError = () => {
     console.warn(`Error loading media (attempt ${attemptCount + 1}): ${mediaSrc}`);
+    setAttemptCount(prev => prev + 1);
     
     // Try next fallback strategy if we haven't exhausted them
     if (attemptCount < 3) {
@@ -164,9 +177,13 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
     }
   };
 
+  useEffect(() => {
+    console.log('NFTImage state:', { loading, error, mediaSrc, isVideo });
+  }, [loading, error, mediaSrc, isVideo]);
+
   return (
     <div className="nft-media-container">
-      {/* Always render the media elements (hidden while loading) so they can trigger onLoad */}
+      {/* Always render the media elements (visible regardless of loading) */}
       {!error && !isVideo && (
         <img
           src={mediaSrc}
@@ -174,7 +191,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           className={`nft-media ${className}`}
           onLoad={handleMediaLoad}
           onError={handleMediaError}
-          style={{ visibility: loading ? 'hidden' : 'visible' }}
+          style={{ visibility: 'visible' }}
           loading="lazy"
           crossOrigin="anonymous"
         />
@@ -186,7 +203,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           className={`nft-media ${className}`}
           onLoadedData={handleMediaLoad}
           onError={handleMediaError}
-          style={{ visibility: loading ? 'hidden' : 'visible' }}
+          style={{ visibility: 'visible' }}
           autoPlay
           loop
           muted
