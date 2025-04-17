@@ -54,17 +54,28 @@ module.exports = async (req, res) => {
   const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
   
   try {
-    // Get Zapper API key from environment variables
+    // Get Zapper API key from environment variables with more detailed debugging
     const apiKey = process.env.ZAPPER_API_KEY || '';
     
+    // Debug environment variables (safe keys only)
+    const safeEnvVars = {};
+    for (const key in process.env) {
+      if (key.includes('API_KEY')) {
+        safeEnvVars[key] = `${process.env[key].substring(0, 4)}...`;
+      } else if (!key.includes('SECRET') && !key.includes('TOKEN')) {
+        safeEnvVars[key] = process.env[key];
+      }
+    }
+    console.log('Available environment variables:', safeEnvVars);
+    
     if (!apiKey) {
-      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
-      console.log('Available env vars:', Object.keys(process.env).filter(key => !key.includes('SECRET')));
+      console.warn('⚠️ CRITICAL: No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
         errors: [{
           message: 'Zapper API key is missing. Please check server configuration.',
           extensions: {
-            error: 'API Configuration Error'
+            error: 'API Configuration Error',
+            availableEnvVars: Object.keys(process.env).filter(k => !k.includes('SECRET'))
           }
         }]
       });
@@ -73,17 +84,18 @@ module.exports = async (req, res) => {
     // Print API key for debugging (first 4 chars)
     console.log(`Using Zapper API key: ${apiKey.substring(0, 4)}...`);
     
-    // Set up headers with API key
+    // Set up headers with API key and proper User-Agent
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+      'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
     
-    // Try multiple endpoints if one fails
-    let success = false;
-    let lastError = null;
+    // Log full headers (redact API key)
+    const safeHeaders = {...headers};
+    safeHeaders['x-zapper-api-key'] = `${safeHeaders['x-zapper-api-key'].substring(0, 4)}...`;
+    console.log('Request headers:', safeHeaders);
     
     // Try Neynar API as a fallback if username is provided
     if (username && !fid) {
@@ -124,6 +136,10 @@ module.exports = async (req, res) => {
       timeout: 15000 // 15 second timeout for slow API responses
     });
     
+    // Log response headers and status
+    console.log(`Zapper API response status: ${response.status}`);
+    console.log('Zapper API response headers:', response.headers);
+    
     // Return the response from Zapper
     return res.status(response.status).json(response.data);
     
@@ -132,7 +148,22 @@ module.exports = async (req, res) => {
     
     if (error.response) {
       console.error('Response status:', error.response.status);
+      console.error('Response headers:', error.response.headers);
       console.error('Response data:', JSON.stringify(error.response.data));
+    }
+    
+    // Try a fetch to protocol.zapper.xyz agents.txt to test connectivity
+    try {
+      console.log('Testing connectivity to protocol.zapper.xyz...');
+      const testResponse = await axios.get('https://protocol.zapper.xyz/agents.txt', {
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+        }
+      });
+      console.log('Connectivity test succeeded with status:', testResponse.status);
+    } catch (testError) {
+      console.error('Connectivity test failed:', testError.message);
     }
     
     // Return an appropriate error response
@@ -140,7 +171,8 @@ module.exports = async (req, res) => {
       errors: [{
         message: error.message || 'Error from Zapper API',
         extensions: {
-          details: error.response?.data
+          details: error.response?.data,
+          statusCode: error.response?.status
         }
       }]
     });
@@ -156,7 +188,8 @@ async function fetchFromNeynar(username) {
       method: 'get',
       url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(username)}&limit=1`,
       headers: {
-        'accept': 'application/json'
+        'accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
       },
       timeout: 5000
     });

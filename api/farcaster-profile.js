@@ -27,16 +27,28 @@ module.exports = async (req, res) => {
   const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
 
   try {
-    // Get Zapper API key from environment variables
+    // Get Zapper API key from environment variables with more detailed debugging
     const apiKey = process.env.ZAPPER_API_KEY || '';
     
+    // Debug environment variables (safe keys only)
+    const safeEnvVars = {};
+    for (const key in process.env) {
+      if (key.includes('API_KEY')) {
+        safeEnvVars[key] = `${process.env[key].substring(0, 4)}...`;
+      } else if (!key.includes('SECRET') && !key.includes('TOKEN')) {
+        safeEnvVars[key] = process.env[key];
+      }
+    }
+    console.log('Farcaster Profile API - Available environment variables:', safeEnvVars);
+    
     if (!apiKey) {
-      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
+      console.warn('⚠️ CRITICAL: No ZAPPER_API_KEY found in environment variables!');
       return res.status(500).json({
         errors: [{
           message: 'Zapper API key is missing. Please check server configuration.',
           extensions: {
-            error: 'API Configuration Error'
+            error: 'API Configuration Error',
+            availableEnvVars: Object.keys(process.env).filter(k => !k.includes('SECRET'))
           }
         }]
       });
@@ -79,18 +91,23 @@ module.exports = async (req, res) => {
     // Build variables based on what was provided
     const variables = fid ? { fid: parseInt(fid, 10) } : { username };
 
-    // Set up headers with API key
+    // Set up headers with API key and proper User-Agent
     const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'x-zapper-api-key': apiKey,
-      'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+      'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
     };
     
     // Print API key for debugging (first 4 chars)
     if (apiKey) {
       console.log(`Using API key: ${apiKey.substring(0, 4)}...`);
     }
+    
+    // Log headers (redact API key)
+    const safeHeaders = {...headers};
+    safeHeaders['x-zapper-api-key'] = `${safeHeaders['x-zapper-api-key'].substring(0, 4)}...`;
+    console.log('Request headers:', safeHeaders);
 
     console.log(`Sending request to ${ZAPPER_API_URL} with variables:`, variables);
     
@@ -128,6 +145,34 @@ module.exports = async (req, res) => {
       return res.status(200).json(response.data.data.farcasterProfile);
     } else {
       console.log('No profile found in response:', JSON.stringify(response.data));
+      
+      // Try alternate source if Zapper fails - Neynar API
+      if (username && !fid) {
+        try {
+          console.log('Trying Neynar API as fallback...');
+          const neynarResponse = await fetchFromNeynar(username);
+          if (neynarResponse) {
+            // Convert to our format
+            const profile = {
+              username: neynarResponse.username,
+              fid: neynarResponse.fid,
+              metadata: {
+                displayName: neynarResponse.display_name,
+                imageUrl: neynarResponse.pfp_url,
+                description: neynarResponse.profile?.bio?.text
+              },
+              custodyAddress: neynarResponse.custody_address,
+              connectedAddresses: neynarResponse.connected_addresses || []
+            };
+            
+            console.log('Profile found via Neynar fallback');
+            return res.status(200).json(profile);
+          }
+        } catch (neynarError) {
+          console.log('Neynar fallback failed:', neynarError.message);
+        }
+      }
+      
       return res.status(404).json({
         errors: [{
           message: `No Farcaster profile found for ${username || fid}`,
@@ -148,14 +193,58 @@ module.exports = async (req, res) => {
       console.error('Error response headers:', JSON.stringify(error.response.headers));
     }
     
+    // Try connectivity test
+    try {
+      console.log('Testing connectivity to protocol.zapper.xyz...');
+      const testResponse = await axios.get('https://protocol.zapper.xyz/agents.txt', {
+        timeout: 5000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+        }
+      });
+      console.log('Connectivity test succeeded with status:', testResponse.status);
+    } catch (testError) {
+      console.error('Connectivity test failed:', testError.message);
+    }
+    
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
       errors: [{
         message: error.message || 'Error fetching Farcaster profile',
         extensions: {
-          details: error.response?.data
+          details: error.response?.data,
+          statusCode: error.response?.status  
         }
       }]
     });
   }
-}; 
+};
+
+// Fallback to fetch Farcaster profile from Neynar
+async function fetchFromNeynar(username) {
+  try {
+    console.log(`Fetching user from Neynar: ${username}`);
+    const response = await axios({
+      method: 'get',
+      url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(username)}&limit=1`,
+      headers: {
+        'accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 GALL3RY/1.0 (+https://gall3ry.vercel.app)'
+      },
+      timeout: 5000
+    });
+    
+    if (response.data && response.data.users && response.data.users.length > 0) {
+      const exactMatch = response.data.users.find(
+        user => user.username.toLowerCase() === username.toLowerCase()
+      );
+      
+      return exactMatch || response.data.users[0];
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Neynar API error:', error.message);
+    return null;
+  }
+} 

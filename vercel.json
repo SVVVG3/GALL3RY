@@ -50,7 +50,7 @@
       "headers": [
         { 
           "key": "Content-Security-Policy", 
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' http://localhost:* https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://public.zapper.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net; media-src 'self' blob: data: https:;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' http://localhost:* https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://public.zapper.xyz https://protocol.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net; media-src 'self' blob: data: https:;"
         },
         {
           "key": "X-Content-Type-Options",
