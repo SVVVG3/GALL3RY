@@ -139,52 +139,99 @@ export default async function handler(req, res) {
           
           console.log(`Fetching transfers for ${addresses.length} addresses on ${chain}`);
           
-          // Make a POST request to Alchemy's JSON-RPC endpoint
-          const rpcResponse = await axios.post(url, {
-            jsonrpc: "2.0",
-            id: 1,
-            method: "alchemy_getAssetTransfers",
-            params: [{
-              category: ["ERC721", "ERC1155"],
-              toAddress: addresses,
-              withMetadata: true,
-              excludeZeroValue: true,
-              maxCount: "0x64", // Hex for 100
-              order: requestParams.order || "desc"
-            }]
-          }, {
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json'
-            }
-          });
+          // Make two requests - one for incoming transfers and one for outgoing
+          const [incomingResponse, outgoingResponse] = await Promise.all([
+            // Fetch transfers TO these addresses (acquisitions)
+            axios.post(url, {
+              jsonrpc: "2.0",
+              id: 1,
+              method: "alchemy_getAssetTransfers",
+              params: [{
+                category: ["ERC721", "ERC1155"],
+                toAddress: addresses,
+                withMetadata: true,
+                excludeZeroValue: true,
+                maxCount: "0x64", // Hex for 100
+                order: requestParams.order || "desc"
+              }]
+            }, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              }
+            }),
+            
+            // Fetch transfers FROM these addresses (sales/transfers out)
+            axios.post(url, {
+              jsonrpc: "2.0",
+              id: 2,
+              method: "alchemy_getAssetTransfers",
+              params: [{
+                category: ["ERC721", "ERC1155"],
+                fromAddress: addresses,
+                withMetadata: true,
+                excludeZeroValue: true,
+                maxCount: "0x64", // Hex for 100
+                order: requestParams.order || "desc"
+              }]
+            }, {
+              headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+              }
+            })
+          ]);
           
           // Process the transfer data to make it easier to use on the frontend
-          const transfers = rpcResponse.data?.result?.transfers || [];
-          console.log(`Received ${transfers.length} transfers from Alchemy`);
+          const incomingTransfers = incomingResponse.data?.result?.transfers || [];
+          const outgoingTransfers = outgoingResponse.data?.result?.transfers || [];
+          
+          console.log(`Received ${incomingTransfers.length} incoming transfers and ${outgoingTransfers.length} outgoing transfers from Alchemy`);
           
           // Create a map of contractAddress-tokenId -> timestamp for easy lookup
+          // Process only incoming transfers initially since these are current NFTs
           const transferMap = {};
-          transfers.forEach(transfer => {
+          let processedCount = 0;
+          
+          // Process incoming transfers first (these are acquisitions)
+          incomingTransfers.forEach(transfer => {
             try {
               const contractAddress = transfer.rawContract?.address;
               const tokenId = transfer.tokenId;
               
               if (contractAddress && tokenId) {
                 const key = `${contractAddress.toLowerCase()}-${tokenId}`;
-                // Use ISO string for consistent date handling
-                transferMap[key] = new Date(transfer.metadata.blockTimestamp).toISOString();
+                const timestamp = transfer.metadata.blockTimestamp;
+                
+                // Only store the most recent timestamp for each NFT
+                // or overwrite if this transfer is more recent
+                if (!transferMap[key] || new Date(timestamp) > new Date(transferMap[key])) {
+                  transferMap[key] = timestamp;
+                  processedCount++;
+                }
               }
             } catch (e) {
               console.warn('Error processing transfer:', e);
             }
           });
           
+          // If requested, include debug information
+          const debug = requestParams.debug === 'true';
+          const diagnosticInfo = debug ? {
+            incomingCount: incomingTransfers.length,
+            outgoingCount: outgoingTransfers.length,
+            processedCount,
+            addressesUsed: addresses,
+            sampleTransfers: incomingTransfers.slice(0, 2)
+          } : null;
+          
           // Return both the raw transfers and the processed map
           return res.status(200).json({
-            transfers,
+            transfers: incomingTransfers,
             transferMap,
-            count: transfers.length
+            count: incomingTransfers.length,
+            processedCount,
+            diagnostic: diagnosticInfo
           });
         } catch (error) {
           console.error('Error fetching asset transfers:', error);

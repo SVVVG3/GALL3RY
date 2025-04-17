@@ -58,10 +58,21 @@ export const NFTProvider = ({ children }) => {
       
       // Fetch transfer data to enhance NFTs with accurate transfer timestamps
       console.log('Fetching transfer history for better "Recent" sorting...');
-      const transferData = await fetchAssetTransfers(normalizedAddresses);
+      const transferData = await fetchAssetTransfers(normalizedAddresses, {
+        debug: true // Enable diagnostic data
+      });
+      
+      // Log detailed transfer data for debugging
+      console.log(`Transfer data received from API:`, {
+        dataAvailable: !!transferData,
+        transferCount: transferData?.transfers?.length || 0,
+        mapEntries: transferData?.transferMap ? Object.keys(transferData.transferMap).length : 0,
+        diagnosticInfo: transferData?.diagnostic
+      });
       
       // Enhance NFTs with transfer timestamps if transfer data is available
       let enhancedNfts = result.nfts || [];
+      let transfersApplied = 0;
       
       if (transferData.transferMap && Object.keys(transferData.transferMap).length > 0) {
         console.log(`Enhancing NFTs with transfer timestamps from ${Object.keys(transferData.transferMap).length} records`);
@@ -78,16 +89,33 @@ export const NFTProvider = ({ children }) => {
           
           // Add the timestamp if found
           if (transferTimestamp) {
+            transfersApplied++;
+            
+            // Use ISO string for consistent date handling
+            const timestamp = new Date(transferTimestamp).toISOString();
+            
             return {
               ...nft,
-              transferTimestamp
+              transferTimestamp: timestamp
             };
           }
           
           return nft;
         });
         
-        console.log('NFTs enhanced with transfer timestamps');
+        console.log(`Successfully applied ${transfersApplied} transfer timestamps out of ${enhancedNfts.length} NFTs`);
+        
+        // Log a few sample NFTs for debugging
+        if (enhancedNfts.length > 0) {
+          const samples = enhancedNfts.slice(0, 2);
+          console.log("Sample NFTs with transfer data:", samples.map(nft => ({
+            name: nft.name || nft.title,
+            contractAddress: nft.contract?.address,
+            tokenId: nft.tokenId,
+            hasTransferTimestamp: !!nft.transferTimestamp,
+            transferTimestamp: nft.transferTimestamp
+          })));
+        }
       } else {
         console.log('No transfer data available for enhancing NFTs');
       }

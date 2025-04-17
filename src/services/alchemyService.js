@@ -408,27 +408,45 @@ async function getAssetTransfers(addresses, options = {}) {
       endpoint: 'getassettransfers',
       chain,
       addresses: addresses.join(','),
-      order: options.order || 'desc'
+      order: options.order || 'desc',
+      debug: options.debug === true ? 'true' : undefined
     };
     
     // Call our backend API which will handle the RPC call
     const response = await axios.get(ALCHEMY_ENDPOINT, { params });
     
     // Check if we got a valid response
-    if (!response.data || !response.data.transferMap) {
-      console.warn('Invalid response from getAssetTransfers:', response.data);
+    if (!response.data) {
+      console.warn('Empty response from getAssetTransfers API');
       return { transfers: [], transferMap: {} };
     }
     
-    console.log(`Got transfer data with ${response.data.count || 0} entries`);
+    // Check if we have the transferMap
+    if (!response.data.transferMap) {
+      console.warn('Response missing transferMap:', response.data);
+      return { 
+        transfers: response.data.transfers || [], 
+        transferMap: {},
+        diagnostic: response.data.diagnostic || { error: 'Missing transferMap in response' }
+      };
+    }
+    
+    console.log(`Got transfer data with ${response.data.count || 0} entries, ${Object.keys(response.data.transferMap).length} mapped items`);
     
     return {
       transfers: response.data.transfers || [],
-      transferMap: response.data.transferMap || {}
+      transferMap: response.data.transferMap || {},
+      processedCount: response.data.processedCount,
+      diagnostic: response.data.diagnostic
     };
   } catch (error) {
     console.error('Error fetching asset transfers:', error);
-    return { transfers: [], transferMap: {} };
+    return { 
+      transfers: [], 
+      transferMap: {},
+      error: error.message,
+      diagnostic: { error: error.message, stack: error.stack }
+    };
   }
 }
 
