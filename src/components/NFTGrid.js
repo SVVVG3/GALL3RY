@@ -16,11 +16,21 @@ const getCORSProxyUrl = (url) => {
     url.includes('i.seadn.io') ||
     url.includes('cloudflare-ipfs.com') ||
     url.includes('ipfs.io') ||
-    url.startsWith('ipfs://');
+    url.includes('gateway.pinata.cloud') ||
+    url.includes('ipfs.infura.io') ||
+    url.includes('gateway.ipfs.io') ||
+    url.includes('dweb.link') ||
+    url.startsWith('ipfs://') ||
+    url.startsWith('ar://');
   
   if (needsProxy) {
     // Use our internal image proxy
     return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  }
+  
+  // For HTTP URLs, ensure they are HTTPS
+  if (url.startsWith('http://')) {
+    url = url.replace('http://', 'https://');
   }
   
   return url;

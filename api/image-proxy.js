@@ -21,8 +21,9 @@ const PLACEHOLDER_PATH = path.join(__dirname, '../public/assets/placeholder-nft.
 /**
  * Return a static placeholder image
  * @param {Object} res - Express response object
+ * @param {string} errorMessage - Optional error message to embed in SVG
  */
-function returnPlaceholder(res) {
+function returnPlaceholder(res, errorMessage = 'Image unavailable') {
   try {
     // Try to send the placeholder file if it exists
     if (fs.existsSync(PLACEHOLDER_PATH)) {
@@ -36,6 +37,7 @@ function returnPlaceholder(res) {
     const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
       <rect width="200" height="200" fill="#f0f0f0"/>
       <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
     </svg>`);
     
     res.setHeader('Content-Type', 'image/svg+xml');
@@ -50,6 +52,7 @@ function returnPlaceholder(res) {
     const transparentSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
       <rect width="200" height="200" fill="#f5f5f5"/>
       <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image Error</text>
+      <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
     </svg>`);
     
     res.setHeader('Content-Type', 'image/svg+xml');
@@ -59,147 +62,143 @@ function returnPlaceholder(res) {
 }
 
 /**
- * Handle request for image proxy
+ * Fetch with retries for more robust image fetching
+ * @param {string} url - The URL to fetch
+ * @param {Object} options - Axios request options
+ * @param {number} maxRetries - Maximum number of retry attempts
+ * @returns {Promise<Object>} - Axios response
+ */
+async function fetchWithRetry(url, options, maxRetries = 2) {
+  let lastError;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Attempt ${attempt + 1}/${maxRetries + 1} fetching: ${url}`);
+      
+      // Add a small delay between retries
+      if (attempt > 0) {
+        await new Promise(resolve => setTimeout(resolve, attempt * 500));
+      }
+      
+      const response = await axios.get(url, options);
+      return response;
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error.message);
+      lastError = error;
+      
+      // If we have a response with a status code, no need to retry certain cases
+      if (error.response && (
+        error.response.status === 404 || // Not found
+        error.response.status === 403    // Forbidden
+      )) {
+        throw error; // No point retrying these specific errors
+      }
+    }
+  }
+  
+  // If we got here, all attempts failed
+  throw lastError;
+}
+
+/**
+ * Image proxy endpoint to handle CORS issues with NFT images
+ * 
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
+ * @returns {Promise<void>}
  */
-async function handleImageProxy(req, res) {
-  // Set CORS headers early
+module.exports = async (req, res) => {
+  // Set CORS headers to allow requests from any origin
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
   
-  // Handle OPTIONS requests
+  // Handle OPTIONS preflight request
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
+  }
+  
+  // Only allow GET requests
+  if (req.method !== 'GET') {
+    return res.status(405).json({
+      error: 'Method not allowed',
+      message: 'Only GET requests are allowed for image proxy'
+    });
+  }
+  
+  // Get the image URL from query parameter
+  const imageUrl = req.query.url;
+  
+  // Check if image URL is provided
+  if (!imageUrl) {
+    return returnPlaceholder(res, 'Missing URL parameter');
   }
   
   try {
-    // Get the URL from the query parameter
-    const url = req.query.url;
+    console.log(`Proxying image: ${imageUrl}`);
     
-    if (!url) {
-      console.error('No URL parameter provided');
-      return returnPlaceholder(res);
-    }
-    
-    console.log(`Image proxy request for: ${url}`);
-    
-    // Validate the URL to prevent abuse
-    try {
-      new URL(url); // This will throw if URL is invalid
-    } catch (e) {
-      console.error('Invalid URL format:', url);
-      return returnPlaceholder(res);
-    }
-    
-    // Add security check to prevent proxying of internal resources
-    if (url.includes('localhost') || url.includes('127.0.0.1')) {
-      console.error('Blocked request to local resource:', url);
-      return returnPlaceholder(res);
-    }
-    
-    // Determine which method to use for fetching
-    let proxyUrl = url;
-    let customHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
-      'Referer': 'https://gall3ry.vercel.app/',
-      'Accept': 'image/*,*/*;q=0.8'
+    // Set request headers and options
+    const requestOptions = {
+      responseType: 'arraybuffer',
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br'
+      },
+      maxRedirects: 5
     };
     
-    // Handle special URLs
-    
-    // Handle IPFS URLs
-    if (proxyUrl.startsWith('ipfs://')) {
-      const ipfsHash = proxyUrl.replace('ipfs://', '');
-      proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
-      console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
+    // Special handling for IPFS URLs
+    let targetUrl = imageUrl;
+    if (targetUrl.startsWith('ipfs://')) {
+      const ipfsHash = targetUrl.replace('ipfs://', '');
+      targetUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+      console.log(`Converted IPFS URL to: ${targetUrl}`);
     }
     
-    // Handle Arweave URLs
-    if (proxyUrl.startsWith('ar://')) {
-      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
-      console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
-    }
-    
-    // Handle HTTP URLs to ensure they're HTTPS
-    if (proxyUrl.startsWith('http://')) {
-      proxyUrl = proxyUrl.replace('http://', 'https://');
-      console.log(`Converted HTTP to HTTPS: ${url} -> ${proxyUrl}`);
-    }
-    
-    console.log(`Attempting to fetch: ${proxyUrl}`);
-    
-    // Try to fetch the image with axios instead of fetch
-    let response;
-    try {
-      response = await axios({
-        method: 'get',
-        url: proxyUrl,
-        responseType: 'arraybuffer',
-        timeout: 10000, // 10 second timeout
-        headers: customHeaders,
-        // Don't throw on non-200 status codes
-        validateStatus: () => true
-      });
-    } catch (error) {
-      console.error(`Axios error for ${proxyUrl}:`, error.message);
-      return returnPlaceholder(res);
-    }
-    
-    // Check the status code
-    if (response.status >= 400) {
-      console.error(`Error status ${response.status} from ${proxyUrl}`);
-      return returnPlaceholder(res);
-    }
-    
-    // Get content type
-    let contentType = response.headers['content-type'];
-    
-    // If no content type, try to infer from URL or data
-    if (!contentType || !contentType.includes('image')) {
-      if (proxyUrl.match(/\.jpg$|\.jpeg$/i)) contentType = 'image/jpeg';
-      else if (proxyUrl.match(/\.png$/i)) contentType = 'image/png';
-      else if (proxyUrl.match(/\.gif$/i)) contentType = 'image/gif';
-      else if (proxyUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
-      else if (proxyUrl.match(/\.webp$/i)) contentType = 'image/webp';
-      else {
-        console.warn(`Response from ${proxyUrl} does not have image content type`);
-        // Check if the response looks like an image anyway
-        if (response.data && response.data.length > 0) {
-          // Try to detect from content
-          const buffer = Buffer.from(response.data);
-          if (buffer.length > 4) {
-            const header = buffer.slice(0, 4);
-            if (Buffer.compare(header, Buffer.from([0x89, 0x50, 0x4E, 0x47])) === 0) {
-              contentType = 'image/png';
-            } else if (Buffer.compare(header.slice(0, 2), Buffer.from([0xFF, 0xD8])) === 0) {
-              contentType = 'image/jpeg';
-            } else if (Buffer.compare(header.slice(0, 3), Buffer.from([0x47, 0x49, 0x46])) === 0) {
-              contentType = 'image/gif';
-            } else {
-              // Default to octet-stream if we can't detect
-              contentType = 'application/octet-stream';
-            }
-          }
-        } else {
-          console.error('Empty or invalid response data');
-          return returnPlaceholder(res);
+    // Special handling for Alchemy CDN URLs
+    if (targetUrl.includes('nft-cdn.alchemy.com')) {
+      console.log('Using special headers for Alchemy CDN');
+      
+      // Add API key to Alchemy requests if not present
+      if (!targetUrl.includes('apiKey=')) {
+        const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+        if (alchemyApiKey) {
+          const separator = targetUrl.includes('?') ? '&' : '?';
+          targetUrl = `${targetUrl}${separator}apiKey=${alchemyApiKey}`;
         }
       }
+      
+      // Use specific headers known to work with Alchemy
+      requestOptions.headers = {
+        ...requestOptions.headers,
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/'
+      };
     }
     
-    // Set response headers
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Fetch the image with retry logic
+    try {
+      const response = await fetchWithRetry(targetUrl, requestOptions);
+      
+      // Extract content type or default to image/jpeg
+      const contentType = response.headers['content-type'] || 'image/jpeg';
+      
+      // Set caching headers - cache for 1 day
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.setHeader('Content-Type', contentType);
+      
+      // Send the image data
+      return res.status(200).send(response.data);
+    } catch (fetchError) {
+      console.error(`All fetch attempts failed for ${targetUrl}:`, fetchError.message);
+      return returnPlaceholder(res, `Fetch error: ${fetchError.message.substring(0, 30)}`);
+    }
     
-    // Send the data
-    return res.send(response.data);
   } catch (error) {
-    console.error('Image proxy error:', error.message);
-    return returnPlaceholder(res);
+    console.error(`Global error in image proxy for ${imageUrl}:`, error.message);
+    return returnPlaceholder(res, `Error: ${error.message.substring(0, 30)}`);
   }
-}
-
-module.exports = handleImageProxy; 
+}; 

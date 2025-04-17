@@ -643,6 +643,7 @@ app.get('/image-proxy', async (req, res) => {
       const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f0f0f0"/>
         <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${error.message.substring(0, 30)}</text>
       </svg>`);
       
       res.setHeader('Content-Type', 'image/svg+xml');
@@ -658,6 +659,7 @@ app.get('/image-proxy', async (req, res) => {
       const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f0f0f0"/>
         <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">Status: ${response?.status || 'unknown'}</text>
       </svg>`);
       
       res.setHeader('Content-Type', 'image/svg+xml');
@@ -690,6 +692,7 @@ app.get('/image-proxy', async (req, res) => {
     const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
       <rect width="200" height="200" fill="#f0f0f0"/>
       <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${error.message.substring(0, 30)}</text>
     </svg>`);
     
     res.setHeader('Content-Type', 'image/svg+xml');
