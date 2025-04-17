@@ -42,10 +42,262 @@ app.use(cors({
 }));
 
 // Add rewrite rule for the image proxy to handle both paths
-app.get('/api/image-proxy', (req, res) => {
-  // Redirect /api/image-proxy to /image-proxy
-  const url = req.originalUrl.replace('/api/image-proxy', '/image-proxy');
-  res.redirect(url);
+app.get('/api/image-proxy', async (req, res) => {
+  // Set CORS headers to allow cross-origin requests
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Get image URL from query parameter
+  const { url } = req.query;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'Missing url parameter' });
+  }
+  
+  console.log(`Image proxy request (API) for: ${decodeURIComponent(url)}`);
+  
+  try {
+    // Always decode the URL to handle any encoded characters
+    let proxyUrl = decodeURIComponent(url);
+    
+    // Default headers for most requests
+    let customHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
+      'Referer': 'https://gall3ry.vercel.app/',
+      'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br'
+    };
+    
+    // Special handling for different URL types
+    
+    // Handle Alchemy CDN URLs specifically - this needs special attention
+    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+      console.log('Detected Alchemy CDN URL, adding special headers and API key');
+      
+      // Add Alchemy API key to the URL if not already present
+      if (!proxyUrl.includes('apiKey=')) {
+        const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+        if (alchemyApiKey) {
+          const separator = proxyUrl.includes('?') ? '&' : '?';
+          proxyUrl = `${proxyUrl}${separator}apiKey=${alchemyApiKey}`;
+          console.log('Added API key to Alchemy URL');
+        }
+      }
+      
+      // Use specific headers for Alchemy CDN that worked in testing
+      customHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-site',
+        'If-None-Match': '', // Clear any conditional requests
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      };
+      
+      // For some Alchemy CDN URLs, we might need to fix the path format
+      if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb') && !proxyUrl.includes('.jpg') && !proxyUrl.includes('.png')) {
+        proxyUrl = `${proxyUrl}/original`;
+        console.log(`Fixed Alchemy URL format: ${proxyUrl}`);
+      }
+    }
+    
+    // Special handling for IPFS URLs
+    if (proxyUrl.startsWith('ipfs://')) {
+      proxyUrl = proxyUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      console.log(`Converted IPFS URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle ipfs links that aren't using the ipfs:// protocol
+    if (proxyUrl.includes('/ipfs/')) {
+      console.log('Detected standard IPFS gateway URL');
+      // Just keep the URL as is, but add special headers
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null
+      };
+    }
+    
+    // Special handling for Arweave URLs
+    if (proxyUrl.startsWith('ar://')) {
+      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
+      console.log(`Converted Arweave URL: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle HTTP URLs - ensure they are HTTPS
+    if (proxyUrl.startsWith('http://')) {
+      proxyUrl = proxyUrl.replace('http://', 'https://');
+      console.log(`Converted HTTP to HTTPS: ${url} -> ${proxyUrl}`);
+    }
+    
+    // Handle api.zora.co renderer URLs that include ipfs content
+    if (proxyUrl.includes('api.zora.co') && proxyUrl.includes('ipfs')) {
+      // Try to extract the ipfs hash from various formats
+      let ipfsHash = null;
+      
+      // Common patterns seen in the Zora URLs
+      const ipfsPatterns = [
+        /ipfs(?:%3a|:)%2f%2f([a-zA-Z0-9]+)/i, // URL encoded ipfs://hash
+        /ipfs:\/\/([a-zA-Z0-9]+)/i,           // Direct ipfs://hash
+        /ipfs\/([a-zA-Z0-9]+)/i               // /ipfs/hash format
+      ];
+      
+      // Try each pattern
+      for (const pattern of ipfsPatterns) {
+        const match = proxyUrl.match(pattern);
+        if (match && match[1]) {
+          ipfsHash = match[1];
+          console.log(`Extracted IPFS hash ${ipfsHash} from Zora URL`);
+          break;
+        }
+      }
+      
+      // If we found a hash, use a more reliable IPFS gateway
+      if (ipfsHash) {
+        proxyUrl = `https://cloudflare-ipfs.com/ipfs/${ipfsHash}`;
+        console.log(`Using alternative IPFS gateway: ${proxyUrl}`);
+      }
+    }
+    
+    console.log(`Fetching image: ${proxyUrl}`);
+    
+    // Function to attempt image fetch with retries
+    const fetchWithRetries = async (url, headers, maxRetries = 2) => {
+      let lastError;
+      
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'arraybuffer',
+            timeout: 10000,
+            headers: headers,
+            validateStatus: false // Allow non-200 status codes to process them below
+          });
+          
+          // If we got a successful response, return it
+          if (response.status < 400) {
+            return response;
+          }
+          
+          // If we got a 403 Forbidden specifically from Alchemy CDN
+          if (response.status === 403 && url.includes('nft-cdn.alchemy.com')) {
+            console.log(`Attempt ${attempt + 1}: Got 403 from Alchemy CDN, trying with different headers`);
+            
+            // Modify headers for next attempt
+            headers = {
+              ...headers,
+              'Referer': 'https://dashboard.alchemy.com/',
+              'Origin': 'https://dashboard.alchemy.com'
+            };
+            
+            // Add API key directly to URL as a different parameter format
+            if (!url.includes('api_key=') && !url.includes('apiKey=')) {
+              const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+              if (alchemyApiKey) {
+                const separator = url.includes('?') ? '&' : '?';
+                url = `${url}${separator}api_key=${alchemyApiKey}`;
+                console.log('Added API key in alternate format');
+              }
+            }
+            
+            // Wait briefly before retry
+            await new Promise(resolve => setTimeout(resolve, 500));
+            continue;
+          }
+          
+          // For other error status codes, log and continue to next attempt
+          console.error(`Attempt ${attempt + 1}: Error status ${response.status} for: ${url}`);
+          lastError = new Error(`HTTP ${response.status}`);
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Attempt ${attempt + 1}: Network error fetching from ${url}:`, error.message);
+          lastError = error;
+          
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // If we got here, all attempts failed
+      throw lastError || new Error('All retry attempts failed');
+    };
+    
+    // Attempt to proxy the image with retries
+    let response;
+    try {
+      response = await fetchWithRetries(proxyUrl, customHeaders);
+    } catch (error) {
+      console.error(`All attempts failed for ${proxyUrl}:`, error.message);
+      
+      // Create a simple SVG placeholder instead of returning JSON
+      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect width="200" height="200" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${error.message.substring(0, 30)}</text>
+      </svg>`);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); 
+      return res.send(placeholderSvg);
+    }
+    
+    // Check for non-successful status after all retries
+    if (!response || response.status >= 400) {
+      console.error(`Source returned error status ${response?.status || 'unknown'} for: ${proxyUrl}`);
+      
+      // Create a simple SVG placeholder instead of returning JSON
+      const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+        <rect width="200" height="200" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+        <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">Status: ${response?.status || 'unknown'}</text>
+      </svg>`);
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); 
+      return res.send(placeholderSvg);
+    }
+    
+    // Set content type from response
+    const contentType = response.headers['content-type'];
+    if (contentType) {
+      res.setHeader('Content-Type', contentType);
+    } else {
+      // Try to guess content type from URL
+      if (proxyUrl.match(/\.(jpg|jpeg)$/i)) res.setHeader('Content-Type', 'image/jpeg');
+      else if (proxyUrl.match(/\.png$/i)) res.setHeader('Content-Type', 'image/png');
+      else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
+      else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
+      else res.setHeader('Content-Type', 'application/octet-stream');
+    }
+    
+    // Set cache headers for better performance
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+    
+    // Return the image data
+    return res.send(response.data);
+  } catch (error) {
+    console.error(`Error proxying image (${url}):`, error.message);
+    
+    // Return a placeholder SVG image instead of JSON
+    const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+      <rect width="200" height="200" fill="#f0f0f0"/>
+      <text x="50%" y="50%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">Image unavailable</text>
+      <text x="50%" y="65%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${error.message.substring(0, 30)}</text>
+    </svg>`);
+    
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); 
+    return res.send(placeholderSvg);
+  }
 });
 
 // API Routes
