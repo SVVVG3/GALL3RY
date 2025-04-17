@@ -334,7 +334,7 @@ const NFTCard = ({ nft }) => {
     console.error(`Failed to load image after ${newAttemptCount} attempts, using placeholder`);
     setMedia({
       status: 'error',
-      url: '/assets/placeholder-nft.svg',
+      url: `${window.location.origin}/assets/placeholder-nft.svg`,
       type: 'image',
       fallbacksExhausted: true
     });
@@ -392,7 +392,7 @@ const NFTCard = ({ nft }) => {
           {media.status === 'error' && (
             <div className="nft-image-error">
               <img 
-                src="/assets/placeholder-nft.svg"
+                src={`${window.location.origin}/assets/placeholder-nft.svg`}
                 alt={`${title} (unavailable)`}
                 className="nft-image-placeholder"
               />

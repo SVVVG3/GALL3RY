@@ -148,7 +148,8 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
   // Helper to use default placeholder
   const useDefaultPlaceholder = () => {
     console.warn('Using default placeholder after all attempts failed');
-    setMediaSrc('/assets/placeholder-nft.svg');
+    // Use full URL for Vercel deployment
+    setMediaSrc(`${window.location.origin}/assets/placeholder-nft.svg`);
     setIsVideo(false);
     // Set loading to false since we're using the placeholder
     setLoading(false);

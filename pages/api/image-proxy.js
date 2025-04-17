@@ -1,11 +1,13 @@
 /**
  * Ultra-reliable image proxy for NFT images with guaranteed responses
+ * Optimized for Vercel deployment
  */
 
 export const config = {
   api: {
     bodyParser: false,
-    responseLimit: false,
+    responseLimit: '10mb',
+    externalResolver: true, // Optimize for Vercel edge functions
   },
 };
 
@@ -13,7 +15,12 @@ export default async function handler(req, res) {
   // Always set CORS headers first thing
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  
+  // Add Vercel-specific cache headers for better edge caching
+  res.setHeader('CDN-Cache-Control', 'public, max-age=86400'); // 24 hours for Vercel's CDN
+  res.setHeader('Vercel-CDN-Cache-Control', 'public, max-age=86400');
   
   // Handle preflight requests immediately
   if (req.method === 'OPTIONS') {
@@ -47,15 +54,51 @@ export default async function handler(req, res) {
       // Prepare headers for the target server
       const headers = new Headers();
       headers.append('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      headers.append('Accept', '*/*');
+      headers.append('Accept', 'image/webp,image/apng,image/*,*/*;q=0.8');
       
       // Special case for known problematic domains
       if (targetUrl.includes('apeokx.one')) {
         headers.append('Origin', null);
         headers.append('Referer', null);
       } else if (targetUrl.includes('nft-cdn.alchemy.com')) {
+        // Add Alchemy API key to URL if missing
+        let alchemyUrl = targetUrl;
+        const apiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+        
+        if (!targetUrl.includes('apiKey=') && apiKey) {
+          alchemyUrl = `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
+          console.log(`[IMAGE-PROXY] Added API key to Alchemy URL`);
+        }
+        
         headers.append('Origin', 'https://dashboard.alchemy.com');
         headers.append('Referer', 'https://dashboard.alchemy.com/');
+        
+        // Try the modified Alchemy URL
+        const alchemyResponse = await fetch(alchemyUrl, {
+          method: 'GET',
+          headers,
+          redirect: 'follow',
+          signal: controller.signal,
+        });
+        
+        if (alchemyResponse.ok) {
+          const imageBuffer = await alchemyResponse.arrayBuffer();
+          if (imageBuffer.byteLength > 0) {
+            let contentType = alchemyResponse.headers.get('content-type');
+            
+            // Force image content type for better Vercel behavior
+            if (!contentType || contentType === 'application/octet-stream') {
+              contentType = 'image/jpeg';
+            }
+            
+            // Set explicit headers for Vercel
+            res.setHeader('Content-Type', contentType);
+            res.setHeader('Cache-Control', 'public, max-age=86400');
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            
+            return res.status(200).send(Buffer.from(imageBuffer));
+          }
+        }
       } else if (targetUrl.includes('goonzworld.com')) {
         headers.append('Origin', null);
         headers.append('Referer', null);
@@ -84,6 +127,12 @@ export default async function handler(req, res) {
       // Get the response data as an array buffer
       const imageBuffer = await response.arrayBuffer();
       
+      // Check if we actually got image data
+      if (imageBuffer.byteLength < 100) {
+        console.log(`[IMAGE-PROXY] Empty or tiny response: ${imageBuffer.byteLength} bytes`);
+        return sendPlaceholder(res, 'Empty image response');
+      }
+      
       // Detect content type
       let contentType = response.headers.get('content-type');
       
@@ -99,11 +148,13 @@ export default async function handler(req, res) {
         else contentType = 'image/jpeg'; // Default fallback
       }
       
-      // Set headers for our response
+      // Set headers for our response - explicit for Vercel
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+      res.setHeader('Access-Control-Allow-Origin', '*');
       
-      // Send the image data
+      // Send the image data with explicit content length for Vercel
+      res.setHeader('Content-Length', Buffer.byteLength(imageBuffer));
       return res.status(200).send(Buffer.from(imageBuffer));
     } catch (fetchError) {
       // Clear timeout if it's still active
@@ -130,10 +181,11 @@ function sendPlaceholder(res, message = 'Image unavailable') {
     <text x="50%" y="50%" font-family="Arial" font-size="18" text-anchor="middle" fill="#666">${message}</text>
   </svg>`;
   
-  // Set headers for SVG response
+  // Set headers for SVG response with explicit Vercel caching
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'public, max-age=3600'); // 1 hour
   res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Content-Length', Buffer.byteLength(svg));
   
   // Always return 200 status so the image displays in the frontend
   return res.status(200).send(svg);
