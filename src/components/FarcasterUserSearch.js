@@ -190,6 +190,20 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                        b.contractMetadata?.name ||
                        '').toLowerCase();
           
+          // Helper function to determine if a character is a letter
+          const isLetter = (char) => /[a-z]/i.test(char);
+          
+          // Helper function to determine if collection starts with letter
+          const startsWithLetter = (str) => str.length > 0 && isLetter(str[0]);
+          
+          // Empty collections (with '') should be sorted last
+          if (collA === '' && collB !== '') {
+            return sortOrder === 'asc' ? 1 : -1; // Empty collections last
+          }
+          if (collA !== '' && collB === '') {
+            return sortOrder === 'asc' ? -1 : 1; // Empty collections last
+          }
+          
           // If same collection, sort by token ID
           if (collA === collB) {
             // Parse token IDs as numbers when possible
@@ -199,10 +213,18 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             return sortOrder === 'asc' ? idA - idB : idB - idA;
           }
           
-          // Sort by collection name
+          // If one starts with letter and other doesn't, letter comes first
+          if (startsWithLetter(collA) && !startsWithLetter(collB)) {
+            return sortOrder === 'asc' ? -1 : 1; // Letters first
+          }
+          if (!startsWithLetter(collA) && startsWithLetter(collB)) {
+            return sortOrder === 'asc' ? 1 : -1; // Letters first
+          }
+          
+          // Normal comparison for collections that both start with letters or both don't
           const result = sortOrder === 'asc' 
-            ? collA.localeCompare(collB) 
-            : collB.localeCompare(collA);
+            ? collA.localeCompare(collB, undefined, { numeric: true }) 
+            : collB.localeCompare(collA, undefined, { numeric: true });
             
           return result;
         });
