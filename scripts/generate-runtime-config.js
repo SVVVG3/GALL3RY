@@ -13,12 +13,12 @@ const getApiUrl = () => {
     return process.env.REACT_APP_API_URL;
   }
   
-  // Check if a specific API port is provided
+  // Check if a specific API port is provided or if we're using an alternative port
   const apiPort = process.env.API_PORT || process.env.PORT || 3001;
+  const actualPort = process.env.ACTUAL_PORT || apiPort;
   
-  // Handle the case where port 3001 is in use and we're using an alternative port
-  const actualApiPort = process.env.ACTUAL_PORT || apiPort;
-  return `http://localhost:${actualApiPort}/api`;
+  // This happens if the default port is in use and the server switches to an alternative
+  return `http://localhost:${actualPort}/api`;
 };
 
 // Create runtime config - IMPORTANT: DO NOT include API keys here!

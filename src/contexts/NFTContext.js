@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import alchemyService from '../services/alchemySDK';
+import { fetchNftsForAddresses } from '../services/alchemyService';
 
 // Create context
 const NFTContext = createContext();
@@ -19,95 +19,59 @@ export const NFTProvider = ({ children }) => {
   const [nfts, setNfts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [pageKey, setPageKey] = useState(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [selectedWallets, setSelectedWallets] = useState([]);
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedWallets, setSelectedWallets] = useState([]);
   
   // Reset state
   const resetState = useCallback(() => {
     setNfts([]);
-    setPageKey(null);
-    setHasMore(false);
     setError(null);
   }, []);
   
-  // Fetch NFTs for a single address
-  const fetchNFTs = useCallback(async (address, options = {}) => {
-    if (!address) {
-      setError('Wallet address is required');
-      return { nfts: [], hasMore: false };
-    }
-    
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Use the Alchemy SDK service
-      const result = await alchemyService.getNFTsForOwner(address, options);
-      
-      // Update state
-      setNfts(prevNfts => options.pageKey ? [...prevNfts, ...result.nfts] : result.nfts);
-      setPageKey(result.pageKey);
-      setHasMore(result.hasMore);
-      
-      return result;
-    } catch (err) {
-      console.error(`Error fetching NFTs for ${address}:`, err);
-      setError(err.message || 'Failed to fetch NFTs');
-      return { nfts: [], hasMore: false };
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-  
-  // Fetch NFTs for multiple addresses
-  const fetchNFTsForMultipleAddresses = useCallback(async (addresses, options = {}) => {
+  // Fetch NFTs for multiple addresses with multi-chain support
+  const fetchAllNFTsForWallets = useCallback(async (addresses, options = {}) => {
     if (!addresses || addresses.length === 0) {
-      setError('No wallet addresses provided');
-      return { nfts: [], hasMore: false };
+      console.warn('No wallet addresses provided to fetchAllNFTsForWallets');
+      return { nfts: [], error: 'No wallet addresses provided' };
     }
     
     try {
       setIsLoading(true);
       setError(null);
-      
-      // Use the Alchemy SDK service for multiple addresses
-      const result = await alchemyService.getNFTsForMultipleOwners(addresses, options);
-      
-      // Update state
-      setNfts(result.nfts);
-      setPageKey(null); // No single pageKey for multiple addresses
-      setHasMore(result.hasMore);
-      
-      // Save the selected wallets
       setSelectedWallets(addresses);
       
-      return result;
+      console.log(`Fetching NFTs for ${addresses.length} wallets across multiple chains`);
+      
+      // Normalize addresses to lowercase
+      const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
+      
+      // Use the new multi-chain implementation
+      const result = await fetchNftsForAddresses(normalizedAddresses, options);
+      
+      console.log(`Fetched ${result.nfts?.length || 0} NFTs total`);
+      
+      if (result.error) {
+        setError(result.error);
+      }
+      
+      // Set NFTs to state and return the result
+      setNfts(result.nfts || []);
+      
+      return {
+        nfts: result.nfts || [],
+        totalCount: result.totalCount || 0,
+        error: result.error
+      };
     } catch (err) {
-      console.error('Error fetching NFTs for multiple addresses:', err);
+      console.error('Error in fetchAllNFTsForWallets:', err);
       setError(err.message || 'Failed to fetch NFTs');
-      return { nfts: [], hasMore: false };
+      return { nfts: [], error: err.message };
     } finally {
       setIsLoading(false);
     }
   }, []);
-  
-  // Load more NFTs
-  const loadMoreNFTs = useCallback(async () => {
-    if (!pageKey || isLoading || !hasMore || selectedWallets.length !== 1) {
-      return;
-    }
-    
-    try {
-      await fetchNFTs(selectedWallets[0], { pageKey });
-    } catch (err) {
-      console.error('Error loading more NFTs:', err);
-      setError(err.message || 'Failed to load more NFTs');
-    }
-  }, [fetchNFTs, pageKey, isLoading, hasMore, selectedWallets]);
   
   // Filter NFTs by search query
   const getFilteredNFTs = useCallback(() => {
@@ -145,19 +109,14 @@ export const NFTProvider = ({ children }) => {
     nfts: getFilteredNFTs(),
     isLoading,
     error,
-    pageKey,
-    hasMore,
     searchQuery,
     selectedWallets,
     setSearchQuery,
     setSelectedWallets,
-    fetchNFTs,
-    fetchNFTsForMultipleAddresses,
-    loadMoreNFTs,
     resetState,
     
-    // Alias for backward compatibility with other components
-    fetchAllNFTsForWallets: fetchNFTsForMultipleAddresses
+    // Main function to fetch NFTs for wallets
+    fetchAllNFTsForWallets
   };
   
   return (

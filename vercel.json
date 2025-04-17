@@ -15,6 +15,10 @@
     "api/image-proxy.js": {
       "memory": 1024,
       "maxDuration": 10
+    },
+    "api/alchemy.js": {
+      "memory": 1024,
+      "maxDuration": 15
     }
   },
   "rewrites": [
@@ -29,6 +33,10 @@
     {
       "source": "/api/image-proxy",
       "destination": "/api/image-proxy.js"
+    },
+    {
+      "source": "/api/alchemy",
+      "destination": "/api/alchemy.js"
     },
     {
       "source": "/(.*)",
