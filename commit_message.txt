@@ -1,0 +1,19 @@
+# API Improvements
+
+- Added setupProxy.js for local development API routing
+- Existing api/index.js has proper handling for Alchemy v3 API format
+- Improved handling of ownerAddress attribution for NFTs
+- Added includeMedia parameter to ensure full image URLs
+- Enhanced batch request processing for multiple wallet addresses
+
+refactor: standardize NFT component naming and context
+
+- Rename SimpleNFTGrid to NFTGrid for consistent naming
+- Rename SimpleNFTGallery to NFTGallery
+- Consolidate SimpleNFTContext and NFTContext into single NFTContext
+- Add comprehensive JSDoc comments to components
+- Add component inventory to README for documentation
+- Create consistent naming structure throughout codebase
+- Update all imports and references to use standardized components
+
+This refactoring improves code maintainability and establishes clear naming conventions.

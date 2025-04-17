@@ -1,0 +1,9 @@
+Environment variables loaded:
+- NODE_ENV: undefined
+- Has ALCHEMY_API_KEY: Yes (-DhG...8Lak)
+Running in development mode - serving static assets from /public
+Server is running on port 3001
+Port 3001 is in use, trying 30011
+Server running on port 30011
+API base URL: http://localhost:30011/api
+Running in development mode - serving static assets from /public

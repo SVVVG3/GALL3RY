@@ -1,9 +1,8 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { NFTProvider } from '../contexts/NFTContext';
 
-// Dynamically import the FarcasterUserSearch component to avoid circular dependencies
-const DynamicFarcasterUserSearch = React.lazy(() => import('./FarcasterUserSearch'));
+// Import the simple version instead
+const SimpleFarcasterSearch = React.lazy(() => import('./SimpleFarcasterSearch'));
 
 /**
  * Error fallback component
@@ -39,30 +38,19 @@ const SearchLoader = () => (
 );
 
 /**
- * Wrapper component that loads FarcasterUserSearch with proper context
- * This creates separation to avoid circular dependencies during initialization
+ * Wrapper component that loads SimpleFarcasterSearch with proper error boundaries
  */
 const LazyFarcasterSearch = ({ initialUsername }) => {
-  // Fixed: We don't need this state here - it's causing issues
-  // const [error, setError] = useState(null);
-  
-  // Fixed: Instead of useEffect with initialUsername dependency that calls setError,
-  // we'll handle the error reset directly in the ErrorBoundary's onReset prop
-  
   return (
     <ErrorBoundary 
       FallbackComponent={ErrorFallback}
       onReset={() => {
-        // This function is called when the "Try Again" button is clicked
-        // No need to update any local state
         console.log("Resetting Farcaster Search");
       }}
     >
-      <NFTProvider>
-        <Suspense fallback={<SearchLoader />}>
-          <DynamicFarcasterUserSearch initialUsername={initialUsername} />
-        </Suspense>
-      </NFTProvider>
+      <Suspense fallback={<SearchLoader />}>
+        <SimpleFarcasterSearch initialUsername={initialUsername} />
+      </Suspense>
     </ErrorBoundary>
   );
 };
