@@ -42,12 +42,12 @@ const NFTCard = ({ nft }) => {
     
     // Handle IPFS URLs
     if (url.startsWith('ipfs://')) {
-      return `/image-proxy?url=${encodeURIComponent(url)}`;
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`;
     }
     
     // Handle Arweave URLs
     if (url.startsWith('ar://')) {
-      return `/image-proxy?url=${encodeURIComponent(url)}`;
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`;
     }
     
     // Handle HTTP URLs
@@ -72,7 +72,7 @@ const NFTCard = ({ nft }) => {
       url.includes('goonzworld.com');
     
     if (needsProxy) {
-      return `/image-proxy?url=${encodeURIComponent(url)}`;
+      return `/api/image-proxy?url=${encodeURIComponent(url)}`;
     }
     
     return url;
@@ -202,8 +202,8 @@ const NFTCard = ({ nft }) => {
         console.error(`Failed to load image from ${processedUrl}`);
         
         // If not already using image proxy, try with the proxy
-        if (!processedUrl.includes('/image-proxy') && imageUrl) {
-          const proxiedUrl = `/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+        if (!processedUrl.includes('/api/image-proxy') && imageUrl) {
+          const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
           
           // Try the proxy URL
           const proxyImg = new Image();

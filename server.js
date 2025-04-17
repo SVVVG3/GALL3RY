@@ -41,6 +41,13 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
+// Add rewrite rule for the image proxy to handle both paths
+app.get('/api/image-proxy', (req, res) => {
+  // Redirect /api/image-proxy to /image-proxy
+  const url = req.originalUrl.replace('/api/image-proxy', '/image-proxy');
+  res.redirect(url);
+});
+
 // API Routes
 const apiRouter = express.Router();
 
