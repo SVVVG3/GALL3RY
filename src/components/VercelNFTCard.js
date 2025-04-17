@@ -39,12 +39,7 @@ const VercelNFTCard = ({ nft }) => {
   // Format the value for display - show USD values in ETH format with 4 decimal places
   const formattedValue = useMemo(() => {
     if (valueUsd) {
-      // Display the USD value but with ETH as the currency unit (using original values)
-      if (valueUsd === 1.00) return '0.0005 ETH'; // For $1.00 Croc Club
-      if (valueUsd === 0.04) return '0.0000 ETH'; // For $0.04 alien frens
-      if (valueUsd === 0.01) return '0.0000 ETH'; // For $0.01 alien frens
-      
-      // For other values, use fixed format with 4 decimal places
+      // For all values, use fixed format with 4 decimal places
       // Don't convert, just display as ETH (this is what the user wants)
       return `${parseFloat(valueUsd).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
     } else if (valueEth) {
