@@ -240,7 +240,7 @@ const alchemyService = {
       
       // Remove duplicates by using contract address and token ID as unique key
       const seen = new Set();
-      const uniqueNfts = allNfts.filter(nft => {
+      let uniqueNfts = allNfts.filter(nft => {
         const key = `${nft.contract?.address}-${nft.tokenId}-${nft.network}`;
         if (seen.has(key)) return false;
         seen.add(key);
