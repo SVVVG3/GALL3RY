@@ -19,7 +19,10 @@ const VercelNFTCard = ({ nft }) => {
   const [mediaType, setMediaType] = useState('image'); // 'image', 'video', or 'unsupported'
   
   // Extract NFT details with fallbacks
-  const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
+  const rawTitle = nft?.metadata?.name || nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
+  
+  // Clean the title by removing "NFT" prefix
+  const title = rawTitle.replace(/^NFT\s+#/i, '#');
   const collection = nft?.collection?.name || nft?.collection_name || nft?.contractMetadata?.name || '';
   
   // Extract NFT value information with fallbacks
@@ -33,12 +36,14 @@ const VercelNFTCard = ({ nft }) => {
                    nft?.floorPrice?.value || 
                    (valueUsd ? (valueUsd / 2000) : null); // Rough ETH conversion if only USD is available
   
-  // Format the value for display
+  // Format the value for display - always prioritize ETH with 4 decimal places
   const formattedValue = useMemo(() => {
-    if (valueUsd) {
-      return `$${parseFloat(valueUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    } else if (valueEth) {
+    if (valueEth) {
       return `${parseFloat(valueEth).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+    } else if (valueUsd) {
+      // Convert USD to ETH (rough estimate) and format with 4 decimal places
+      const estimatedEth = valueUsd / 2000; // Rough conversion
+      return `${parseFloat(estimatedEth).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
     }
     return null;
   }, [valueUsd, valueEth]);

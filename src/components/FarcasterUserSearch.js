@@ -64,13 +64,36 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     switch (sortBy) {
       case 'name':
         return nftsCopy.sort((a, b) => {
-          // Enhanced name extraction with more fallbacks
-          const nameA = (a.name || a.title || a.metadata?.name || `#${a.tokenId || a.token_id || '0'}`).toLowerCase();
-          const nameB = (b.name || b.title || b.metadata?.name || `#${b.tokenId || b.token_id || '0'}`).toLowerCase();
+          // Enhanced name extraction with more fallbacks and cleaning
+          const rawNameA = (a.name || a.title || a.metadata?.name || `#${a.tokenId || a.token_id || '0'}`);
+          const rawNameB = (b.name || b.title || b.metadata?.name || `#${b.tokenId || b.token_id || '0'}`);
           
+          // Clean names by removing NFT prefix
+          const nameA = rawNameA.replace(/^NFT\s+#/i, '#').toLowerCase();
+          const nameB = rawNameB.replace(/^NFT\s+#/i, '#').toLowerCase();
+          
+          // Helper function to determine if a character is a letter
+          const isLetter = (char) => /[a-z]/i.test(char);
+          
+          // Helper function to determine if name starts with letter
+          const startsWithLetter = (str) => str.length > 0 && isLetter(str[0]);
+          
+          // Get first character for sorting
+          const firstCharA = nameA.charAt(0);
+          const firstCharB = nameB.charAt(0);
+          
+          // If one starts with letter and other doesn't, letter comes first
+          if (startsWithLetter(nameA) && !startsWithLetter(nameB)) {
+            return sortOrder === 'asc' ? -1 : 1;
+          }
+          if (!startsWithLetter(nameA) && startsWithLetter(nameB)) {
+            return sortOrder === 'asc' ? 1 : -1;
+          }
+          
+          // Normal comparison for two strings that both start with letters or both don't
           const result = sortOrder === 'asc' 
-            ? nameA.localeCompare(nameB) 
-            : nameB.localeCompare(nameA);
+            ? nameA.localeCompare(nameB, undefined, { numeric: true }) 
+            : nameB.localeCompare(nameA, undefined, { numeric: true });
             
           return result;
         });
