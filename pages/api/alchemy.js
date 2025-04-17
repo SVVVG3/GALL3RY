@@ -80,6 +80,8 @@ export default async function handler(req, res) {
           pageSize: parseInt(requestParams.pageSize || '100', 10),
           // Ensure we get media info for better display
           includeMedia: true,
+          // Include floor price data for proper value sorting
+          withFloorPrice: true,
         };
         
         // Handle owner validation

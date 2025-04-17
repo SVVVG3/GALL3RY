@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
 // Define keyframes for spinner animation
 const spinKeyframes = `
@@ -21,6 +21,46 @@ const VercelNFTCard = ({ nft }) => {
   // Extract NFT details with fallbacks
   const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
   const collection = nft?.collection?.name || nft?.collection_name || nft?.contractMetadata?.name || '';
+  
+  // Extract NFT value information with fallbacks
+  const floorPrice = nft?.collection?.floorPrice;
+  const valueUsd = floorPrice?.valueUsd || 
+                   nft?.floorPrice?.valueUsd || 
+                   nft?.contractMetadata?.openSea?.floorPrice || 
+                   nft?.contract?.openSeaMetadata?.floorPrice || 
+                   null;
+  const valueEth = floorPrice?.value || 
+                   nft?.floorPrice?.value || 
+                   (valueUsd ? (valueUsd / 2000) : null); // Rough ETH conversion if only USD is available
+  
+  // Format the value for display
+  const formattedValue = useMemo(() => {
+    if (valueUsd) {
+      return `$${parseFloat(valueUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    } else if (valueEth) {
+      return `${parseFloat(valueEth).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+    }
+    return null;
+  }, [valueUsd, valueEth]);
+  
+  // Log value data for debugging (only in dev and only for first few NFTs)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && title.includes('NFT #1') || title.includes('NFT #2')) {
+      console.log(`Value data for ${title}:`, {
+        valueUsd,
+        valueEth,
+        formattedValue,
+        paths: {
+          collectionFloorPriceUsd: nft?.collection?.floorPrice?.valueUsd,
+          directFloorPriceUsd: nft?.floorPrice?.valueUsd,
+          openSeaFloorPrice: nft?.contractMetadata?.openSea?.floorPrice,
+          openSeaMetadataFloorPrice: nft?.contract?.openSeaMetadata?.floorPrice,
+          collectionFloorPriceEth: nft?.collection?.floorPrice?.value,
+          directFloorPriceEth: nft?.floorPrice?.value
+        }
+      });
+    }
+  }, [title, nft, valueUsd, valueEth, formattedValue]);
   
   // Get contract address and token ID
   const contractAddress = 
@@ -427,18 +467,33 @@ const VercelNFTCard = ({ nft }) => {
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              fontFamily: 'Arial, sans-serif' // Override Comic Sans
+              fontFamily: 'Arial, sans-serif'
             }}>{title}</h3>
             {collection && (
               <p style={{
                 margin: 0,
+                marginBottom: formattedValue ? '2px' : '0',
                 fontSize: '14px',
                 color: '#666',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
-                fontFamily: 'Arial, sans-serif' // Override Comic Sans
+                fontFamily: 'Arial, sans-serif'
               }}>{collection}</p>
+            )}
+            {formattedValue && (
+              <p style={{
+                margin: 0,
+                fontSize: '14px',
+                color: '#4CAF50', // Green color for value
+                fontWeight: 500,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontFamily: 'Arial, sans-serif'
+              }}>
+                {formattedValue}
+              </p>
             )}
           </div>
         </div>

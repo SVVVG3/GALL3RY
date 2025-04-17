@@ -40,52 +40,148 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   const sortedNfts = useCallback(() => {
     if (!userNfts || userNfts.length === 0) return [];
     
+    console.log(`Sorting ${userNfts.length} NFTs by ${sortBy} in ${sortOrder} order`);
+    
+    // Debug first NFT's structure for understanding available fields
+    if (userNfts.length > 0) {
+      const sampleNft = userNfts[0];
+      console.log('Sample NFT structure for sorting:', {
+        name: sampleNft.name || sampleNft.title,
+        collection: sampleNft.collection?.name,
+        contractName: sampleNft.contract?.name,
+        value: sampleNft.collection?.floorPrice?.valueUsd,
+        ethValue: sampleNft.collection?.floorPrice?.value,
+        timestamps: {
+          lastActivity: sampleNft.lastActivityTimestamp,
+          acquired: sampleNft.acquiredAt,
+          lastTransfer: sampleNft.lastTransferTimestamp
+        }
+      });
+    }
+    
     const nftsCopy = [...userNfts];
     
     switch (sortBy) {
       case 'name':
         return nftsCopy.sort((a, b) => {
-          const nameA = (a.name || '').toLowerCase();
-          const nameB = (b.name || '').toLowerCase();
-          return sortOrder === 'asc' 
+          // Enhanced name extraction with more fallbacks
+          const nameA = (a.name || a.title || a.metadata?.name || `#${a.tokenId || a.token_id || '0'}`).toLowerCase();
+          const nameB = (b.name || b.title || b.metadata?.name || `#${b.tokenId || b.token_id || '0'}`).toLowerCase();
+          
+          const result = sortOrder === 'asc' 
             ? nameA.localeCompare(nameB) 
             : nameB.localeCompare(nameA);
+            
+          return result;
         });
         
       case 'value':
         return nftsCopy.sort((a, b) => {
-          const valueA = a.collection?.floorPrice?.valueUsd || 0;
-          const valueB = b.collection?.floorPrice?.valueUsd || 0;
-          return sortOrder === 'asc' 
-            ? valueA - valueB 
-            : valueB - valueA;
+          // Enhanced value extraction with more fallbacks
+          const valueA = a.collection?.floorPrice?.valueUsd || 
+                        a.floorPrice?.valueUsd || 
+                        a.collection?.floorPrice?.value || 
+                        a.floorPrice?.value || 
+                        (a.contractMetadata?.openSea?.floorPrice || 0) ||
+                        // Additional paths for Alchemy v3 API response format
+                        (a.contract?.openSeaMetadata?.floorPrice || 0) ||
+                        0;
+                        
+          const valueB = b.collection?.floorPrice?.valueUsd || 
+                        b.floorPrice?.valueUsd ||
+                        b.collection?.floorPrice?.value || 
+                        b.floorPrice?.value || 
+                        (b.contractMetadata?.openSea?.floorPrice || 0) ||
+                        // Additional paths for Alchemy v3 API response format
+                        (b.contract?.openSeaMetadata?.floorPrice || 0) ||
+                        0;
+          
+          // Debug log for troubleshooting (only for first few NFTs)
+          if (a.name && a.name === userNfts[0]?.name || b.name === userNfts[0]?.name) {
+            console.log('Value comparison NFT structure:', {
+              nameA: a.name, 
+              valueA, 
+              paths: {
+                floorPriceValueUsd: a.collection?.floorPrice?.valueUsd,
+                floorPriceValueUsdDirect: a.floorPrice?.valueUsd,
+                floorPriceEth: a.collection?.floorPrice?.value,
+                floorPriceEthDirect: a.floorPrice?.value,
+                openSea: a.contractMetadata?.openSea?.floorPrice,
+                openSeaV3: a.contract?.openSeaMetadata?.floorPrice
+              }
+            });
+          }
+          
+          // Convert to numbers to ensure proper comparison
+          const numA = parseFloat(valueA) || 0;
+          const numB = parseFloat(valueB) || 0;
+          
+          const result = sortOrder === 'asc' 
+            ? numA - numB 
+            : numB - numA;
+            
+          return result;
         });
         
       case 'recent':
         return nftsCopy.sort((a, b) => {
-          const timeA = a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp || 0;
-          const timeB = b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp || 0;
-          return sortOrder === 'asc' 
-            ? timeA - timeB 
-            : timeB - timeA;
+          // Enhanced timestamp extraction with more fallbacks
+          const timeA = a.lastActivityTimestamp || 
+                       a.acquiredAt || 
+                       a.lastTransferTimestamp || 
+                       a.mintedAt ||
+                       a.createdAt ||
+                       0;
+                       
+          const timeB = b.lastActivityTimestamp || 
+                       b.acquiredAt || 
+                       b.lastTransferTimestamp || 
+                       b.mintedAt ||
+                       b.createdAt ||
+                       0;
+          
+          // Convert to numbers to ensure proper comparison
+          const numA = parseInt(timeA) || 0;
+          const numB = parseInt(timeB) || 0;
+          
+          const result = sortOrder === 'asc' 
+            ? numA - numB 
+            : numB - numA;
+            
+          return result;
         });
         
       case 'collection':
       default:
         return nftsCopy.sort((a, b) => {
-          const collA = (a.collection?.name || '').toLowerCase();
-          const collB = (b.collection?.name || '').toLowerCase();
+          // Enhanced collection name extraction with more fallbacks
+          const collA = (a.collection?.name || 
+                       a.collectionName || 
+                       a.contract?.name || 
+                       a.contractMetadata?.name ||
+                       '').toLowerCase();
+                       
+          const collB = (b.collection?.name || 
+                       b.collectionName || 
+                       b.contract?.name || 
+                       b.contractMetadata?.name ||
+                       '').toLowerCase();
           
+          // If same collection, sort by token ID
           if (collA === collB) {
-            // Sort by token ID within the same collection
-            const idA = parseInt(a.tokenId) || 0;
-            const idB = parseInt(b.tokenId) || 0;
+            // Parse token IDs as numbers when possible
+            const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
+            const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
+            
             return sortOrder === 'asc' ? idA - idB : idB - idA;
           }
           
-          return sortOrder === 'asc' 
+          // Sort by collection name
+          const result = sortOrder === 'asc' 
             ? collA.localeCompare(collB) 
             : collB.localeCompare(collA);
+            
+          return result;
         });
     }
   }, [userNfts, sortBy, sortOrder]);
