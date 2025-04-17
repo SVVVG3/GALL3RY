@@ -171,7 +171,7 @@ export default async function handler(req, res) {
             timeout: 4000, // 4 second timeout (shorter than the controller timeout)
             headers: headers,
             validateStatus: null, // Allow any status code
-            maxContentLength: 3 * 1024 * 1024, // 3MB max size for Vercel
+            maxContentLength: 10 * 1024 * 1024, // 10MB max size
             maxRedirects: 3,
             signal: controller.signal
           });
@@ -218,7 +218,7 @@ export default async function handler(req, res) {
           await new Promise(resolve => setTimeout(resolve, 300));
         } catch (error) {
           console.error(`Network error on attempt ${attempt + 1}: ${error.message}`);
-          clearTimeout?.timeoutId;
+          if (timeoutId) clearTimeout(timeoutId);
           lastError = error;
           
           // Wait before retry
@@ -262,6 +262,8 @@ export default async function handler(req, res) {
       else if (proxyUrl.match(/\.gif$/i)) res.setHeader('Content-Type', 'image/gif');
       else if (proxyUrl.match(/\.svg$/i)) res.setHeader('Content-Type', 'image/svg+xml');
       else if (proxyUrl.match(/\.webp$/i)) res.setHeader('Content-Type', 'image/webp');
+      else if (proxyUrl.match(/\.mp4$/i)) res.setHeader('Content-Type', 'video/mp4');
+      else if (proxyUrl.match(/\.webm$/i)) res.setHeader('Content-Type', 'video/webm');
       else res.setHeader('Content-Type', 'image/jpeg'); // Default to jpeg as a fallback
     }
     
@@ -279,10 +281,10 @@ export default async function handler(req, res) {
 
 // Helper function to return a placeholder image
 function returnPlaceholder(res, errorMessage = 'Image unavailable') {
-  const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
-    <rect width="200" height="200" fill="#f0f0f0"/>
-    <text x="50%" y="50%" font-family="Arial" font-size="14" text-anchor="middle" fill="#888">Image unavailable</text>
-    <text x="50%" y="70%" font-family="Arial" font-size="10" text-anchor="middle" fill="#888">${errorMessage}</text>
+  const placeholderSvg = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+    <rect width="400" height="400" fill="#f0f0f0"/>
+    <text x="50%" y="50%" font-family="Arial" font-size="16" text-anchor="middle" fill="#888">Image unavailable</text>
+    <text x="50%" y="60%" font-family="Arial" font-size="12" text-anchor="middle" fill="#888">${errorMessage}</text>
   </svg>`);
   
   // Ensure proper headers

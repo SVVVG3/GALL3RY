@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getApiBaseUrl } from '../utils/runtimeConfig';
 
 // Base URL for Alchemy API requests
 const getBaseUrl = () => {
@@ -16,6 +17,43 @@ const getBaseUrl = () => {
   // Development fallback (note: the actual port may change, but this will be overridden by runtime config)
   return 'http://localhost:3001/api/alchemy';
 };
+
+// Initialize the SERVER_URL with a default value
+// Will be updated dynamically when initializeEndpoints() is called
+let SERVER_URL = '';
+let ALCHEMY_ENDPOINT = '';
+
+// Initialize endpoints after we've loaded the API base URL
+async function initializeEndpoints() {
+  try {
+    const baseUrl = await getApiBaseUrl();
+    
+    // Only update if SERVER_URL has changed or is not yet set
+    if (!SERVER_URL || SERVER_URL !== baseUrl) {
+      SERVER_URL = baseUrl;
+      console.log(`Initialized Alchemy SERVER_URL: ${SERVER_URL}`);
+      
+      ALCHEMY_ENDPOINT = `${SERVER_URL}/alchemy`;
+      console.log(`Alchemy API endpoint initialized: ${ALCHEMY_ENDPOINT}`);
+    }
+  } catch (error) {
+    console.error('Failed to initialize Alchemy endpoints:', error);
+    // Fallback to default values
+    SERVER_URL = '/api';
+    ALCHEMY_ENDPOINT = `${SERVER_URL}/alchemy`;
+  }
+}
+
+// Call initialization immediately
+initializeEndpoints();
+
+// Reinitialize service periodically
+setInterval(() => {
+  console.log('Refreshing Alchemy API endpoints configuration...');
+  initializeEndpoints()
+    .then(() => console.log('Alchemy API endpoints refreshed'))
+    .catch(err => console.error('Failed to refresh Alchemy API endpoints:', err));
+}, 60000); // Check every minute
 
 // Define all supported chains
 const SUPPORTED_CHAINS = [
@@ -69,7 +107,8 @@ const alchemyService = {
       
       console.log(`Fetching NFTs for ${ownerAddress} on ${chainId}`);
       
-      const response = await axios.get(getBaseUrl(), { params });
+      // Use the dynamically updated ALCHEMY_ENDPOINT instead of calling getBaseUrl()
+      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
       
       // Log response for debugging
       console.log(`Received ${response.data?.ownedNfts?.length || 0} NFTs from Alchemy on ${chainId}`);
@@ -237,7 +276,7 @@ const alchemyService = {
         chain: network
       };
       
-      const response = await axios.get(this.getBaseUrl(network), { params });
+      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
       return response.data;
     } catch (error) {
       console.error('Error fetching NFT metadata from Alchemy:', error.message);
@@ -292,7 +331,7 @@ const alchemyService = {
         chain: network
       };
       
-      const response = await axios.get(this.getBaseUrl(network), { params });
+      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
       
       return {
         nfts: response.data?.nfts || [],
