@@ -22,9 +22,13 @@
   "functions": {
     "api/zapper.js": {
       "memory": 1024,
-      "maxDuration": 10
+      "maxDuration": 15
     },
     "api/farcaster-profile.js": {
+      "memory": 1024,
+      "maxDuration": 15
+    },
+    "api/image-proxy.js": {
       "memory": 1024,
       "maxDuration": 10
     }
@@ -37,6 +41,10 @@
     {
       "source": "/api/farcaster-profile",
       "destination": "/api/farcaster-profile.js"
+    },
+    {
+      "source": "/api/image-proxy",
+      "destination": "/api/image-proxy.js"
     },
     {
       "source": "/(.*)",
@@ -58,7 +66,7 @@
       "headers": [
         { 
           "key": "Content-Security-Policy", 
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://public.zapper.xyz https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net; media-src 'self' blob: data: https:;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://public.zapper.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net; media-src 'self' blob: data: https:;"
         },
         {
           "key": "X-Content-Type-Options",
@@ -66,5 +74,13 @@
         }
       ]
     }
-  ]
+  ],
+  "env": {
+    "ZAPPER_API_KEY": "0b615d5f-ef05-42fb-95d3-a5e180d316cf",
+    "REACT_APP_ZAPPER_API_KEY": "0b615d5f-ef05-42fb-95d3-a5e180d316cf",
+    "ALCHEMY_API_KEY": "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak",
+    "REACT_APP_ALCHEMY_API_KEY": "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak",
+    "REACT_APP_API_URL": "https://gall3ry.vercel.app/api",
+    "DEBUG": "true"
+  }
 }

@@ -30,8 +30,7 @@ This project follows standardized naming conventions for components. Here are th
 
 ### Contexts
 
-- **NFTContext**: Provides NFT data fetching and management for complex use cases.
-- **SimpleNFTContext**: Simplified NFT context for basic NFT gallery functionality.
+- **NFTContext**: Provides NFT data fetching and management for NFT gallery functionality.
 - **AuthContext**: Handles user authentication state.
 - **WalletContext**: Manages connected wallet information.
 

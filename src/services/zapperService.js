@@ -1,11 +1,17 @@
 import axios from 'axios';
+import { getApiBaseUrl, getZapperApiKey } from '../utils/runtimeConfig';
 // Completely remove any imports from NFTContext
 
 // Define constants locally rather than importing them
 // This helps break potential circular dependencies
 const ZAPPER_API_URL = process.env.REACT_APP_ZAPPER_API_URL || 'https://public.zapper.xyz/graphql';
-const ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
+let ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
 const FALLBACK_ZAPPER_URL = 'https://api.zapper.fi/v2';
+
+// Initialize the SERVER_URL with a default value
+// Will be updated dynamically when getServerUrl() is called
+let SERVER_URL = '';
+let ZAPPER_API_ENDPOINTS = [];
 
 // Single cache for all API responses
 const cache = new Map();
@@ -22,13 +28,44 @@ const zapperAxios = axios.create({
 
 // Constants
 // Use window.location.origin to ensure this works in both development and production
-const SERVER_URL = window.location.origin;
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
-const ZAPPER_API_ENDPOINTS = [
-  `${SERVER_URL}/api/zapper`,             // Use absolute URL (either localhost or production)
+const DEFAULT_ENDPOINTS = [
+  '/api/zapper',             // Default relative URL
   'https://public.zapper.xyz/graphql'     // Direct Zapper API endpoint as last resort
 ];
-// Direct endpoint is removed to prevent 404s - all requests should go through our proxy
+
+// Initialize endpoints after we've loaded the API base URL
+async function initializeEndpoints() {
+  if (SERVER_URL) return; // Already initialized
+  
+  try {
+    SERVER_URL = await getApiBaseUrl();
+    console.log(`Initialized SERVER_URL: ${SERVER_URL}`);
+    
+    // Get the API key from runtime config
+    const runtimeApiKey = await getZapperApiKey();
+    if (runtimeApiKey) {
+      ZAPPER_API_KEY = runtimeApiKey;
+      console.log('Using Zapper API key from runtime config');
+    }
+    
+    // Updated endpoints to prioritize our proxy and properly format the direct endpoint
+    ZAPPER_API_ENDPOINTS = [
+      `${SERVER_URL}/zapper`,             // Use absolute URL (either localhost or production)
+      'https://public.zapper.xyz/graphql'  // Direct Zapper API endpoint as last resort
+    ];
+    
+    console.log('Initialized endpoints:', ZAPPER_API_ENDPOINTS);
+  } catch (error) {
+    console.error('Failed to initialize endpoints:', error);
+    // Fallback to default values
+    SERVER_URL = '/api';
+    ZAPPER_API_ENDPOINTS = DEFAULT_ENDPOINTS;
+  }
+}
+
+// Call initialization immediately
+initializeEndpoints();
 
 // Use the unified cache for NFT data instead of separate caches
 // const NFT_CACHE = new Map();
@@ -38,6 +75,30 @@ const ZAPPER_API_ENDPOINTS = [
 // const nftCache = new Map();
 // const CACHE_TTL = 15 * 60 * 1000; // 15 minutes
 
+// Define constants for API URLs that will be set during initialization
+let ZAPPER_ENDPOINT = '/api/zapper';
+let FARCASTER_PROFILE_ENDPOINT = '/api/farcaster-profile';
+
+// Update these endpoints when we initialize
+async function updateApiEndpoints() {
+  try {
+    const baseUrl = await getApiBaseUrl();
+    ZAPPER_ENDPOINT = `${baseUrl}/zapper`;
+    FARCASTER_PROFILE_ENDPOINT = `${baseUrl}/farcaster-profile`;
+    console.log(`API endpoints updated: 
+      ZAPPER_ENDPOINT: ${ZAPPER_ENDPOINT}
+      FARCASTER_PROFILE_ENDPOINT: ${FARCASTER_PROFILE_ENDPOINT}
+    `);
+  } catch (error) {
+    console.error('Failed to update API endpoints:', error);
+  }
+}
+
+// Call both initialization functions
+Promise.all([initializeEndpoints(), updateApiEndpoints()])
+  .then(() => console.log('Zapper service fully initialized'))
+  .catch(error => console.error('Error initializing zapper service:', error));
+
 /**
  * Make a GraphQL request to the Zapper API with fallback endpoints
  * @param {string} query - GraphQL query
@@ -46,11 +107,18 @@ const ZAPPER_API_ENDPOINTS = [
  * @param {number} maxRetries - Maximum number of retries per endpoint
  * @returns {Promise<object>} - API response
  */
-const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_ENDPOINTS, maxRetries = 3) => {
+const makeGraphQLRequest = async (query, variables = {}, endpoints = null, maxRetries = 3) => {
+  // Use dynamic endpoints if not explicitly provided
+  const endpointsToUse = endpoints || ZAPPER_API_ENDPOINTS;
+  if (!endpointsToUse || endpointsToUse.length === 0) {
+    console.warn('No endpoints available, falling back to default');
+    endpointsToUse = DEFAULT_ENDPOINTS;
+  }
+  
   let lastError = null;
   
   // Try each endpoint
-  for (const endpoint of endpoints) {
+  for (const endpoint of endpointsToUse) {
     let retryCount = 0;
     
     while (retryCount < maxRetries) {
@@ -129,12 +197,6 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = ZAPPER_API_
   throw lastError;
 };
 
-// Define constants for API URLs
-const API_URL = process.env.REACT_APP_API_URL || '';
-// Use SERVER_URL to ensure consistency between local dev and production
-const ZAPPER_ENDPOINT = `${SERVER_URL}/api/zapper`;
-const FARCASTER_PROFILE_ENDPOINT = `${SERVER_URL}/api/farcaster-profile`;
-
 /**
  * Get a Farcaster profile by username or FID
  * @param {string|number} usernameOrFid - Farcaster username or FID
@@ -160,6 +222,8 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   
   console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
   
+  let errors = [];
+  
   try {
     // First try the dedicated GET endpoint
     try {
@@ -177,6 +241,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
       }
     } catch (dedicatedEndpointError) {
       console.error('Dedicated endpoint failed:', dedicatedEndpointError.message);
+      errors.push(`Dedicated endpoint: ${dedicatedEndpointError.message}`);
       
       // Check if this is an API key issue
       if (dedicatedEndpointError.response?.status === 403 || 
@@ -187,60 +252,113 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     }
     
     // If dedicated endpoint fails, try the GraphQL endpoint
-    console.log(`Trying GraphQL endpoint: ${ZAPPER_ENDPOINT}`);
-    
-    // GraphQL query based on Zapper API documentation
-    const query = `
-      query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
-        farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
-          username
-          fid
-          metadata {
-            displayName
-            description
-            imageUrl
-            warpcast
+    try {
+      console.log(`Trying GraphQL endpoint: ${ZAPPER_ENDPOINT}`);
+      
+      // GraphQL query based on Zapper API documentation
+      const query = `
+        query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
+          farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
+            username
+            fid
+            metadata {
+              displayName
+              description
+              imageUrl
+              warpcast
+            }
+            custodyAddress
+            connectedAddresses
           }
-          custodyAddress
-          connectedAddresses
         }
-      }
-    `;
-    
-    // Build variables based on input type
-    const variables = isFid 
-      ? { fid: parseInt(cleanInput, 10) }
-      : { username: cleanInput };
-    
-    const graphqlResponse = await zapperAxios.post(
-      ZAPPER_ENDPOINT,
-      { query, variables },
-      { 
-        headers: {
-          'Content-Type': 'application/json',
-          // Explicitly add API key for direct GraphQL endpoint
-          ...(ZAPPER_API_KEY && { 'x-zapper-api-key': ZAPPER_API_KEY })
+      `;
+      
+      // Build variables based on input type
+      const variables = isFid 
+        ? { fid: parseInt(cleanInput, 10) }
+        : { username: cleanInput };
+      
+      const graphqlResponse = await zapperAxios.post(
+        ZAPPER_ENDPOINT,
+        { query, variables },
+        { 
+          headers: {
+            'Content-Type': 'application/json',
+            // Explicitly add API key for direct GraphQL endpoint
+            ...(ZAPPER_API_KEY && { 'x-zapper-api-key': ZAPPER_API_KEY })
+          }
         }
+      );
+      
+      // Check for GraphQL errors
+      if (graphqlResponse.data?.errors) {
+        console.error('GraphQL errors:', graphqlResponse.data.errors);
+        throw new Error(graphqlResponse.data.errors[0]?.message || 'GraphQL error');
       }
-    );
-    
-    // Check for GraphQL errors
-    if (graphqlResponse.data?.errors) {
-      console.error('GraphQL errors:', graphqlResponse.data.errors);
-      throw new Error(graphqlResponse.data.errors[0]?.message || 'GraphQL error');
+      
+      // Find profile data in the response
+      const profileData = graphqlResponse.data?.data?.farcasterProfile;
+      
+      if (profileData) {
+        console.log('Found Farcaster profile via GraphQL endpoint:', profileData);
+        return profileData;
+      }
+      throw new Error('No profile data in GraphQL response');
+    } catch (graphqlError) {
+      console.error('GraphQL endpoint failed:', graphqlError.message);
+      errors.push(`GraphQL endpoint: ${graphqlError.message}`);
+      // Continue to try Neynar API
     }
     
-    // Find profile data in the response
-    const profileData = graphqlResponse.data?.data?.farcasterProfile;
-    
-    if (!profileData) {
-      throw new Error(`Farcaster profile not found for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
+    // If both Zapper endpoints fail, try Neynar API as a last resort
+    if (!isFid) { // Neynar search endpoint works only with usernames
+      try {
+        console.log('Trying Neynar API as last resort');
+        const response = await axios({
+          method: 'get',
+          url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(cleanInput)}&limit=1`,
+          headers: {
+            'accept': 'application/json'
+          },
+          timeout: 5000
+        });
+        
+        if (response.data && response.data.users && response.data.users.length > 0) {
+          // Look for exact match first
+          const exactMatch = response.data.users.find(
+            user => user.username.toLowerCase() === cleanInput.toLowerCase()
+          );
+          
+          const userData = exactMatch || response.data.users[0];
+          
+          // Convert Neynar response to our format
+          const profileData = {
+            username: userData.username,
+            fid: userData.fid,
+            metadata: {
+              displayName: userData.display_name,
+              imageUrl: userData.pfp_url,
+              description: userData.profile?.bio?.text
+            },
+            custodyAddress: userData.custody_address,
+            connectedAddresses: userData.connected_addresses || []
+          };
+          
+          console.log('Found Farcaster profile via Neynar API:', profileData);
+          return profileData;
+        }
+        throw new Error('No profile found in Neynar response');
+      } catch (neynarError) {
+        console.error('Neynar API failed:', neynarError.message);
+        errors.push(`Neynar API: ${neynarError.message}`);
+      }
     }
     
-    console.log('Found Farcaster profile via GraphQL endpoint:', profileData);
-    return profileData;
+    // If we get here, all attempts failed
+    throw new Error(`Farcaster profile not found for ${isFid ? 'FID' : 'username'}: ${cleanInput}. All API attempts failed.`);
   } catch (error) {
-    console.error('Error in getFarcasterProfile:', error);
+    console.error('Error in getFarcasterProfile:', error.message);
+    console.error('All errors:', errors);
     throw new Error(`Failed to find Farcaster profile for ${cleanInput}: ${error.message}`);
   }
 };
