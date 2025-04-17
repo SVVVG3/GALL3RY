@@ -67,7 +67,8 @@ export const NFTProvider = ({ children }) => {
         dataAvailable: !!transferData,
         transferCount: transferData?.transfers?.length || 0,
         mapEntries: transferData?.transferMap ? Object.keys(transferData.transferMap).length : 0,
-        diagnosticInfo: transferData?.diagnostic
+        diagnosticInfo: transferData?.diagnostic,
+        firstFewKeys: Object.keys(transferData?.transferMap || {}).slice(0, 5)
       });
       
       // Enhance NFTs with transfer timestamps if transfer data is available
@@ -93,6 +94,11 @@ export const NFTProvider = ({ children }) => {
             
             // Use ISO string for consistent date handling
             const timestamp = new Date(transferTimestamp).toISOString();
+            
+            // Log details about this NFT and the timestamp being applied
+            if (transfersApplied <= 3) {
+              console.log(`Transfer timestamp applied: NFT ${nft.name || 'Unnamed'}, contract: ${contractAddress}, tokenId: ${tokenId}, timestamp: ${timestamp}`);
+            }
             
             return {
               ...nft,

@@ -167,8 +167,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           // Debug timestamps for the first few NFTs to help troubleshoot
           if (a === userNfts[0] || b === userNfts[0]) {
             console.log('Recent sorting timestamp info:', {
+              name: a.name || a.title,
               transferTimestampA: a.transferTimestamp,
               otherTimestampA: a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp,
+              allTimestampsA: {
+                transfer: a.transferTimestamp,
+                lastActivity: a.lastActivityTimestamp,
+                acquired: a.acquiredAt,
+                lastTransfer: a.lastTransferTimestamp
+              },
               transferTimestampB: b.transferTimestamp,
               otherTimestampB: b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp
             });
