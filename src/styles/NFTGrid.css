@@ -873,7 +873,9 @@
   object-fit: cover !important;
   opacity: 1 !important;
   visibility: visible !important;
-  z-index: 1 !important;
+  z-index: 50 !important; /* Increased to ensure it's really on top */
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 /* Ensure NFT videos are always visible */
@@ -886,7 +888,9 @@
   object-fit: cover !important;
   opacity: 1 !important;
   visibility: visible !important;
-  z-index: 1 !important;
+  z-index: 50 !important; /* Increased to ensure it's really on top */
+  display: block !important;
+  pointer-events: auto !important;
 }
 
 /* Ensure NFT audio is properly displayed */
@@ -895,5 +899,36 @@
   max-width: 250px !important;
   opacity: 1 !important;
   visibility: visible !important;
+  z-index: 50 !important; /* Increased to ensure it's really on top */
+  display: block !important;
+  pointer-events: auto !important;
+}
+
+/* Force NFT media container to be visible */
+.nft-media-container {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 10 !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  overflow: visible !important;
+}
+
+/* Override any existing rules hiding NFT images */
+.nft-image {
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 100% !important;
+  height: 100% !important;
+  position: static !important;
+  z-index: auto !important;
+}
+
+/* Ensure proper stacking context for the card */
+.nft-card {
+  position: relative !important;
   z-index: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
 } 

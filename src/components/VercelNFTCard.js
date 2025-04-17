@@ -172,7 +172,7 @@ const VercelNFTCard = ({ nft }) => {
     setMediaLoaded(false);
     setMediaError(false);
     
-  }, [nft, contractAddress, tokenId]); // Only re-run if the NFT or its identifiers change
+  }, [nft, contractAddress, tokenId, getMediaType]); // Added getMediaType to dependency array
   
   // Safety fallback for placeholders
   const placeholderUrl = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
@@ -197,6 +197,46 @@ const VercelNFTCard = ({ nft }) => {
     setMediaLoaded(true); // Consider it "loaded" but with error
   };
   
+  // New useEffect to debug the DOM and fix rendering issues
+  useEffect(() => {
+    if (mediaLoaded) {
+      // Wait a short time after load to check the DOM
+      const checkTimer = setTimeout(() => {
+        try {
+          // Find all media elements in this component
+          const mediaElements = document.querySelectorAll('.nft-image-content, .nft-video-content, .nft-audio-content');
+          
+          // Force fix any hidden elements
+          mediaElements.forEach(el => {
+            const computedStyle = window.getComputedStyle(el);
+            const isHidden = computedStyle.display === 'none' || 
+                            computedStyle.visibility === 'hidden' || 
+                            computedStyle.opacity === '0';
+            
+            if (isHidden) {
+              console.warn('Found hidden media element, forcing display:', el);
+              el.style.cssText = `
+                display: block !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                z-index: 999 !important;
+                position: absolute !important;
+                top: 0 !important;
+                left: 0 !important;
+                width: 100% !important;
+                height: 100% !important;
+              `;
+            }
+          });
+        } catch (e) {
+          console.error('Error checking media elements:', e);
+        }
+      }, 500);
+      
+      return () => clearTimeout(checkTimer);
+    }
+  }, [mediaLoaded]);
+  
   return (
     <div className="nft-card" style={{ 
       minHeight: '250px', 
@@ -205,176 +245,182 @@ const VercelNFTCard = ({ nft }) => {
       border: '1px solid #eee',
       borderRadius: '8px',
       overflow: 'hidden',
-      backgroundColor: '#fff'
+      backgroundColor: '#fff',
+      position: 'relative' // Add explicit position for proper z-indexing
     }}>
+      {/* NFT Media Container - OUTSIDE the Link to prevent click capturing */}
+      <div className="nft-media-container" style={{ 
+        position: 'relative', 
+        width: '100%',
+        paddingBottom: '100%', // 1:1 aspect ratio
+        backgroundColor: '#f5f5f5',
+        flexShrink: 0,
+        zIndex: 5 // Ensure media is above other elements
+      }}>
+        {/* Debug info - remove in production */}
+        <div style={{
+          position: 'absolute',
+          bottom: '0',
+          left: '0',
+          right: '0',
+          backgroundColor: 'rgba(0,0,0,0.7)',
+          color: 'white',
+          fontSize: '9px',
+          padding: '2px 4px',
+          zIndex: 6, // Above the media
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis'
+        }}>
+          Debug URL: {debugMediaUrl} (Type: {mediaType})
+        </div>
+        
+        {/* Render appropriate media type based on content */}
+        {mediaType === 'image' && (
+          <img
+            src={mediaUrl}
+            alt={title}
+            className="nft-image-content"
+            onLoad={handleMediaLoad}
+            onError={handleMediaError}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+              visibility: 'visible',
+              opacity: 1,
+              zIndex: 5, // Ensure it's visible
+              margin: 0,
+              padding: 0,
+              border: 'none',
+              fontFamily: 'inherit'
+            }}
+          />
+        )}
+        
+        {mediaType === 'video' && (
+          <video
+            src={mediaUrl}
+            className="nft-video-content"
+            onLoadedData={handleMediaLoad}
+            onError={handleMediaError}
+            autoPlay
+            loop
+            muted
+            playsInline
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              display: 'block',
+              visibility: 'visible',
+              opacity: 1,
+              zIndex: 5, // Ensure it's visible
+              margin: 0,
+              padding: 0,
+              border: 'none'
+            }}
+          />
+        )}
+        
+        {mediaType === 'audio' && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f0f0f0',
+            zIndex: 5 // Ensure it's visible
+          }}>
+            <audio
+              src={mediaUrl}
+              className="nft-audio-content"
+              onLoadedData={handleMediaLoad}
+              onError={handleMediaError}
+              controls
+              style={{
+                width: '90%',
+                maxWidth: '250px',
+                zIndex: 5 // Ensure it's visible
+              }}
+            />
+          </div>
+        )}
+        
+        {/* Loading indicator - only shown while loading */}
+        {!mediaLoaded && !mediaError && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5',
+            zIndex: mediaLoaded ? 0 : 6 // Above the media while loading
+          }}>
+            <div style={{
+              width: '30px',
+              height: '30px',
+              border: '3px solid rgba(0, 0, 0, 0.1)',
+              borderTopColor: '#7c3aed',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <style dangerouslySetInnerHTML={{ __html: spinKeyframes }} />
+          </div>
+        )}
+        
+        {/* Error fallback - only shown on error */}
+        {mediaError && (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5',
+            zIndex: 6 // Above everything
+          }}>
+            <img 
+              src={placeholderUrl}
+              alt={`${title} (unavailable)`}
+              style={{
+                width: '80%',
+                height: '80%',
+                objectFit: 'contain'
+              }}
+            />
+          </div>
+        )}
+      </div>
+      
+      {/* Link container - placed after the media */}
       <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link" style={{ 
         display: 'flex', 
         flexDirection: 'column', 
-        height: '100%',
+        flex: 1,
         textDecoration: 'none',
-        color: 'inherit'
+        color: 'inherit',
+        zIndex: 4 // Below the media
       }}>
-        <div className="nft-image" style={{ 
-          position: 'relative', 
-          width: '100%',
-          paddingBottom: '100%', // 1:1 aspect ratio
-          backgroundColor: '#f5f5f5',
-          flexShrink: 0
-        }}>
-          {/* Debug info - remove in production */}
-          <div style={{
-            position: 'absolute',
-            bottom: '0',
-            left: '0',
-            right: '0',
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            color: 'white',
-            fontSize: '9px',
-            padding: '2px 4px',
-            zIndex: 5,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis'
-          }}>
-            Debug URL: {debugMediaUrl}
-          </div>
-          
-          {/* Render appropriate media type based on content */}
-          {mediaType === 'image' && (
-            <img
-              src={mediaUrl}
-              alt={title}
-              className="nft-image-content"
-              onLoad={handleMediaLoad}
-              onError={handleMediaError}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                visibility: 'visible',
-                opacity: 1,
-                zIndex: 1,
-                margin: 0,
-                padding: 0,
-                border: 'none',
-                fontFamily: 'inherit'
-              }}
-            />
-          )}
-          
-          {mediaType === 'video' && (
-            <video
-              src={mediaUrl}
-              className="nft-video-content"
-              onLoadedData={handleMediaLoad}
-              onError={handleMediaError}
-              autoPlay
-              loop
-              muted
-              playsInline
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                display: 'block',
-                visibility: 'visible',
-                opacity: 1,
-                zIndex: 1,
-                margin: 0,
-                padding: 0,
-                border: 'none'
-              }}
-            />
-          )}
-          
-          {mediaType === 'audio' && (
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#f0f0f0',
-              zIndex: 1
-            }}>
-              <audio
-                src={mediaUrl}
-                className="nft-audio-content"
-                onLoadedData={handleMediaLoad}
-                onError={handleMediaError}
-                controls
-                style={{
-                  width: '90%',
-                  maxWidth: '250px'
-                }}
-              />
-            </div>
-          )}
-          
-          {/* Loading indicator - only shown while loading */}
-          {!mediaLoaded && !mediaError && (
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#f5f5f5',
-              zIndex: mediaLoaded ? 0 : 2
-            }}>
-              <div style={{
-                width: '30px',
-                height: '30px',
-                border: '3px solid rgba(0, 0, 0, 0.1)',
-                borderTopColor: '#7c3aed',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite'
-              }}></div>
-              <style dangerouslySetInnerHTML={{ __html: spinKeyframes }} />
-            </div>
-          )}
-          
-          {/* Error fallback - only shown on error */}
-          {mediaError && (
-            <div style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: '#f5f5f5',
-              zIndex: 2
-            }}>
-              <img 
-                src={placeholderUrl}
-                alt={`${title} (unavailable)`}
-                style={{
-                  width: '80%',
-                  height: '80%',
-                  objectFit: 'contain'
-                }}
-              />
-            </div>
-          )}
-        </div>
-        
-        <div className="nft-details" style={{ padding: '12px' }}>
+        <div className="nft-details" style={{ padding: '12px', zIndex: 4 }}>
           <div className="nft-info">
             <h3 style={{ 
               margin: '0 0 4px 0',
