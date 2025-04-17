@@ -1,6 +1,7 @@
 import React from 'react';
 import '../styles/NFTGrid.css';
 import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
+import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized component
 
 /**
  * NFT Grid component 
@@ -19,6 +20,13 @@ import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file
  */
 const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
   console.log(`NFTGrid rendering ${nfts.length} NFTs, isLoading: ${isLoading}`);
+  
+  // Determine if we're in production (Vercel) or development
+  const isProduction = process.env.NODE_ENV === 'production' || 
+                       window.location.hostname.includes('vercel.app');
+  
+  // Choose the appropriate NFT card component based on environment
+  const CardComponent = isProduction ? VercelNFTCard : NFTCard;
   
   if (isLoading && (!nfts || nfts.length === 0)) {
     return (
@@ -48,10 +56,10 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
           
           // Debug the NFT data being passed to NFTCard
           const nftKey = getNftKey(nft) || index;
-          console.log(`Rendering NFT ${nftKey}`, nft);
+          console.log(`Rendering NFT ${nftKey} with ${isProduction ? 'VercelNFTCard' : 'NFTCard'}`, nft);
           
           return (
-            <NFTCard 
+            <CardComponent 
               key={nftKey} 
               nft={nft}
             />

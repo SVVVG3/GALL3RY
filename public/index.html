@@ -62,9 +62,31 @@
       }
     </style>
     <title>GALL3RY - Modern NFT Gallery</title>
+    <!-- Inline placeholder SVG to ensure it's always available -->
+    <style>
+      .hidden-placeholder-svg {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+      }
+      /* Animation keyframes for loading spinners */
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
+    
+    <!-- Hidden placeholder SVGs that can be referenced directly -->
+    <div class="hidden-placeholder-svg">
+      <svg id="placeholder-nft-svg" xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
+        <rect width="300" height="300" fill="#f0f0f0"/>
+        <text x="50%" y="50%" font-family="Arial" font-size="18" text-anchor="middle" fill="#666">Image unavailable</text>
+      </svg>
+    </div>
+    
     <div id="root"></div>
     <!--
       This HTML file is a template.
