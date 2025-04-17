@@ -5,15 +5,15 @@
 export const config = {
   api: {
     bodyParser: false,
-    responseLimit: false,
+    responseLimit: '10mb',
   },
 };
 
 export default async function handler(req, res) {
-  // Always set CORS headers first thing
+  // Always set CORS headers first thing - very permissive to debug
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
   // Handle preflight requests immediately
   if (req.method === 'OPTIONS') {
@@ -39,82 +39,162 @@ export default async function handler(req, res) {
     // Always decode the URL
     const targetUrl = decodeURIComponent(url);
     
-    // Process image using native fetch with proper timeout
+    // Handle Alchemy URLs specially - they often need API keys
+    if (targetUrl.includes('nft-cdn.alchemy.com')) {
+      // Add Alchemy API key to URL if missing
+      const apiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
+      const modifiedUrl = !targetUrl.includes('apiKey=') && apiKey ? 
+        `${targetUrl}${targetUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}` : 
+        targetUrl;
+      
+      console.log(`[IMAGE-PROXY] Modified Alchemy URL with API key`);
+      return await proxyAlchemyImage(modifiedUrl, res);
+    }
+    
+    // Handle IPFS URLs
+    if (targetUrl.startsWith('ipfs://')) {
+      const ipfsGatewayUrl = `https://cloudflare-ipfs.com/ipfs/${targetUrl.replace('ipfs://', '')}`;
+      console.log(`[IMAGE-PROXY] Converting IPFS URL: ${ipfsGatewayUrl}`);
+      return await proxyGenericImage(ipfsGatewayUrl, res);
+    }
+    
+    // Handle all other URLs
+    console.log(`[IMAGE-PROXY] Proxying standard URL: ${targetUrl}`);
+    return await proxyGenericImage(targetUrl, res);
+    
+  } catch (error) {
+    console.error('[IMAGE-PROXY] Global error:', error.message);
+    return sendPlaceholder(res, `Error: ${error.message.substring(0, 30)}`);
+  }
+}
+
+/**
+ * Proxy specifically for Alchemy image CDN
+ */
+async function proxyAlchemyImage(url, res) {
+  try {
+    // Specific headers known to work with Alchemy
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      'Origin': 'https://dashboard.alchemy.com',
+      'Referer': 'https://dashboard.alchemy.com/',
+    };
+    
+    // Process URL to ensure it has the correct format
+    let processedUrl = url;
+    if (!url.includes('/original') && !url.includes('/thumb') && !url.includes('.jpg') && !url.includes('.png')) {
+      processedUrl = `${url}/original`;
+      console.log(`[IMAGE-PROXY] Fixed Alchemy URL format: ${processedUrl}`);
+    }
+    
+    // Timeout of 8 seconds
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8000);
     
     try {
-      // Prepare headers for the target server
-      const headers = new Headers();
-      headers.append('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
-      headers.append('Accept', '*/*');
+      const response = await fetch(processedUrl, {
+        method: 'GET',
+        headers,
+        signal: controller.signal,
+      });
       
-      // Special case for known problematic domains
-      if (targetUrl.includes('apeokx.one')) {
-        headers.append('Origin', null);
-        headers.append('Referer', null);
-      } else if (targetUrl.includes('nft-cdn.alchemy.com')) {
-        headers.append('Origin', 'https://dashboard.alchemy.com');
-        headers.append('Referer', 'https://dashboard.alchemy.com/');
-      } else if (targetUrl.includes('goonzworld.com')) {
-        headers.append('Origin', null);
-        headers.append('Referer', null);
-      } else if (targetUrl.includes('i.seadn.io')) {
-        headers.append('Origin', 'https://opensea.io');
-        headers.append('Referer', 'https://opensea.io/');
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.error(`[IMAGE-PROXY] Alchemy returned status ${response.status}`);
+        return sendPlaceholder(res, `Alchemy error ${response.status}`);
       }
+      
+      const contentType = response.headers.get('content-type');
+      const buffer = await response.arrayBuffer();
+      
+      // Only proceed if we have actual image data
+      if (buffer.byteLength === 0) {
+        console.error(`[IMAGE-PROXY] Empty response from Alchemy`);
+        return sendPlaceholder(res, 'Empty image data');
+      }
+      
+      res.setHeader('Content-Type', contentType || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
+      
+      return res.status(200).send(Buffer.from(buffer));
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      console.error(`[IMAGE-PROXY] Fetch error for Alchemy:`, fetchError.message);
+      return sendPlaceholder(res, `Alchemy fetch error`);
+    }
+  } catch (error) {
+    console.error(`[IMAGE-PROXY] Error in proxyAlchemyImage:`, error.message);
+    return sendPlaceholder(res, 'Alchemy proxy error');
+  }
+}
+
+/**
+ * Generic image proxy for non-Alchemy sources
+ */
+async function proxyGenericImage(url, res) {
+  try {
+    // Prepare headers for general image sources
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+      'Accept': '*/*',
+    };
     
-      // Attempt the fetch
-      const response = await fetch(targetUrl, {
+    // Add origin and referer if it's OpenSea
+    if (url.includes('seadn.io') || url.includes('opensea')) {
+      headers['Origin'] = 'https://opensea.io';
+      headers['Referer'] = 'https://opensea.io/';
+    }
+    
+    // Timeout of 8 seconds
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+    
+    try {
+      const response = await fetch(url, {
         method: 'GET',
         headers,
         redirect: 'follow',
         signal: controller.signal,
       });
       
-      // Clear the timeout
       clearTimeout(timeoutId);
       
-      // Check if we received a successful response
       if (!response.ok) {
-        console.log(`[IMAGE-PROXY] Non-OK response from ${targetUrl}: ${response.status}`);
+        console.error(`[IMAGE-PROXY] URL returned status ${response.status}: ${url}`);
         return sendPlaceholder(res, `Error ${response.status}`);
       }
       
-      // Get the response data as an array buffer
-      const imageBuffer = await response.arrayBuffer();
+      const buffer = await response.arrayBuffer();
       
-      // Detect content type
+      // Detect content type or use response header
       let contentType = response.headers.get('content-type');
       
-      // If no content type or invalid type, try to determine from URL
+      // If no content type or it's generic, try to determine from URL
       if (!contentType || contentType === 'application/octet-stream' || contentType === 'text/plain') {
-        if (targetUrl.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
-        else if (targetUrl.match(/\.png$/i)) contentType = 'image/png';
-        else if (targetUrl.match(/\.gif$/i)) contentType = 'image/gif';
-        else if (targetUrl.match(/\.svg$/i)) contentType = 'image/svg+xml';
-        else if (targetUrl.match(/\.webp$/i)) contentType = 'image/webp';
-        else if (targetUrl.match(/\.mp4$/i)) contentType = 'video/mp4';
-        else if (targetUrl.match(/\.webm$/i)) contentType = 'video/webm';
+        if (url.match(/\.(jpg|jpeg)$/i)) contentType = 'image/jpeg';
+        else if (url.match(/\.png$/i)) contentType = 'image/png';
+        else if (url.match(/\.gif$/i)) contentType = 'image/gif';
+        else if (url.match(/\.svg$/i)) contentType = 'image/svg+xml';
+        else if (url.match(/\.webp$/i)) contentType = 'image/webp';
+        else if (url.match(/\.mp4$/i)) contentType = 'video/mp4';
         else contentType = 'image/jpeg'; // Default fallback
       }
       
-      // Set headers for our response
+      // Set explicit Cache-Control for all images 
       res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
       
-      // Send the image data
-      return res.status(200).send(Buffer.from(imageBuffer));
+      return res.status(200).send(Buffer.from(buffer));
     } catch (fetchError) {
-      // Clear timeout if it's still active
       clearTimeout(timeoutId);
-      
-      console.error(`[IMAGE-PROXY] Fetch error for ${targetUrl}:`, fetchError.message);
+      console.error(`[IMAGE-PROXY] Fetch error:`, fetchError.message);
       return sendPlaceholder(res, 'Could not fetch image');
     }
   } catch (error) {
-    console.error('[IMAGE-PROXY] Global error:', error.message);
-    return sendPlaceholder(res, 'Server error');
+    console.error(`[IMAGE-PROXY] Error in proxyGenericImage:`, error.message);
+    return sendPlaceholder(res, 'Generic proxy error');
   }
 }
 
