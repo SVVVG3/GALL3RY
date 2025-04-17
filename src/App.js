@@ -20,6 +20,7 @@ import safeStorage from './utils/storage';
 // Import our new components
 import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
+import AuthStatusIndicator from './components/AuthStatusIndicator';
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -118,9 +119,12 @@ function App() {
       }
     >
       <AuthKitProvider authKitConfig={{
-        domain: 'gall3ry.vercel.app',
-        siweUri: 'https://gall3ry.vercel.app/login',
-        rpcUrl: 'https://mainnet.optimism.io'
+        domain: window.location.hostname || 'gall3ry.vercel.app',
+        siweUri: window.location.origin || 'https://gall3ry.vercel.app',
+        rpcUrl: 'https://mainnet.optimism.io',
+        relay: 'https://relay.farcaster.xyz',
+        version: '1',
+        debug: process.env.NODE_ENV === 'development'
       }}>
         <AuthProvider>
           <WalletProvider>
@@ -129,6 +133,7 @@ function App() {
                 <header className="app-header">
                   <Link to="/" className="logo-link">GALL3RY</Link>
                   <div className="auth-container">
+                    <AuthStatusIndicator />
                     <SignInButton />
                   </div>
                 </header>
@@ -137,6 +142,11 @@ function App() {
                   <Routes>
                     <Route path="/" element={<HomePage />} />
                     <Route path="/simple" element={<SimpleGalleryPage />} />
+                    <Route path="/me" element={
+                      <NFTProvider>
+                        <UserProfilePage />
+                      </NFTProvider>
+                    } />
                     <Route path="/user/:username" element={
                       <NFTProvider>
                         <UserProfilePage />

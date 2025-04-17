@@ -178,11 +178,47 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       <FarcasterSignInButton 
         onSuccess={(result) => {
           console.log('Farcaster sign-in success:', result);
+          // Store some data in session for debugging
+          if (isBrowser && window.sessionStorage) {
+            try {
+              window.sessionStorage.setItem('farcaster_auth_debug', 
+                JSON.stringify({
+                  timestamp: new Date().toISOString(),
+                  success: true,
+                  username: result?.username || 'unknown'
+                })
+              );
+            } catch (e) {
+              console.error('Failed to save auth debug info:', e);
+            }
+          }
+          
           // onSuccess callback will be handled by the useEffect hook
           if (onSuccess && typeof onSuccess === 'function') {
             onSuccess(result);
           }
-        }} 
+        }}
+        onError={(error) => {
+          console.error('Farcaster sign-in error:', error);
+          setError(error || new Error("Sign in failed"));
+          
+          // Store error info for debugging
+          if (isBrowser && window.sessionStorage) {
+            try {
+              window.sessionStorage.setItem('farcaster_auth_error', 
+                JSON.stringify({
+                  timestamp: new Date().toISOString(),
+                  message: error?.message || 'Unknown error',
+                  stack: error?.stack
+                })
+              );
+            } catch (e) {
+              console.error('Failed to save auth error info:', e);
+            }
+          }
+        }}
+        timeout={60000} // 1 minute timeout
+        nonce={`gall3ry-${Date.now()}`} // Generate a unique nonce
       />
     </ErrorBoundaryWrapper>
   );

@@ -1,8 +1,9 @@
 import React, { useState, useEffect, Suspense } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import FarcasterUserSearch from './FarcasterUserSearch';
 import { ErrorBoundary } from 'react-error-boundary';
 import '../styles/UserProfilePage.css';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * UserProfilePage component with better error handling
@@ -10,14 +11,27 @@ import '../styles/UserProfilePage.css';
  */
 const UserProfilePage = () => {
   const { username } = useParams();
+  const { isAuthenticated, profile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Set loading and error states
     setLoading(false);
     setError(null);
-  }, [username]);
+    
+    // Handle the special case where 'me' is used as username parameter
+    if (username === 'me') {
+      if (isAuthenticated && profile?.username) {
+        // Redirect to the actual username URL
+        navigate(`/user/${profile.username}`, { replace: true });
+      } else if (!isAuthenticated) {
+        // If not authenticated but trying to access 'me', show error
+        setError(new Error("Please sign in to view your profile"));
+      }
+    }
+  }, [username, isAuthenticated, profile, navigate]);
 
   // ErrorFallback component
   const ErrorFallback = ({ error, resetErrorBoundary }) => (

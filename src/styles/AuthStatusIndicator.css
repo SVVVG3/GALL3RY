@@ -1,0 +1,20 @@
+.auth-status-indicator {
+  display: flex;
+  align-items: center;
+  margin-right: 16px;
+}
+
+.my-nfts-link {
+  color: #fff;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s ease;
+}
+
+.my-nfts-link:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  text-decoration: none;
+} 

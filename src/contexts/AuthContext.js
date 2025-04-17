@@ -62,7 +62,22 @@ export const useAuth = () => {
       pfp: farcasterAuth.profile?.pfp,
       pfpType: typeof farcasterAuth.profile?.pfp,
       pfpUrl: typeof farcasterAuth.profile?.pfp === 'object' ? farcasterAuth.profile?.pfp?.url : farcasterAuth.profile?.pfp,
+      username: farcasterAuth.profile?.username,
+      fid: farcasterAuth.profile?.fid || 'No fid'
     });
+    
+    // Store user info in localStorage for persistence
+    if (isBrowser) {
+      try {
+        localStorage.setItem('farcaster_user', JSON.stringify({
+          username: farcasterAuth.profile.username,
+          fid: farcasterAuth.profile.fid,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (e) {
+        console.warn('Failed to save user info to localStorage:', e);
+      }
+    }
   }
   
   // Create a properly formatted profile object from Farcaster Auth data
@@ -74,9 +89,11 @@ export const useAuth = () => {
     return {
       fid: farcasterAuth.profile.fid,
       username: farcasterAuth.profile.username,
-      displayName: farcasterAuth.profile.displayName,
+      displayName: farcasterAuth.profile.displayName || farcasterAuth.profile.username,
       avatarUrl: getProfileImageUrl(farcasterAuth.profile),
       connectedAddresses: farcasterAuth.profile.verifications || [],
+      // Extra fields for search functionality
+      custodyAddress: farcasterAuth.profile.custody_address || farcasterAuth.profile.custodyAddress,
       // Include the raw profile for debugging
       _rawProfile: farcasterAuth.profile
     };
