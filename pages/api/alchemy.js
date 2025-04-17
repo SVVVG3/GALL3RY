@@ -76,7 +76,7 @@ export default async function handler(req, res) {
         requestParams = {
           ...requestParams,
           withMetadata: requestParams.withMetadata !== 'false',
-          excludeFilters: requestParams.excludeFilters || ['SPAM'],
+          excludeFilters: requestParams.excludeFilters || ['SPAM', 'AIRDROPS'],
           pageSize: parseInt(requestParams.pageSize || '100', 10),
           // Ensure we get media info for better display
           includeMedia: true,
