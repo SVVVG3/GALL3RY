@@ -12,7 +12,7 @@ const ALCHEMY_PROXY_URL = config.ALCHEMY_PROXY_URL || '/api/alchemy';
 
 // ALWAYS force using the proxy to ensure server API key is used
 // Never use a client-side key which could be demo or undefined
-const USE_PROXY = true;
+const USE_PROXY = true; // Always use proxy regardless of API key
 
 // NFT API endpoints
 const NFT_ENDPOINTS = {

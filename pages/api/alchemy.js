@@ -137,10 +137,16 @@ export default async function handler(req, res) {
         url = `${getAlchemyBaseUrl(chain)}/v2/${apiKey}`;
         
         try {
-          // Parse addresses
+          // Parse and validate addresses
           const addresses = requestParams.addresses ? 
-            requestParams.addresses.split(',').map(addr => addr.trim()) : 
+            requestParams.addresses.split(',')
+              .map(addr => addr.trim())
+              .filter(addr => addr && addr.length > 0) : 
             [];
+          
+          // More detailed logging for debugging
+          console.log(`Fetching transfers for ${addresses.length} addresses on ${chain}:`, 
+            addresses.length > 0 ? addresses.slice(0, 3).concat(addresses.length > 3 ? ['...and more'] : []) : 'No addresses');
           
           if (!addresses.length) {
             return res.status(400).json({
@@ -149,7 +155,10 @@ export default async function handler(req, res) {
             });
           }
           
-          console.log(`Fetching transfers for ${addresses.length} addresses on ${chain}`);
+          // Get the optional category parameter or default to ERC721 and ERC1155
+          const categories = requestParams.category ? 
+            (Array.isArray(requestParams.category) ? requestParams.category : [requestParams.category]) : 
+            ["ERC721", "ERC1155"];
           
           // Make two requests - one for incoming transfers and one for outgoing
           const [incomingResponse, outgoingResponse] = await Promise.all([
@@ -159,7 +168,7 @@ export default async function handler(req, res) {
               id: 1,
               method: "alchemy_getAssetTransfers",
               params: [{
-                category: ["ERC721", "ERC1155"],
+                category: categories,
                 toAddress: addresses,
                 withMetadata: true,
                 excludeZeroValue: true,
@@ -179,7 +188,7 @@ export default async function handler(req, res) {
               id: 2,
               method: "alchemy_getAssetTransfers",
               params: [{
-                category: ["ERC721", "ERC1155"],
+                category: categories,
                 fromAddress: addresses,
                 withMetadata: true,
                 excludeZeroValue: true,
@@ -199,6 +208,19 @@ export default async function handler(req, res) {
           const outgoingTransfers = outgoingResponse.data?.result?.transfers || [];
           
           console.log(`Received ${incomingTransfers.length} incoming transfers and ${outgoingTransfers.length} outgoing transfers from Alchemy`);
+          
+          // Sample log for debugging
+          if (incomingTransfers.length > 0) {
+            const sample = incomingTransfers[0];
+            console.log('Sample transfer:', {
+              from: sample.from,
+              to: sample.to,
+              asset: sample.asset,
+              tokenId: sample.tokenId,
+              contractAddress: sample.rawContract?.address,
+              timestamp: sample.metadata?.blockTimestamp
+            });
+          }
           
           // Create a map of contractAddress-tokenId -> timestamp for easy lookup
           // Process only incoming transfers initially since these are current NFTs
@@ -255,6 +277,7 @@ export default async function handler(req, res) {
             outgoingCount: outgoingTransfers.length,
             processedCount,
             addressesUsed: addresses,
+            mapEntriesCount: Object.keys(transferMap).length,
             sampleTransfers: incomingTransfers.slice(0, 2)
           } : null;
           
@@ -264,13 +287,29 @@ export default async function handler(req, res) {
             transferMap,
             count: incomingTransfers.length,
             processedCount,
+            mapSize: Object.keys(transferMap).length,
             diagnostic: diagnosticInfo
           });
         } catch (error) {
           console.error('Error fetching asset transfers:', error);
+          
+          // Enhanced error logging
+          const errorDetails = {
+            message: error.message,
+            stack: error.stack,
+            response: error.response ? {
+              status: error.response.status,
+              statusText: error.response.statusText,
+              data: error.response.data
+            } : null
+          };
+          
+          console.error('Error details:', JSON.stringify(errorDetails, null, 2));
+          
           return res.status(500).json({
             error: 'Failed to fetch asset transfers',
-            message: error.message
+            message: error.message,
+            details: errorDetails
           });
         }
         

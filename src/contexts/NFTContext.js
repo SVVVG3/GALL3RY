@@ -58,18 +58,26 @@ export const NFTProvider = ({ children }) => {
       
       // Fetch transfer data to enhance NFTs with accurate transfer timestamps
       console.log('Fetching transfer history for better "Recent" sorting...');
-      const transferData = await fetchAssetTransfers(normalizedAddresses, {
-        debug: true // Enable diagnostic data
-      });
+      let transferData = { transfers: [], transferMap: {} };
       
-      // Log detailed transfer data for debugging
-      console.log(`Transfer data received from API:`, {
-        dataAvailable: !!transferData,
-        transferCount: transferData?.transfers?.length || 0,
-        mapEntries: transferData?.transferMap ? Object.keys(transferData.transferMap).length : 0,
-        diagnosticInfo: transferData?.diagnostic,
-        firstFewKeys: Object.keys(transferData?.transferMap || {}).slice(0, 5)
-      });
+      try {
+        transferData = await fetchAssetTransfers(normalizedAddresses, {
+          debug: true, // Enable diagnostic data
+          category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
+        });
+        
+        // Log detailed transfer data for debugging
+        console.log(`Transfer data received from API:`, {
+          dataAvailable: !!transferData,
+          transferCount: transferData?.transfers?.length || 0,
+          mapEntries: transferData?.transferMap ? Object.keys(transferData.transferMap).length : 0,
+          diagnosticInfo: transferData?.diagnostic,
+          firstFewKeys: transferData?.transferMap ? Object.keys(transferData.transferMap).slice(0, 5) : []
+        });
+      } catch (transferError) {
+        console.error('Error fetching transfer data:', transferError);
+        // Don't fail the entire request if transfers fail - just continue with the NFTs we have
+      }
       
       // Enhance NFTs with transfer timestamps if transfer data is available
       let enhancedNfts = result.nfts || [];

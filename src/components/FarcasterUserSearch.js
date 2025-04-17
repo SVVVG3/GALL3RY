@@ -155,6 +155,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                        a.acquiredAt || 
                        a.lastTransferTimestamp || 
                        a.mintedAt ||
+                       a.timeLastUpdated ||
                        a.createdAt;
                        
           const timeB = b.transferTimestamp || 
@@ -162,6 +163,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
                        b.acquiredAt || 
                        b.lastTransferTimestamp || 
                        b.mintedAt ||
+                       b.timeLastUpdated ||
                        b.createdAt;
           
           // Debug timestamps for the first few NFTs to help troubleshoot
@@ -169,15 +171,16 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             console.log('Recent sorting timestamp info:', {
               name: a.name || a.title,
               transferTimestampA: a.transferTimestamp,
-              otherTimestampA: a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp,
+              otherTimestampA: a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp || a.timeLastUpdated,
               allTimestampsA: {
                 transfer: a.transferTimestamp,
                 lastActivity: a.lastActivityTimestamp,
                 acquired: a.acquiredAt,
-                lastTransfer: a.lastTransferTimestamp
+                lastTransfer: a.lastTransferTimestamp,
+                timeLastUpdated: a.timeLastUpdated
               },
               transferTimestampB: b.transferTimestamp,
-              otherTimestampB: b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp
+              otherTimestampB: b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp || b.timeLastUpdated
             });
           }
           

@@ -401,16 +401,35 @@ async function getAssetTransfers(addresses, options = {}) {
     // Get the chains to fetch from (defaulting to ETH only for transfers to reduce API calls)
     const chain = options.chain || 'eth';
     
-    console.log(`Fetching NFT transfers for ${addresses.length} addresses on ${chain}`);
+    // Clean and validate addresses
+    const validAddresses = addresses
+      .filter(addr => addr && typeof addr === 'string')
+      .map(addr => addr.toLowerCase().trim());
+    
+    if (validAddresses.length === 0) {
+      console.warn('No valid addresses after formatting');
+      return { transfers: [], transferMap: {} };
+    }
+    
+    console.log(`Fetching NFT transfers for ${validAddresses.length} addresses on ${chain}`);
     
     // Build the params for the Alchemy API call
     const params = {
       endpoint: 'getAssetTransfers',
       chain,
-      addresses: addresses.join(','),
+      addresses: validAddresses.join(','),
       order: options.order || 'desc',
-      debug: options.debug === true ? 'true' : undefined
+      debug: options.debug === true ? 'true' : undefined,
+      category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
     };
+    
+    console.log(`Fetching transfers with params:`, {
+      endpoint: params.endpoint,
+      chain: params.chain,
+      addressCount: validAddresses.length,
+      order: params.order,
+      debug: params.debug
+    });
     
     // Call our backend API which will handle the RPC call
     const response = await axios.get(ALCHEMY_ENDPOINT, { params });
@@ -441,11 +460,19 @@ async function getAssetTransfers(addresses, options = {}) {
     };
   } catch (error) {
     console.error('Error fetching asset transfers:', error);
+    const errorDetails = {
+      message: error.message,
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data
+    };
+    console.error('Error details:', errorDetails);
+    
     return { 
       transfers: [], 
       transferMap: {},
       error: error.message,
-      diagnostic: { error: error.message, stack: error.stack }
+      diagnostic: { error: error.message, stack: error.stack, details: errorDetails }
     };
   }
 }
