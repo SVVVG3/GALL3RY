@@ -178,7 +178,8 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       <FarcasterSignInButton 
         onSuccess={(result) => {
           console.log('Farcaster sign-in success:', result);
-          // Store some data in session for debugging
+          
+          // Log success for debugging
           if (isBrowser && window.sessionStorage) {
             try {
               window.sessionStorage.setItem('farcaster_auth_debug', 
@@ -202,7 +203,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
           console.error('Farcaster sign-in error:', error);
           setError(error || new Error("Sign in failed"));
           
-          // Store error info for debugging
+          // Log error for debugging
           if (isBrowser && window.sessionStorage) {
             try {
               window.sessionStorage.setItem('farcaster_auth_error', 
@@ -217,8 +218,6 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
             }
           }
         }}
-        timeout={60000} // 1 minute timeout
-        nonce={`gall3ry-${Date.now()}`} // Generate a unique nonce
       />
     </ErrorBoundaryWrapper>
   );

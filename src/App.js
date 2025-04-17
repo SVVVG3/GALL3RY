@@ -118,13 +118,10 @@ function App() {
         <ErrorDisplay error={error} onRetry={resetErrorBoundary} />
       }
     >
-      <AuthKitProvider authKitConfig={{
+      <AuthKitProvider config={{
         domain: window.location.hostname || 'gall3ry.vercel.app',
-        siweUri: window.location.origin || 'https://gall3ry.vercel.app',
-        rpcUrl: 'https://mainnet.optimism.io',
-        relay: 'https://relay.farcaster.xyz',
-        version: '1',
-        debug: process.env.NODE_ENV === 'development'
+        siweUri: `${window.location.origin || 'https://gall3ry.vercel.app'}/login`,
+        rpcUrl: 'https://mainnet.optimism.io'
       }}>
         <AuthProvider>
           <WalletProvider>

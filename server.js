@@ -1223,4 +1223,14 @@ process.on('uncaughtException', (err) => {
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
   // Don't crash the application, but log the error
+});
+
+// Add login route for Farcaster authentication
+app.get('/login', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Farcaster authentication endpoint' });
+});
+
+app.post('/login', (req, res) => {
+  // This endpoint is used by Farcaster Auth Kit to verify authentication
+  res.status(200).json({ status: 'ok', message: 'Authentication successful' });
 }); 
