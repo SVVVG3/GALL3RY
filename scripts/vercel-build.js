@@ -73,12 +73,11 @@ const getApiUrl = () => {
   return productionUrl;
 };
 
-// Create a runtime config file with the API URLs
+// Create a runtime config file with the API URLs - BUT NOT API KEYS
 // This is useful because the REACT_APP_ prefix only works at build time
 const runtimeConfig = {
   apiUrl: getApiUrl(),
-  zapperApiKey: process.env.REACT_APP_ZAPPER_API_KEY,
-  alchemyApiKey: process.env.REACT_APP_ALCHEMY_API_KEY,
+  // SECURITY: Do not include API keys in client-side config
   buildTime: new Date().toISOString()
 };
 

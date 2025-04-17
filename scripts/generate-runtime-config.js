@@ -15,19 +15,25 @@ const getApiUrl = () => {
   
   // Check if a specific API port is provided
   const apiPort = process.env.API_PORT || process.env.PORT || 3001;
-  return `http://localhost:${apiPort}/api`;
+  
+  // Handle the case where port 3001 is in use and we're using an alternative port
+  const actualApiPort = process.env.ACTUAL_PORT || apiPort;
+  return `http://localhost:${actualApiPort}/api`;
 };
 
-// Create runtime config
+// Create runtime config - IMPORTANT: DO NOT include API keys here!
 const config = {
   apiUrl: getApiUrl(),
-  zapperApiKey: process.env.REACT_APP_ZAPPER_API_KEY || process.env.ZAPPER_API_KEY,
-  alchemyApiKey: process.env.REACT_APP_ALCHEMY_API_KEY || process.env.ALCHEMY_API_KEY,
+  // Remove API keys from client-side config for security
   buildTime: new Date().toISOString()
 };
 
 console.log('Generating runtime config:');
-console.log(JSON.stringify(config, null, 2));
+// Only log partial info for security
+console.log(JSON.stringify({
+  apiUrl: config.apiUrl,
+  buildTime: config.buildTime
+}, null, 2));
 
 // Ensure directory exists
 const publicDir = path.resolve(__dirname, '../public');

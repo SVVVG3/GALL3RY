@@ -1,12 +1,14 @@
 import axios from 'axios';
-import { getApiBaseUrl, getZapperApiKey } from '../utils/runtimeConfig';
+import { getApiBaseUrl } from '../utils/runtimeConfig';
 // Completely remove any imports from NFTContext
 
 // Define constants locally rather than importing them
 // This helps break potential circular dependencies
 const ZAPPER_API_URL = process.env.REACT_APP_ZAPPER_API_URL || 'https://public.zapper.xyz/graphql';
-let ZAPPER_API_KEY = process.env.REACT_APP_ZAPPER_API_KEY;
-const FALLBACK_ZAPPER_URL = 'https://api.zapper.fi/v2';
+
+// NOTE: We no longer store API keys client-side for security reasons
+// API keys are now managed server-side only
+// Server-side proxy endpoints will handle authentication
 
 // Initialize the SERVER_URL with a default value
 // Will be updated dynamically when getServerUrl() is called
@@ -30,8 +32,7 @@ const zapperAxios = axios.create({
 // Use window.location.origin to ensure this works in both development and production
 // Updated endpoints to prioritize our proxy and properly format the direct endpoint
 const DEFAULT_ENDPOINTS = [
-  '/api/zapper',             // Default relative URL
-  'https://public.zapper.xyz/graphql'     // Direct Zapper API endpoint as last resort
+  '/api/zapper' // Default relative URL - all requests go through our proxy now
 ];
 
 // Initialize endpoints after we've loaded the API base URL
@@ -44,17 +45,10 @@ async function initializeEndpoints() {
       SERVER_URL = baseUrl;
       console.log(`Initialized SERVER_URL: ${SERVER_URL}`);
       
-      // Get the API key from runtime config
-      const runtimeApiKey = await getZapperApiKey();
-      if (runtimeApiKey) {
-        ZAPPER_API_KEY = runtimeApiKey;
-        console.log('Using Zapper API key from runtime config');
-      }
-      
-      // Updated endpoints to prioritize our proxy and properly format the direct endpoint
+      // Updated endpoints to only use our proxy endpoint
+      // This ensures API keys are kept server-side only
       ZAPPER_API_ENDPOINTS = [
-        `${SERVER_URL}/zapper`,             // Use absolute URL (either localhost or production)
-        'https://public.zapper.xyz/graphql'  // Direct Zapper API endpoint as last resort
+        `${SERVER_URL}/zapper` // Use absolute URL (either localhost or production)
       ];
       
       console.log('Initialized endpoints:', ZAPPER_API_ENDPOINTS);
@@ -146,14 +140,7 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = null, maxRe
         const headers = {
           'Content-Type': 'application/json',
           // Don't set User-Agent in browser environment as it will cause errors
-          // 'User-Agent': 'GALL3RY/1.0 (https://gall3ry.vercel.app)'
         };
-        
-        // If using direct Zapper API, add the API key if available
-        if (endpoint.includes('zapper.xyz') && ZAPPER_API_KEY) {
-          // Use the correct authentication header format per docs
-          headers['x-zapper-api-key'] = ZAPPER_API_KEY;
-        }
         
         console.log(`Trying endpoint: ${endpoint}, attempt ${retryCount + 1}/${maxRetries}`);
         
@@ -303,9 +290,8 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         { query, variables },
         { 
           headers: {
-            'Content-Type': 'application/json',
-            // Explicitly add API key for direct GraphQL endpoint
-            ...(ZAPPER_API_KEY && { 'x-zapper-api-key': ZAPPER_API_KEY })
+            'Content-Type': 'application/json'
+            // API keys are now handled server-side only
           }
         }
       );
