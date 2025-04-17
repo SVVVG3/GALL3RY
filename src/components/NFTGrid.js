@@ -1,6 +1,6 @@
 import React from 'react';
 import '../styles/NFTGrid.css';
-import NFTCard from './NftCard'; // Fix case sensitivity in import path
+import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
 
 /**
  * NFT Grid component 
@@ -18,6 +18,8 @@ import NFTCard from './NftCard'; // Fix case sensitivity in import path
  * @returns {JSX.Element} The rendered NFT grid component
  */
 const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
+  console.log(`NFTGrid rendering ${nfts.length} NFTs, isLoading: ${isLoading}`);
+  
   if (isLoading && (!nfts || nfts.length === 0)) {
     return (
       <div className="nft-grid-loader">
@@ -44,9 +46,13 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
             nft.collection_name = getCollectionName(nft);
           }
           
+          // Debug the NFT data being passed to NFTCard
+          const nftKey = getNftKey(nft) || index;
+          console.log(`Rendering NFT ${nftKey}`, nft);
+          
           return (
             <NFTCard 
-              key={getNftKey(nft) || index} 
+              key={nftKey} 
               nft={nft}
             />
           );

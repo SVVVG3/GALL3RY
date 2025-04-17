@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import '../styles/NFTCard.css';
 
@@ -18,6 +18,9 @@ const NFTCard = ({ nft }) => {
     type: 'image', // image, video, or unsupported
     fallbacksExhausted: false
   });
+  const [attemptCount, setAttemptCount] = useState(0);
+  const [urlsAttempted, setUrlsAttempted] = useState([]);
+  const mountedRef = useRef(true);
 
   // Extract NFT details
   const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
@@ -159,6 +162,16 @@ const NFTCard = ({ nft }) => {
   
   // Load media on mount or when nft changes
   useEffect(() => {
+    // Reset state for new NFT
+    setAttemptCount(0);
+    setUrlsAttempted([]);
+    setMedia({
+      status: 'loading',
+      url: null,
+      type: 'image',
+      fallbacksExhausted: false
+    });
+    
     console.log('NFTCard: Loading media for', nft?.name || nft?.title || 'unknown NFT');
     
     const imageUrl = findBestImageUrl(nft);
@@ -187,72 +200,132 @@ const NFTCard = ({ nft }) => {
         fallbacksExhausted: false
       });
     } else {
-      // For images, preload to check if they load properly
-      const img = new Image();
-      img.onload = () => {
-        setMedia({
-          status: 'loaded',
-          url: processedUrl,
-          type: 'image',
-          fallbacksExhausted: false
-        });
-      };
-      
-      img.onerror = () => {
-        console.error(`Failed to load image from ${processedUrl}`);
-        
-        // If not already using image proxy, try with the proxy
-        if (!processedUrl.includes('/api/image-proxy') && imageUrl) {
-          const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
-          
-          // Try the proxy URL
-          const proxyImg = new Image();
-          proxyImg.onload = () => {
-            setMedia({
-              status: 'loaded',
-              url: proxiedUrl,
-              type: 'image',
-              fallbacksExhausted: false
-            });
-          };
-          
-          proxyImg.onerror = () => {
-            console.error(`Failed to load image via proxy from ${proxiedUrl}`);
-            setMedia({
-              status: 'error',
-              url: '/placeholder-nft.svg',
-              type: 'image', 
-              fallbacksExhausted: true
-            });
-          };
-          
-          proxyImg.src = proxiedUrl;
-        } else {
-          // Already tried with proxy or no URL to proxy, show error
-          setMedia({
-            status: 'error',
-            url: '/placeholder-nft.svg',
-            type: 'image',
-            fallbacksExhausted: true
-          });
+      // For images, use a proper load/error handling approach
+      setMedia({
+        status: 'loading',
+        url: processedUrl,
+        type: 'image',
+        fallbacksExhausted: false
+      });
+    }
+    
+    // Cleanup function
+    return () => {
+      mountedRef.current = false;
+    };
+  }, [nft]);
+
+  // After mount, set mounted ref to true
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+  
+  const handleMediaLoad = () => {
+    if (!mountedRef.current) return;
+    
+    console.log(`Media loaded successfully: ${media.url}`);
+    setMedia(prevMedia => ({
+      ...prevMedia,
+      status: 'loaded'
+    }));
+  };
+
+  const handleMediaError = () => {
+    if (!mountedRef.current) return;
+    
+    console.warn(`Error loading media (attempt ${attemptCount + 1}): ${media.url}`);
+    
+    // Add current URL to attempted list
+    setUrlsAttempted(prev => [...prev, media.url]);
+    
+    // Increment attempt counter
+    const newAttemptCount = attemptCount + 1;
+    setAttemptCount(newAttemptCount);
+    
+    // Try next fallback strategy if we haven't exhausted them
+    if (newAttemptCount < 3) {
+      // For the first failure, try with a different format for Alchemy URLs
+      if (media.url && media.url.includes('nft-cdn.alchemy.com')) {
+        let fixedUrl;
+        if (media.url.includes('/original')) {
+          // Remove /original and try with /thumb
+          fixedUrl = media.url.replace('/original', '/thumb');
+        } else if (!media.url.includes('/thumb')) {
+          // Add /original
+          fixedUrl = `${media.url.includes('?') ? media.url.split('?')[0] : media.url}/original${media.url.includes('?') ? '?' + media.url.split('?')[1] : ''}`;
         }
-      };
-      
-      // Set crossOrigin for CORS requests
-      if (!processedUrl.startsWith('/') && !processedUrl.startsWith('data:')) {
-        img.crossOrigin = 'anonymous';
+        
+        if (fixedUrl && fixedUrl !== media.url && !urlsAttempted.includes(fixedUrl)) {
+          console.log(`Trying alternative Alchemy format: ${fixedUrl}`);
+          setMedia({
+            status: 'loading',
+            url: fixedUrl,
+            type: getMediaType(fixedUrl),
+            fallbacksExhausted: false
+          });
+          return;
+        }
       }
       
-      img.src = processedUrl;
+      // Try direct URL if we're using a proxy
+      if (media.url && media.url.includes('/api/image-proxy')) {
+        try {
+          // Extract the original URL
+          const originalUrl = new URL(media.url, window.location.origin).searchParams.get('url');
+          if (originalUrl && !urlsAttempted.includes(originalUrl)) {
+            console.log(`Trying direct URL: ${originalUrl}`);
+            // For some URLs it's safer to try without the proxy
+            if (originalUrl.includes('ipfs.io') || 
+                originalUrl.includes('cloudflare-ipfs.com') ||
+                originalUrl.includes('nftstorage.link')) {
+              setMedia({
+                status: 'loading',
+                url: originalUrl,
+                type: getMediaType(originalUrl),
+                fallbacksExhausted: false
+              });
+              return;
+            }
+          }
+        } catch (e) {
+          console.error('Error extracting URL param:', e);
+        }
+      }
+      
+      // If we have the original URL, try adding more proxy layers
+      const rawUrl = findBestImageUrl(nft);
+      if (rawUrl && !urlsAttempted.includes(`/api/image-proxy?url=${encodeURIComponent(rawUrl)}`)) {
+        const forcedProxyUrl = `/api/image-proxy?url=${encodeURIComponent(rawUrl)}`;
+        console.log(`Trying forced proxy URL: ${forcedProxyUrl}`);
+        setMedia({
+          status: 'loading',
+          url: forcedProxyUrl,
+          type: getMediaType(rawUrl),
+          fallbacksExhausted: false
+        });
+        return;
+      }
     }
-  }, [nft]);
+    
+    // If we get here, all our strategies have failed
+    console.error(`Failed to load image after ${newAttemptCount} attempts, using placeholder`);
+    setMedia({
+      status: 'error',
+      url: '/placeholder-nft.svg',
+      type: 'image',
+      fallbacksExhausted: true
+    });
+  };
   
   return (
-    <div className="nft-card-container">
+    <div className="nft-card">
       <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link">
-        <div className="nft-image-container">
+        <div className="nft-image">
           {media.status === 'loading' && (
-            <div className="nft-image-placeholder">
+            <div className="nft-image-loading">
               <div className="loading-indicator"></div>
               <span>Loading...</span>
             </div>
@@ -262,12 +335,9 @@ const NFTCard = ({ nft }) => {
             <img
               src={media.url}
               alt={title}
-              className="nft-image loaded"
-              onError={(e) => {
-                console.error(`Error loading image ${media.url}`);
-                e.target.src = '/placeholder-nft.svg';
-                e.target.className = 'nft-image fallback';
-              }}
+              className={`nft-image-content ${media.status === 'loaded' ? 'loaded' : ''}`}
+              onLoad={handleMediaLoad}
+              onError={handleMediaError}
               loading="lazy"
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
@@ -277,20 +347,14 @@ const NFTCard = ({ nft }) => {
           {media.status === 'loaded' && media.type === 'video' && (
             <video
               src={media.url}
-              className="nft-video loaded"
+              className="nft-video-content loaded"
               muted
               loop
               autoPlay
               playsInline
-              onError={(e) => {
-                console.error(`Error loading video ${media.url}`);
-                setMedia({
-                  status: 'error',
-                  url: '/placeholder-nft.svg',
-                  type: 'image',
-                  fallbacksExhausted: true
-                });
-              }}
+              onLoadedData={handleMediaLoad}
+              onError={handleMediaError}
+              crossOrigin="anonymous"
             />
           )}
           
@@ -299,15 +363,17 @@ const NFTCard = ({ nft }) => {
               <img 
                 src="/placeholder-nft.svg"
                 alt={`${title} (unavailable)`}
-                className="nft-image fallback"
+                className="nft-image-placeholder"
               />
             </div>
           )}
         </div>
         
-        <div className="nft-info">
-          <h3 className="nft-title">{title}</h3>
-          {collection && <p className="nft-collection">{collection}</p>}
+        <div className="nft-details">
+          <div className="nft-info">
+            <h3 className="nft-name">{title}</h3>
+            {collection && <p className="collection-name">{collection}</p>}
+          </div>
         </div>
       </Link>
     </div>
