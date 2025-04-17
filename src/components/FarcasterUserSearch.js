@@ -148,30 +148,53 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         
       case 'recent':
         return nftsCopy.sort((a, b) => {
-          // Enhanced timestamp extraction with more fallbacks
-          const timeA = a.lastActivityTimestamp || 
+          // Prioritize transferTimestamp which comes from Alchemy's getAssetTransfers
+          // Then fall back to other timestamp fields if available
+          const timeA = a.transferTimestamp || 
+                       a.lastActivityTimestamp || 
                        a.acquiredAt || 
                        a.lastTransferTimestamp || 
                        a.mintedAt ||
-                       a.createdAt ||
-                       0;
+                       a.createdAt;
                        
-          const timeB = b.lastActivityTimestamp || 
+          const timeB = b.transferTimestamp || 
+                       b.lastActivityTimestamp || 
                        b.acquiredAt || 
                        b.lastTransferTimestamp || 
                        b.mintedAt ||
-                       b.createdAt ||
-                       0;
+                       b.createdAt;
           
-          // Convert to numbers to ensure proper comparison
-          const numA = parseInt(timeA) || 0;
-          const numB = parseInt(timeB) || 0;
+          // Debug timestamps for the first few NFTs to help troubleshoot
+          if (a === userNfts[0] || b === userNfts[0]) {
+            console.log('Recent sorting timestamp info:', {
+              transferTimestampA: a.transferTimestamp,
+              otherTimestampA: a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp,
+              transferTimestampB: b.transferTimestamp,
+              otherTimestampB: b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp
+            });
+          }
           
-          const result = sortOrder === 'asc' 
-            ? numA - numB 
-            : numB - numA;
-            
-          return result;
+          // If both have timestamps, compare them as dates
+          if (timeA && timeB) {
+            try {
+              const dateA = new Date(timeA);
+              const dateB = new Date(timeB);
+              return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+            } catch (e) {
+              console.warn('Error comparing dates:', e);
+              // Fall through to numeric comparison
+            }
+          }
+          
+          // If one has timestamp and other doesn't, prioritize the one with timestamp
+          if (timeA && !timeB) return sortOrder === 'asc' ? -1 : 1;
+          if (!timeA && timeB) return sortOrder === 'asc' ? 1 : -1;
+          
+          // If neither has a timestamp or date comparison failed, fall back to token ID
+          const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
+          const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
+          
+          return sortOrder === 'asc' ? idA - idB : idB - idA;
         });
         
       case 'collection':

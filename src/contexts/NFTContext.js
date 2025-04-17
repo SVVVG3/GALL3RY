@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
-import { fetchNftsForAddresses } from '../services/alchemyService';
+import { fetchNftsForAddresses, fetchAssetTransfers } from '../services/alchemyService';
 
 // Create context
 const NFTContext = createContext();
@@ -56,16 +56,52 @@ export const NFTProvider = ({ children }) => {
       
       console.log(`Fetched ${result.nfts?.length || 0} NFTs total`);
       
+      // Fetch transfer data to enhance NFTs with accurate transfer timestamps
+      console.log('Fetching transfer history for better "Recent" sorting...');
+      const transferData = await fetchAssetTransfers(normalizedAddresses);
+      
+      // Enhance NFTs with transfer timestamps if transfer data is available
+      let enhancedNfts = result.nfts || [];
+      
+      if (transferData.transferMap && Object.keys(transferData.transferMap).length > 0) {
+        console.log(`Enhancing NFTs with transfer timestamps from ${Object.keys(transferData.transferMap).length} records`);
+        
+        enhancedNfts = enhancedNfts.map(nft => {
+          // Create the key for the transfer map
+          const contractAddress = nft.contract?.address || nft.contractAddress;
+          const tokenId = nft.tokenId || nft.token_id;
+          
+          if (!contractAddress || !tokenId) return nft;
+          
+          const key = `${contractAddress.toLowerCase()}-${tokenId}`;
+          const transferTimestamp = transferData.transferMap[key];
+          
+          // Add the timestamp if found
+          if (transferTimestamp) {
+            return {
+              ...nft,
+              transferTimestamp
+            };
+          }
+          
+          return nft;
+        });
+        
+        console.log('NFTs enhanced with transfer timestamps');
+      } else {
+        console.log('No transfer data available for enhancing NFTs');
+      }
+      
       if (result.error) {
         setError(result.error);
       }
       
-      // Set NFTs to state and return the result
-      setNfts(result.nfts || []);
+      // Set enhanced NFTs to state
+      setNfts(enhancedNfts);
       
       return {
-        nfts: result.nfts || [],
-        totalCount: result.totalCount || 0,
+        nfts: enhancedNfts,
+        totalCount: result.totalCount || enhancedNfts.length,
         error: result.error
       };
     } catch (err) {

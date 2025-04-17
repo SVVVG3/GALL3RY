@@ -387,6 +387,51 @@ const alchemyService = {
   },
 };
 
+/**
+ * Get asset transfers for addresses to track NFT ownership history
+ * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
+ */
+async function getAssetTransfers(addresses, options = {}) {
+  if (!addresses || addresses.length === 0) {
+    console.warn('No addresses provided to getAssetTransfers');
+    return { transfers: [], transferMap: {} };
+  }
+  
+  try {
+    // Get the chains to fetch from (defaulting to ETH only for transfers to reduce API calls)
+    const chain = options.chain || 'eth';
+    
+    console.log(`Fetching NFT transfers for ${addresses.length} addresses on ${chain}`);
+    
+    // Build the params for the Alchemy API call
+    const params = {
+      endpoint: 'getassettransfers',
+      chain,
+      addresses: addresses.join(','),
+      order: options.order || 'desc'
+    };
+    
+    // Call our backend API which will handle the RPC call
+    const response = await axios.get(ALCHEMY_ENDPOINT, { params });
+    
+    // Check if we got a valid response
+    if (!response.data || !response.data.transferMap) {
+      console.warn('Invalid response from getAssetTransfers:', response.data);
+      return { transfers: [], transferMap: {} };
+    }
+    
+    console.log(`Got transfer data with ${response.data.count || 0} entries`);
+    
+    return {
+      transfers: response.data.transfers || [],
+      transferMap: response.data.transferMap || {}
+    };
+  } catch (error) {
+    console.error('Error fetching asset transfers:', error);
+    return { transfers: [], transferMap: {} };
+  }
+}
+
 // Export convenience functions
 export const fetchNftsForOwner = (address, options) => 
   alchemyService.getNftsForOwner(address, options);
@@ -396,5 +441,8 @@ export const fetchNftsAcrossChains = (address, options) =>
 
 export const fetchNftsForAddresses = (addresses, options) =>
   alchemyService.fetchNftsForMultipleAddresses(addresses, options);
+
+export const fetchAssetTransfers = (addresses, options) =>
+  getAssetTransfers(addresses, options);
 
 export default alchemyService; 
