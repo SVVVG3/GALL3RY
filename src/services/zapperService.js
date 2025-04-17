@@ -36,26 +36,32 @@ const DEFAULT_ENDPOINTS = [
 
 // Initialize endpoints after we've loaded the API base URL
 async function initializeEndpoints() {
-  if (SERVER_URL) return; // Already initialized
-  
   try {
-    SERVER_URL = await getApiBaseUrl();
-    console.log(`Initialized SERVER_URL: ${SERVER_URL}`);
+    const baseUrl = await getApiBaseUrl();
     
-    // Get the API key from runtime config
-    const runtimeApiKey = await getZapperApiKey();
-    if (runtimeApiKey) {
-      ZAPPER_API_KEY = runtimeApiKey;
-      console.log('Using Zapper API key from runtime config');
+    // Only update if SERVER_URL has changed or is not yet set
+    if (!SERVER_URL || SERVER_URL !== baseUrl) {
+      SERVER_URL = baseUrl;
+      console.log(`Initialized SERVER_URL: ${SERVER_URL}`);
+      
+      // Get the API key from runtime config
+      const runtimeApiKey = await getZapperApiKey();
+      if (runtimeApiKey) {
+        ZAPPER_API_KEY = runtimeApiKey;
+        console.log('Using Zapper API key from runtime config');
+      }
+      
+      // Updated endpoints to prioritize our proxy and properly format the direct endpoint
+      ZAPPER_API_ENDPOINTS = [
+        `${SERVER_URL}/zapper`,             // Use absolute URL (either localhost or production)
+        'https://public.zapper.xyz/graphql'  // Direct Zapper API endpoint as last resort
+      ];
+      
+      console.log('Initialized endpoints:', ZAPPER_API_ENDPOINTS);
+      
+      // Also update the other endpoints
+      await updateApiEndpoints();
     }
-    
-    // Updated endpoints to prioritize our proxy and properly format the direct endpoint
-    ZAPPER_API_ENDPOINTS = [
-      `${SERVER_URL}/zapper`,             // Use absolute URL (either localhost or production)
-      'https://public.zapper.xyz/graphql'  // Direct Zapper API endpoint as last resort
-    ];
-    
-    console.log('Initialized endpoints:', ZAPPER_API_ENDPOINTS);
   } catch (error) {
     console.error('Failed to initialize endpoints:', error);
     // Fallback to default values
@@ -83,6 +89,12 @@ let FARCASTER_PROFILE_ENDPOINT = '/api/farcaster-profile';
 async function updateApiEndpoints() {
   try {
     const baseUrl = await getApiBaseUrl();
+    
+    // Only update if SERVER_URL is different from the current baseUrl
+    if (SERVER_URL !== baseUrl) {
+      SERVER_URL = baseUrl;
+    }
+    
     ZAPPER_ENDPOINT = `${baseUrl}/zapper`;
     FARCASTER_PROFILE_ENDPOINT = `${baseUrl}/farcaster-profile`;
     console.log(`API endpoints updated: 
@@ -95,9 +107,17 @@ async function updateApiEndpoints() {
 }
 
 // Call both initialization functions
-Promise.all([initializeEndpoints(), updateApiEndpoints()])
+Promise.all([initializeEndpoints()])
   .then(() => console.log('Zapper service fully initialized'))
   .catch(error => console.error('Error initializing zapper service:', error));
+
+// Reinitialize service periodically
+setInterval(() => {
+  console.log('Refreshing API endpoints configuration...');
+  initializeEndpoints()
+    .then(() => console.log('API endpoints refreshed'))
+    .catch(err => console.error('Failed to refresh API endpoints:', err));
+}, 60000); // Check every minute
 
 /**
  * Make a GraphQL request to the Zapper API with fallback endpoints

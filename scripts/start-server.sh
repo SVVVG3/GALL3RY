@@ -56,6 +56,10 @@ if [ -z "$ALCHEMY_API_KEY" ] && [ -f .env ]; then
   source .env 2>/dev/null || true
 fi
 
+# Generate runtime config for frontend
+echo "📝 Generating runtime-config.json for frontend..."
+node scripts/generate-runtime-config.js
+
 echo "🚀 Starting server..."
 exec node -r dotenv/config server.js 2>&1 | tee -a $LOG_FILE
 
