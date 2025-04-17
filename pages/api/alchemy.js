@@ -47,6 +47,16 @@ export default async function handler(req, res) {
   // Get request parameters
   const { endpoint, chain = 'eth' } = req.query;
   
+  // Log all request details for debugging
+  console.log(`Alchemy API Request:`, {
+    endpoint,
+    chain,
+    method: req.method,
+    params: req.query,
+    url: req.url,
+    userAgent: req.headers['user-agent']
+  });
+  
   if (!endpoint) {
     return res.status(400).json({ 
       error: 'Missing endpoint parameter', 
@@ -121,6 +131,8 @@ export default async function handler(req, res) {
         break;
       
       case 'getassettransfers':
+      case 'getassettransfer':
+      case 'getasset':
         // This endpoint requires a different URL format since it's an RPC method
         url = `${getAlchemyBaseUrl(chain)}/v2/${apiKey}`;
         
@@ -215,6 +227,27 @@ export default async function handler(req, res) {
             }
           });
           
+          // Now ALSO process outgoing transfers to get the most recent activity for each NFT
+          outgoingTransfers.forEach(transfer => {
+            try {
+              const contractAddress = transfer.rawContract?.address;
+              const tokenId = transfer.tokenId;
+              
+              if (contractAddress && tokenId) {
+                const key = `${contractAddress.toLowerCase()}-${tokenId}`;
+                const timestamp = transfer.metadata.blockTimestamp;
+                
+                // Update if this outgoing transfer is more recent than what we have
+                if (!transferMap[key] || new Date(timestamp) > new Date(transferMap[key])) {
+                  transferMap[key] = timestamp;
+                  processedCount++;
+                }
+              }
+            } catch (e) {
+              console.warn('Error processing outgoing transfer:', e);
+            }
+          });
+          
           // If requested, include debug information
           const debug = requestParams.debug === 'true';
           const diagnosticInfo = debug ? {
@@ -240,8 +273,6 @@ export default async function handler(req, res) {
             message: error.message
           });
         }
-        
-        // No need for a break statement here as we're returning directly
         
       default:
         return res.status(400).json({

@@ -405,7 +405,7 @@ async function getAssetTransfers(addresses, options = {}) {
     
     // Build the params for the Alchemy API call
     const params = {
-      endpoint: 'getassettransfers',
+      endpoint: 'getAssetTransfers',
       chain,
       addresses: addresses.join(','),
       order: options.order || 'desc',
