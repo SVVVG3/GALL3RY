@@ -65,7 +65,7 @@ const VercelNFTCard = ({ nft }) => {
 
   // Generate the safest URL for production
   const getProxyUrl = (url) => {
-    if (!url) return "#placeholder-nft-svg"; // Use inline SVG reference
+    if (!url) return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4="; // Inline SVG data URL
     
     // Always use API proxy for external images
     if (url.startsWith('http') || url.startsWith('ipfs://')) {
@@ -78,8 +78,8 @@ const VercelNFTCard = ({ nft }) => {
   // Find the actual URL to use
   const imageUrl = getProxyUrl(getImageUrl());
   
-  // Safety fallback for placeholders - reference inline SVG
-  const placeholderUrl = "#placeholder-nft-svg";
+  // Safety fallback for placeholders - inline SVG data URL
+  const placeholderUrl = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
   
   return (
     <div className="nft-card" style={{ minHeight: '250px', display: 'flex', flexDirection: 'column' }}>
