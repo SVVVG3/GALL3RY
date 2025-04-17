@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 
 // Define keyframes for spinner animation
@@ -16,6 +16,7 @@ const VercelNFTCard = ({ nft }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [debugImageUrl, setDebugImageUrl] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
   
   // Extract NFT details with fallbacks
   const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
@@ -33,105 +34,113 @@ const VercelNFTCard = ({ nft }) => {
     nft?.token_id || 
     (nft?.id?.split && nft?.id?.includes(':') ? nft?.id?.split(':')[3] : '');
 
-  // Function to find best image URL with fallbacks
-  const getImageUrl = () => {
-    let foundUrl = "";
-    let source = "";
-    
-    // Dump the entire image object for debugging
-    if (nft?.image) {
-      console.log("NFT image object:", JSON.stringify(nft.image, null, 2));
-    }
-    
-    // First try Alchemy's media array format
-    if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
-      const mediaItem = nft.media[0];
-      console.log("Found media array item:", mediaItem);
-      if (mediaItem.gateway) {
-        foundUrl = mediaItem.gateway;
-        source = "media.gateway";
-      } else if (mediaItem.raw) {
-        foundUrl = mediaItem.raw;
-        source = "media.raw";
+  // Use useEffect to get and set the image URL only once per NFT change
+  useEffect(() => {
+    // Function to find best image URL with fallbacks
+    const getImageUrl = () => {
+      let foundUrl = "";
+      let source = "";
+      
+      // Dump the entire image object for debugging
+      if (nft?.image) {
+        console.log("NFT image object:", JSON.stringify(nft.image, null, 2));
       }
-    }
-    
-    // Try direct image URL strings
-    if (!foundUrl && nft?.image_url) {
-      foundUrl = nft.image_url;
-      source = "image_url";
-    }
-    
-    if (!foundUrl && typeof nft?.image === 'string') {
-      foundUrl = nft.image;
-      source = "image string";
-    }
-    
-    // Try Alchemy's image object format
-    if (!foundUrl && nft?.image && typeof nft.image === 'object') {
-      console.log("Looking in image object");
-      if (nft.image.cachedUrl) {
-        foundUrl = nft.image.cachedUrl;
-        source = "image.cachedUrl";
-      } else if (nft.image.originalUrl) {
-        foundUrl = nft.image.originalUrl;
-        source = "image.originalUrl";
-      } else if (nft.image.gateway) {
-        foundUrl = nft.image.gateway;
-        source = "image.gateway";
-      } else if (nft.image.url) {
-        foundUrl = nft.image.url;
-        source = "image.url";
+      
+      // First try Alchemy's media array format
+      if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
+        const mediaItem = nft.media[0];
+        console.log("Found media array item:", mediaItem);
+        if (mediaItem.gateway) {
+          foundUrl = mediaItem.gateway;
+          source = "media.gateway";
+        } else if (mediaItem.raw) {
+          foundUrl = mediaItem.raw;
+          source = "media.raw";
+        }
       }
-    }
-    
-    // Try metadata
-    if (!foundUrl && nft?.metadata?.image) {
-      foundUrl = nft.metadata.image;
-      source = "metadata.image";
-    }
-    
-    // Last resort - direct Alchemy CDN
-    if (!foundUrl && contractAddress && tokenId) {
-      foundUrl = `https://nft-cdn.alchemy.com/eth-mainnet/${contractAddress}/${tokenId}`;
-      source = "alchemy direct";
-    }
-    
-    console.log(`Image URL found from ${source}: ${foundUrl}`);
-    setDebugImageUrl(foundUrl); // Store for debugging
-    
-    return foundUrl;
-  };
+      
+      // Try direct image URL strings
+      if (!foundUrl && nft?.image_url) {
+        foundUrl = nft.image_url;
+        source = "image_url";
+      }
+      
+      if (!foundUrl && typeof nft?.image === 'string') {
+        foundUrl = nft.image;
+        source = "image string";
+      }
+      
+      // Try Alchemy's image object format
+      if (!foundUrl && nft?.image && typeof nft.image === 'object') {
+        console.log("Looking in image object");
+        if (nft.image.cachedUrl) {
+          foundUrl = nft.image.cachedUrl;
+          source = "image.cachedUrl";
+        } else if (nft.image.originalUrl) {
+          foundUrl = nft.image.originalUrl;
+          source = "image.originalUrl";
+        } else if (nft.image.gateway) {
+          foundUrl = nft.image.gateway;
+          source = "image.gateway";
+        } else if (nft.image.url) {
+          foundUrl = nft.image.url;
+          source = "image.url";
+        }
+      }
+      
+      // Try metadata
+      if (!foundUrl && nft?.metadata?.image) {
+        foundUrl = nft.metadata.image;
+        source = "metadata.image";
+      }
+      
+      // Last resort - direct Alchemy CDN
+      if (!foundUrl && contractAddress && tokenId) {
+        foundUrl = `https://nft-cdn.alchemy.com/eth-mainnet/${contractAddress}/${tokenId}`;
+        source = "alchemy direct";
+      }
+      
+      console.log(`Image URL found from ${source}: ${foundUrl}`);
+      return { url: foundUrl, source };
+    };
 
-  // Generate the safest URL for production
-  const getProxyUrl = (url) => {
-    if (!url) {
-      console.log("No URL to proxy, using placeholder");
-      return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
-    }
-    
-    // Special case for Alchemy CDN URLs - use direct URL with API key
-    if (url.includes('nft-cdn.alchemy.com')) {
-      const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
-      if (!url.includes('apiKey=') && apiKey) {
-        const urlWithKey = `${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
-        console.log("Using direct Alchemy URL with API key");
-        return urlWithKey;
+    // Generate the safest URL for production
+    const getProxyUrl = (url) => {
+      if (!url) {
+        console.log("No URL to proxy, using placeholder");
+        return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
       }
-    }
+      
+      // Special case for Alchemy CDN URLs - use direct URL with API key
+      if (url.includes('nft-cdn.alchemy.com')) {
+        const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
+        if (!url.includes('apiKey=') && apiKey) {
+          const urlWithKey = `${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
+          console.log("Using direct Alchemy URL with API key");
+          return urlWithKey;
+        }
+      }
+      
+      // Always use API proxy for external images
+      if (url.startsWith('http') || url.startsWith('ipfs://')) {
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(url)}`;
+        console.log(`Proxying through: ${proxyUrl}`);
+        return proxyUrl;
+      }
+      
+      return url;
+    };
+
+    // Get the image URL and save it to state
+    const { url, source } = getImageUrl();
+    setDebugImageUrl(url);
+    setImageUrl(getProxyUrl(url));
     
-    // Always use API proxy for external images
-    if (url.startsWith('http') || url.startsWith('ipfs://')) {
-      const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(url)}`;
-      console.log(`Proxying through: ${proxyUrl}`);
-      return proxyUrl;
-    }
+    // Reset loading state when NFT changes
+    setImageLoaded(false);
+    setImageError(false);
     
-    return url;
-  };
-  
-  // Find the actual URL to use
-  const imageUrl = getProxyUrl(getImageUrl());
+  }, [nft, contractAddress, tokenId]); // Only re-run if the NFT or its identifiers change
   
   // Safety fallback for placeholders
   const placeholderUrl = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
