@@ -223,23 +223,13 @@ const NFTCard = ({ nft }) => {
     const processedUrl = processUrl(imageUrl);
     const mediaType = getMediaType(imageUrl);
     
-    if (mediaType === 'video') {
-      // For videos, we don't preload - just set the URL
-      setMedia({
-        status: 'loaded', 
-        url: processedUrl,
-        type: 'video',
-        fallbacksExhausted: false
-      });
-    } else {
-      // For images, use a proper load/error handling approach
-      setMedia({
-        status: 'loading',
-        url: processedUrl,
-        type: 'image',
-        fallbacksExhausted: false
-      });
-    }
+    // Set status as 'loaded' immediately to trigger rendering of the actual media element
+    setMedia({
+      status: 'loaded', 
+      url: processedUrl,
+      type: mediaType,
+      fallbacksExhausted: false
+    });
     
     // Cleanup function
     return () => {
@@ -259,10 +249,8 @@ const NFTCard = ({ nft }) => {
     if (!mountedRef.current) return;
     
     console.log(`Media loaded successfully: ${media.url}`);
-    setMedia(prevMedia => ({
-      ...prevMedia,
-      status: 'loaded'
-    }));
+    // We don't need to set the status to 'loaded' again - it causes a re-render loop
+    // since we only render <img> when status is already 'loaded'
   };
 
   const handleMediaError = () => {
