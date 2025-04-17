@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
 
 // Define keyframes for spinner animation
 const spinKeyframes = `
@@ -411,12 +410,11 @@ const VercelNFTCard = ({ nft }) => {
         )}
       </div>
       
-      {/* Link container - placed after the media */}
-      <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link" style={{ 
+      {/* NFT Info - Replaced Link with a regular div */}
+      <div className="nft-info-container" style={{ 
         display: 'flex', 
         flexDirection: 'column', 
         flex: 1,
-        textDecoration: 'none',
         color: 'inherit',
         zIndex: 4 // Below the media
       }}>
@@ -444,7 +442,7 @@ const VercelNFTCard = ({ nft }) => {
             )}
           </div>
         </div>
-      </Link>
+      </div>
     </div>
   );
 };

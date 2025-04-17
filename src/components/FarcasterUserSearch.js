@@ -202,7 +202,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           
           // Fetch with proper error handling
           try {
-            const result = await fetchAllNFTsForWallets(addresses);
+            const result = await fetchAllNFTsForWallets(addresses, {
+              excludeSpam: true
+            });
             
             // Enhanced debugging logs
             console.log('NFT fetch result:', {
@@ -363,7 +365,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
             await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
           }
           
-          result = await fetchAllNFTsForWallets(addresses);
+          result = await fetchAllNFTsForWallets(addresses, {
+            excludeSpam: true
+          });
           
           // Verify the result structure
           if (result && Array.isArray(result.nfts)) {
