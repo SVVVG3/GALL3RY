@@ -120,7 +120,7 @@ function App() {
     >
       <AuthKitProvider config={{
         domain: window.location.hostname || 'gall3ry.vercel.app',
-        siweUri: `${window.location.origin || 'https://gall3ry.vercel.app'}/api/login`,
+        siweUri: `${window.location.origin || 'https://gall3ry.vercel.app'}/api/farcaster-auth`,
         rpcUrl: 'https://mainnet.optimism.io'
       }}>
         <AuthProvider>
