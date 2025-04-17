@@ -66,23 +66,25 @@ export default async function handler(req, res) {
     // Handle different URL types - prioritize Alchemy CDN URLs
     
     // Special handling for Alchemy CDN URLs
-    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+    if (proxyUrl.includes('nft-cdn.alchemy.com') || proxyUrl.includes('alchemyapi.io')) {
       console.log('Detected Alchemy CDN URL, adding special headers and API key');
       
       // Add Alchemy API key to the URL if not already present
-      if (!proxyUrl.includes('apiKey=')) {
+      if (!proxyUrl.includes('apiKey=') && !proxyUrl.includes('api_key=')) {
         const alchemyApiKey = process.env.ALCHEMY_API_KEY || process.env.REACT_APP_ALCHEMY_API_KEY;
         if (alchemyApiKey) {
           const separator = proxyUrl.includes('?') ? '&' : '?';
           proxyUrl = `${proxyUrl}${separator}apiKey=${alchemyApiKey}`;
           console.log('Added API key to Alchemy URL');
+        } else {
+          console.warn('No Alchemy API key found in environment variables');
         }
       }
       
       // Use specific headers for Alchemy CDN that worked in testing
       customHeaders = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept': '*/*',
         'Accept-Encoding': 'gzip, deflate, br',
         'Origin': 'https://dashboard.alchemy.com',
         'Referer': 'https://dashboard.alchemy.com/',
@@ -96,7 +98,9 @@ export default async function handler(req, res) {
       
       // For some Alchemy CDN URLs, we might need to fix the path format
       if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb') && 
-          !proxyUrl.includes('.jpg') && !proxyUrl.includes('.png')) {
+          !proxyUrl.includes('.jpg') && !proxyUrl.includes('.png') && 
+          !proxyUrl.includes('.gif') && !proxyUrl.includes('.webp') &&
+          !proxyUrl.includes('.mp4')) {
         proxyUrl = `${proxyUrl}/original`;
         console.log(`Fixed Alchemy URL format: ${proxyUrl}`);
       }
@@ -161,18 +165,18 @@ export default async function handler(req, res) {
         try {
           // Set a strict timeout for the request to prevent hanging on Vercel
           const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4500); // 4.5 second timeout for Vercel
+          const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout for Vercel
           
           // Fetch the image
           const response = await axios({
             method: 'get',
             url: url,
             responseType: 'arraybuffer',
-            timeout: 4000, // 4 second timeout (shorter than the controller timeout)
+            timeout: 7000, // 7 second timeout (shorter than the controller timeout)
             headers: headers,
             validateStatus: null, // Allow any status code
             maxContentLength: 10 * 1024 * 1024, // 10MB max size
-            maxRedirects: 3,
+            maxRedirects: 5, // Increased redirect limit
             signal: controller.signal
           });
           
@@ -185,14 +189,16 @@ export default async function handler(req, res) {
           }
           
           // If we got a 403 Forbidden specifically from Alchemy CDN
-          if (response.status === 403 && url.includes('nft-cdn.alchemy.com')) {
-            console.log(`Attempt ${attempt + 1}: Got 403 from Alchemy CDN, trying with different headers`);
+          if ((response.status === 403 || response.status === 401) && 
+              (url.includes('nft-cdn.alchemy.com') || url.includes('alchemyapi.io'))) {
+            console.log(`Attempt ${attempt + 1}: Got ${response.status} from Alchemy CDN, trying with different headers`);
             
             // Modify headers for next attempt
             headers = {
               ...headers,
               'Referer': 'https://dashboard.alchemy.com/',
-              'Origin': 'https://dashboard.alchemy.com'
+              'Origin': 'https://dashboard.alchemy.com',
+              'Accept': '*/*'
             };
             
             // Add API key directly to URL as a different parameter format
@@ -246,7 +252,7 @@ export default async function handler(req, res) {
     }
     
     // Check if the response is very small (likely an error page)
-    if (response.data.length < 100) {
+    if (response.data && response.data.length < 100) {
       console.error(`Response too small (${response.data.length} bytes)`);
       return returnPlaceholder(res, 'Response too small');
     }
@@ -274,6 +280,12 @@ export default async function handler(req, res) {
     return res.status(200).send(response.data);
   } catch (error) {
     console.error(`Global error in image proxy:`, error.message);
+    if (error.code) console.error(`Error code: ${error.code}`);
+    if (error.response) {
+      console.error(`Error response status: ${error.response.status}`);
+      console.error(`Error response headers:`, error.response.headers);
+    }
+    
     // Return a placeholder for any error
     return returnPlaceholder(res, error.message.substring(0, 30));
   }

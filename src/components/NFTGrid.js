@@ -10,30 +10,39 @@ import { Link } from 'react-router-dom';
 const getCORSProxyUrl = (url) => {
   if (!url) return '';
   
-  // Check if we should use a proxy
-  const needsProxy = 
-    url.includes('nft-cdn.alchemy.com') || 
-    url.includes('i.seadn.io') ||
-    url.includes('cloudflare-ipfs.com') ||
-    url.includes('ipfs.io') ||
-    url.includes('gateway.pinata.cloud') ||
-    url.includes('ipfs.infura.io') ||
-    url.includes('gateway.ipfs.io') ||
-    url.includes('dweb.link') ||
-    url.startsWith('ipfs://') ||
-    url.startsWith('ar://');
-  
-  if (needsProxy) {
-    // Use our internal image proxy
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  // Always encode the URL to prevent malformed URLs
+  try {
+    // Check if we should use a proxy - expanded list of problematic domains
+    const needsProxy = 
+      url.includes('nft-cdn.alchemy.com') || 
+      url.includes('alchemyapi.io') ||
+      url.includes('i.seadn.io') ||
+      url.includes('cloudflare-ipfs.com') ||
+      url.includes('ipfs.io') ||
+      url.includes('gateway.pinata.cloud') ||
+      url.includes('ipfs.infura.io') ||
+      url.includes('gateway.ipfs.io') ||
+      url.includes('dweb.link') ||
+      url.includes('arweave.net') ||
+      url.startsWith('ipfs://') ||
+      url.startsWith('ar://');
+    
+    if (needsProxy) {
+      // Use our internal image proxy - make sure url is encoded properly
+      const encodedUrl = encodeURIComponent(url);
+      return `/api/image-proxy?url=${encodedUrl}`;
+    }
+    
+    // For HTTP URLs, ensure they are HTTPS
+    if (url.startsWith('http://')) {
+      url = url.replace('http://', 'https://');
+    }
+    
+    return url;
+  } catch (error) {
+    console.error('Error in getCORSProxyUrl:', error);
+    return url; // Return original URL on error
   }
-  
-  // For HTTP URLs, ensure they are HTTPS
-  if (url.startsWith('http://')) {
-    url = url.replace('http://', 'https://');
-  }
-  
-  return url;
 };
 
 /**
@@ -93,9 +102,12 @@ const getImageUrl = (nft) => {
   
   // PRIORITY 3: Animation URLs for NFTs that are videos or GIFs
   if (!imageUrl && nft.animation) {
-    if (nft.animation.cachedUrl) {
+    if (typeof nft.animation === 'object' && nft.animation.cachedUrl) {
       imageUrl = nft.animation.cachedUrl;
       console.log('Using animation cached URL:', imageUrl);
+    } else if (typeof nft.animation === 'string') {
+      imageUrl = nft.animation;
+      console.log('Using animation string URL:', imageUrl);
     }
   }
   else if (!imageUrl && nft.animation_url) {
@@ -103,17 +115,7 @@ const getImageUrl = (nft) => {
     console.log('Using animation URL:', imageUrl);
   }
   
-  // PRIORITY 4: Try raw metadata structures based on the Alchemy API response
-  if (!imageUrl && nft.raw) {
-    // Try the new raw.metadata structure from Alchemy API
-    if (nft.raw.metadata) {
-      const metadata = nft.raw.metadata;
-      imageUrl = metadata.image || metadata.image_url || metadata.image_data || '';
-      if (imageUrl) console.log('Found image in raw.metadata:', imageUrl);
-    }
-  }
-  
-  // PRIORITY 5: Try media array 
+  // PRIORITY 4: Try media array (Alchemy v3 API format)
   if (!imageUrl && nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
     // Try to find the best media format (gateway is usually more reliable)
     const mediaItem = nft.media.find(m => m.gateway) || 
@@ -125,6 +127,16 @@ const getImageUrl = (nft) => {
     if (mediaItem) {
       imageUrl = mediaItem.gateway || mediaItem.raw || mediaItem.uri || mediaItem.thumbnail || '';
       console.log('Found media array item:', imageUrl);
+    }
+  }
+  
+  // PRIORITY 5: Try raw metadata structures based on the Alchemy API response
+  if (!imageUrl && nft.raw) {
+    // Try the new raw.metadata structure from Alchemy API
+    if (nft.raw.metadata) {
+      const metadata = nft.raw.metadata;
+      imageUrl = metadata.image || metadata.image_url || metadata.image_data || '';
+      if (imageUrl) console.log('Found image in raw.metadata:', imageUrl);
     }
   }
   
@@ -184,8 +196,10 @@ const getImageUrl = (nft) => {
     return imageUrl;
   }
   
+  // Special handling logic for different URL types
+  
   // Handle IPFS URLs
-  if (imageUrl && imageUrl.startsWith('ipfs://')) {
+  if (imageUrl.startsWith('ipfs://')) {
     const ipfsHash = imageUrl.replace('ipfs://', '');
     // Use our image proxy to handle IPFS URLs
     imageUrl = `/api/image-proxy?url=${encodeURIComponent(`ipfs://${ipfsHash}`)}`;
@@ -194,30 +208,41 @@ const getImageUrl = (nft) => {
   }
   
   // Handle Arweave URLs
-  if (imageUrl && imageUrl.startsWith('ar://')) {
-    imageUrl = imageUrl.replace('ar://', 'https://arweave.net/');
-    console.log('Converted Arweave URL:', imageUrl);
+  if (imageUrl.startsWith('ar://')) {
+    const arweaveHash = imageUrl.replace('ar://', '');
+    imageUrl = `/api/image-proxy?url=${encodeURIComponent(`ar://${arweaveHash}`)}`;
+    console.log('Converted Arweave URL through proxy:', imageUrl);
+    return imageUrl;
   }
   
   // Handle HTTP URLs - ensure they are HTTPS
-  if (imageUrl && imageUrl.startsWith('http://')) {
+  if (imageUrl.startsWith('http://')) {
     imageUrl = imageUrl.replace('http://', 'https://');
     console.log('Converted HTTP to HTTPS:', imageUrl);
   }
   
   // Special handling for NFT CDN URLs 
-  if (imageUrl && imageUrl.includes('nft-cdn.alchemy.com')) {
+  if (imageUrl.includes('nft-cdn.alchemy.com')) {
     // Add format if needed
     if (!imageUrl.includes('/original') && !imageUrl.includes('/thumb') && 
         !imageUrl.includes('.jpg') && !imageUrl.includes('.png') && 
-        !imageUrl.includes('?')) {
+        !imageUrl.includes('.gif') && !imageUrl.includes('.webp') &&
+        !imageUrl.includes('.mp4') && !imageUrl.includes('?')) {
       imageUrl = `${imageUrl}/original`;
       console.log('Added format to Alchemy CDN URL:', imageUrl);
     }
     
-    // Use our image proxy for Alchemy CDN URLs
+    // Always use our image proxy for Alchemy CDN URLs
     imageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
     console.log('Using proxy for Alchemy CDN URL:', imageUrl);
+    return imageUrl;
+  }
+  
+  // Handle URLs containing alchemyapi.io
+  if (imageUrl.includes('alchemyapi.io')) {
+    // Always use our image proxy for Alchemy API URLs
+    imageUrl = `/api/image-proxy?url=${encodeURIComponent(imageUrl)}`;
+    console.log('Using proxy for Alchemy API URL:', imageUrl);
     return imageUrl;
   }
   
@@ -270,7 +295,7 @@ const NFTCard = ({ nft }) => {
   // Get token ID from various possible locations
   const tokenId = nft.token_id || nft.tokenId || getTokenId(nft);
 
-  // Generate fallback URLs for different image formats - simplify this to focus on formats rather than gateways
+  // Generate fallback URLs for different image formats
   const generateFallbackUrls = useCallback((baseUrl) => {
     if (!baseUrl) return [];
     
@@ -343,7 +368,7 @@ const NFTCard = ({ nft }) => {
         
         const img = new Image();
         
-        // Set a timeout to catch hanging requests - reduced for better UX
+        // Set a timeout to catch hanging requests - increased for better chances of success
         const loadTimeoutId = setTimeout(() => {
           // Image is taking too long to load, consider it failed and move to next
           if (img.complete) return; // Already completed
@@ -366,7 +391,7 @@ const NFTCard = ({ nft }) => {
             });
             setCurrentImageUrl(`${origin}/placeholder.png`);
           }
-        }, 7000); // 7 second timeout for image loading
+        }, 10000); // 10 second timeout for image loading
         
         img.onload = () => {
           if (!isActive) return;
