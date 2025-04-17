@@ -121,7 +121,7 @@ function App() {
       <AuthKitProvider config={{
         domain: window.location.hostname || 'gall3ry.vercel.app',
         siweUri: `${window.location.origin || 'https://gall3ry.vercel.app'}/api/login`,
-        rpcUrl: `${window.location.origin || 'https://gall3ry.vercel.app'}/api/optimism-proxy`
+        rpcUrl: 'https://opt-mainnet.g.alchemy.com/v2/demo'
       }}>
         <AuthProvider>
           <WalletProvider>

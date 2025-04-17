@@ -1,49 +1,23 @@
 // Optimism RPC Proxy for Farcaster Auth Kit
 // This endpoint forwards JSON-RPC requests to the Optimism RPC
+const axios = require('axios');
 
-// Define config for Vercel Edge
-export const config = {
-  runtime: 'edge',
-  regions: ['iad1'], // Use the default region or specify multiple
-  methods: ['GET', 'POST', 'OPTIONS']
-};
-
+// Export a standard API handler (not Edge runtime)
 export default async function handler(req, res) {
-  // Get the request body as a string
-  const body = await req.text();
-  let jsonBody;
-  
-  try {
-    jsonBody = JSON.parse(body);
-  } catch (e) {
-    jsonBody = null;
-  }
-
   // Set CORS headers
-  const headers = {
-    'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
-  };
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 
   // Handle preflight request
   if (req.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers
-    });
+    return res.status(200).end();
   }
 
   // Only allow POST and GET methods
   if (req.method !== 'POST' && req.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json'
-      }
-    });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
@@ -52,42 +26,38 @@ export default async function handler(req, res) {
     // Log the request for debugging
     console.log('Proxying Optimism RPC request:', {
       method: req.method,
-      body: jsonBody ? JSON.stringify(jsonBody).substring(0, 100) : 'No body'
+      body: req.body
     });
 
     // Forward the request to Optimism RPC
-    const response = await fetch(OPTIMISM_RPC_URL, {
-      method: req.method,
+    const response = await axios({
+      method: 'POST', // Always use POST for JSON-RPC
+      url: OPTIMISM_RPC_URL,
+      data: req.body,
       headers: {
         'Content-Type': 'application/json',
       },
-      body: body,
+      timeout: 10000 // 10 second timeout
     });
     
-    // Get the response body
-    const responseBody = await response.text();
-    
-    // Return the response
-    return new Response(responseBody, {
-      status: response.status,
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json'
-      }
-    });
+    // Return the response data
+    return res.status(200).json(response.data);
   } catch (error) {
     console.error('Error proxying to Optimism RPC:', error.message);
     
-    // Create error response
-    return new Response(JSON.stringify({
+    // Try to extract more error details
+    let errorDetails = { message: error.message };
+    if (error.response) {
+      errorDetails.status = error.response.status;
+      errorDetails.data = error.response.data;
+    }
+    
+    console.error('Error details:', errorDetails);
+    
+    // Return an error response
+    return res.status(502).json({
       error: 'Error connecting to Optimism RPC',
-      message: error.message
-    }), {
-      status: 502,
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json'
-      }
+      details: errorDetails
     });
   }
 } 
