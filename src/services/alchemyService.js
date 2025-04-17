@@ -249,6 +249,40 @@ const alchemyService = {
       
       console.log(`After removing duplicates: ${uniqueNfts.length} unique NFTs`);
       
+      // Enrich NFT data with image URLs if they're missing
+      const enrichWithImageUrls = (nfts) => {
+        return nfts.map(nft => {
+          // If we already have image data, return as is
+          if (nft.image || nft.image_url || 
+             (nft.media && nft.media.length > 0) || 
+             nft.animation_url || 
+             (nft.metadata && (nft.metadata.image || nft.metadata.image_url))) {
+            return nft;
+          }
+          
+          // Try to add image URL based on contract address and token ID
+          if (nft.contract && nft.contract.address && nft.tokenId) {
+            const imageUrl = `https://nft-cdn.alchemy.com/eth-mainnet/${nft.contract.address}/${nft.tokenId}`;
+            nft.image_url = imageUrl;
+            
+            // Add media array if it doesn't exist
+            if (!nft.media) {
+              nft.media = [{
+                raw: imageUrl,
+                gateway: imageUrl
+              }];
+            }
+          }
+          
+          return nft;
+        });
+      };
+      
+      // Add this call before returning the NFTs
+      if (uniqueNfts.length > 0) {
+        uniqueNfts = enrichWithImageUrls(uniqueNfts);
+      }
+      
       return {
         nfts: uniqueNfts,
         totalCount: uniqueNfts.length

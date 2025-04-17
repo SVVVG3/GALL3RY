@@ -102,40 +102,54 @@ const NFTCard = ({ nft }) => {
   const findBestImageUrl = (nft) => {
     if (!nft) return null;
     
+    console.log('Finding image URL for NFT:', nft);
+    
     // Try media array first (Alchemy v3 API format)
     if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
       const mediaItem = nft.media[0];
+      console.log('Found media array item:', mediaItem);
       if (mediaItem.gateway) return mediaItem.gateway;
       if (mediaItem.raw) return mediaItem.raw;
       if (mediaItem.thumbnail) return mediaItem.thumbnail;
     }
     
+    // Try direct image URLs (most common format)
+    if (nft.image_url) {
+      console.log('Found image_url:', nft.image_url);
+      return nft.image_url;
+    }
+    
+    if (typeof nft.image === 'string') {
+      console.log('Found image string:', nft.image);
+      return nft.image;
+    }
+    
     // Try image object (Alchemy structured response)
-    if (nft.image) {
-      if (typeof nft.image === 'object') {
-        if (nft.image.cachedUrl) return nft.image.cachedUrl;
-        if (nft.image.originalUrl) return nft.image.originalUrl;
-        if (nft.image.pngUrl) return nft.image.pngUrl;
-        if (nft.image.thumbnailUrl) return nft.image.thumbnailUrl;
-        if (nft.image.gateway) return nft.image.gateway;
-      } else if (typeof nft.image === 'string') {
-        return nft.image;
-      }
+    if (nft.image && typeof nft.image === 'object') {
+      console.log('Found image object:', nft.image);
+      if (nft.image.cachedUrl) return nft.image.cachedUrl;
+      if (nft.image.originalUrl) return nft.image.originalUrl;
+      if (nft.image.pngUrl) return nft.image.pngUrl;
+      if (nft.image.thumbnailUrl) return nft.image.thumbnailUrl;
+      if (nft.image.gateway) return nft.image.gateway;
     }
     
     // Check animation URLs for videos
-    if (nft.animation_url) return nft.animation_url;
+    if (nft.animation_url) {
+      console.log('Found animation_url:', nft.animation_url);
+      return nft.animation_url;
+    }
     
-    if (nft.animation) {
-      if (typeof nft.animation === 'object' && nft.animation.cachedUrl) {
-        return nft.animation.cachedUrl;
-      } else if (typeof nft.animation === 'string') {
-        return nft.animation;
-      }
+    if (nft.animation && typeof nft.animation === 'object' && nft.animation.cachedUrl) {
+      console.log('Found animation object:', nft.animation);
+      return nft.animation.cachedUrl;
+    } else if (nft.animation && typeof nft.animation === 'string') {
+      return nft.animation;
     }
     
     // Check metadata locations
     if (nft.metadata) {
+      console.log('Checking metadata:', nft.metadata);
       if (nft.metadata.image) return nft.metadata.image;
       if (nft.metadata.image_url) return nft.metadata.image_url;
       if (nft.metadata.animation_url) return nft.metadata.animation_url;
@@ -143,20 +157,38 @@ const NFTCard = ({ nft }) => {
     
     // Check raw metadata
     if (nft.raw && nft.raw.metadata) {
+      console.log('Checking raw metadata:', nft.raw.metadata);
       if (nft.raw.metadata.image) return nft.raw.metadata.image;
       if (nft.raw.metadata.image_url) return nft.raw.metadata.image_url;
     }
     
     // Check other common locations
     if (nft.rawMetadata) {
+      console.log('Checking rawMetadata:', nft.rawMetadata);
       if (nft.rawMetadata.image) return nft.rawMetadata.image;
       if (nft.rawMetadata.image_url) return nft.rawMetadata.image_url;
     }
     
-    if (nft.image_url) return nft.image_url;
-    if (nft.thumbnail) return nft.thumbnail;
+    if (nft.thumbnail) {
+      console.log('Found thumbnail:', nft.thumbnail);
+      return nft.thumbnail;
+    }
+    
+    // Check token URIs - they might contain image data
+    if (nft.tokenUri && nft.tokenUri.gateway) {
+      console.log('Found tokenUri gateway:', nft.tokenUri.gateway);
+      return nft.tokenUri.gateway;
+    }
+    
+    // If all else fails, try to generate an Alchemy NFT CDN URL if we have contract and token ID
+    if (contractAddress && tokenId) {
+      const alchemyUrl = `https://nft-cdn.alchemy.com/eth-mainnet/${contractAddress}/${tokenId}`;
+      console.log('Generated Alchemy URL:', alchemyUrl);
+      return alchemyUrl;
+    }
     
     // If nothing found, return null
+    console.warn('No image URL found for NFT:', nft);
     return null;
   };
   
