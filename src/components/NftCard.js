@@ -213,7 +213,7 @@ const NFTCard = ({ nft }) => {
       console.warn('NFTCard: No image URL found');
       setMedia({
         status: 'error',
-        url: '/placeholder-nft.svg',
+        url: '/assets/placeholder-nft.svg',
         type: 'image',
         fallbacksExhausted: true
       });
@@ -334,16 +334,16 @@ const NFTCard = ({ nft }) => {
     console.error(`Failed to load image after ${newAttemptCount} attempts, using placeholder`);
     setMedia({
       status: 'error',
-      url: '/placeholder-nft.svg',
+      url: '/assets/placeholder-nft.svg',
       type: 'image',
       fallbacksExhausted: true
     });
   };
   
   return (
-    <div className="nft-card">
+    <div className="nft-card" style={{ minHeight: '250px' }}>
       <Link to={`/nft/${contractAddress}/${tokenId}`} className="nft-link">
-        <div className="nft-image">
+        <div className="nft-image" style={{ minHeight: '200px', position: 'relative' }}>
           {media.status === 'loading' && (
             <div className="nft-image-loading">
               <div className="loading-indicator"></div>
@@ -361,7 +361,16 @@ const NFTCard = ({ nft }) => {
               loading="lazy"
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
-              style={{ display: 'block', visibility: 'visible' }}
+              style={{ 
+                display: 'block', 
+                visibility: 'visible', 
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover'
+              }}
             />
           )}
           
@@ -383,7 +392,7 @@ const NFTCard = ({ nft }) => {
           {media.status === 'error' && (
             <div className="nft-image-error">
               <img 
-                src="/placeholder-nft.svg"
+                src="/assets/placeholder-nft.svg"
                 alt={`${title} (unavailable)`}
                 className="nft-image-placeholder"
               />

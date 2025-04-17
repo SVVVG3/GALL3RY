@@ -182,7 +182,7 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
   }, [loading, error, mediaSrc, isVideo]);
 
   return (
-    <div className="nft-media-container">
+    <div className="nft-media-container" style={{ minHeight: '200px', display: 'block' }}>
       {/* Always render the media elements (visible regardless of loading) */}
       {!error && !isVideo && (
         <img
@@ -191,7 +191,14 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           className={`nft-media ${className}`}
           onLoad={handleMediaLoad}
           onError={handleMediaError}
-          style={{ visibility: 'visible' }}
+          style={{ 
+            visibility: 'visible', 
+            display: 'block !important', 
+            opacity: '1 !important',
+            width: '100%',
+            height: 'auto',
+            maxHeight: '100%'
+          }}
           loading="lazy"
           crossOrigin="anonymous"
         />
@@ -203,7 +210,13 @@ const NFTImage = ({ src, rawSrc, alt = 'NFT Image', className = '', onLoad = () 
           className={`nft-media ${className}`}
           onLoadedData={handleMediaLoad}
           onError={handleMediaError}
-          style={{ visibility: 'visible' }}
+          style={{ 
+            visibility: 'visible',
+            display: 'block !important',
+            opacity: '1 !important',
+            width: '100%',
+            height: 'auto'
+          }}
           autoPlay
           loop
           muted
