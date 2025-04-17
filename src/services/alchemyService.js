@@ -89,23 +89,29 @@ const alchemyService = {
       network = 'ethereum', 
       pageKey, 
       pageSize = 100,
-      excludeSpam = true
+      excludeSpam = true,
+      excludeAirdrops = true
     } = options;
     
     const chainId = this.getChainId(network);
     
     try {
+      // Build filter array based on options
+      const filters = [];
+      if (excludeSpam) filters.push('SPAM');
+      if (excludeAirdrops) filters.push('AIRDROPS');
+      
       const params = {
         endpoint: 'getNFTsForOwner',
         chain: chainId,
         owner: ownerAddress,
         pageSize,
         withMetadata: true,
-        excludeFilters: excludeSpam ? 'SPAM' : null,
+        excludeFilters: filters.length > 0 ? filters : null,
         pageKey: pageKey || undefined
       };
       
-      console.log(`Fetching NFTs for ${ownerAddress} on ${chainId}`);
+      console.log(`Fetching NFTs for ${ownerAddress} on ${chainId} with filters: ${filters.join(', ')}`);
       
       // Use the dynamically updated ALCHEMY_ENDPOINT instead of calling getBaseUrl()
       const response = await axios.get(ALCHEMY_ENDPOINT, { params });
@@ -157,7 +163,8 @@ const alchemyService = {
           this.getNftsForOwner(ownerAddress, {
             network: chainId,
             pageSize,
-            excludeSpam: options.excludeSpam !== false
+            excludeSpam: options.excludeSpam !== false,
+            excludeAirdrops: options.excludeAirdrops !== false
           })
         )
       );

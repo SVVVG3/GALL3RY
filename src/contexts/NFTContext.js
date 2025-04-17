@@ -47,8 +47,12 @@ export const NFTProvider = ({ children }) => {
       // Normalize addresses to lowercase
       const normalizedAddresses = addresses.map(addr => addr.toLowerCase());
       
-      // Use the new multi-chain implementation
-      const result = await fetchNftsForAddresses(normalizedAddresses, options);
+      // Use the new multi-chain implementation with enhanced filtering
+      const result = await fetchNftsForAddresses(normalizedAddresses, {
+        ...options,
+        excludeSpam: options.excludeSpam !== false, // Default to true unless explicitly set to false
+        excludeAirdrops: true // Always filter out airdrops
+      });
       
       console.log(`Fetched ${result.nfts?.length || 0} NFTs total`);
       
