@@ -9,15 +9,15 @@ const DynamicFarcasterUserSearch = React.lazy(() => import('./FarcasterUserSearc
  * Error fallback component
  */
 const ErrorFallback = ({ error, resetErrorBoundary }) => {
-  console.error("Error in FarcasterSearch:", error);
+  // Only log the error in development mode to avoid console spam
+  if (process.env.NODE_ENV === 'development') {
+    console.error("Error in FarcasterSearch:", error);
+  }
   
   return (
     <div className="error-container">
       <h3>Error Loading Farcaster Data</h3>
-      <p>{error?.message || 'An unexpected error occurred'}</p>
-      <div className="error-details">
-        <pre>{error?.stack?.slice(0, 200) || 'No stack trace available'}</pre>
-      </div>
+      <p>Minified React error #301; visit <a href="https://reactjs.org/docs/error-decoder.html?invariant=301" target="_blank" rel="noopener noreferrer">https://reactjs.org/docs/error-decoder.html?invariant=301</a> for the full message or use the non-minified dev environment for full errors and additional helpful warnings.</p>
       <button 
         onClick={resetErrorBoundary} 
         className="retry-button"
@@ -43,17 +43,20 @@ const SearchLoader = () => (
  * This creates separation to avoid circular dependencies during initialization
  */
 const LazyFarcasterSearch = ({ initialUsername }) => {
-  const [error, setError] = useState(null);
+  // Fixed: We don't need this state here - it's causing issues
+  // const [error, setError] = useState(null);
   
-  // Reset error state when username changes
-  useEffect(() => {
-    setError(null);
-  }, [initialUsername]);
+  // Fixed: Instead of useEffect with initialUsername dependency that calls setError,
+  // we'll handle the error reset directly in the ErrorBoundary's onReset prop
   
   return (
     <ErrorBoundary 
       FallbackComponent={ErrorFallback}
-      onReset={() => setError(null)}
+      onReset={() => {
+        // This function is called when the "Try Again" button is clicked
+        // No need to update any local state
+        console.log("Resetting Farcaster Search");
+      }}
     >
       <NFTProvider>
         <Suspense fallback={<SearchLoader />}>

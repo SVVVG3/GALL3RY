@@ -280,12 +280,36 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     }
   }, [searchQuery, fetchAllNFTsForWallets]);
 
-  // Effect for initial search if username is provided
+  /**
+   * Effect for initial search if username is provided
+   * This must be at the top level, not conditionally called
+   */
   useEffect(() => {
-    if (initialUsername) {
-      handleSearch();
+    // Only trigger search if we have an initialUsername
+    if (initialUsername && initialUsername.trim()) {
+      setSearchQuery(initialUsername.trim());
+      // We'll handle the actual search in a separate effect to avoid calling handleSearch directly
     }
-  }, [initialUsername, handleSearch]);
+  }, [initialUsername]); // Note: do NOT include handleSearch in dependencies
+
+  // Separate effect to handle searching when searchQuery changes from initialUsername
+  useEffect(() => {
+    // Only perform search if searchQuery was set from initialUsername
+    const searchFromInitial = searchQuery && searchQuery === initialUsername && initialUsername.trim();
+    
+    if (searchFromInitial) {
+      // Call handleSearch with no arguments to avoid event handling issues
+      const performSearch = async () => {
+        try {
+          await handleSearch();
+        } catch (err) {
+          console.error("Error performing initial search:", err);
+        }
+      };
+      
+      performSearch();
+    }
+  }, [searchQuery, initialUsername, handleSearch]);
 
   const fetchUserNfts = async (profile) => {
     setIsSearching(true);
