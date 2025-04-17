@@ -874,4 +874,26 @@
   opacity: 1 !important;
   visibility: visible !important;
   z-index: 1 !important;
+}
+
+/* Ensure NFT videos are always visible */
+.nft-video-content {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  object-fit: cover !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1 !important;
+}
+
+/* Ensure NFT audio is properly displayed */
+.nft-audio-content {
+  width: 90% !important;
+  max-width: 250px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  z-index: 1 !important;
 } 

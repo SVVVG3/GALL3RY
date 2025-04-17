@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 // Define keyframes for spinner animation
@@ -13,10 +13,11 @@ const spinKeyframes = `
  * Specifically designed for Vercel deployment to solve image loading issues
  */
 const VercelNFTCard = ({ nft }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [debugImageUrl, setDebugImageUrl] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
+  const [debugMediaUrl, setDebugMediaUrl] = useState('');
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaType, setMediaType] = useState('image'); // 'image', 'video', or 'unsupported'
   
   // Extract NFT details with fallbacks
   const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
@@ -34,20 +35,49 @@ const VercelNFTCard = ({ nft }) => {
     nft?.token_id || 
     (nft?.id?.split && nft?.id?.includes(':') ? nft?.id?.split(':')[3] : '');
 
+  // Detect media type based on URL or metadata
+  const getMediaType = (url) => {
+    if (!url) return 'image';
+    
+    // Check file extension in URL
+    if (url.match(/\.(mp4|webm|mov)($|\?)/i)) {
+      return 'video';
+    }
+    
+    if (url.match(/\.(mp3|wav|ogg)($|\?)/i)) {
+      return 'audio';
+    }
+    
+    // Check NFT metadata for animation or video indicators
+    if (nft?.metadata?.animation_type === 'video' || 
+        nft?.animation_type === 'video' ||
+        (nft?.metadata?.properties?.category === 'video')) {
+      return 'video';
+    }
+    
+    // Default to image
+    return 'image';
+  };
+
   // Use useEffect to get and set the image URL only once per NFT change
   useEffect(() => {
-    // Function to find best image URL with fallbacks
-    const getImageUrl = () => {
+    // Function to find best media URL with fallbacks
+    const getMediaUrl = () => {
       let foundUrl = "";
       let source = "";
       
-      // Dump the entire image object for debugging
-      if (nft?.image) {
-        console.log("NFT image object:", JSON.stringify(nft.image, null, 2));
+      // First try animation URL for video content
+      if (nft?.animation_url) {
+        foundUrl = nft.animation_url;
+        source = "animation_url";
+      } 
+      // Then try metadata animation URL
+      else if (nft?.metadata?.animation_url) {
+        foundUrl = nft.metadata.animation_url;
+        source = "metadata.animation_url";
       }
-      
-      // First try Alchemy's media array format
-      if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      // Then try Alchemy's media array format
+      else if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
         const mediaItem = nft.media[0];
         console.log("Found media array item:", mediaItem);
         if (mediaItem.gateway) {
@@ -58,20 +88,17 @@ const VercelNFTCard = ({ nft }) => {
           source = "media.raw";
         }
       }
-      
       // Try direct image URL strings
-      if (!foundUrl && nft?.image_url) {
+      else if (nft?.image_url) {
         foundUrl = nft.image_url;
         source = "image_url";
       }
-      
-      if (!foundUrl && typeof nft?.image === 'string') {
+      else if (typeof nft?.image === 'string') {
         foundUrl = nft.image;
         source = "image string";
       }
-      
       // Try Alchemy's image object format
-      if (!foundUrl && nft?.image && typeof nft.image === 'object') {
+      else if (nft?.image && typeof nft.image === 'object') {
         console.log("Looking in image object");
         if (nft.image.cachedUrl) {
           foundUrl = nft.image.cachedUrl;
@@ -87,20 +114,18 @@ const VercelNFTCard = ({ nft }) => {
           source = "image.url";
         }
       }
-      
       // Try metadata
-      if (!foundUrl && nft?.metadata?.image) {
+      else if (nft?.metadata?.image) {
         foundUrl = nft.metadata.image;
         source = "metadata.image";
       }
-      
       // Last resort - direct Alchemy CDN
-      if (!foundUrl && contractAddress && tokenId) {
+      else if (contractAddress && tokenId) {
         foundUrl = `https://nft-cdn.alchemy.com/eth-mainnet/${contractAddress}/${tokenId}`;
         source = "alchemy direct";
       }
       
-      console.log(`Image URL found from ${source}: ${foundUrl}`);
+      console.log(`Media URL found from ${source}: ${foundUrl}`);
       return { url: foundUrl, source };
     };
 
@@ -131,14 +156,21 @@ const VercelNFTCard = ({ nft }) => {
       return url;
     };
 
-    // Get the image URL and save it to state
-    const { url, source } = getImageUrl();
-    setDebugImageUrl(url);
-    setImageUrl(getProxyUrl(url));
+    // Get the media URL and save it to state
+    const { url } = getMediaUrl();
+    setDebugMediaUrl(url);
+    
+    // Set the media type based on URL or metadata
+    const type = getMediaType(url);
+    setMediaType(type);
+    
+    // Get the proxied URL
+    const proxiedUrl = getProxyUrl(url);
+    setMediaUrl(proxiedUrl);
     
     // Reset loading state when NFT changes
-    setImageLoaded(false);
-    setImageError(false);
+    setMediaLoaded(false);
+    setMediaError(false);
     
   }, [nft, contractAddress, tokenId]); // Only re-run if the NFT or its identifiers change
   
@@ -147,22 +179,22 @@ const VercelNFTCard = ({ nft }) => {
   
   // Log the final URL being used
   useEffect(() => {
-    console.log(`NFT ${title}: Using final image URL: ${imageUrl}`);
-    console.log(`Loading state: ${imageLoaded ? 'Loaded' : 'Loading'}, Error state: ${imageError ? 'Error' : 'No Error'}`);
-  }, [imageUrl, imageLoaded, imageError, title]);
+    console.log(`NFT ${title}: Using final media URL: ${mediaUrl} (type: ${mediaType})`);
+    console.log(`Loading state: ${mediaLoaded ? 'Loaded' : 'Loading'}, Error state: ${mediaError ? 'Error' : 'No Error'}`);
+  }, [mediaUrl, mediaLoaded, mediaError, title, mediaType]);
   
-  // Handle image load success
-  const handleImageLoad = () => {
-    console.log(`Image loaded successfully: ${imageUrl}`);
-    setImageLoaded(true);
-    setImageError(false);
+  // Handle media load success
+  const handleMediaLoad = () => {
+    console.log(`Media loaded successfully: ${mediaUrl}`);
+    setMediaLoaded(true);
+    setMediaError(false);
   };
   
-  // Handle image load error
-  const handleImageError = () => {
-    console.log(`Image load error: ${imageUrl}`);
-    setImageError(true);
-    setImageLoaded(true); // Consider it "loaded" but with error
+  // Handle media load error
+  const handleMediaError = () => {
+    console.log(`Media load error: ${mediaUrl}`);
+    setMediaError(true);
+    setMediaLoaded(true); // Consider it "loaded" but with error
   };
   
   return (
@@ -204,37 +236,93 @@ const VercelNFTCard = ({ nft }) => {
             whiteSpace: 'nowrap',
             textOverflow: 'ellipsis'
           }}>
-            Debug URL: {debugImageUrl}
+            Debug URL: {debugMediaUrl}
           </div>
           
-          {/* Always render image - this is the main display */}
-          <img
-            src={imageUrl}
-            alt={title}
-            className="nft-image-content"
-            onLoad={handleImageLoad}
-            onError={handleImageError}
-            style={{
+          {/* Render appropriate media type based on content */}
+          {mediaType === 'image' && (
+            <img
+              src={mediaUrl}
+              alt={title}
+              className="nft-image-content"
+              onLoad={handleMediaLoad}
+              onError={handleMediaError}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                visibility: 'visible',
+                opacity: 1,
+                zIndex: 1,
+                margin: 0,
+                padding: 0,
+                border: 'none',
+                fontFamily: 'inherit'
+              }}
+            />
+          )}
+          
+          {mediaType === 'video' && (
+            <video
+              src={mediaUrl}
+              className="nft-video-content"
+              onLoadedData={handleMediaLoad}
+              onError={handleMediaError}
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+                visibility: 'visible',
+                opacity: 1,
+                zIndex: 1,
+                margin: 0,
+                padding: 0,
+                border: 'none'
+              }}
+            />
+          )}
+          
+          {mediaType === 'audio' && (
+            <div style={{
               position: 'absolute',
               top: 0,
               left: 0,
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              visibility: 'visible',
-              opacity: 1,
-              zIndex: 1,
-              // Simple CSS reset to override any global styles
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              fontFamily: 'inherit'
-            }}
-          />
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f0f0f0',
+              zIndex: 1
+            }}>
+              <audio
+                src={mediaUrl}
+                className="nft-audio-content"
+                onLoadedData={handleMediaLoad}
+                onError={handleMediaError}
+                controls
+                style={{
+                  width: '90%',
+                  maxWidth: '250px'
+                }}
+              />
+            </div>
+          )}
           
           {/* Loading indicator - only shown while loading */}
-          {!imageLoaded && !imageError && (
+          {!mediaLoaded && !mediaError && (
             <div style={{
               position: 'absolute',
               top: 0,
@@ -245,7 +333,7 @@ const VercelNFTCard = ({ nft }) => {
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: '#f5f5f5',
-              zIndex: imageLoaded ? 0 : 2
+              zIndex: mediaLoaded ? 0 : 2
             }}>
               <div style={{
                 width: '30px',
@@ -260,7 +348,7 @@ const VercelNFTCard = ({ nft }) => {
           )}
           
           {/* Error fallback - only shown on error */}
-          {imageError && (
+          {mediaError && (
             <div style={{
               position: 'absolute',
               top: 0,
