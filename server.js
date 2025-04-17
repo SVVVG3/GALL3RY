@@ -33,6 +33,7 @@ const PORT = process.env.PORT || 3001;
 // Middleware
 app.use(compression());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Configure CORS - more permissive for development
 app.use(cors({
@@ -1233,4 +1234,58 @@ app.get('/login', (req, res) => {
 app.post('/login', (req, res) => {
   // This endpoint is used by Farcaster Auth Kit to verify authentication
   res.status(200).json({ status: 'ok', message: 'Authentication successful' });
+});
+
+// Add Optimism RPC proxy endpoint
+app.all('/optimism-proxy', async (req, res) => {
+  // Set CORS headers for the preflight request
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  try {
+    const OPTIMISM_RPC_URL = 'https://mainnet.optimism.io';
+    
+    // Log the request for debugging
+    console.log('Proxying Optimism RPC request:', {
+      method: req.method,
+      body: req.body
+    });
+    
+    // Forward the request to Optimism RPC
+    const response = await axios({
+      method: req.method,
+      url: OPTIMISM_RPC_URL,
+      data: req.body,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      timeout: 10000 // 10 second timeout
+    });
+    
+    // Return the response data
+    return res.status(response.status).json(response.data);
+  } catch (error) {
+    console.error('Error proxying to Optimism RPC:', error.message);
+    
+    // Try to extract more error details
+    let errorDetails = { message: error.message };
+    if (error.response) {
+      errorDetails.status = error.response.status;
+      errorDetails.data = error.response.data;
+    }
+    
+    console.error('Error details:', errorDetails);
+    
+    // Return an error response
+    return res.status(error.response?.status || 502).json({
+      error: 'Error connecting to Optimism RPC',
+      details: errorDetails
+    });
+  }
 }); 
