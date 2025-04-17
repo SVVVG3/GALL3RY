@@ -19,6 +19,7 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <!-- Global font enforcement to ensure Comic Sans is used throughout the app -->
     <style>
+      /* 
       @font-face {
         font-family: 'Comic Sans';
         src: local('Comic Sans MS'), local('Comic Sans');
@@ -26,7 +27,6 @@
         font-display: swap;
       }
       
-      /* Additional override to prevent cursive rendering on mobile */
       @font-face {
         font-family: 'Comic Sans MS';
         src: local('Comic Sans MS'), local('Comic Sans');
@@ -34,7 +34,6 @@
         font-display: swap;
       }
       
-      /* Force all text to use Comic Sans throughout the entire application */
       html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, 
       blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, 
       img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, 
@@ -46,7 +45,6 @@
         font-style: normal !important;
       }
       
-      /* Mobile-specific overrides */
       @media (max-width: 768px) {
         body * {
           font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
@@ -59,6 +57,20 @@
           font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
           font-style: normal !important;
         }
+      }
+      */
+
+      /* Special styles for NFT images - ensure they display properly */
+      .nft-image img, 
+      .nft-image-content,
+      .nft-media,
+      .nft-video-content,
+      [class*="nft"] img {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        max-width: 100% !important;
+        font-family: inherit !important;
       }
     </style>
     <title>GALL3RY - Modern NFT Gallery</title>
@@ -73,6 +85,26 @@
       /* Animation keyframes for loading spinners */
       @keyframes spin {
         to { transform: rotate(360deg); }
+      }
+      
+      /* Fix for NFT image display in all environments */
+      .nft-image-content, .nft-media {
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        height: auto !important;
+        max-width: 100% !important;
+        object-fit: contain !important;
+        transform: none !important;
+      }
+      
+      /* Fix image containers */
+      .nft-image, .nft-media-container {
+        position: relative;
+        overflow: hidden;
+        min-height: 200px;
+        min-width: 200px;
+        background-color: #f5f5f5;
       }
     </style>
   </head>
