@@ -27,6 +27,7 @@ module.exports = async (req, res) => {
   let isFarcasterRequest = false;
   let username = null;
   let fid = null;
+  let originalUsername = null;
   
   if (req.body?.query && req.body.query.includes('farcasterProfile')) {
     isFarcasterRequest = true;
@@ -34,6 +35,11 @@ module.exports = async (req, res) => {
     if (req.body.variables) {
       username = req.body.variables.username;
       fid = req.body.variables.fid;
+      
+      // Store original username for error messages
+      if (username) {
+        originalUsername = username;
+      }
     }
     
     console.log(`Farcaster profile request for username: ${username}, fid: ${fid}`);
@@ -128,13 +134,53 @@ module.exports = async (req, res) => {
     
     // Forward the request to Zapper
     console.log(`Sending GraphQL request to ${ZAPPER_API_URL}`);
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: req.body,
-      timeout: 15000 // 15 second timeout for slow API responses
-    });
+    
+    // Check if username has .eth suffix
+    const hasEthSuffix = username && username.toLowerCase().endsWith('.eth');
+    let response;
+    
+    try {
+      // First attempt with original request (may include .eth)
+      response = await axios({
+        method: 'post',
+        url: ZAPPER_API_URL,
+        headers: headers,
+        data: req.body,
+        timeout: 15000 // 15 second timeout for slow API responses
+      });
+    } catch (firstError) {
+      // If we have a username with .eth suffix, try without it
+      if (hasEthSuffix) {
+        console.log('Initial request failed. Trying again without .eth suffix');
+        
+        // Create a modified request body with .eth removed
+        const modifiedBody = { ...req.body };
+        if (modifiedBody.variables && modifiedBody.variables.username) {
+          modifiedBody.variables = { 
+            ...modifiedBody.variables,
+            username: modifiedBody.variables.username.replace(/\.eth$/i, '')
+          };
+        }
+        
+        try {
+          // Try the request again with the modified username
+          response = await axios({
+            method: 'post',
+            url: ZAPPER_API_URL,
+            headers: headers,
+            data: modifiedBody,
+            timeout: 15000
+          });
+        } catch (secondError) {
+          // If both attempts fail, throw the original error
+          console.error('Both attempts with and without .eth failed');
+          throw firstError;
+        }
+      } else {
+        // If no .eth suffix, just throw the original error
+        throw firstError;
+      }
+    }
     
     // Log response headers and status
     console.log(`Zapper API response status: ${response.status}`);

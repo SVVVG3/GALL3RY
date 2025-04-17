@@ -68,7 +68,14 @@ module.exports = async (req, res) => {
       });
     }
 
-    console.log(`Farcaster profile request via dedicated endpoint for: ${username || fid}`);
+    // Keep the original username input for proper error messages
+    const originalUsername = username;
+    
+    // For compatibility with both approaches, try with and without .eth if needed
+    let cleanUsername = username;
+    const hasEthSuffix = username && username.toLowerCase().endsWith('.eth');
+    
+    console.log(`Farcaster profile request via dedicated endpoint for: ${username || fid}${hasEthSuffix ? ' (contains .eth suffix)' : ''}`);
     
     // Build the GraphQL query based on what was provided
     const query = `
@@ -89,8 +96,10 @@ module.exports = async (req, res) => {
     `;
 
     // Build variables based on what was provided
-    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
-
+    const variables = fid 
+      ? { fid: parseInt(fid, 10) } 
+      : { username: cleanUsername };
+    
     // Set up headers with API key and proper User-Agent
     const headers = {
       'Content-Type': 'application/json',
@@ -111,17 +120,47 @@ module.exports = async (req, res) => {
 
     console.log(`Sending request to ${ZAPPER_API_URL} with variables:`, variables);
     
-    // Make the GraphQL request to Zapper
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: {
-        query,
-        variables
-      },
-      timeout: 10000 // 10 second timeout
-    });
+    // First try with the original input (which may include .eth)
+    let response;
+    try {
+      // Make the GraphQL request to Zapper
+      response = await axios({
+        method: 'post',
+        url: ZAPPER_API_URL,
+        headers: headers,
+        data: {
+          query,
+          variables
+        },
+        timeout: 10000 // 10 second timeout
+      });
+    } catch (error) {
+      // If the first attempt fails and we have an .eth suffix, try without it
+      if (hasEthSuffix) {
+        console.log('First attempt failed. Trying again without .eth suffix');
+        cleanUsername = cleanUsername.replace(/\.eth$/i, '');
+        
+        try {
+          response = await axios({
+            method: 'post',
+            url: ZAPPER_API_URL,
+            headers: headers,
+            data: {
+              query,
+              variables: { username: cleanUsername }
+            },
+            timeout: 10000
+          });
+        } catch (secondError) {
+          // If both attempts fail, throw the original error
+          console.error('Both attempts failed:', error.message, secondError.message);
+          throw error;
+        }
+      } else {
+        // If there's no .eth suffix, just re-throw the original error
+        throw error;
+      }
+    }
     
     // Log successful response for debugging
     console.log(`Received response with status ${response.status}`);

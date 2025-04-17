@@ -217,13 +217,6 @@ export const getFarcasterProfile = async (usernameOrFid) => {
   // Clean up the username - remove @, trim whitespace
   let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
   
-  // NEW FIX: Remove .eth suffix for Farcaster API calls
-  // Farcaster doesn't support .eth in usernames directly
-  if (cleanInput.endsWith('.eth')) {
-    console.log(`Input contains .eth suffix, removing for Farcaster API compatibility`);
-    cleanInput = cleanInput.replace(/\.eth$/, '');
-  }
-  
   // Determine if input is a FID (number) or username (string)
   const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
   

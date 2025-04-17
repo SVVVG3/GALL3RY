@@ -150,13 +150,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         profile = await getFarcasterProfile(cleanQuery);
       } catch (profileError) {
         console.error('Profile search error:', profileError);
-        
-        if (isEthDomain) {
-          // Special handling for .eth domains
-          throw new Error(`Could not find Farcaster user "${originalQuery}". Try searching without the .eth suffix.`);
-        } else {
-          throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
-        }
+        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
       }
       
       if (!profile) {
