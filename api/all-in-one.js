@@ -769,6 +769,8 @@ async function handleCollectionFriendsRequest(req, res) {
     limit = 50
   } = req.query;
 
+  console.log(`[CollectionFriends] Starting request with contractAddress=${contractAddress}, fid=${fid}, network=${network}, limit=${limit}`);
+
   if (!contractAddress) {
     return res.status(400).json({ error: 'Missing parameter', message: 'contractAddress is required' });
   }
@@ -777,18 +779,33 @@ async function handleCollectionFriendsRequest(req, res) {
     return res.status(400).json({ error: 'Missing parameter', message: 'fid (Farcaster ID) is required' });
   }
 
-  // Check cache first
-  const cacheKey = `${contractAddress}:${fid}`;
-  const cachedData = CACHE.get('friends', cacheKey);
-  if (cachedData) {
-    return res.status(200).json(cachedData);
+  // Ensure cache objects exist
+  if (!CACHE.friends) {
+    console.log("[CollectionFriends] Initializing friends cache object");
+    CACHE.friends = {};
+  }
+
+  // Check cache first - with better error handling
+  try {
+    const cacheKey = `${contractAddress}:${fid}`;
+    console.log(`[CollectionFriends] Cache key: ${cacheKey}`);
+    
+    const cachedData = CACHE.get('friends', cacheKey);
+    if (cachedData) {
+      console.log(`[CollectionFriends] Cache hit for ${cacheKey}`);
+      return res.status(200).json(cachedData);
+    }
+  } catch (cacheError) {
+    console.error('[CollectionFriends] Cache access error:', cacheError);
+    // Continue with normal execution - don't return early on cache error
   }
 
   try {
-    console.log(`Getting collection friends for contract: ${contractAddress}, user FID: ${fid}`);
+    console.log(`[CollectionFriends] Getting collection friends for contract: ${contractAddress}, user FID: ${fid}`);
 
     // Get Neynar API key
     const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+    console.log(`[CollectionFriends] Using Neynar API key: ${NEYNAR_API_KEY.substring(0, 4)}...`);
 
     // STEP 1: Get the list of users the Farcaster user follows (using Neynar API)
     let followingList = [];

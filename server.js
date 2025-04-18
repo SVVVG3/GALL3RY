@@ -24,8 +24,25 @@ const { parse } = require('url');
 const fs = require('fs');
 const compression = require('compression');
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const apiRoutes = require('./api/vercel-local-bridge.js'); // Import API routes using Vercel-compatible bridge
-const net = require('net');
+
+// Fix the import path to use the bridge file directly
+try {
+  var apiRoutes = require('./api/vercel-local-bridge.js');
+  console.log("Successfully loaded API routes from vercel-local-bridge.js");
+} catch (error) {
+  console.error("Error loading API routes:", error.message);
+  // Fallback to empty router if the bridge file cannot be loaded
+  const express = require('express');
+  var apiRoutes = express.Router();
+  
+  // Add an error route
+  apiRoutes.all('*', (req, res) => {
+    res.status(500).json({
+      error: 'API Routes Not Loaded',
+      message: 'The API bridge could not be loaded: ' + error.message
+    });
+  });
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
