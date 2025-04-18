@@ -152,26 +152,27 @@ a:hover {
 }
 
 .app-footer {
-  background-color: #f9fafb;
-  padding: 20px 0;
-  border-top: 1px solid #e5e7eb;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--color-gray-600);
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 4px;
+  gap: 0;
+  white-space: nowrap;
 }
 
-.app-footer .container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-  text-align: center;
+.footer-link {
+  margin-left: 0;
+  color: var(--color-primary);
+  text-decoration: none;
+  transition: color 0.2s ease;
 }
 
-.app-footer p, .app-footer span {
-  margin: 0;
-  color: #6b7280;
-  font-size: 0.9rem;
+.footer-link:hover {
+  color: var(--color-primary-dark);
+  text-decoration: underline;
 }
 
 /* Home Page Styles */
