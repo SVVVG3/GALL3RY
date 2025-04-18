@@ -194,6 +194,24 @@ async function handleAlchemyRequest(req, res) {
         // Build the full URL with the correct format
         const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
         return `${baseUrl}${apiKey}/getNFTsForOwner`;
+      },
+      'getassettransfers': (apiKey, chain = 'eth') => {
+        // Map chain IDs to their correct Alchemy URL formats
+        const chainUrlMap = {
+          'eth': 'eth-mainnet',
+          'ethereum': 'eth-mainnet',
+          'polygon': 'polygon-mainnet',
+          'arbitrum': 'arb-mainnet',
+          'optimism': 'opt-mainnet',
+          'base': 'base-mainnet',
+          'zora': 'zora-mainnet'
+        };
+        
+        // Get the correct chain URL or default to eth-mainnet
+        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
+        
+        // Build the URL for Alchemy's Core API (getAssetTransfers is part of core, not NFT API)
+        return `https://${chainUrl}.g.alchemy.com/v2/${apiKey}`;
       }
     };
     
@@ -211,7 +229,113 @@ async function handleAlchemyRequest(req, res) {
     // Build the request URL using the normalized endpoint
     const endpointUrl = ENDPOINTS[normalizedEndpoint](apiKey, chain);
     
-    // Prepare request parameters according to Alchemy v3 API format
+    // Special handling for getAssetTransfers - uses JSON-RPC instead of REST
+    if (normalizedEndpoint === 'getassettransfers') {
+      // Extract addresses from query parameters
+      let addresses = req.query.addresses ? req.query.addresses.split(',') : [];
+      addresses = addresses.map(addr => addr.toLowerCase().trim());
+      
+      if (addresses.length === 0) {
+        return res.status(400).json({ error: 'No addresses provided for getAssetTransfers' });
+      }
+      
+      // Create the JSON-RPC payload for getAssetTransfers
+      const rpcPayload = {
+        id: 1,
+        jsonrpc: "2.0",
+        method: "alchemy_getAssetTransfers",
+        params: [
+          {
+            category: ['ERC721', 'ERC1155'], // NFT transfers only
+            fromBlock: "0x0",
+            toBlock: "latest",
+            withMetadata: true,
+            excludeZeroValue: true,
+            maxCount: "0x64", // Hex for 100
+            order: req.query.order === 'asc' ? 'asc' : 'desc',
+            fromAddress: addresses,
+            toAddress: addresses
+          }
+        ]
+      };
+      
+      // Make the request to Alchemy RPC endpoint
+      const response = await axios.post(endpointUrl, rpcPayload, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 15000
+      });
+      
+      // Extract the transfer data
+      if (response.data && response.data.result && response.data.result.transfers) {
+        const transfers = response.data.result.transfers;
+        
+        // Process transfers to build a map keyed by contract address and token ID
+        const transferMap = {};
+        const allTransfers = [];
+        
+        transfers.forEach(transfer => {
+          // Normalize contract and token ID to create a key
+          if (transfer.rawContract && transfer.tokenId) {
+            const contractAddress = transfer.rawContract.address.toLowerCase();
+            const tokenId = transfer.tokenId;
+            const key = `${contractAddress}:${tokenId}`;
+            
+            // If we don't have a timestamp for this NFT yet, or this one is newer
+            if (!transferMap[key] || new Date(transfer.metadata.blockTimestamp) > new Date(transferMap[key].timestamp)) {
+              transferMap[key] = {
+                timestamp: transfer.metadata.blockTimestamp,
+                from: transfer.from,
+                to: transfer.to,
+                tokenId: tokenId,
+                contractAddress: contractAddress
+              };
+            }
+            
+            // Keep track of all transfers
+            allTransfers.push({
+              timestamp: transfer.metadata.blockTimestamp,
+              from: transfer.from,
+              to: transfer.to,
+              tokenId: tokenId,
+              contractAddress: contractAddress
+            });
+          }
+        });
+        
+        return res.status(200).json({
+          transfers: allTransfers,
+          transferMap: transferMap,
+          count: allTransfers.length,
+          processedCount: transfers.length,
+          dataAvailable: transfers.length > 0,
+          diagnostic: {
+            addressCount: addresses.length,
+            chain: chain,
+            requestMethod: 'alchemy_getAssetTransfers',
+            transferCountFromRPC: transfers.length
+          }
+        });
+      }
+      
+      // Return response data if successful
+      return res.status(200).json({
+        transfers: [],
+        transferMap: {},
+        count: 0,
+        dataAvailable: false,
+        rawResponse: response.data,
+        diagnostic: {
+          addressCount: addresses.length,
+          chain: chain,
+          error: "No transfers found or unexpected response format",
+          requestMethod: 'alchemy_getAssetTransfers'
+        }
+      });
+    }
+    
+    // Regular REST API handling for other endpoints
     // Clone query params to avoid modifying the original
     const requestParams = { ...req.query };
     
