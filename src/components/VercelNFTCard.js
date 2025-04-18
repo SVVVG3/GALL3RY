@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
@@ -88,8 +88,8 @@ const VercelNFTCard = ({ nft }) => {
     nft?.token_id || 
     (nft?.id?.split && nft?.id?.includes(':') ? nft?.id?.split(':')[3] : '');
 
-  // Detect media type based on URL or metadata
-  const getMediaType = (url) => {
+  // Memoize the media type function to avoid dependency warnings
+  const getMediaType = useMemo(() => (url) => {
     if (!url) return 'image';
     
     // Check file extension in URL
@@ -110,7 +110,7 @@ const VercelNFTCard = ({ nft }) => {
     
     // Default to image
     return 'image';
-  };
+  }, [nft]); // Include nft in dependencies
 
   // Use useEffect to get and set the image URL only once per NFT change
   useEffect(() => {

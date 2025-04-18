@@ -1,36 +1,50 @@
-/* Collection Friends Modal Styles */
-.collection-friends-modal {
-  max-width: 480px;
-  width: 100%;
-  height: 90vh;
-  max-height: 700px;
-  border-radius: 12px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 2147483646; /* Extremely high z-index to ensure it appears above everything */
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-  background-color: var(--bg-color, #ffffff);
-}
-
+/* Collection Friends Modal Styles - Complete rewrite */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.75);
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 2147483645; /* Just below the modal itself */
+  z-index: 9999999;
   backdrop-filter: blur(4px);
+  pointer-events: all;
+  will-change: opacity;
+  transition: opacity 0.3s ease;
+}
+
+.collection-friends-modal {
+  background-color: var(--bg-color, #ffffff);
+  max-width: 480px;
+  width: 90%;
+  max-height: 80vh;
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10000000;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  will-change: transform;
+  transform: translateY(0);
+  transition: transform 0.3s ease;
+  animation: modal-appear 0.3s forwards;
+}
+
+@keyframes modal-appear {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .collection-friends-modal .modal-header {
@@ -40,16 +54,43 @@
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.collection-friends-modal .modal-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+
+.collection-friends-modal .modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: var(--text-secondary, #666);
+  transition: color 0.2s;
+  padding: 5px;
+  margin: -5px;
+  line-height: 1;
+}
+
+.collection-friends-modal .modal-close:hover {
+  color: var(--text-color, #333);
 }
 
 .collection-friends-content {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 20px 20px;
-  max-height: calc(90vh - 70px); /* Adjust based on modal height minus header */
+  padding: 16px 20px;
+  max-height: calc(80vh - 60px);
   scrollbar-width: thin;
   scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
   background-color: var(--bg-color, #ffffff);
+  overflow-x: hidden;
 }
 
 .collection-friends-content::-webkit-scrollbar {

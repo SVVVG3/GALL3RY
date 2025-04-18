@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
@@ -10,6 +10,7 @@ import '../styles/CollectionFriendsModal.css';
 const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionName }) => {
   const { isAuthenticated } = useAuth();
   const { profile } = useProfile();
+  const modalRef = useRef(null);
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -30,6 +31,23 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
       window.removeEventListener('keydown', handleEscKey);
     };
   }, [onClose]);
+  
+  // Handle clicking outside the modal to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (modalRef.current && !modalRef.current.contains(event.target)) {
+        onClose();
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen, onClose]);
   
   // Fetch collection friends from multiple API endpoints with retries
   useEffect(() => {
@@ -88,6 +106,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   
   // Prevent body scrolling when modal is open
   useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -95,7 +115,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     }
     
     return () => {
-      document.body.style.overflow = '';
+      document.body.style.overflow = originalStyle;
     };
   }, [isOpen]);
   
@@ -118,7 +138,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   // Prevent click events from bubbling up and closing the modal unexpectedly
   const handleModalClick = (e) => {
     e.stopPropagation();
-    e.preventDefault(); // Prevent any default behavior
   };
   
   if (!isOpen) return null;
@@ -127,18 +146,19 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     <div 
       className="modal-overlay" 
       onClick={onClose}
-      style={{pointerEvents: 'auto'}}
+      data-testid="modal-overlay"
     >
       <div 
+        ref={modalRef}
         className="collection-friends-modal"
         onClick={handleModalClick}
-        style={{pointerEvents: 'auto'}}
+        data-testid="friends-modal"
       >
         <div className="modal-header">
           <h2 className="modal-title">
             {collectionName ? `${collectionName} Owners` : 'Collection Owners'}
           </h2>
-          <button className="modal-close" onClick={onClose}>×</button>
+          <button className="modal-close" onClick={onClose} aria-label="Close">×</button>
         </div>
         
         <div className="collection-friends-content">
