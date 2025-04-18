@@ -4,71 +4,59 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "api/zapper.js": {
-      "memory": 1024,
-      "maxDuration": 15
-    },
-    "api/farcaster-profile.js": {
-      "memory": 1024,
-      "maxDuration": 15
-    },
-    "api/image-proxy.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    },
-    "api/alchemy.js": {
-      "memory": 1024,
-      "maxDuration": 15
-    },
-    "api/collection-friends.js": {
+    "api/combined-apis.js": {
       "memory": 1024,
       "maxDuration": 30
     },
-    "api/login.js": {
+    "api/folders-api.js": {
       "memory": 1024,
-      "maxDuration": 10
+      "maxDuration": 30
     },
-    "api/farcaster.js": {
+    "api/v2-api.js": {
       "memory": 1024,
-      "maxDuration": 15
-    },
-    "api/farcaster-user.js": {
-      "memory": 1024,
-      "maxDuration": 15
+      "maxDuration": 30
     }
   },
   "rewrites": [
     {
       "source": "/api/zapper",
-      "destination": "/api/zapper.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/farcaster-profile",
-      "destination": "/api/farcaster-profile.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/image-proxy",
-      "destination": "/api/image-proxy.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/alchemy",
-      "destination": "/api/alchemy.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/collection-friends",
-      "destination": "/api/collection-friends.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/login",
-      "destination": "/api/login.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/farcaster",
-      "destination": "/api/farcaster.js"
+      "destination": "/api/combined-apis.js"
     },
     {
       "source": "/api/farcaster-user",
-      "destination": "/api/farcaster-user.js"
+      "destination": "/api/combined-apis.js"
+    },
+    {
+      "source": "/api/folders/:path*",
+      "destination": "/api/folders-api.js"
+    },
+    {
+      "source": "/api/v2/:path*",
+      "destination": "/api/v2-api.js"
     },
     {
       "source": "/(.*)",
