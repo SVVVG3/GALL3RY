@@ -69,40 +69,44 @@
 .collection-friends-content {
   padding: 20px;
   overflow-y: auto;
-  overflow-x: hidden;
-  max-height: calc(90vh - 70px); /* Matched with CollectionFriendsModal.css */
+  max-height: 60vh;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(0, 0, 0, 0.2) transparent;
+  gap: 10px;
 }
 
-.collection-friends-content::-webkit-scrollbar {
-  width: 6px;
-}
-
-.collection-friends-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.collection-friends-content::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 3px;
-}
-
-.collection-friends-content .friend-item,
-.collection-friends-content .friend-card {
-  padding: 12px;
-  border-radius: 8px;
-  transition: background-color 0.2s;
+.collection-friends-content .friend-item {
   display: flex;
   align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
 }
 
-.collection-friends-content .friend-item:hover,
-.collection-friends-content .friend-card:hover {
+.collection-friends-content .friend-item:hover {
   background-color: rgba(0, 0, 0, 0.05);
+}
+
+.collection-friends-content .friend-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 12px;
+}
+
+.collection-friends-content .friend-info {
+  flex: 1;
+}
+
+.collection-friends-content .friend-name {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.collection-friends-content .friend-address {
+  font-size: 0.8rem;
+  color: #666;
+  word-break: break-all;
 }
 
 .modal-footer {
@@ -147,12 +151,11 @@
     color: #fff;
   }
   
-  .collection-friends-content::-webkit-scrollbar-thumb {
-    background-color: rgba(255, 255, 255, 0.2);
+  .collection-friends-content .friend-item:hover {
+    background-color: rgba(255, 255, 255, 0.1);
   }
   
-  .collection-friends-content .friend-item:hover,
-  .collection-friends-content .friend-card:hover {
-    background-color: rgba(255, 255, 255, 0.05);
+  .collection-friends-content .friend-address {
+    color: #aaa;
   }
 } 
