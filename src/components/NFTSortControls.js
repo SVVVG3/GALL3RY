@@ -17,7 +17,7 @@ const NFTSortControls = () => {
     <div className="nft-sort-controls">
       <div className="sort-options">
         <button
-          className={`sort-button ${sortBy === 'recent' ? 'active' : ''}`}
+          className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
           onClick={() => setSortBy('recent')}
           aria-label="Sort by recent"
           aria-pressed={sortBy === 'recent'}
@@ -25,7 +25,7 @@ const NFTSortControls = () => {
           Recent
         </button>
         <button
-          className={`sort-button ${sortBy === 'name' ? 'active' : ''}`}
+          className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
           onClick={() => setSortBy('name')}
           aria-label="Sort by name"
           aria-pressed={sortBy === 'name'}
@@ -33,7 +33,7 @@ const NFTSortControls = () => {
           Name
         </button>
         <button
-          className={`sort-button ${sortBy === 'collection' ? 'active' : ''}`}
+          className={`sort-option ${sortBy === 'collection' ? 'active' : ''}`}
           onClick={() => setSortBy('collection')}
           aria-label="Sort by collection"
           aria-pressed={sortBy === 'collection'}
@@ -41,7 +41,7 @@ const NFTSortControls = () => {
           Collection
         </button>
         <button
-          className={`sort-button ${sortBy === 'value' ? 'active' : ''}`}
+          className={`sort-option ${sortBy === 'value' ? 'active' : ''}`}
           onClick={() => setSortBy('value')}
           aria-label="Sort by value"
           aria-pressed={sortBy === 'value'}

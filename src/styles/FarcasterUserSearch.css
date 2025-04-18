@@ -533,11 +533,6 @@
     border-radius: 8px;
   }
   
-  .nft-section .nft-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-  
   .nft-container {
     padding: 0 5px;
   }
@@ -567,12 +562,19 @@
     padding: 15px;
   }
   
-  .profile-image img,
-  .nft-image {
+  /* Fix image styles - don't override object-fit */
+  .profile-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  
+  /* Don't override NFTGrid styles */
+  /*.nft-image {
     width: 100%;
     height: auto;
     object-fit: contain;
-  }
+  }*/
   
   .nft-card {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -1670,15 +1672,16 @@
 }
 
 .sort-option:hover {
-  background-color: #7c3aed;
-  color: white;
-  border-color: #7c3aed;
+  background-color: #f3f4f6;
+  color: var(--heading-color);
+  border-color: var(--input-border);
 }
 
 .sort-option.active {
-  background-color: #8b5cf6;
-  color: white;
-  border-color: #8b5cf6;
+  background-color: #f3f4f6;
+  color: var(--heading-color);
+  font-weight: 600;
+  border-color: var(--input-border);
 }
 
 .sort-order-toggle {
@@ -1695,44 +1698,45 @@
 }
 
 .sort-order-toggle:hover {
-  background-color: #7c3aed;
-  color: white;
-  border-color: #7c3aed;
+  background-color: #f3f4f6;
+  color: var(--heading-color);
+  border-color: var(--input-border);
 }
 
 /* Responsive styles for sorting */
 @media (max-width: 600px) {
   .nft-header {
     flex-direction: column;
-    align-items: center;
+    align-items: stretch;
     gap: 12px;
+    width: 100%;
   }
   
   .nft-header-left,
   .nft-header-right {
     width: 100%;
-    justify-content: center;
   }
   
   .nft-sort-controls {
     width: 100%;
-    justify-content: center;
+    justify-content: space-between;
     flex-wrap: wrap;
-    padding: 4px;
+    padding: 4px 0;
   }
   
   .sort-options {
+    flex: 1;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
-    margin-bottom: 8px;
   }
   
   .sort-option {
     padding: 8px 12px;
     font-size: 13px;
-    min-width: 70px;
     text-align: center;
+    flex-grow: 1;
+    max-width: calc(25% - 6px);
   }
 }
 
