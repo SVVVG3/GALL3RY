@@ -15,10 +15,16 @@ import { fetchNftsForAddresses } from '../services/alchemyService';
  * FarcasterUserSearch component - simplified to avoid circular dependencies
  */
 const FarcasterUserSearch = ({ initialUsername }) => {
-  const { fetchAllNFTsForWallets, isLoading: isNftLoading } = useNFT();
+  const { 
+    fetchAllNFTsForWallets, 
+    isLoading: isNftLoading,
+    searchQuery, // NFT filter search query from context
+    sortBy,
+    sortOrder
+  } = useNFT();
   
-  // Search state
-  const [searchQuery, setSearchQuery] = useState(initialUsername || '');
+  // Form search state (for Farcaster username, not NFT filtering)
+  const [formSearchQuery, setFormSearchQuery] = useState(initialUsername || '');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
   
@@ -29,13 +35,6 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
-  
-  // Sorting state
-  const [sortBy, setSortBy] = useState('recent');
-  const [sortOrder, setSortOrder] = useState('desc');
-  
-  // Add state for NFT filtering
-  const [nftSearchQuery, setNftSearchQuery] = useState('');
   
   // Get sorted NFTs
   const sortedNfts = useCallback(() => {
@@ -267,9 +266,9 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // Function to filter NFTs by search term
   const filterNftsBySearch = useCallback((nfts) => {
-    if (!nftSearchQuery.trim()) return nfts;
+    if (!searchQuery.trim()) return nfts;
     
-    const searchTerm = nftSearchQuery.toLowerCase();
+    const searchTerm = searchQuery.toLowerCase();
     return nfts.filter(nft => {
       const name = (nft.name || nft.title || `#${nft.tokenId || '0'}`).toLowerCase();
       const collection = ((nft.collection && nft.collection.name) || 
@@ -278,7 +277,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       
       return name.includes(searchTerm) || collection.includes(searchTerm);
     });
-  }, [nftSearchQuery]);
+  }, [searchQuery]);
 
   // Apply filter to sorted NFTs
   const filteredAndSortedNfts = useCallback(() => {
@@ -291,7 +290,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       e.preventDefault();
     }
     
-    if (!searchQuery.trim()) return;
+    if (!formSearchQuery.trim()) return;
 
     setIsSearching(true);
     setSearchError(null);
@@ -300,7 +299,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     setWalletAddresses([]);
 
     // Message to users with .eth usernames
-    const originalQuery = searchQuery.trim();
+    const originalQuery = formSearchQuery.trim();
     const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
     const isWarpcastLink = originalQuery.includes('warpcast.com/');
     
@@ -456,7 +455,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [searchQuery, fetchAllNFTsForWallets]);
+  }, [formSearchQuery, fetchAllNFTsForWallets]);
 
   /**
    * Effect for initial search if username is provided
@@ -465,15 +464,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   useEffect(() => {
     // Only trigger search if we have an initialUsername
     if (initialUsername && initialUsername.trim()) {
-      setSearchQuery(initialUsername.trim());
+      setFormSearchQuery(initialUsername.trim());
       // We'll handle the actual search in a separate effect to avoid calling handleSearch directly
     }
   }, [initialUsername]); // Note: do NOT include handleSearch in dependencies
 
-  // Separate effect to handle searching when searchQuery changes from initialUsername
+  // Separate effect to handle searching when formSearchQuery changes from initialUsername
   useEffect(() => {
-    // Only perform search if searchQuery was set from initialUsername
-    const searchFromInitial = searchQuery && searchQuery === initialUsername && initialUsername.trim();
+    // Only perform search if formSearchQuery was set from initialUsername
+    const searchFromInitial = formSearchQuery && formSearchQuery === initialUsername && initialUsername.trim();
     
     if (searchFromInitial) {
       // Call handleSearch with no arguments to avoid event handling issues
@@ -487,7 +486,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       
       performSearch();
     }
-  }, [searchQuery, initialUsername, handleSearch]);
+  }, [formSearchQuery, initialUsername, handleSearch]);
 
   const fetchUserNfts = async (profile) => {
     setIsSearching(true);
@@ -605,8 +604,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
         <div className="search-input-wrapper">
           <input
             type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={formSearchQuery}
+            onChange={(e) => setFormSearchQuery(e.target.value)}
             placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
             className="search-input"
             aria-label="Farcaster username"
@@ -615,7 +614,7 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           <button 
             type="submit"
             className="search-button"
-            disabled={!searchQuery.trim() || isSearching}
+            disabled={!formSearchQuery.trim() || isSearching}
           >
             {isSearching ? 'Searching...' : 'Search'}
           </button>
