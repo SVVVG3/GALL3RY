@@ -9,7 +9,6 @@
       "maxDuration": 60
     }
   },
-  "excludeFiles": "api/**/*.js",
   "rewrites": [
     {
       "source": "/api/(.*)",
