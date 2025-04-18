@@ -4,23 +4,23 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "api/zapper.js": {
+    "pages/api/zapper.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "api/farcaster-profile.js": {
+    "pages/api/farcaster-profile.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "api/image-proxy.js": {
+    "pages/api/image-proxy.js": {
       "memory": 1024,
       "maxDuration": 10
     },
-    "api/alchemy.js": {
+    "pages/api/alchemy.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "api/collection-friends.js": {
+    "pages/api/collection-friends.js": {
       "memory": 1024,
       "maxDuration": 30
     }
@@ -28,23 +28,23 @@
   "rewrites": [
     {
       "source": "/api/zapper",
-      "destination": "/api/zapper.js"
+      "destination": "/pages/api/zapper.js"
     },
     {
       "source": "/api/farcaster-profile",
-      "destination": "/api/farcaster-profile.js"
+      "destination": "/pages/api/farcaster-profile.js"
     },
     {
       "source": "/api/image-proxy",
-      "destination": "/api/image-proxy.js"
+      "destination": "/pages/api/image-proxy.js"
     },
     {
       "source": "/api/alchemy",
-      "destination": "/api/alchemy.js"
+      "destination": "/pages/api/alchemy.js"
     },
     {
       "source": "/api/collection-friends",
-      "destination": "/api/collection-friends.js"
+      "destination": "/pages/api/collection-friends.js"
     },
     {
       "source": "/(.*)",
