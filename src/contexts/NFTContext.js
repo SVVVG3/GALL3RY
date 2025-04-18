@@ -221,8 +221,6 @@ export const NFTProvider = ({ children }) => {
   const getSortedNFTs = useCallback((nftsToSort) => {
     if (!nftsToSort || nftsToSort.length === 0) return [];
     
-    console.log(`Sorting ${nftsToSort.length} NFTs by ${sortBy} in ${sortOrder} order`);
-    
     const nftsCopy = [...nftsToSort];
     
     switch (sortBy) {
@@ -232,6 +230,24 @@ export const NFTProvider = ({ children }) => {
           const nameA = (a.name || a.title || a.metadata?.name || `#${a.tokenId || a.token_id || '0'}`).toLowerCase();
           const nameB = (b.name || b.title || b.metadata?.name || `#${b.tokenId || b.token_id || '0'}`).toLowerCase();
           
+          // Helper function to determine if a character is a letter
+          const isLetter = (char) => /[a-z]/i.test(char);
+          
+          // Check if names start with letters
+          const aStartsWithLetter = nameA.length > 0 && isLetter(nameA[0]);
+          const bStartsWithLetter = nameB.length > 0 && isLetter(nameB[0]);
+          
+          // If one starts with letter and other doesn't, letter comes first
+          // Numbers and symbols should come AFTER all letters (after Z)
+          if (aStartsWithLetter && !bStartsWithLetter) {
+            return sortOrder === 'asc' ? -1 : 1; // A-Z first
+          }
+          if (!aStartsWithLetter && bStartsWithLetter) {
+            return sortOrder === 'asc' ? 1 : -1; // Numbers/symbols after Z
+          }
+          
+          // If both start with letters or both start with non-letters,
+          // use standard comparison with numeric collation
           return sortOrder === 'asc' 
             ? nameA.localeCompare(nameB, undefined, { numeric: true }) 
             : nameB.localeCompare(nameA, undefined, { numeric: true });
@@ -322,6 +338,21 @@ export const NFTProvider = ({ children }) => {
                        b.contractMetadata?.name ||
                        '').toLowerCase();
           
+          // Helper function to determine if a character is a letter
+          const isLetter = (char) => /[a-z]/i.test(char);
+          
+          // Check if collection names start with letters
+          const aStartsWithLetter = collA.length > 0 && isLetter(collA[0]);
+          const bStartsWithLetter = collB.length > 0 && isLetter(collB[0]);
+          
+          // Empty collections (with '') should always be sorted last
+          if (collA === '' && collB !== '') {
+            return sortOrder === 'asc' ? 1 : -1; // Empty collections last
+          }
+          if (collA !== '' && collB === '') {
+            return sortOrder === 'asc' ? -1 : 1; // Empty collections last
+          }
+          
           // If same collection, sort by token ID
           if (collA === collB) {
             const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
@@ -330,6 +361,16 @@ export const NFTProvider = ({ children }) => {
             return sortOrder === 'asc' ? idA - idB : idB - idA;
           }
           
+          // If one starts with letter and other doesn't, letter comes first
+          // Numbers and symbols should come AFTER all letters (after Z)
+          if (aStartsWithLetter && !bStartsWithLetter) {
+            return sortOrder === 'asc' ? -1 : 1; // A-Z first
+          }
+          if (!aStartsWithLetter && bStartsWithLetter) {
+            return sortOrder === 'asc' ? 1 : -1; // Numbers/symbols after Z
+          }
+          
+          // Normal comparison for collections that both start with letters or both with non-letters
           return sortOrder === 'asc' 
             ? collA.localeCompare(collB, undefined, { numeric: true }) 
             : collB.localeCompare(collA, undefined, { numeric: true });
