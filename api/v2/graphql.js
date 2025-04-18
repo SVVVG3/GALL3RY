@@ -39,14 +39,14 @@ module.exports = async (req, res) => {
     
     // Add API key if available
     if (apiKey) {
-      headers['Authorization'] = `Basic ${apiKey}`;
+      headers['x-zapper-api-key'] = apiKey;
     }
     
     // Log request details
     console.log('Request body length:', JSON.stringify(req.body || {}).length);
     
     // Make request to Zapper API
-    const response = await fetch('https://api.zapper.xyz/v2/graphql', {
+    const response = await fetch('https://public.zapper.xyz/graphql', {
       method: 'POST',
       headers: headers,
       body: JSON.stringify(req.body)
@@ -64,8 +64,12 @@ module.exports = async (req, res) => {
     } catch (e) {
       console.error('Failed to parse response as JSON:', e);
       return res.status(500).json({
-        error: 'Invalid JSON response from API',
-        responsePreview: responseText.substring(0, 500) // First 500 chars for debugging
+        errors: [{
+          message: 'Invalid JSON response from API',
+          extensions: {
+            responsePreview: responseText.substring(0, 500) // First 500 chars for debugging
+          }
+        }]
       });
     }
     
@@ -75,8 +79,12 @@ module.exports = async (req, res) => {
     console.error('Error proxying to Zapper API:', error);
     
     return res.status(500).json({
-      error: 'Internal server error',
-      message: error.message || 'An unknown error occurred'
+      errors: [{
+        message: error.message || 'Internal server error',
+        extensions: {
+          details: error.response?.data || error.toString()
+        }
+      }]
     });
   }
 }; 

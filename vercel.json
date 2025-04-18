@@ -4,47 +4,71 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "pages/api/zapper.js": {
+    "api/zapper.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "pages/api/farcaster-profile.js": {
+    "api/farcaster-profile.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "pages/api/image-proxy.js": {
+    "api/image-proxy.js": {
       "memory": 1024,
       "maxDuration": 10
     },
-    "pages/api/alchemy.js": {
+    "api/alchemy.js": {
       "memory": 1024,
       "maxDuration": 15
     },
-    "pages/api/collection-friends.js": {
+    "api/collection-friends.js": {
       "memory": 1024,
       "maxDuration": 30
+    },
+    "api/login.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/farcaster.js": {
+      "memory": 1024,
+      "maxDuration": 15
+    },
+    "api/farcaster-user.js": {
+      "memory": 1024,
+      "maxDuration": 15
     }
   },
   "rewrites": [
     {
       "source": "/api/zapper",
-      "destination": "/pages/api/zapper.js"
+      "destination": "/api/zapper.js"
     },
     {
       "source": "/api/farcaster-profile",
-      "destination": "/pages/api/farcaster-profile.js"
+      "destination": "/api/farcaster-profile.js"
     },
     {
       "source": "/api/image-proxy",
-      "destination": "/pages/api/image-proxy.js"
+      "destination": "/api/image-proxy.js"
     },
     {
       "source": "/api/alchemy",
-      "destination": "/pages/api/alchemy.js"
+      "destination": "/api/alchemy.js"
     },
     {
       "source": "/api/collection-friends",
-      "destination": "/pages/api/collection-friends.js"
+      "destination": "/api/collection-friends.js"
+    },
+    {
+      "source": "/api/login",
+      "destination": "/api/login.js"
+    },
+    {
+      "source": "/api/farcaster",
+      "destination": "/api/farcaster.js"
+    },
+    {
+      "source": "/api/farcaster-user",
+      "destination": "/api/farcaster-user.js"
     },
     {
       "source": "/(.*)",
