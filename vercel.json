@@ -4,59 +4,15 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "api/combined-apis.js": {
+    "api/unified-api.js": {
       "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/folders-api.js": {
-      "memory": 1024,
-      "maxDuration": 30
-    },
-    "api/v2-api.js": {
-      "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "rewrites": [
     {
-      "source": "/api/zapper",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/farcaster-profile",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/image-proxy",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/alchemy",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/collection-friends",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/login",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/farcaster",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/farcaster-user",
-      "destination": "/api/combined-apis.js"
-    },
-    {
-      "source": "/api/folders/:path*",
-      "destination": "/api/folders-api.js"
-    },
-    {
-      "source": "/api/v2/:path*",
-      "destination": "/api/v2-api.js"
+      "source": "/api/(.*)",
+      "destination": "/api/unified-api.js"
     },
     {
       "source": "/(.*)",
