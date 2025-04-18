@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useProfile } from '@farcaster/auth-kit';
+import CollectionFriendsModal from './CollectionFriendsModal';
 
 // Define keyframes for spinner animation
 const spinKeyframes = `
@@ -12,11 +15,14 @@ const spinKeyframes = `
  * Specifically designed for Vercel deployment to solve image loading issues
  */
 const VercelNFTCard = ({ nft }) => {
+  const { isAuthenticated } = useAuth();
+  const { profile } = useProfile();
   const [mediaLoaded, setMediaLoaded] = useState(false);
   const [mediaError, setMediaError] = useState(false);
   const [debugMediaUrl, setDebugMediaUrl] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState('image'); // 'image', 'video', or 'unsupported'
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   
   // Extract NFT details with fallbacks
   const rawTitle = nft?.metadata?.name || nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
@@ -282,6 +288,20 @@ const VercelNFTCard = ({ nft }) => {
     }
   }, [mediaLoaded]);
   
+  // Handle showing friends modal
+  const handleShowFriends = (e) => {
+    e.preventDefault(); // Prevent link navigation
+    e.stopPropagation(); // Prevent event bubbling
+    setShowFriendsModal(true);
+  };
+  
+  const handleCloseFriendsModal = () => {
+    setShowFriendsModal(false);
+  };
+  
+  // Check if user is authenticated with Farcaster
+  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
+  
   return (
     <div className="nft-card" style={{ 
       minHeight: '250px', 
@@ -462,7 +482,8 @@ const VercelNFTCard = ({ nft }) => {
         flexDirection: 'column', 
         flex: 1,
         color: 'inherit',
-        zIndex: 4 // Below the media
+        zIndex: 4, // Below the media
+        position: 'relative' // Add position relative for friends button positioning
       }}>
         <div className="nft-details" style={{ padding: '12px', zIndex: 4 }}>
           <div className="nft-info">
@@ -502,8 +523,52 @@ const VercelNFTCard = ({ nft }) => {
               </p>
             )}
           </div>
+          
+          {/* Add Collection Friends button for Farcaster users */}
+          {showFriendsButton && (
+            <button 
+              className="collection-friends-button" 
+              onClick={handleShowFriends}
+              title="Show friends who own this collection"
+              style={{
+                position: 'absolute',
+                bottom: '8px',
+                right: '8px',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%',
+                backgroundColor: 'rgba(97, 0, 255, 0.2)',
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#6100ff',
+                transition: 'all 0.2s ease',
+                zIndex: 5,
+                boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                <path d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
+      
+      {/* Collection Friends Modal */}
+      {showFriendsModal && (
+        <CollectionFriendsModal
+          isOpen={showFriendsModal}
+          onClose={handleCloseFriendsModal}
+          contractAddress={contractAddress}
+          collectionName={collection}
+        />
+      )}
     </div>
   );
 };
