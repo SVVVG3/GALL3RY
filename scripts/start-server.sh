@@ -60,6 +60,10 @@ if [ -z "$ALCHEMY_API_KEY" ] && [ -f .env ]; then
   source .env 2>/dev/null || true
 fi
 
+# Run our patch script to fix module compatibility issues
+echo "🔧 Patching server.js for module compatibility..."
+node scripts/patch-server.js
+
 # Run the server and capture its output to parse the actual port
 echo "🚀 Starting server..."
 node -r dotenv/config server.js > server_output.log 2>&1 &
