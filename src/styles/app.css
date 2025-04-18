@@ -104,11 +104,17 @@ a:hover {
   flex-direction: column;
 }
 
+/* App header with proper background and container */
 .app-header {
   background-color: #8b5cf6;
+  width: 100%;
   border-bottom: none;
-  padding: 1rem 0;
+  padding: 0;
   color: white;
+}
+
+/* Header inner container for proper spacing */
+.app-header-container {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -177,6 +183,11 @@ a:hover {
 
 .app-content {
   flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .app-footer {

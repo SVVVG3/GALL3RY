@@ -14,7 +14,7 @@
 
 /* Main container */
 .farcaster-search-container {
-  max-width: 95%; /* Increased from fixed width */
+  max-width: 800px;
   margin: 0 auto;
   padding: 20px;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -34,7 +34,7 @@
 .search-form {
   width: 100%;
   max-width: 600px;
-  margin: 0 auto 1rem;
+  margin: 0 auto 2rem;
   display: flex;
   justify-content: center;
 }
@@ -1769,4 +1769,24 @@
 
 .nft-filter-clear:hover {
   color: #333;
+}
+
+@media (min-width: 769px) {
+  .search-form {
+    margin: 0 auto 3rem;
+  }
+  
+  .search-input-wrapper {
+    max-width: 600px;
+  }
+  
+  .search-input {
+    padding: 14px 18px;
+    font-size: 1.05rem;
+  }
+  
+  .search-button {
+    padding: 14px 24px;
+    font-size: 1.05rem;
+  }
 } 

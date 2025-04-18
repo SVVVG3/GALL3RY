@@ -145,10 +145,12 @@ function App() {
             <Router>
               <div className="app">
                 <header className="app-header">
-                  <Link to="/" className="logo-link">GALL3RY</Link>
-                  <div className="auth-container">
-                    <AuthStatusIndicator />
-                    <SignInButton />
+                  <div className="app-header-container">
+                    <Link to="/" className="logo-link">GALL3RY</Link>
+                    <div className="auth-container">
+                      <AuthStatusIndicator />
+                      <SignInButton />
+                    </div>
                   </div>
                 </header>
                 
