@@ -5,6 +5,32 @@
 
 import axios from 'axios';
 
+// Simple memory cache to avoid redundant API calls
+const CACHE = {
+  requests: {},
+  transfers: {},
+  profiles: {},
+  nfts: {},
+  getKey: (endpoint, params) => `${endpoint}:${JSON.stringify(params)}`,
+  set: (type, key, data, ttl = 300000) => { // Default 5 minute TTL
+    CACHE[type][key] = {
+      data,
+      expiry: Date.now() + ttl
+    };
+  },
+  get: (type, key) => {
+    const cached = CACHE[type][key];
+    if (cached && cached.expiry > Date.now()) {
+      console.log(`Cache hit for ${type}:${key}`);
+      return cached.data;
+    }
+    return null;
+  },
+  clear: (type) => {
+    CACHE[type] = {};
+  }
+};
+
 // -----------------------------------------------------------------------
 // CORS HEADERS
 // -----------------------------------------------------------------------
@@ -19,6 +45,9 @@ const setCorsHeaders = (res) => {
 // MAIN API HANDLER
 // -----------------------------------------------------------------------
 export default async function handler(req, res) {
+  // Record start time for performance monitoring
+  const startTime = Date.now();
+  
   // Enable CORS for all requests
   setCorsHeaders(res);
   
@@ -35,49 +64,39 @@ export default async function handler(req, res) {
     console.log(`[API] Request to: ${path}`);
     
     // Route based on the path
+    let result;
     if (path.startsWith('zapper')) {
-      return await handleZapperRequest(req, res);
+      result = await handleZapperRequest(req, res);
+    } else if (path.startsWith('alchemy')) {
+      result = await handleAlchemyRequest(req, res);
+    } else if (path.startsWith('farcaster-profile')) {
+      result = await handleFarcasterProfileRequest(req, res);
+    } else if (path.startsWith('image-proxy')) {
+      result = await handleImageProxyRequest(req, res);
+    } else if (path === 'folders' || path.startsWith('folders/')) {
+      result = await handleFoldersRequest(req, res, path);
+    } else if (path.startsWith('collection-friends')) {
+      result = await handleCollectionFriendsRequest(req, res);
+    } else if (path.startsWith('login')) {
+      result = await handleLoginRequest(req, res);
+    } else if (path.startsWith('farcaster')) {
+      result = await handleFarcasterRequest(req, res);
+    } else if (path.startsWith('v2/')) {
+      result = await handleV2Request(req, res, path);
+    } else {
+      // Default: Not found
+      return res.status(404).json({ 
+        error: 'API endpoint not found',
+        path,
+        url
+      });
     }
     
-    if (path.startsWith('alchemy')) {
-      return await handleAlchemyRequest(req, res);
-    }
+    // Log performance metrics
+    const duration = Date.now() - startTime;
+    console.log(`[PERF] ${path} request completed in ${duration}ms`);
     
-    if (path.startsWith('farcaster-profile')) {
-      return await handleFarcasterProfileRequest(req, res);
-    }
-    
-    if (path.startsWith('image-proxy')) {
-      return await handleImageProxyRequest(req, res);
-    }
-    
-    if (path === 'folders' || path.startsWith('folders/')) {
-      return await handleFoldersRequest(req, res, path);
-    }
-    
-    if (path.startsWith('collection-friends')) {
-      return await handleCollectionFriendsRequest(req, res);
-    }
-    
-    if (path.startsWith('login')) {
-      return await handleLoginRequest(req, res);
-    }
-    
-    if (path.startsWith('farcaster')) {
-      return await handleFarcasterRequest(req, res);
-    }
-    
-    if (path.startsWith('v2/')) {
-      return await handleV2Request(req, res, path);
-    }
-    
-    // Default: Not found
-    return res.status(404).json({ 
-      error: 'API endpoint not found',
-      path,
-      url
-    });
-    
+    return result;
   } catch (error) {
     console.error(`[API] Error processing request:`, error);
     return res.status(500).json({ 
@@ -120,6 +139,13 @@ async function handleZapperRequest(req, res) {
       });
     }
     
+    // Try to use cached response if available
+    const cacheKey = CACHE.getKey('zapper', req.body);
+    const cachedData = CACHE.get('requests', cacheKey);
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+    
     // Set up headers with API key according to documentation
     const headers = {
       'Content-Type': 'application/json',
@@ -134,6 +160,9 @@ async function handleZapperRequest(req, res) {
       data: req.body,
       timeout: 15000 // Extended timeout to 15 seconds
     });
+    
+    // Cache the response
+    CACHE.set('requests', cacheKey, response.data);
     
     // Return the response from Zapper
     return res.status(response.status).json(response.data);
@@ -226,6 +255,13 @@ async function handleAlchemyRequest(req, res) {
       });
     }
     
+    // Check cache for this request
+    const cacheKey = CACHE.getKey(normalizedEndpoint, req.query);
+    const cachedData = CACHE.get('requests', cacheKey);
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+    
     // Build the request URL using the normalized endpoint
     const endpointUrl = ENDPOINTS[normalizedEndpoint](apiKey, chain);
     
@@ -237,6 +273,13 @@ async function handleAlchemyRequest(req, res) {
       
       if (addresses.length === 0) {
         return res.status(400).json({ error: 'No addresses provided for getAssetTransfers' });
+      }
+      
+      // Try to use cached transfer data first
+      const transferCacheKey = addresses.sort().join(',');
+      const cachedTransfers = CACHE.get('transfers', transferCacheKey);
+      if (cachedTransfers) {
+        return res.status(200).json(cachedTransfers);
       }
       
       // Create the JSON-RPC payload for getAssetTransfers
@@ -259,6 +302,8 @@ async function handleAlchemyRequest(req, res) {
         ]
       };
       
+      console.log(`Fetching asset transfers for ${addresses.length} addresses`);
+      
       // Make the request to Alchemy RPC endpoint
       const response = await axios.post(endpointUrl, rpcPayload, {
         headers: {
@@ -270,6 +315,7 @@ async function handleAlchemyRequest(req, res) {
       // Extract the transfer data
       if (response.data && response.data.result && response.data.result.transfers) {
         const transfers = response.data.result.transfers;
+        console.log(`Received ${transfers.length} transfers from Alchemy`);
         
         // Process transfers to build a map keyed by contract address and token ID
         const transferMap = {};
@@ -299,12 +345,13 @@ async function handleAlchemyRequest(req, res) {
               from: transfer.from,
               to: transfer.to,
               tokenId: tokenId,
-              contractAddress: contractAddress
+              contractAddress: contractAddress,
+              transactionHash: transfer.hash
             });
           }
         });
         
-        return res.status(200).json({
+        const result = {
           transfers: allTransfers,
           transferMap: transferMap,
           count: allTransfers.length,
@@ -316,23 +363,29 @@ async function handleAlchemyRequest(req, res) {
             requestMethod: 'alchemy_getAssetTransfers',
             transferCountFromRPC: transfers.length
           }
-        });
+        };
+        
+        // Cache the result
+        CACHE.set('transfers', transferCacheKey, result, 600000); // 10 minute TTL
+        
+        return res.status(200).json(result);
       }
       
       // Return response data if successful
-      return res.status(200).json({
+      const fallbackResult = {
         transfers: [],
         transferMap: {},
         count: 0,
         dataAvailable: false,
-        rawResponse: response.data,
         diagnostic: {
           addressCount: addresses.length,
           chain: chain,
           error: "No transfers found or unexpected response format",
           requestMethod: 'alchemy_getAssetTransfers'
         }
-      });
+      };
+      
+      return res.status(200).json(fallbackResult);
     }
     
     // Regular REST API handling for other endpoints
@@ -369,19 +422,52 @@ async function handleAlchemyRequest(req, res) {
     }
     
     // Make the API request
+    console.log(`Making Alchemy API request to ${normalizedEndpoint} for chain ${chain}`);
     const response = await axios.get(endpointUrl, { 
       params: requestParams,
       timeout: 15000 // 15 second timeout
     });
     
     // If this is a getNftsForOwner request, ensure ownerAddress is set on each NFT
+    // AND add transferTimestamp from our cached transfer data if available
     if (normalizedEndpoint === 'getnftsforowner' && response.data?.ownedNfts && requestParams.owner) {
-      // Add owner address to each NFT for easier filtering later
-      response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
-        ...nft,
-        ownerAddress: requestParams.owner
-      }));
+      // Try to get cached transfer data to enhance the NFTs with timestamps
+      const ownerAddress = requestParams.owner.toLowerCase();
+      const transferCacheKey = ownerAddress;
+      const cachedTransfers = CACHE.get('transfers', transferCacheKey);
+      
+      // Enhanced NFTs with better field normalization and timestamps if available
+      response.data.ownedNfts = response.data.ownedNfts.map(nft => {
+        // Get the contract address in lowercase
+        const contractAddress = (nft.contract?.address || '').toLowerCase();
+        const tokenId = nft.tokenId || '';
+        const key = `${contractAddress}:${tokenId}`;
+        
+        // Start with basic owner info
+        const enhancedNft = {
+          ...nft,
+          ownerAddress,
+          // Normalize important fields that might be differently named
+          name: nft.name || nft.title || `#${nft.tokenId || '0'}`,
+          collection: {
+            name: nft.contract?.name || 
+                  nft.collection?.name || 
+                  nft.contractMetadata?.name || 
+                  `Contract ${contractAddress.substring(0, 6)}...`
+          }
+        };
+        
+        // Add transfer timestamp if we have it in our cache
+        if (cachedTransfers && cachedTransfers.transferMap && cachedTransfers.transferMap[key]) {
+          enhancedNft.transferTimestamp = cachedTransfers.transferMap[key].timestamp;
+        }
+        
+        return enhancedNft;
+      });
     }
+    
+    // Cache the response data
+    CACHE.set('requests', cacheKey, response.data, 300000); // 5 minute TTL
     
     return res.status(200).json(response.data);
   } catch (error) {
@@ -425,6 +511,13 @@ async function handleFarcasterProfileRequest(req, res) {
     }
 
     console.log(`Farcaster profile request via dedicated endpoint for: ${username || fid}`);
+    
+    // Check cache first
+    const cacheKey = username || `fid-${fid}`;
+    const cachedProfile = CACHE.get('profiles', cacheKey);
+    if (cachedProfile) {
+      return res.status(200).json(cachedProfile);
+    }
     
     // Build the GraphQL query based on what was provided
     const query = `
@@ -477,6 +570,9 @@ async function handleFarcasterProfileRequest(req, res) {
     
     // Return the profile data
     if (response.data?.data?.farcasterProfile) {
+      // Cache the profile
+      CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
+      
       return res.status(200).json(response.data.data.farcasterProfile);
     } else {
       return res.status(404).json({
