@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
@@ -6,6 +7,7 @@ import '../styles/CollectionFriendsModal.css';
 
 /**
  * Modal component that displays which Farcaster friends own NFTs from the same collection
+ * Uses React Portal to render outside the normal DOM hierarchy
  */
 const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionName }) => {
   const { isAuthenticated } = useAuth();
@@ -48,6 +50,29 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isOpen, onClose]);
+  
+  // Prevent body scrolling when modal is open - enhanced version
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    // Save current body style
+    const originalStyle = window.getComputedStyle(document.body);
+    const originalOverflow = originalStyle.overflow;
+    const originalPaddingRight = originalStyle.paddingRight;
+    
+    // Get scrollbar width
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    
+    // Apply styles to prevent scrolling
+    document.body.style.overflow = 'hidden';
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+    
+    return () => {
+      // Restore original styles
+      document.body.style.overflow = originalOverflow;
+      document.body.style.paddingRight = originalPaddingRight;
+    };
+  }, [isOpen]);
   
   // Fetch collection friends from multiple API endpoints with retries
   useEffect(() => {
@@ -104,21 +129,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     fetchCollectionFriends();
   }, [isOpen, contractAddress, profile?.fid]);
   
-  // Prevent body scrolling when modal is open
-  useEffect(() => {
-    const originalStyle = window.getComputedStyle(document.body).overflow;
-    
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    
-    return () => {
-      document.body.style.overflow = originalStyle;
-    };
-  }, [isOpen]);
-  
   // Generate mock friends data for fallback
   const generateMockFriends = useCallback(() => {
     const names = [
@@ -142,7 +152,9 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   
   if (!isOpen) return null;
   
-  return (
+  // Use createPortal to render the modal at the root level of the document
+  // This prevents z-index stacking context issues
+  return createPortal(
     <div 
       className="modal-overlay" 
       onClick={onClose}
@@ -219,7 +231,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body // Mount directly to body element
   );
 };
 
