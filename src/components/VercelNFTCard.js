@@ -666,25 +666,24 @@ const VercelNFTCard = ({ nft }) => {
           className="collection-friends-overlay"
           onClick={handleCloseFriendsModal}
           style={{
-            position: 'absolute',
-            top: '0',
-            left: '0',
+            position: 'fixed',
+            top: 0,
+            left: 0,
             width: '100%',
             height: '100%',
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 1000,
-            backdropFilter: 'blur(4px)',
-            borderRadius: '12px'
+            zIndex: 10000,
+            backdropFilter: 'blur(4px)'
           }}
         >
           <div 
             className="collection-friends-modal"
             onClick={e => e.stopPropagation()}
             style={{
-              backgroundColor: 'white',
+              backgroundColor: '#ffffff',
               maxWidth: '350px',
               width: '90%',
               borderRadius: '12px',
@@ -693,8 +692,9 @@ const VercelNFTCard = ({ nft }) => {
               flexDirection: 'column',
               maxHeight: '80vh',
               position: 'relative',
-              zIndex: 1001,
-              overflow: 'hidden'
+              zIndex: 10001,
+              overflow: 'hidden',
+              color: '#333'
             }}
           >
             <div className="modal-header" style={{
@@ -707,7 +707,8 @@ const VercelNFTCard = ({ nft }) => {
               <h2 className="modal-title" style={{
                 margin: 0,
                 fontSize: '1.1rem',
-                fontWeight: 600
+                fontWeight: 600,
+                color: '#333'
               }}>
                 {collection ? `${collection} Owners` : 'Collection Owners'}
               </h2>
@@ -727,7 +728,13 @@ const VercelNFTCard = ({ nft }) => {
               >×</button>
             </div>
             
-            <div className="collection-friends-content">
+            <div className="collection-friends-content" style={{
+              padding: '16px',
+              overflowY: 'auto',
+              maxHeight: 'calc(80vh - 70px)',
+              flex: 1,
+              backgroundColor: '#ffffff'
+            }}>
               {usingMockData && (
                 <div className="mock-data-notice" style={{
                   backgroundColor: '#f0f8ff',
@@ -767,7 +774,7 @@ const VercelNFTCard = ({ nft }) => {
                     animation: 'spin 1s linear infinite',
                     marginBottom: '16px'
                   }}></div>
-                  <p>Loading friends...</p>
+                  <p style={{color: '#333'}}>Loading friends...</p>
                 </div>
               ) : friendsError && !usingMockData ? (
                 <div className="error-message" style={{
@@ -778,7 +785,7 @@ const VercelNFTCard = ({ nft }) => {
                   margin: '20px 0',
                   textAlign: 'center'
                 }}>
-                  <p>Error loading collection friends</p>
+                  <p style={{color: '#333'}}>Error loading collection friends</p>
                   <button 
                     onClick={() => window.location.reload()}
                     style={{
