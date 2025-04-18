@@ -284,20 +284,23 @@ const FarcasterUserSearch = ({ initialUsername }) => {
     return filterNftsBySearch(sortedNfts());
   }, [filterNftsBySearch, sortedNfts]);
   
-  // Wrap handleSearch in useCallback to use in useEffect
+  /**
+   * Handle search for Farcaster user and their NFTs
+   */
   const handleSearch = useCallback(async (e) => {
-    if (e && e.preventDefault) {
-      e.preventDefault();
+    if (e) e.preventDefault();
+    
+    if (!formSearchQuery || formSearchQuery.trim() === '') {
+      setSearchError('Please enter a username');
+      return;
     }
     
-    if (!formSearchQuery.trim()) return;
-
     setIsSearching(true);
     setSearchError(null);
     setUserProfile(null);
-    setUserNfts([]);
     setWalletAddresses([]);
-
+    setUserNfts([]);
+    
     // Message to users with .eth usernames
     const originalQuery = formSearchQuery.trim();
     const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
@@ -370,82 +373,41 @@ const FarcasterUserSearch = ({ initialUsername }) => {
       
       // Fetch NFTs if we have wallet addresses
       if (addresses.length > 0) {
+        console.log(`Fetching NFTs for addresses:`, addresses);
+        
         try {
-          // Add a console.log right before the API call
-          console.log(`Fetching NFTs for addresses:`, addresses);
+          // Use the NFTContext to fetch NFTs - this eliminates duplicate fetching
+          const result = await fetchAllNFTsForWallets(addresses, {
+            excludeSpam: true,
+            fetchAll: true
+          });
           
-          // Fetch with proper error handling
-          try {
-            const result = await fetchAllNFTsForWallets(addresses, {
-              excludeSpam: true,
-              fetchAll: true
-            });
+          // Process result
+          if (!result) {
+            setUserNfts([]);
+            setSearchError('Could not fetch NFTs: Received empty response from server');
+          } else if (result.error) {
+            setUserNfts(result.nfts || []);
+            setSearchError(`Could not fetch all NFTs: ${result.error}`);
+          } else if (!result.nfts) {
+            setUserNfts([]);
+            setSearchError('Could not fetch NFTs: Invalid response format from server');
+          } else {
+            console.log(`Fetched ${result.nfts.length} NFTs for user ${cleanQuery}`);
+            setUserNfts(result.nfts);
             
-            // Enhanced debugging logs
-            console.log('NFT fetch result:', {
-              resultExists: !!result,
-              hasNftsProperty: result ? 'nfts' in result : false,
-              nftsIsArray: result && result.nfts ? Array.isArray(result.nfts) : false,
-              nftsCount: result && result.nfts && Array.isArray(result.nfts) ? result.nfts.length : 0,
-              hasError: result && result.error ? true : false,
-              errorMessage: result && result.error ? result.error : null
-            });
-
-            // Direct debugging - show first NFT if available
-            if (result && result.nfts && Array.isArray(result.nfts) && result.nfts.length > 0) {
-              console.log('First NFT in results:', {
-                id: result.nfts[0].id,
-                name: result.nfts[0].name || 'Unnamed',
-                network: result.nfts[0].network || 'No network',
-                owner: result.nfts[0].ownerAddress || 'No owner'
-              });
-            }
-            
-            // Ensure result contains nfts array
-            if (!result) {
-              console.warn('fetchAllNFTsForWallets returned undefined result');
-              setUserNfts([]);
-              setSearchError('Could not fetch NFTs: Received empty response from server');
-            } else if (result.error) {
-              // Display error from the result if present
-              console.warn('fetchAllNFTsForWallets returned error:', result.error);
-              setUserNfts(result.nfts || []);
-              setSearchError(`Could not fetch all NFTs: ${result.error}`);
-            } else if (!result.nfts) {
-              console.warn('fetchAllNFTsForWallets result is missing nfts property:', result);
-              setUserNfts([]);
-              setSearchError('Could not fetch NFTs: Invalid response format from server');
-            } else if (!Array.isArray(result.nfts)) {
-              console.warn('fetchAllNFTsForWallets returned invalid format - nfts is not an array:', result);
-              setUserNfts([]);
-              setSearchError('Could not fetch NFTs: Received invalid NFT data format');
+            if (result.nfts.length > 0) {
+              setSearchError(null);
             } else {
-              console.log(`Fetched ${result.nfts.length} NFTs for user ${cleanQuery}`);
-              
-              // CRITICAL: Actually use the NFTs we received
-              setUserNfts(result.nfts); 
-              
-              // Clear error if we got NFTs successfully
-              if (result.nfts.length > 0) {
-                setSearchError(null);
-                console.log(`Successfully set ${result.nfts.length} NFTs to state`);
-              } else {
-                // Set a gentle message if there are no NFTs but no error
-                setSearchError(`No NFTs found for user ${cleanQuery}. They might not own any NFTs on the supported chains.`);
-              }
+              setSearchError(`No NFTs found for user ${cleanQuery}. They might not own any NFTs on the supported chains.`);
             }
-          } catch (nftAPIError) {
-            console.error('API Error fetching NFTs:', nftAPIError);
-            setSearchError(`Found profile but could not fetch NFTs: ${nftAPIError.message}`);
-            setUserNfts([]); // Ensure userNfts is always an array
           }
         } catch (nftError) {
           console.error('Error in NFT fetch process:', nftError);
           setSearchError(`Found profile but could not load NFTs: ${nftError.message}`);
-          setUserNfts([]); // Ensure userNfts is always an array
+          setUserNfts([]);
         }
       } else {
-        // No wallet addresses found
         console.log('No wallet addresses found for this user');
         setUserNfts([]);
       }

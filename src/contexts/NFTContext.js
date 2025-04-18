@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { fetchNftsForAddresses, fetchAssetTransfers } from '../services/alchemyService';
 
 // Create context
@@ -21,6 +21,9 @@ export const NFTProvider = ({ children }) => {
   const [error, setError] = useState(null);
   const [selectedWallets, setSelectedWallets] = useState([]);
   
+  // Request cache to avoid duplicate API calls
+  const [requestCache, setRequestCache] = useState({});
+  
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -34,6 +37,14 @@ export const NFTProvider = ({ children }) => {
     setError(null);
   }, []);
   
+  // Generate cache key for requests
+  const generateCacheKey = useCallback((addresses, options) => {
+    // Sort addresses for consistent key regardless of order
+    const sortedAddresses = [...addresses].sort().join(',');
+    const optionsStr = JSON.stringify(options || {});
+    return `${sortedAddresses}:${optionsStr}`;
+  }, []);
+  
   // Fetch NFTs for multiple addresses with multi-chain support
   const fetchAllNFTsForWallets = useCallback(async (addresses, options = {}) => {
     if (!addresses || addresses.length === 0) {
@@ -45,6 +56,16 @@ export const NFTProvider = ({ children }) => {
       setIsLoading(true);
       setError(null);
       setSelectedWallets(addresses);
+      
+      // Check cache first
+      const cacheKey = generateCacheKey(addresses, options);
+      const cachedResult = requestCache[cacheKey];
+      
+      if (cachedResult && !options.bypassCache) {
+        console.log(`Using cached NFT data for ${addresses.length} wallets`);
+        setNfts(cachedResult.nfts);
+        return cachedResult;
+      }
       
       console.log(`Fetching NFTs for ${addresses.length} wallets across multiple chains`);
       
@@ -71,14 +92,7 @@ export const NFTProvider = ({ children }) => {
           category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
         });
         
-        // Log detailed transfer data for debugging
-        console.log(`Transfer data received from API:`, {
-          dataAvailable: !!transferData,
-          transferCount: transferData?.transfers?.length || 0,
-          mapEntries: transferData?.transferMap ? Object.keys(transferData.transferMap).length : 0,
-          diagnosticInfo: transferData?.diagnostic,
-          firstFewKeys: transferData?.transferMap ? Object.keys(transferData.transferMap).slice(0, 5) : []
-        });
+        console.log(`Transfer data received: ${transferData?.transfers?.length || 0} transfers`);
       } catch (transferError) {
         console.error('Error fetching transfer data:', transferError);
         // Don't fail the entire request if transfers fail - just continue with the NFTs we have
@@ -89,7 +103,7 @@ export const NFTProvider = ({ children }) => {
       let transfersApplied = 0;
       
       if (transferData.transferMap && Object.keys(transferData.transferMap).length > 0) {
-        console.log(`Enhancing NFTs with transfer timestamps from ${Object.keys(transferData.transferMap).length} records`);
+        console.log(`Enhancing NFTs with transfer timestamps`);
         
         enhancedNfts = enhancedNfts.map(nft => {
           // Create the key for the transfer map
@@ -108,11 +122,6 @@ export const NFTProvider = ({ children }) => {
             // Use ISO string for consistent date handling
             const timestamp = new Date(transferTimestamp).toISOString();
             
-            // Log details about this NFT and the timestamp being applied
-            if (transfersApplied <= 3) {
-              console.log(`Transfer timestamp applied: NFT ${nft.name || 'Unnamed'}, contract: ${contractAddress}, tokenId: ${tokenId}, timestamp: ${timestamp}`);
-            }
-            
             return {
               ...nft,
               transferTimestamp: timestamp
@@ -122,35 +131,47 @@ export const NFTProvider = ({ children }) => {
           return nft;
         });
         
-        console.log(`Successfully applied ${transfersApplied} transfer timestamps out of ${enhancedNfts.length} NFTs`);
-        
-        // Log a few sample NFTs for debugging
-        if (enhancedNfts.length > 0) {
-          const samples = enhancedNfts.slice(0, 2);
-          console.log("Sample NFTs with transfer data:", samples.map(nft => ({
-            name: nft.name || nft.title,
-            contractAddress: nft.contract?.address,
-            tokenId: nft.tokenId,
-            hasTransferTimestamp: !!nft.transferTimestamp,
-            transferTimestamp: nft.transferTimestamp
-          })));
-        }
-      } else {
-        console.log('No transfer data available for enhancing NFTs');
+        console.log(`Applied ${transfersApplied} transfer timestamps`);
       }
+      
+      // Remove duplicate NFTs (same contract/tokenId across different wallets)
+      const nftMap = new Map();
+      enhancedNfts.forEach(nft => {
+        const contractAddress = nft.contract?.address || nft.contractAddress;
+        const tokenId = nft.tokenId || nft.token_id;
+        
+        if (contractAddress && tokenId) {
+          const key = `${contractAddress.toLowerCase()}-${tokenId}`;
+          // Only keep the first instance of each NFT
+          if (!nftMap.has(key)) {
+            nftMap.set(key, nft);
+          }
+        }
+      });
+      
+      const uniqueNfts = Array.from(nftMap.values());
+      console.log(`After deduplication: ${uniqueNfts.length} unique NFTs (removed ${enhancedNfts.length - uniqueNfts.length} duplicates)`);
       
       if (result.error) {
         setError(result.error);
       }
       
       // Set enhanced NFTs to state
-      setNfts(enhancedNfts);
+      setNfts(uniqueNfts);
       
-      return {
-        nfts: enhancedNfts,
-        totalCount: result.totalCount || enhancedNfts.length,
+      // Cache the result
+      const finalResult = {
+        nfts: uniqueNfts,
+        totalCount: uniqueNfts.length,
         error: result.error
       };
+      
+      setRequestCache(prev => ({
+        ...prev,
+        [cacheKey]: finalResult
+      }));
+      
+      return finalResult;
     } catch (err) {
       console.error('Error in fetchAllNFTsForWallets:', err);
       setError(err.message || 'Failed to fetch NFTs');
@@ -158,7 +179,7 @@ export const NFTProvider = ({ children }) => {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [generateCacheKey, requestCache]);
   
   // Filter NFTs by search query
   const getFilteredNFTs = useCallback(() => {
