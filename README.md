@@ -114,12 +114,53 @@ The folder service provides functionality to create and manage NFT collections:
 
 ## Deployment
 
-### Vercel
+### Vercel (Recommended Production Deployment)
+
+This project is optimized for deployment on Vercel's serverless platform:
 
 1. Push your code to GitHub
 2. Connect your GitHub repository to Vercel
-3. Configure environment variables in Vercel dashboard
-4. Deploy
+3. Configure environment variables in the Vercel dashboard:
+   - `ALCHEMY_API_KEY`: Your Alchemy API key
+   - `NEYNAR_API_KEY`: Your Neynar API key
+   - `ZAPPER_API_KEY`: Your Zapper API key (if applicable)
+4. Deploy from the Vercel dashboard
+
+The project structure is specifically designed for Vercel, with API routes in the `/api` directory that automatically become serverless functions.
+
+### Local Development
+
+To run the project locally:
+
+1. Install dependencies:
+```bash
+npm install
+```
+
+2. Create a `.env` file with your API keys:
+```
+ALCHEMY_API_KEY=your_alchemy_api_key
+NEYNAR_API_KEY=your_neynar_api_key
+ZAPPER_API_KEY=your_zapper_api_key
+```
+
+3. Start the development server:
+```bash
+npm run dev
+```
+
+This uses a custom start script that:
+- Patches the server.js file for local compatibility
+- Starts the Express server
+- Sets up a dynamic port if 3001 is already in use
+- Generates a runtime config for the frontend
+
+#### Module Compatibility
+
+The project uses a hybrid module system:
+- The `/api` directory is designed for Vercel's serverless functions
+- A local bridge file (`vercel-local-bridge.js`) connects these API modules to the Express server
+- The patch script handles any compatibility issues automatically
 
 ## License
 
