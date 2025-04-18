@@ -302,6 +302,9 @@ const VercelNFTCard = ({ nft }) => {
     e.stopPropagation(); // Prevent event bubbling
     setShowFriendsModal(true);
     
+    // Disable body scroll when modal is open
+    document.body.style.overflow = 'hidden';
+    
     // Fetch friends data when modal is opened
     if (contractAddress && profile?.fid) {
       fetchCollectionFriends();
@@ -310,6 +313,9 @@ const VercelNFTCard = ({ nft }) => {
   
   const handleCloseFriendsModal = () => {
     setShowFriendsModal(false);
+    
+    // Re-enable body scroll when modal is closed
+    document.body.style.overflow = '';
   };
   
   // Close modal when user hits escape key
@@ -393,14 +399,11 @@ const VercelNFTCard = ({ nft }) => {
     }
   };
   
-  // Prevent click events from bubbling up and closing the modal unexpectedly
+  // Handle modal click - stop propagation
   const handleModalClick = (e) => {
     e.stopPropagation();
     e.preventDefault(); // Prevent any default behavior
   };
-  
-  // Check if user is authenticated with Farcaster
-  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
   
   // Add missing handleCardClick function
   const handleCardClick = (e) => {
@@ -411,8 +414,18 @@ const VercelNFTCard = ({ nft }) => {
     // Card click handling - can be expanded later if needed
   };
   
+  // Check if user is authenticated with Farcaster
+  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
+  
   return (
-    <div className="nft-card vercel-nft-card" onClick={handleCardClick}>
+    <div 
+      className="nft-card vercel-nft-card" 
+      onClick={handleCardClick} 
+      style={{ 
+        position: 'relative',
+        isolation: 'isolate' // Create a stacking context
+      }}
+    >
       {/* NFT Media Container - OUTSIDE the Link to prevent click capturing */}
       <div className="nft-media-container" style={{ 
         position: 'relative', 
@@ -669,6 +682,8 @@ const VercelNFTCard = ({ nft }) => {
             position: 'fixed',
             top: 0,
             left: 0,
+            right: 0,
+            bottom: 0,
             width: '100%',
             height: '100%',
             backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -678,10 +693,11 @@ const VercelNFTCard = ({ nft }) => {
             zIndex: 10000,
             backdropFilter: 'blur(4px)'
           }}
+          onMouseLeave={(e) => e.stopPropagation()}
         >
           <div 
             className="collection-friends-modal"
-            onClick={e => e.stopPropagation()}
+            onClick={handleModalClick}
             style={{
               backgroundColor: '#ffffff',
               maxWidth: '350px',
