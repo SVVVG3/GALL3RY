@@ -312,33 +312,18 @@ const VercelNFTCard = ({ nft }) => {
     setShowFriendsModal(false);
   };
   
-  // Prevent body scrolling when modal is open
-  useEffect(() => {
-    if (showFriendsModal) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [showFriendsModal]);
-  
   // Close modal when user hits escape key
   useEffect(() => {
     const handleEscKey = (event) => {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && showFriendsModal) {
         handleCloseFriendsModal();
       }
     };
 
-    if (showFriendsModal) {
-      window.addEventListener('keydown', handleEscKey);
-      return () => {
-        window.removeEventListener('keydown', handleEscKey);
-      };
-    }
+    window.addEventListener('keydown', handleEscKey);
+    return () => {
+      window.removeEventListener('keydown', handleEscKey);
+    };
   }, [showFriendsModal]);
   
   // Generate mock friends data for fallback
@@ -418,16 +403,7 @@ const VercelNFTCard = ({ nft }) => {
   const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
   
   return (
-    <div className="nft-card" style={{ 
-      minHeight: '250px', 
-      display: 'flex', 
-      flexDirection: 'column',
-      border: '1px solid #eee',
-      borderRadius: '8px',
-      overflow: 'hidden',
-      backgroundColor: '#fff',
-      position: 'relative' // Add explicit position for proper z-indexing
-    }}>
+    <div className="nft-card vercel-nft-card" onClick={handleCardClick}>
       {/* NFT Media Container - OUTSIDE the Link to prevent click capturing */}
       <div className="nft-media-container" style={{ 
         position: 'relative', 
@@ -678,59 +654,50 @@ const VercelNFTCard = ({ nft }) => {
       {/* Collection Friends Modal - integrated directly into the card */}
       {showFriendsModal && (
         <div 
-          className="modal-overlay" 
+          className="collection-friends-overlay"
           onClick={handleCloseFriendsModal}
           style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            zIndex: 99999, /* Very high z-index */
-            backdropFilter: 'blur(3px)'
+            zIndex: 1000,
+            backdropFilter: 'blur(4px)',
+            borderRadius: '12px'
           }}
         >
           <div 
             className="collection-friends-modal"
-            onClick={handleModalClick}
-            onMouseOver={handleModalClick}
-            onMouseLeave={handleModalClick}
+            onClick={e => e.stopPropagation()}
             style={{
-              maxWidth: '480px',
-              width: '100%',
-              height: '90vh',
-              maxHeight: '700px',
+              backgroundColor: 'white',
+              maxWidth: '350px',
+              width: '90%',
               borderRadius: '12px',
-              overflow: 'hidden',
+              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
               display: 'flex',
               flexDirection: 'column',
-              position: 'fixed',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              zIndex: 100000, /* Even higher z-index */
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.25)',
-              backgroundColor: '#ffffff' /* Ensure solid background */
+              maxHeight: '80vh',
+              position: 'relative',
+              zIndex: 1001,
+              overflow: 'hidden'
             }}
           >
             <div className="modal-header" style={{
-              display: 'flex',
-              justifyContent: 'space-between',
+              display: 'flex', 
+              justifyContent: 'space-between', 
               alignItems: 'center',
               padding: '16px 20px',
-              borderBottom: '1px solid #eee',
-              position: 'sticky',
-              top: 0,
-              zIndex: 10,
-              backgroundColor: '#ffffff'
+              borderBottom: '1px solid #eee'
             }}>
               <h2 className="modal-title" style={{
                 margin: 0,
-                fontSize: '1.25rem',
+                fontSize: '1.1rem',
                 fontWeight: 600
               }}>
                 {collection ? `${collection} Owners` : 'Collection Owners'}
@@ -746,21 +713,12 @@ const VercelNFTCard = ({ nft }) => {
                   lineHeight: 1,
                   padding: '5px',
                   margin: '-5px',
-                  color: '#666',
-                  transition: 'color 0.2s'
+                  color: '#666'
                 }}
               >×</button>
             </div>
             
-            <div className="collection-friends-content" style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '10px 20px 20px',
-              maxHeight: 'calc(90vh - 70px)',
-              scrollbarWidth: 'thin',
-              scrollbarColor: 'rgba(0, 0, 0, 0.2) transparent',
-              backgroundColor: '#ffffff'
-            }}>
+            <div className="collection-friends-content">
               {usingMockData && (
                 <div className="mock-data-notice" style={{
                   backgroundColor: '#f0f8ff',
@@ -770,13 +728,13 @@ const VercelNFTCard = ({ nft }) => {
                   marginBottom: '20px'
                 }}>
                   <p style={{color: '#3473e0', fontSize: '14px', margin: 0}}>
-                    Using sample data for demonstration. Connect with Farcaster to see your real friends.
+                    Using sample data for demonstration.
                   </p>
                 </div>
               )}
               
               <div className="collection-info" style={{marginBottom: '20px'}}>
-                <p style={{textAlign: 'center', fontSize: '16px', color: '#333'}}>
+                <p style={{textAlign: 'center', fontSize: '14px', color: '#333'}}>
                   {totalFriends > 0 
                     ? `${totalFriends} friends own NFTs from this collection` 
                     : 'No friends found with NFTs from this collection'}
@@ -785,18 +743,18 @@ const VercelNFTCard = ({ nft }) => {
               
               {isLoadingFriends ? (
                 <div className="loading-container" style={{
-                  display: 'flex',
+                  display: 'flex', 
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  minHeight: '200px'
+                  minHeight: '100px'
                 }}>
                   <div className="loading-spinner" style={{
                     border: '4px solid rgba(0, 0, 0, 0.1)',
                     borderRadius: '50%',
                     borderTop: '4px solid #3772ff',
-                    width: '40px',
-                    height: '40px',
+                    width: '30px',
+                    height: '30px',
                     animation: 'spin 1s linear infinite',
                     marginBottom: '16px'
                   }}></div>
@@ -811,7 +769,7 @@ const VercelNFTCard = ({ nft }) => {
                   margin: '20px 0',
                   textAlign: 'center'
                 }}>
-                  <p>Error loading collection friends: {friendsError.message}</p>
+                  <p>Error loading collection friends</p>
                   <button 
                     onClick={() => window.location.reload()}
                     style={{
@@ -833,7 +791,7 @@ const VercelNFTCard = ({ nft }) => {
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
-                  minHeight: '200px',
+                  minHeight: '100px',
                   color: '#666',
                   textAlign: 'center',
                   padding: '20px'
@@ -844,15 +802,15 @@ const VercelNFTCard = ({ nft }) => {
                 <div className="friends-list" style={{
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '12px'
+                  gap: '8px'
                 }}>
                   {friends.map(friend => (
                     <a 
                       key={friend.id || friend.fid} 
                       href={`https://warpcast.com/${friend.username}`}
-                      target="_blank"
+                      target="_blank" 
                       rel="noopener noreferrer"
-                      className="friend-card"
+                      className="friend-item"
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -861,12 +819,13 @@ const VercelNFTCard = ({ nft }) => {
                         backgroundColor: '#f9f9f9',
                         transition: 'background-color 0.2s',
                         textDecoration: 'none',
-                        color: '#333'
+                        color: '#333',
+                        marginBottom: '8px'
                       }}
                     >
                       <div className="friend-avatar" style={{
-                        width: '48px',
-                        height: '48px',
+                        width: '32px',
+                        height: '32px',
                         borderRadius: '50%',
                         overflow: 'hidden',
                         marginRight: '12px',
@@ -888,7 +847,7 @@ const VercelNFTCard = ({ nft }) => {
                         ) : (
                           <div className="avatar-placeholder" style={{
                             color: '#666',
-                            fontSize: '20px',
+                            fontSize: '14px',
                             fontWeight: 'bold'
                           }}>
                             {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
@@ -897,14 +856,14 @@ const VercelNFTCard = ({ nft }) => {
                       </div>
                       <div className="friend-info" style={{flex: 1}}>
                         <div className="friend-name" style={{
-                          fontSize: '16px',
+                          fontSize: '14px',
                           fontWeight: 500,
-                          marginBottom: '4px'
+                          marginBottom: '2px'
                         }}>
                           {friend.displayName || friend.username}
                         </div>
                         <div className="friend-username" style={{
-                          fontSize: '14px',
+                          fontSize: '12px',
                           color: '#666'
                         }}>
                           @{friend.username}
