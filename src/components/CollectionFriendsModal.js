@@ -127,13 +127,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     <div 
       className="modal-overlay" 
       onClick={onClose}
-      onMouseMove={(e) => e.stopPropagation()}
+      style={{pointerEvents: 'auto'}}
     >
       <div 
         className="collection-friends-modal"
         onClick={handleModalClick}
-        onMouseOver={handleModalClick}
-        onMouseLeave={handleModalClick}
+        style={{pointerEvents: 'auto'}}
       >
         <div className="modal-header">
           <h2 className="modal-title">
