@@ -727,10 +727,237 @@ async function handleFoldersRequest(req, res, path) {
 // HANDLER: COLLECTION FRIENDS
 // -----------------------------------------------------------------------
 async function handleCollectionFriendsRequest(req, res) {
-  // Placeholder for collection-friends functionality
-  return res.status(200).json({ 
-    status: 'Collection Friends API stub'
-  });
+  // Get parameters from request
+  const { 
+    contractAddress, 
+    fid, 
+    network = 'eth',
+    limit = 50
+  } = req.query;
+
+  if (!contractAddress) {
+    return res.status(400).json({ error: 'Missing parameter', message: 'contractAddress is required' });
+  }
+
+  if (!fid) {
+    return res.status(400).json({ error: 'Missing parameter', message: 'fid (Farcaster ID) is required' });
+  }
+
+  // Check cache first
+  const cacheKey = `${contractAddress}:${fid}`;
+  const cachedData = CACHE.get('friends', cacheKey);
+  if (cachedData) {
+    return res.status(200).json(cachedData);
+  }
+
+  try {
+    console.log(`Getting collection friends for contract: ${contractAddress}, user FID: ${fid}`);
+
+    // Get Neynar API key
+    const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+
+    // STEP 1: Get the list of users the Farcaster user follows (using Neynar API)
+    let followingList = [];
+    let followingCursor = null;
+    let hasMoreFollowing = true;
+
+    while (hasMoreFollowing) {
+      try {
+        // Build Neynar API URL for following list
+        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+        
+        const followingResponse = await axios.get(neynarUrl, {
+          headers: {
+            'Accept': 'application/json',
+            'api_key': NEYNAR_API_KEY
+          }
+        });
+        
+        if (followingResponse.data && followingResponse.data.result && followingResponse.data.result.users) {
+          followingList = [...followingList, ...followingResponse.data.result.users];
+          
+          // Check if there's more data to fetch
+          if (followingResponse.data.result.next && followingResponse.data.result.next.cursor) {
+            followingCursor = followingResponse.data.result.next.cursor;
+          } else {
+            hasMoreFollowing = false;
+          }
+        } else {
+          hasMoreFollowing = false;
+        }
+      } catch (error) {
+        console.error('Error fetching following list from Neynar:', error.message);
+        return res.status(500).json({ 
+          error: 'Neynar API error', 
+          message: error.message || 'Failed to fetch following list'
+        });
+      }
+    }
+
+    console.log(`Found ${followingList.length} following users for FID ${fid}`);
+    
+    // Extract all unique addresses from the following list
+    let uniqueFollowingAddresses = [];
+    
+    followingList.forEach(user => {
+      // Add custody addresses
+      if (user.custody_address) {
+        uniqueFollowingAddresses.push(user.custody_address.toLowerCase());
+      }
+      
+      // Add verified ETH addresses if available
+      if (user.verified_addresses && user.verified_addresses.eth_addresses) {
+        user.verified_addresses.eth_addresses.forEach(address => {
+          uniqueFollowingAddresses.push(address.toLowerCase());
+        });
+      }
+    });
+    
+    // Remove duplicates
+    uniqueFollowingAddresses = [...new Set(uniqueFollowingAddresses)];
+    
+    console.log(`Found ${uniqueFollowingAddresses.length} unique wallet addresses from following list`);
+
+    // STEP 2: Get all wallet addresses that hold NFTs from the specified contract (using Alchemy API)
+    // Get Alchemy API key
+    const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
+    
+    if (!ALCHEMY_API_KEY) {
+      return res.status(500).json({ 
+        error: 'Server configuration error', 
+        message: 'Missing Alchemy API key' 
+      });
+    }
+    
+    // Map chain IDs to their correct Alchemy URL formats
+    const chainUrlMap = {
+      'eth': 'eth-mainnet',
+      'ethereum': 'eth-mainnet',
+      'polygon': 'polygon-mainnet',
+      'arbitrum': 'arb-mainnet',
+      'optimism': 'opt-mainnet',
+      'base': 'base-mainnet',
+      'zora': 'zora-mainnet'
+    };
+    
+    // Get the correct chain URL or default to eth-mainnet
+    const chainUrl = chainUrlMap[network.toLowerCase()] || 'eth-mainnet';
+    const alchemyUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}/getOwnersForContract`;
+    
+    let allOwners = [];
+    let ownersCursor = null;
+    let hasMoreOwners = true;
+
+    while (hasMoreOwners) {
+      try {
+        // Make the request to Alchemy
+        const ownersResponse = await axios.get(alchemyUrl, {
+          params: {
+            contractAddress,
+            withTokenBalances: true,
+            pageKey: ownersCursor
+          }
+        });
+
+        if (ownersResponse.data && ownersResponse.data.owners) {
+          allOwners = [...allOwners, ...ownersResponse.data.owners];
+          
+          // Check if there's more data to fetch
+          if (ownersResponse.data.pageKey) {
+            ownersCursor = ownersResponse.data.pageKey;
+          } else {
+            hasMoreOwners = false;
+          }
+        } else {
+          hasMoreOwners = false;
+        }
+      } catch (error) {
+        console.error('Error fetching owners for contract from Alchemy:', error.message);
+        return res.status(500).json({ 
+          error: 'Alchemy API error', 
+          message: error.message || 'Failed to fetch contract owners'
+        });
+      }
+    }
+
+    console.log(`Found ${allOwners.length} owners of NFTs from contract ${contractAddress}`);
+
+    // Find the intersection between following addresses and contract owners
+    const friendOwners = uniqueFollowingAddresses.filter(address => 
+      allOwners.some(owner => owner.toLowerCase() === address.toLowerCase())
+    );
+
+    console.log(`Found ${friendOwners.length} friends who own NFTs from this collection`);
+
+    // If no friends own NFTs from this collection, return an empty result
+    if (friendOwners.length === 0) {
+      const emptyResult = {
+        contractAddress,
+        friends: [],
+        totalFriends: 0
+      };
+      
+      // Cache the empty result
+      CACHE.set('friends', cacheKey, emptyResult);
+      
+      return res.status(200).json(emptyResult);
+    }
+
+    // STEP 3: For each owner address that's a friend, find the corresponding Farcaster profile
+    const friendsWithProfiles = [];
+
+    // Match addresses to followingList entries
+    for (const address of friendOwners) {
+      // Find the corresponding user in the following list
+      const matchingFollower = followingList.find(user => {
+        // Check custody address
+        if (user.custody_address && user.custody_address.toLowerCase() === address.toLowerCase()) {
+          return true;
+        }
+        
+        // Check verified addresses
+        if (user.verified_addresses && user.verified_addresses.eth_addresses) {
+          return user.verified_addresses.eth_addresses.some(
+            addr => addr.toLowerCase() === address.toLowerCase()
+          );
+        }
+        
+        return false;
+      });
+      
+      if (matchingFollower) {
+        friendsWithProfiles.push({
+          fid: matchingFollower.fid,
+          username: matchingFollower.username,
+          displayName: matchingFollower.display_name || matchingFollower.username,
+          pfpUrl: matchingFollower.pfp_url,
+          address
+        });
+      }
+    }
+
+    // Return the results, applying the requested limit
+    const paginatedResults = friendsWithProfiles.slice(0, parseInt(limit, 10));
+    
+    const result = {
+      contractAddress,
+      friends: paginatedResults,
+      totalFriends: friendsWithProfiles.length,
+      hasMore: friendsWithProfiles.length > parseInt(limit, 10)
+    };
+    
+    // Cache the result
+    CACHE.set('friends', cacheKey, result, 600000); // 10 minute TTL
+    
+    return res.status(200).json(result);
+
+  } catch (error) {
+    console.error('Error in collection-friends API:', error);
+    return res.status(500).json({ 
+      error: 'Internal server error', 
+      message: error.message || 'An unknown error occurred'
+    });
+  }
 }
 
 // -----------------------------------------------------------------------
