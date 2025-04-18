@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 // Import the hook directly to avoid initialization issues
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -9,6 +9,30 @@ import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/au
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
                  window.document !== undefined;
+
+// Add a small CSS block for mobile-specific styles
+const mobileStyles = `
+  @media (max-width: 768px) {
+    .user-profile-dropdown {
+      display: flex !important;
+    }
+    .user-profile-button {
+      display: flex !important;
+      align-items: center !important;
+    }
+    .profile-username {
+      display: block !important;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dropdown-arrow {
+      display: inline-block !important;
+      margin-left: 4px !important;
+    }
+  }
+`;
 
 /**
  * Enhanced SignInButton Component
@@ -129,46 +153,50 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     });
     
     return (
-      <div className="user-profile-dropdown">
-        <div 
-          className="user-profile-button"
-          onClick={() => setDropdownOpen(!dropdownOpen)}
-        >
-          <span className="profile-username">@{profile.username}</span>
-          <svg 
-            className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} 
-            xmlns="http://www.w3.org/2000/svg" 
-            width="16" 
-            height="16" 
-            viewBox="0 0 24 24" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="2" 
-            strokeLinecap="round" 
-            strokeLinejoin="round"
+      <>
+        {/* Add style tag with mobile-specific styles */}
+        <style>{mobileStyles}</style>
+        <div className="user-profile-dropdown">
+          <div 
+            className="user-profile-button"
+            onClick={() => setDropdownOpen(!dropdownOpen)}
           >
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </div>
-        
-        {dropdownOpen && (
-          <div className="dropdown-menu">
-            <Link 
-              to={`/user/${profile.username}`} 
-              className="dropdown-item"
-              onClick={() => setDropdownOpen(false)}
+            <span className="profile-username">@{profile.username}</span>
+            <svg 
+              className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} 
+              xmlns="http://www.w3.org/2000/svg" 
+              width="16" 
+              height="16" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="currentColor" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round"
             >
-              My Profile
-            </Link>
-            <button 
-              onClick={handleSignOut}
-              className="dropdown-item sign-out"
-            >
-              Sign Out
-            </button>
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
           </div>
-        )}
-      </div>
+          
+          {dropdownOpen && (
+            <div className="dropdown-menu">
+              <Link 
+                to={`/user/${profile.username}`} 
+                className="dropdown-item"
+                onClick={() => setDropdownOpen(false)}
+              >
+                My Profile
+              </Link>
+              <button 
+                onClick={handleSignOut}
+                className="dropdown-item sign-out"
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
+      </>
     );
   }
   

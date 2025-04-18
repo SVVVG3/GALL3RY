@@ -183,7 +183,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 5px;
   margin-bottom: 0.25rem;
 }
 
@@ -740,26 +740,25 @@
 
 .sort-option {
   background: none;
-  border: 2px solid var(--color-gray-200);
+  border: 1px solid var(--input-border);
   border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 14px;
-  color: var(--color-gray-600);
+  padding: 5px 10px;
+  font-size: 13px;
+  color: var(--secondary-text);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-style: normal !important;
+  transition: all 0.2s;
 }
 
 .sort-option:hover {
-  border-color: var(--color-primary-light);
-  color: var(--color-primary);
+  background-color: #7c3aed;
+  color: white;
+  border-color: #7c3aed;
 }
 
 .sort-option.active {
-  border-color: var(--color-primary);
-  background-color: var(--color-primary);
+  background-color: #8b5cf6;
   color: white;
+  border-color: #8b5cf6;
 }
 
 /* Media query for mobile adjustments */
@@ -1562,14 +1561,15 @@
 }
 
 .sort-option:hover {
-  background-color: #f3f4f6;
-  color: var(--accent-color);
+  background-color: #7c3aed;
+  color: white;
+  border-color: #7c3aed;
 }
 
 .sort-option.active {
-  background-color: var(--accent-color);
+  background-color: #8b5cf6;
   color: white;
-  border-color: var(--accent-color);
+  border-color: #8b5cf6;
 }
 
 .sort-order-toggle {
@@ -1586,7 +1586,9 @@
 }
 
 .sort-order-toggle:hover {
-  background-color: #f3f4f6;
+  background-color: #8b5cf6;
+  color: white;
+  border-color: #8b5cf6;
 }
 
 /* Responsive styles for sorting */

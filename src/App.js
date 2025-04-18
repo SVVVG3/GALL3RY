@@ -153,8 +153,7 @@ function App() {
                 </main>
                 
                 <footer className="app-footer">
-                  <span>vibe coded with 💜 by</span>
-                  <a 
+                  <span>vibe coded with 💜 by</span><a 
                     href="https://warpcast.com/svvvg3.eth" 
                     target="_blank"
                     rel="noopener noreferrer"

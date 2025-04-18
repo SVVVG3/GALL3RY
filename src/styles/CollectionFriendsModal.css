@@ -258,35 +258,11 @@
 /* Responsive adjustments */
 @media (max-width: 600px) {
   .collection-friends-modal {
-    max-width: 95vw;
-    height: 80vh;
+    width: 95% !important;
+    max-width: none !important;
+    max-height: 85vh !important;
   }
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .collection-friends-modal {
-    background-color: #1a1a1a !important;
-  }
-
-  .collection-friends-modal .modal-header {
-    background-color: #1a1a1a !important;
-    border-bottom-color: #333 !important;
-  }
-
-  .collection-friends-modal .modal-title {
-    color: #f3f4f6 !important;
-  }
-
-  .collection-friends-modal .modal-close {
-    color: #9ca3af !important;
-  }
-
-  .collection-friends-modal .modal-close:hover {
-    color: #f3f4f6 !important;
-  }
-
-  .collection-friends-content {
-    background-color: #1a1a1a !important;
-  }
-} 
+/* Remove dark mode styles */
+/* We're removing the dark mode section that starts with @media (prefers-color-scheme: dark) */ 
