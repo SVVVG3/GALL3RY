@@ -28,7 +28,8 @@ const getAlchemyBaseUrl = (network = 'eth') => {
 };
 
 // Constants
-const NEYNAR_API_URL = 'https://api.neynar.com/v2/farcaster';
+// Updated Neynar API URL to match all-in-one.js implementation
+// const NEYNAR_API_URL = 'https://api.neynar.com/v2/farcaster';
 const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
 const MAX_RETRIES = 2;
 
@@ -90,23 +91,22 @@ export default async function handler(req, res) {
 
     while (hasMoreFollowing) {
       try {
-        const followingResponse = await axios.get(`${NEYNAR_API_URL}/following`, {
+        // Build Neynar API URL for following list - UPDATED to match all-in-one.js
+        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+        
+        const followingResponse = await axios.get(neynarUrl, {
           headers: {
-            'x-api-key': NEYNAR_API_KEY
-          },
-          params: {
-            fid,
-            limit: 100, // Get max allowed per request
-            cursor: followingCursor
+            'Accept': 'application/json',
+            'api_key': NEYNAR_API_KEY
           }
         });
-
-        if (followingResponse.data && followingResponse.data.users) {
-          followingList = [...followingList, ...followingResponse.data.users];
+        
+        if (followingResponse.data && followingResponse.data.result && followingResponse.data.result.users) {
+          followingList = [...followingList, ...followingResponse.data.result.users];
           
           // Check if there's more data to fetch
-          if (followingResponse.data.next && followingResponse.data.next.cursor) {
-            followingCursor = followingResponse.data.next.cursor;
+          if (followingResponse.data.result.next && followingResponse.data.result.next.cursor) {
+            followingCursor = followingResponse.data.result.next.cursor;
           } else {
             hasMoreFollowing = false;
           }
@@ -122,29 +122,28 @@ export default async function handler(req, res) {
       }
     }
 
-    console.log(`Found ${followingList.length} users that the FID ${fid} follows`);
-
-    // Extract all wallet addresses from the following list
-    const followingAddresses = followingList.reduce((addresses, follower) => {
-      const user = follower.user;
-      
-      // Add custody address if available
+    console.log(`Found ${followingList.length} following users for FID ${fid}`);
+    
+    // Extract all unique addresses from the following list
+    let uniqueFollowingAddresses = [];
+    
+    followingList.forEach(user => {
+      // Add custody addresses
       if (user.custody_address) {
-        addresses.push(user.custody_address.toLowerCase());
+        uniqueFollowingAddresses.push(user.custody_address.toLowerCase());
       }
       
-      // Add verified Ethereum addresses if available
+      // Add verified ETH addresses if available
       if (user.verified_addresses && user.verified_addresses.eth_addresses) {
-        user.verified_addresses.eth_addresses.forEach(addr => {
-          addresses.push(addr.toLowerCase());
+        user.verified_addresses.eth_addresses.forEach(address => {
+          uniqueFollowingAddresses.push(address.toLowerCase());
         });
       }
-      
-      return addresses;
-    }, []);
-
-    // Remove duplicates from following addresses
-    const uniqueFollowingAddresses = [...new Set(followingAddresses)];
+    });
+    
+    // Remove duplicates
+    uniqueFollowingAddresses = [...new Set(uniqueFollowingAddresses)];
+    
     console.log(`Found ${uniqueFollowingAddresses.length} unique wallet addresses from following list`);
 
     // STEP 2: Get all wallet addresses that hold NFTs from the specified contract (using Alchemy API)
@@ -162,7 +161,7 @@ export default async function handler(req, res) {
           params: {
             contractAddress,
             withTokenBalances: true,
-            cursor: ownersCursor
+            pageKey: ownersCursor
           }
         });
 
@@ -211,9 +210,7 @@ export default async function handler(req, res) {
     // Match addresses to followingList entries
     for (const address of friendOwners) {
       // Find the corresponding user in the following list
-      const matchingFollower = followingList.find(follower => {
-        const user = follower.user;
-        
+      const matchingFollower = followingList.find(user => {
         // Check custody address
         if (user.custody_address && user.custody_address.toLowerCase() === address.toLowerCase()) {
           return true;
@@ -230,25 +227,24 @@ export default async function handler(req, res) {
       });
       
       if (matchingFollower) {
-        const user = matchingFollower.user;
         friendsWithProfiles.push({
-          fid: user.fid,
-          username: user.username,
-          displayName: user.display_name || user.username,
-          pfpUrl: user.pfp_url,
+          fid: matchingFollower.fid,
+          username: matchingFollower.username,
+          displayName: matchingFollower.display_name || matchingFollower.username,
+          pfpUrl: matchingFollower.pfp_url,
           address
         });
       }
     }
 
     // Return the results, applying the requested limit
-    const paginatedResults = friendsWithProfiles.slice(0, limit);
+    const paginatedResults = friendsWithProfiles.slice(0, parseInt(limit, 10));
     
     return res.status(200).json({
       contractAddress,
       friends: paginatedResults,
       totalFriends: friendsWithProfiles.length,
-      hasMore: friendsWithProfiles.length > limit
+      hasMore: friendsWithProfiles.length > parseInt(limit, 10)
     });
 
   } catch (error) {
