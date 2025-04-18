@@ -1221,4 +1221,20 @@ a:hover {
 .app-header .dropdown-menu {
   background-color: white;
   color: #333;
+}
+
+@media (min-width: 1440px) {
+  .app-content {
+    max-width: 1400px;
+  }
+  
+  .container {
+    max-width: 90vw;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-content {
+    padding: 10px;
+  }
 } 
