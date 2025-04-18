@@ -23,15 +23,19 @@
   padding: 0;
 }
 
-body {
+/* Fix for the purple color extending to viewport edges */
+html, body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   background-color: #ffffff;
   color: #111827;
   line-height: 1.5;
-  min-height: 100vh;
+  min-height: 100%;
   margin: 0;
   padding: 0;
   overflow-x: hidden;
+}
+
+body {
   position: relative;
 }
 
@@ -95,9 +99,9 @@ a:hover {
 
 /* App Layout */
 .app {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
 }
 
 .app-header {
@@ -105,12 +109,27 @@ a:hover {
   border-bottom: none;
   padding: 1rem 0;
   color: white;
-}
-
-.app-header .container {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.app-header .logo-link {
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.5rem;
+}
+
+.auth-container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .logo h1 {

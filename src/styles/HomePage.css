@@ -1,10 +1,11 @@
 /* HomePage.css - Optimized layout styles */
 .home-container-compact {
-  min-height: calc(100vh - 150px);
+  min-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding-bottom: 0;
+  padding-bottom: 20px;
+  box-sizing: border-box;
 }
 
 .search-section {
@@ -12,7 +13,9 @@
   margin: 0 auto;
   padding: 0 20px;
   flex: 0 0 auto;
-  padding-top: 10vh;
+  padding-top: 8vh;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .search-title {
@@ -25,13 +28,16 @@
 /* Mobile optimizations */
 @media (max-width: 768px) {
   .home-container-compact {
-    min-height: calc(100vh - 120px);
+    min-height: calc(100vh - 140px);
     justify-content: flex-start;
+    padding-bottom: 10px;
   }
   
   .search-section {
-    padding-top: 5vh;
+    padding-top: 4vh;
     width: 100%;
+    padding-left: 15px;
+    padding-right: 15px;
   }
   
   .search-title {

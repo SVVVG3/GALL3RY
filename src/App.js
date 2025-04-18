@@ -92,6 +92,21 @@ function App() {
       setLoading(false);
     }, 100); // Reduced from 1000ms to 100ms
     
+    // Set theme-color meta tag to white to match body
+    try {
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', '#ffffff');
+      } else {
+        const meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.content = '#ffffff';
+        document.head.appendChild(meta);
+      }
+    } catch (error) {
+      console.error('Failed to set theme-color:', error);
+    }
+    
     return () => clearTimeout(timer);
   }, []);
   
@@ -110,20 +125,6 @@ function App() {
     return <LoadingScreen />;
   }
   
-  // Set meta tags for mobile
-  useEffect(() => {
-    // Set theme-color meta tag to white to match body
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-    if (metaThemeColor) {
-      metaThemeColor.setAttribute('content', '#ffffff');
-    } else {
-      const meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      meta.content = '#ffffff';
-      document.head.appendChild(meta);
-    }
-  }, []);
-  
   // Return the app with a proper provider hierarchy
   return (
     <ErrorBoundary
@@ -135,7 +136,9 @@ function App() {
       <AuthKitProvider config={{
         domain: window.location.hostname || 'gall3ry.vercel.app',
         siweUri: `${window.location.origin || 'https://gall3ry.vercel.app'}/api/login`,
-        rpcUrl: 'https://mainnet.optimism.io'
+        rpcUrl: 'https://mainnet.optimism.io',
+        walletConnectProjectId: process.env.REACT_APP_WALLET_CONNECT_ID || 'DEFAULT',
+        transport: 'deferredInjected' // Use deferred to prevent conflicts with other providers
       }}>
         <AuthProvider>
           <WalletProvider>
