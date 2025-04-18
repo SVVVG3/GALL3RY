@@ -124,6 +124,9 @@ a:hover {
   font-weight: 700;
   text-decoration: none;
   font-size: 1.5rem;
+  display: block;
+  opacity: 1;
+  visibility: visible;
 }
 
 .auth-container {
@@ -1173,6 +1176,9 @@ a:hover {
   font-weight: 700;
   text-decoration: none;
   font-size: 1.5rem;
+  display: block;
+  opacity: 1;
+  visibility: visible;
 }
 
 .app-header .user-profile-button {

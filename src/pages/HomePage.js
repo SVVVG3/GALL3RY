@@ -10,7 +10,6 @@ const HomePage = () => {
   return (
     <div className="home-container home-container-compact">
       <div className="search-section">
-        <h1 className="search-title">Enter a Farcaster username to explore their NFT collection</h1>
         <NFTProvider>
           <FarcasterUserSearch />
         </NFTProvider>
