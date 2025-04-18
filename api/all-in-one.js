@@ -3,7 +3,7 @@
 // This file contains ALL API functionality in one file to avoid hitting Vercel's
 // 12 function limit on the Hobby plan.
 
-import axios from 'axios';
+const axios = require('axios');
 
 // Simple memory cache to avoid redundant API calls
 const CACHE = {
@@ -44,7 +44,7 @@ const setCorsHeaders = (res) => {
 // -----------------------------------------------------------------------
 // MAIN API HANDLER
 // -----------------------------------------------------------------------
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Record start time for performance monitoring
   const startTime = Date.now();
   

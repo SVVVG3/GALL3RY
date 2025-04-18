@@ -1091,12 +1091,11 @@ app.get('/test-nft-image', async (req, res) => {
   res.send(output);
 });
 
-// Mount API routes
-app.use('/api', apiRouter);
+// Mount API routes - prioritize the all-in-one handler over legacy routes
+app.use('/api', apiRoutes); // API routes from api/index.js (all-in-one handler)
 
-// Mount API routes from the imported module (replaces the apiRouter)
-// Commenting this out to prevent it from overriding our apiRouter paths
-// app.use('/api', apiRoutes);
+// Fall back to legacy API routes for any routes not handled by all-in-one
+app.use('/api', apiRouter);
 
 // Serve static files from the public directory with appropriate headers
 app.use('/assets', express.static(path.join(__dirname, 'public', 'assets'), {

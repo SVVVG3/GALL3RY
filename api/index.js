@@ -19,5 +19,51 @@ router.get('/collection-friends', (req, res) => {
   return allInOne(req, res);
 });
 
+// Debug route for collection-friends with more detailed error reporting
+router.get('/collection-friends-debug', async (req, res) => {
+  try {
+    // Get the original query parameters
+    const { contractAddress, fid, network, limit } = req.query;
+    
+    if (!contractAddress) {
+      return res.status(400).json({ error: 'Missing contractAddress parameter' });
+    }
+    
+    if (!fid) {
+      return res.status(400).json({ error: 'Missing fid parameter' });
+    }
+    
+    console.log(`Debug route: Processing collection-friends for contract=${contractAddress}, fid=${fid}`);
+    
+    // Create a new URL with action=collectionFriends parameter
+    req.url = `/api/all-in-one?action=collectionFriends&contractAddress=${contractAddress}&fid=${fid}${network ? `&network=${network}` : ''}${limit ? `&limit=${limit}` : ''}`;
+    
+    // Wrap the all-in-one handler in a try-catch for better error reporting
+    try {
+      return await allInOne(req, res);
+    } catch (error) {
+      console.error('Error in collection-friends-debug:', error);
+      return res.status(500).json({
+        error: 'Internal server error in debug route',
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+    }
+  } catch (outerError) {
+    console.error('Unexpected error in debug route wrapper:', outerError);
+    return res.status(500).json({
+      error: 'Fatal error in debug route',
+      message: outerError.message,
+      stack: outerError.stack
+    });
+  }
+});
+
+// Health check endpoint
+router.get('/health', (req, res) => {
+  return res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
 // Export the router
 module.exports = router; 
