@@ -61,10 +61,37 @@ export default async function handler(req, res) {
     const url = req.url || '';
     const path = url.split('/api/')[1]?.split('?')[0] || '';
     
-    console.log(`[API] Request to: ${path}`);
+    // Check for action parameter - this allows actions to be specified in the query string
+    const action = req.query.action;
     
-    // Route based on the path
+    console.log(`[API] Request to: ${path}${action ? ` with action: ${action}` : ''}`);
+    
+    // Route based on the path or action
     let result;
+    
+    // First handle action-based routing
+    if (action) {
+      // Route based on the action parameter
+      switch (action) {
+        case 'collectionFriends':
+          result = await handleCollectionFriendsRequest(req, res);
+          break;
+        // Add other actions as needed
+        default:
+          // If we don't recognize the action, fall through to path-based routing
+          console.log(`Unknown action: ${action}, falling back to path-based routing`);
+      }
+      
+      // If we handled the action, return the result
+      if (result) {
+        // Log performance metrics
+        const duration = Date.now() - startTime;
+        console.log(`[PERF] Action ${action} completed in ${duration}ms`);
+        return result;
+      }
+    }
+    
+    // If no action or unhandled action, use path-based routing
     if (path.startsWith('zapper')) {
       result = await handleZapperRequest(req, res);
     } else if (path.startsWith('alchemy')) {
@@ -83,12 +110,19 @@ export default async function handler(req, res) {
       result = await handleFarcasterRequest(req, res);
     } else if (path.startsWith('v2/')) {
       result = await handleV2Request(req, res, path);
+    } else if (path === 'all-in-one' && !action) {
+      // Handle the case where someone hits /api/all-in-one without an action
+      return res.status(400).json({ 
+        error: 'Missing action parameter',
+        message: 'The all-in-one endpoint requires an action parameter'
+      });
     } else {
       // Default: Not found
       return res.status(404).json({ 
         error: 'API endpoint not found',
         path,
-        url
+        url,
+        action
       });
     }
     
