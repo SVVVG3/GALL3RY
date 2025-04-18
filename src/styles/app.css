@@ -104,14 +104,14 @@ a:hover {
   flex-direction: column;
 }
 
-/* App header with proper background and container */
+/* Header container with white background */
 .app-header {
-  background-color: #8b5cf6;
+  background-color: white;
   width: 100%;
-  border-bottom: none;
+  border-bottom: 1px solid #e5e7eb;
   padding: 0;
-  color: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  color: #333;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 /* Header inner container for proper spacing */
@@ -124,10 +124,14 @@ a:hover {
   padding: 0.9rem 20px;
   width: 100%;
   box-sizing: border-box;
+  background-color: white;
 }
 
+/* Purple gradient text for logo */
 .app-header .logo-link {
-  color: white;
+  background: linear-gradient(to right, #8b5cf6, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
   font-weight: 700;
   text-decoration: none;
   font-size: 1.8rem;
@@ -135,7 +139,6 @@ a:hover {
   opacity: 1;
   visibility: visible;
   letter-spacing: 1px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .auth-container {
@@ -680,6 +683,10 @@ a:hover {
   .app-header .logo-link {
     font-size: 1.5rem;
     padding: 5px 0;
+  }
+  
+  .app-header-container {
+    padding: 0.8rem 15px;
   }
 }
 
