@@ -109,7 +109,7 @@ module.exports = async function handler(req, res) {
     } else if (path.startsWith('farcaster')) {
       result = await handleFarcasterRequest(req, res);
     } else if (path.startsWith('v2/')) {
-      result = await handleV2Request(req, res, path);
+      result = await handleV2Request(req, res);
     } else if (path === 'all-in-one' && !action) {
       // Handle the case where someone hits /api/all-in-one without an action
       return res.status(400).json({ 
@@ -144,8 +144,9 @@ module.exports = async function handler(req, res) {
 // HANDLER: ZAPPER API
 // -----------------------------------------------------------------------
 async function handleZapperRequest(req, res) {
-  // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+  // Zapper GraphQL API URL - Updated to v2 endpoint
+  const ZAPPER_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const BACKUP_ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
   
   try {
     // Get Zapper API key from environment variables
@@ -159,17 +160,11 @@ async function handleZapperRequest(req, res) {
       });
     }
     
-    // Check if this is a Farcaster profile request
-    let isFarcasterRequest = false;
-    
-    if (req.body?.query && req.body.query.includes('farcasterProfile')) {
-      isFarcasterRequest = true;
-    } else {
-      // If not a Farcaster request, don't process it through Zapper
-      console.warn('Non-Farcaster request attempted on Zapper endpoint');
+    // Validate request body
+    if (!req.body?.query) {
       return res.status(400).json({
         error: 'Invalid request',
-        message: 'The Zapper endpoint is only for Farcaster profile requests'
+        message: 'GraphQL query is required'
       });
     }
     
@@ -180,29 +175,79 @@ async function handleZapperRequest(req, res) {
       return res.status(200).json(cachedData);
     }
     
+    // Debug request details
+    console.log('Zapper REQUEST - GraphQL query:', req.body.query.replace(/\s+/g, ' ').trim().substring(0, 100) + '...');
+    if (req.body.variables) {
+      console.log('Zapper REQUEST - Variables:', JSON.stringify(req.body.variables));
+    }
+    
     // Set up headers with API key according to documentation
     const headers = {
       'Content-Type': 'application/json',
-      'x-zapper-api-key': apiKey
+      'x-zapper-api-key': apiKey,
+      'User-Agent': 'Gall3ry/1.0.0',
+      'Accept': 'application/json'
     };
     
-    // Forward the request to Zapper
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: req.body,
-      timeout: 15000 // Extended timeout to 15 seconds
+    // Create an array of endpoints to try in sequence
+    const endpoints = [
+      { url: ZAPPER_API_URL, name: 'Primary v2 endpoint' },
+      { url: BACKUP_ZAPPER_API_URL, name: 'Backup public endpoint' }
+    ];
+    
+    let lastError = null;
+    
+    // Try each endpoint in sequence
+    for (const endpoint of endpoints) {
+      try {
+        // Forward the request to Zapper
+        console.log(`Trying Zapper endpoint: ${endpoint.name}`);
+        const response = await axios({
+          method: 'post',
+          url: endpoint.url,
+          headers: headers,
+          data: req.body,
+          timeout: 15000 // Extended timeout to 15 seconds
+        });
+        
+        console.log(`Zapper RESPONSE - Success from ${endpoint.name}, Status: ${response.status}`);
+        
+        // Check for GraphQL errors and handle them properly
+        if (response.data?.errors) {
+          console.warn('GraphQL errors from Zapper:', response.data.errors);
+          // Only cache successful responses
+          return res.status(200).json(response.data); // Still return 200 as it's a valid GraphQL response
+        }
+        
+        // Cache the successful response
+        CACHE.set('requests', cacheKey, response.data);
+        
+        // Return the response from Zapper
+        return res.status(response.status).json(response.data);
+      } catch (error) {
+        console.error(`Error with Zapper endpoint ${endpoint.name}:`, error.message);
+        if (error.response) {
+          console.error('RESPONSE ERROR - Status:', error.response.status);
+          console.error('RESPONSE ERROR - Data:', JSON.stringify(error.response.data).substring(0, 200));
+        } else if (error.request) {
+          console.error('REQUEST ERROR - No response received');
+        }
+        
+        lastError = error;
+        // Continue to next endpoint
+      }
+    }
+    
+    // If we get here, all endpoints failed
+    console.error('All Zapper API endpoints failed');
+    
+    return res.status(lastError?.response?.status || 502).json({
+      error: 'Error from Zapper API',
+      message: `All Zapper endpoints failed: ${lastError?.message || 'Unknown error'}`,
+      details: lastError?.response?.data
     });
-    
-    // Cache the response
-    CACHE.set('requests', cacheKey, response.data);
-    
-    // Return the response from Zapper
-    return res.status(response.status).json(response.data);
-    
   } catch (error) {
-    console.error('Error proxying to Zapper:', error.message);
+    console.error('Unexpected error in Zapper handler:', error);
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
@@ -519,8 +564,9 @@ async function handleAlchemyRequest(req, res) {
 // HANDLER: FARCASTER PROFILE
 // -----------------------------------------------------------------------
 async function handleFarcasterProfileRequest(req, res) {
-  // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+  // Zapper GraphQL API URLs for fallback
+  const PRIMARY_API_URL = 'https://api.zapper.xyz/v2/graphql';
+  const BACKUP_API_URL = 'https://public.zapper.xyz/graphql';
 
   try {
     // Get Zapper API key from environment variables
@@ -574,49 +620,105 @@ async function handleFarcasterProfileRequest(req, res) {
     // Build variables based on what was provided
     const variables = fid ? { fid: parseInt(fid, 10) } : { username };
 
+    // Debug request details
+    console.log('Farcaster REQUEST - GraphQL query:', query.replace(/\s+/g, ' ').trim().substring(0, 100) + '...');
+    console.log('Farcaster REQUEST - Variables:', JSON.stringify(variables));
+
     // Set up headers with API key according to documentation
     const headers = {
       'Content-Type': 'application/json',
-      'x-zapper-api-key': apiKey
+      'x-zapper-api-key': apiKey,
+      'User-Agent': 'Gall3ry/1.0.0',
+      'Accept': 'application/json'
     };
     
-    // Make the GraphQL request to Zapper with better error handling
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: {
-        query,
-        variables
-      },
-      timeout: 15000 // Extended to 15 second timeout for better reliability
+    // Create an array of endpoints to try in sequence
+    const endpoints = [
+      { url: PRIMARY_API_URL, name: 'Primary API endpoint' },
+      { url: BACKUP_API_URL, name: 'Backup public endpoint' }
+    ];
+    
+    let lastError = null;
+    
+    // Try each endpoint in sequence
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`Trying Farcaster profile endpoint: ${endpoint.name}`);
+        // Make the GraphQL request to Zapper with better error handling
+        const response = await axios({
+          method: 'post',
+          url: endpoint.url,
+          headers: headers,
+          data: {
+            query,
+            variables
+          },
+          timeout: 15000 // Extended to 15 second timeout for better reliability
+        });
+        
+        console.log(`Farcaster RESPONSE - Success from ${endpoint.name}, Status: ${response.status}`);
+        
+        // Check for GraphQL errors
+        if (response.data?.errors) {
+          console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
+          
+          // Only log this as a warning and continue to the next endpoint if this isn't a "not found" error
+          const notFoundError = response.data.errors.some(err => 
+            err.message && (
+              err.message.includes('not found') || 
+              err.message.includes('No profile') ||
+              err.message.includes('Invalid')
+            )
+          );
+          
+          if (notFoundError) {
+            // This is a valid "not found" response, return it directly
+            return res.status(404).json({
+              error: 'Profile Not Found',
+              message: `No Farcaster profile found for ${username || fid}`
+            });
+          }
+          
+          // For other GraphQL errors, try the next endpoint
+          lastError = new Error('GraphQL Errors: ' + response.data.errors.map(e => e.message).join('; '));
+          continue;
+        }
+        
+        // Return the profile data
+        if (response.data?.data?.farcasterProfile) {
+          // Cache the profile
+          CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
+          
+          return res.status(200).json(response.data.data.farcasterProfile);
+        } else {
+          // No profile found but no errors either (unusual case)
+          lastError = new Error('Profile data not found in response');
+          continue;
+        }
+      } catch (error) {
+        console.error(`Error with Farcaster endpoint ${endpoint.name}:`, error.message);
+        if (error.response) {
+          console.error('RESPONSE ERROR - Status:', error.response.status);
+          console.error('RESPONSE ERROR - Data:', JSON.stringify(error.response.data).substring(0, 200));
+        } else if (error.request) {
+          console.error('REQUEST ERROR - No response received');
+        }
+        
+        lastError = error;
+        // Continue to next endpoint
+      }
+    }
+    
+    // If we get here, all endpoints failed
+    console.error('All Farcaster profile endpoints failed');
+    
+    return res.status(lastError?.response?.status || 502).json({
+      error: 'Error fetching Farcaster profile',
+      message: `All Farcaster endpoints failed: ${lastError?.message || 'Unknown error'}`,
+      details: lastError?.response?.data
     });
-    
-    // Check for GraphQL errors
-    if (response.data?.errors) {
-      console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
-      return res.status(400).json({
-        error: 'GraphQL Error',
-        message: response.data.errors[0]?.message || 'Unknown GraphQL error',
-        details: response.data.errors
-      });
-    }
-    
-    // Return the profile data
-    if (response.data?.data?.farcasterProfile) {
-      // Cache the profile
-      CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
-      
-      return res.status(200).json(response.data.data.farcasterProfile);
-    } else {
-      return res.status(404).json({
-        error: 'Profile Not Found',
-        message: `No Farcaster profile found for ${username || fid}`
-      });
-    }
-    
   } catch (error) {
-    console.error('Error fetching Farcaster profile:', error.message);
+    console.error('Unexpected error in Farcaster profile handler:', error);
     
     // Return an appropriate error response
     return res.status(error.response?.status || 500).json({
@@ -938,75 +1040,19 @@ async function handleCollectionFriendsRequest(req, res) {
       allOwners.some(owner => owner.toLowerCase() === address.toLowerCase())
     );
 
-    console.log(`Found ${friendOwners.length} friends who own NFTs from this collection`);
-
-    // If no friends own NFTs from this collection, return an empty result
-    if (friendOwners.length === 0) {
-      const emptyResult = {
-        contractAddress,
-        friends: [],
-        totalFriends: 0
-      };
-      
-      // Cache the empty result
-      CACHE.set('friends', cacheKey, emptyResult);
-      
-      return res.status(200).json(emptyResult);
-    }
-
-    // STEP 3: For each owner address that's a friend, find the corresponding Farcaster profile
-    const friendsWithProfiles = [];
-
-    // Match addresses to followingList entries
-    for (const address of friendOwners) {
-      // Find the corresponding user in the following list
-      const matchingFollower = followingList.find(user => {
-        // Check custody address
-        if (user.custody_address && user.custody_address.toLowerCase() === address.toLowerCase()) {
-          return true;
-        }
-        
-        // Check verified addresses
-        if (user.verified_addresses && user.verified_addresses.eth_addresses) {
-          return user.verified_addresses.eth_addresses.some(
-            addr => addr.toLowerCase() === address.toLowerCase()
-          );
-        }
-        
-        return false;
-      });
-      
-      if (matchingFollower) {
-        friendsWithProfiles.push({
-          fid: matchingFollower.fid,
-          username: matchingFollower.username,
-          displayName: matchingFollower.display_name || matchingFollower.username,
-          pfpUrl: matchingFollower.pfp_url,
-          address
-        });
-      }
-    }
-
-    // Return the results, applying the requested limit
-    const paginatedResults = friendsWithProfiles.slice(0, parseInt(limit, 10));
+    console.log(`Found ${friendOwners.length} friends who own NFTs from collection ${contractAddress}`);
     
-    const result = {
-      contractAddress,
-      friends: paginatedResults,
-      totalFriends: friendsWithProfiles.length,
-      hasMore: friendsWithProfiles.length > parseInt(limit, 10)
-    };
-    
-    // Cache the result
-    CACHE.set('friends', cacheKey, result, 600000); // 10 minute TTL
-    
-    return res.status(200).json(result);
-
+    // Return the matching addresses
+    return res.status(200).json({
+      friendOwners,
+      totalFriends: uniqueFollowingAddresses.length,
+      totalOwners: allOwners.length
+    });
   } catch (error) {
-    console.error('Error in collection-friends API:', error);
-    return res.status(500).json({ 
-      error: 'Internal server error', 
-      message: error.message || 'An unknown error occurred'
+    console.error('Error in collection friends handler:', error);
+    return res.status(500).json({
+      error: 'Server error',
+      message: error.message || 'An unexpected error occurred'
     });
   }
 }
@@ -1017,7 +1063,7 @@ async function handleCollectionFriendsRequest(req, res) {
 async function handleLoginRequest(req, res) {
   // Placeholder for login functionality
   return res.status(200).json({ 
-    status: 'Login API stub'
+    status: 'Login API stub' 
   });
 }
 
@@ -1025,27 +1071,163 @@ async function handleLoginRequest(req, res) {
 // HANDLER: FARCASTER
 // -----------------------------------------------------------------------
 async function handleFarcasterRequest(req, res) {
-  // Placeholder for farcaster functionality
-  return res.status(200).json({ 
-    status: 'Farcaster API stub'
-  });
+  // Zapper GraphQL API URL
+  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
+
+  try {
+    // Get Zapper API key from environment variables
+    const apiKey = process.env.ZAPPER_API_KEY || '';
+    
+    if (!apiKey) {
+      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
+      return res.status(500).json({
+        error: 'API Configuration Error',
+        message: 'Zapper API key is missing. Please check server configuration.'
+      });
+    }
+
+    // Get username or FID from query parameters
+    const { username, fid } = req.query;
+    
+    if (!username && !fid) {
+      return res.status(400).json({
+        error: 'Invalid Request',
+        message: 'Either username or fid parameter is required'
+      });
+    }
+
+    console.log(`Farcaster profile request via /api/farcaster endpoint for: ${username || fid}`);
+    
+    // Check cache first
+    const cacheKey = username || `fid-${fid}`;
+    const cachedProfile = CACHE.get('profiles', cacheKey);
+    if (cachedProfile) {
+      return res.status(200).json(cachedProfile);
+    }
+    
+    // Build the GraphQL query based on what was provided
+    const query = `
+      query GetFarcasterProfile(${fid ? '$fid: Int' : '$username: String'}) {
+        farcasterProfile(${fid ? 'fid: $fid' : 'username: $username'}) {
+          username
+          fid
+          metadata {
+            displayName
+            description
+            imageUrl
+            warpcast
+          }
+          custodyAddress
+          connectedAddresses
+        }
+      }
+    `;
+
+    // Build variables based on what was provided
+    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
+
+    // Set up headers with API key according to documentation
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-zapper-api-key': apiKey
+    };
+    
+    // Make the GraphQL request to Zapper with better error handling
+    const response = await axios({
+      method: 'post',
+      url: ZAPPER_API_URL,
+      headers: headers,
+      data: {
+        query,
+        variables
+      },
+      timeout: 15000 // Extended to 15 second timeout for better reliability
+    });
+    
+    // Check for GraphQL errors
+    if (response.data?.errors) {
+      console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
+      return res.status(400).json({
+        error: 'GraphQL Error',
+        message: response.data.errors[0]?.message || 'Unknown GraphQL error',
+        details: response.data.errors
+      });
+    }
+    
+    // Return the profile data
+    if (response.data?.data?.farcasterProfile) {
+      // Cache the profile
+      CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
+      
+      return res.status(200).json(response.data.data.farcasterProfile);
+    } else {
+      return res.status(404).json({
+        error: 'Profile Not Found',
+        message: `No Farcaster profile found for ${username || fid}`
+      });
+    }
+    
+  } catch (error) {
+    console.error('Error fetching Farcaster profile:', error.message);
+    
+    // Return an appropriate error response
+    return res.status(error.response?.status || 500).json({
+      error: 'Error fetching Farcaster profile',
+      message: error.message,
+      details: error.response?.data
+    });
+  }
 }
 
 // -----------------------------------------------------------------------
-// HANDLER: V2 API
+// HANDLER: V2
 // -----------------------------------------------------------------------
-async function handleV2Request(req, res, path) {
-  const v2Path = path.split('v2/')[1];
-  
-  if (v2Path === 'graphql') {
-    // Placeholder for GraphQL functionality
-    return res.status(200).json({ 
-      status: 'GraphQL API stub'
+async function handleV2Request(req, res) {
+  try {
+    // Get the endpoint parameter to determine which handler to call
+    const { endpoint } = req.query;
+    
+    if (!endpoint) {
+      return res.status(400).json({
+        error: "Missing endpoint parameter",
+        message: "The v2 API requires an 'endpoint' parameter to specify which service to access"
+      });
+    }
+
+    console.log(`V2 API request for endpoint: ${endpoint}`);
+    
+    // Route to the appropriate handler based on the endpoint
+    switch (endpoint.toLowerCase()) {
+      case 'zapper':
+        return await handleZapperRequest(req, res);
+      
+      case 'alchemy':
+        return await handleAlchemyRequest(req, res);
+      
+      case 'farcaster':
+      case 'farcaster-profile':
+        return await handleFarcasterProfileRequest(req, res);
+      
+      case 'basescan':
+        return await handleBasescanRequest(req, res);
+      
+      case 'etherscan':
+        return await handleEtherscanRequest(req, res);
+      
+      case 'opensea':
+        return await handleOpenseaRequest(req, res);
+      
+      default:
+        return res.status(400).json({
+          error: "Invalid endpoint",
+          message: `Endpoint '${endpoint}' is not supported by the v2 API`
+        });
+    }
+  } catch (error) {
+    console.error(`Error in V2 API handler: ${error.message}`);
+    return res.status(500).json({
+      error: "Server Error",
+      message: error.message
     });
   }
-  
-  return res.status(404).json({ 
-    error: 'V2 API endpoint not found',
-    path: v2Path
-  });
-} 
+}
