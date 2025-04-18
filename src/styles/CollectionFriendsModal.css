@@ -2,6 +2,8 @@
 .collection-friends-modal {
   max-width: 500px;
   width: 90%;
+  background-color: white;
+  border-radius: 12px;
 }
 
 .collection-info {
@@ -11,6 +13,12 @@
   text-align: center;
 }
 
+.collection-info p {
+  font-size: 15px;
+  color: #333;
+  margin: 0;
+}
+
 .friends-list {
   display: flex;
   flex-direction: column;
@@ -18,29 +26,34 @@
   max-height: 60vh;
   overflow-y: auto;
   padding-right: 8px;
+  margin-top: 15px;
 }
 
 .friend-card {
   display: flex;
   align-items: center;
-  padding: 10px;
+  padding: 12px;
   border-radius: 12px;
   background-color: #f9f9f9;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
   text-decoration: none;
   color: inherit;
+  border: 1px solid transparent;
 }
 
 .friend-card:hover {
   background-color: #f0f0f0;
+  border-color: #e0e0e0;
+  transform: translateY(-2px);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.05);
 }
 
 .friend-avatar {
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   overflow: hidden;
-  margin-right: 12px;
+  margin-right: 14px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -48,6 +61,8 @@
   background-color: #6100ff;
   color: white;
   font-weight: bold;
+  border: 2px solid white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .friend-avatar img {
@@ -72,10 +87,11 @@
 
 .friend-name {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  margin-bottom: 2px;
 }
 
 .friend-username {
@@ -91,17 +107,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 30px 0;
+  padding: 40px 0;
 }
 
 .loading-spinner {
   border: 3px solid rgba(97, 0, 255, 0.1);
   border-radius: 50%;
   border-top: 3px solid #6100ff;
-  width: 30px;
-  height: 30px;
+  width: 36px;
+  height: 36px;
   animation: spin 1s linear infinite;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -113,22 +129,38 @@
   text-align: center;
   padding: 20px;
   color: #e53935;
+  background-color: #ffebee;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.error-message p {
+  margin-bottom: 15px;
 }
 
 .error-message button {
   margin-top: 10px;
-  padding: 6px 12px;
+  padding: 8px 16px;
   background-color: #6100ff;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.error-message button:hover {
+  background-color: #5000d6;
 }
 
 .no-results {
   text-align: center;
-  padding: 30px 0;
+  padding: 40px 0;
   color: #666;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  margin: 15px 0;
 }
 
 .load-more {
@@ -138,4 +170,15 @@
   color: #777;
   border-top: 1px solid #eaeaea;
   margin-top: 15px;
+}
+
+.mock-data-notice {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 15px;
+  font-size: 13px;
+  border: 1px solid #ffeeba;
+  text-align: center;
 } 

@@ -16,6 +16,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   const [friends, setFriends] = useState([]);
   const [totalFriends, setTotalFriends] = useState(0);
   const [hasMore, setHasMore] = useState(false);
+  const [usingMockData, setUsingMockData] = useState(false);
   
   // Close modal when Escape key is pressed
   useEffect(() => {
@@ -40,6 +41,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
       
       setLoading(true);
       setError(null);
+      setUsingMockData(false);
       
       try {
         // Try all endpoints for better reliability, including mock as a last resort
@@ -54,7 +56,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
         let response = null;
         let succeeded = false;
         let lastError = null;
-        let usingMock = false;
         
         for (const endpoint of apiEndpoints) {
           try {
@@ -63,7 +64,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
             
             // Check if this is the mock endpoint
             if (endpoint.includes('mock') && response.ok) {
-              usingMock = true;
+              setUsingMockData(true);
               console.log('Using mock data as fallback');
             }
             
@@ -90,14 +91,23 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
         setFriends(data.friends || []);
         setTotalFriends(data.totalFriends || 0);
         setHasMore(data.hasMore || false);
-        
-        // If we're using mock data, show a warning to the user
-        if (usingMock) {
-          setError('Could not connect to Farcaster. Showing mock data for demonstration.');
-        }
       } catch (error) {
         console.error('Error fetching collection friends:', error);
         setError(error.message || 'Failed to load friends data');
+        // Fallback to mock data if all API calls fail
+        try {
+          const mockResponse = await fetch(`/api/collection-friends-mock?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`);
+          if (mockResponse.ok) {
+            const mockData = await mockResponse.json();
+            setFriends(mockData.friends || []);
+            setTotalFriends(mockData.totalFriends || 0);
+            setHasMore(mockData.hasMore || false);
+            setUsingMockData(true);
+            setError(null); // Clear the error since we have mock data
+          }
+        } catch (mockError) {
+          console.error('Even mock data failed to load:', mockError);
+        }
       } finally {
         setLoading(false);
       }
@@ -125,14 +135,20 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content collection-friends-modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Collection Friends</h3>
-          <button className="modal-close-button" onClick={onClose}>×</button>
+          <h3 className="modal-title">Collection Friends</h3>
+          <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <div className="modal-body">
           <div className="collection-info">
             <p>Friends who hold NFTs from {collectionName || 'this collection'}</p>
           </div>
+          
+          {usingMockData && (
+            <div className="mock-data-notice">
+              <p>Using sample data for demonstration. Connect to Farcaster to see your real friends.</p>
+            </div>
+          )}
           
           {loading && (
             <div className="loading-container">
@@ -141,9 +157,9 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
             </div>
           )}
           
-          {error && (
+          {error && !usingMockData && (
             <div className="error-message">
-              <p>Error: {error}</p>
+              <p>{error}</p>
               <button onClick={() => {
                 setLoading(true);
                 setError(null);
@@ -159,7 +175,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
             </div>
           )}
           
-          {!loading && !error && friends.length > 0 && (
+          {!loading && friends.length > 0 && (
             <div className="friends-list">
               {friends.map(friend => (
                 <a 
