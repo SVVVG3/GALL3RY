@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
 import '../styles/CollectionFriendsModal.css';
+import CollectionFriendsModal from './CollectionFriendsModal';
 
 // Define keyframes for spinner animation
 const spinKeyframes = `
@@ -24,13 +25,6 @@ const VercelNFTCard = ({ nft }) => {
   const [mediaUrl, setMediaUrl] = useState('');
   const [mediaType, setMediaType] = useState('image'); // 'image', 'video', or 'unsupported'
   const [showFriendsModal, setShowFriendsModal] = useState(false);
-  
-  // Friends modal states
-  const [isLoadingFriends, setIsLoadingFriends] = useState(true);
-  const [friendsError, setFriendsError] = useState(null);
-  const [friends, setFriends] = useState([]);
-  const [totalFriends, setTotalFriends] = useState(0);
-  const [usingMockData, setUsingMockData] = useState(false);
   
   // Extract NFT details with fallbacks
   const rawTitle = nft?.metadata?.name || nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
@@ -301,21 +295,10 @@ const VercelNFTCard = ({ nft }) => {
     e.preventDefault(); // Prevent link navigation
     e.stopPropagation(); // Prevent event bubbling
     setShowFriendsModal(true);
-    
-    // Disable body scroll when modal is open
-    document.body.style.overflow = 'hidden';
-    
-    // Fetch friends data when modal is opened
-    if (contractAddress && profile?.fid) {
-      fetchCollectionFriends();
-    }
   };
   
   const handleCloseFriendsModal = () => {
     setShowFriendsModal(false);
-    
-    // Re-enable body scroll when modal is closed
-    document.body.style.overflow = '';
   };
   
   // Close modal when user hits escape key
@@ -332,72 +315,8 @@ const VercelNFTCard = ({ nft }) => {
     };
   }, [showFriendsModal]);
   
-  // Generate mock friends data for fallback
-  const generateMockFriends = useCallback(() => {
-    const names = [
-      "Alex", "Jordan", "Taylor", "Morgan", "Casey", 
-      "Riley", "Avery", "Quinn", "Rowan", "Skyler"
-    ];
-    
-    return Array.from({ length: 8 }, (_, i) => ({
-      id: `mock-${i}`,
-      username: `${names[i % names.length].toLowerCase()}${100 + i}`,
-      displayName: names[i % names.length],
-      pfp: null, // No profile picture for mock data
-      fid: 1000 + i
-    }));
-  }, []);
-  
-  // Fetch collection friends from multiple API endpoints with retries
-  const fetchCollectionFriends = async () => {
-    if (!contractAddress || !profile?.fid) return;
-    
-    setIsLoadingFriends(true);
-    setFriendsError(null);
-    setUsingMockData(false);
-
-    try {
-      // Try primary API endpoint first
-      const apiUrl = `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}`;
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`API returned ${response.status}`);
-      }
-      
-      const data = await response.json();
-      setFriends(data.friends || []);
-      setTotalFriends(data.total || data.friends?.length || 0);
-      setIsLoadingFriends(false);
-    } catch (error) {
-      console.error("Error fetching collection friends from primary API:", error);
-      
-      try {
-        // Try secondary API endpoint
-        const backupApiUrl = `/api/collection-friends-backup?contractAddress=${contractAddress}&fid=${profile.fid}`;
-        const backupResponse = await fetch(backupApiUrl);
-        
-        if (!backupResponse.ok) {
-          throw new Error(`Backup API returned ${backupResponse.status}`);
-        }
-        
-        const backupData = await backupResponse.json();
-        setFriends(backupData.friends || []);
-        setTotalFriends(backupData.total || backupData.friends?.length || 0);
-        setIsLoadingFriends(false);
-      } catch (backupError) {
-        console.error("Error fetching from backup API:", backupError);
-        
-        // Use mock data as last resort
-        console.log("Using mock data as fallback");
-        const mockFriends = generateMockFriends();
-        setFriends(mockFriends);
-        setTotalFriends(mockFriends.length);
-        setUsingMockData(true);
-        setIsLoadingFriends(false);
-      }
-    }
-  };
+  // Check if user is authenticated with Farcaster
+  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
   
   // Handle modal click - stop propagation
   const handleModalClick = (e) => {
@@ -413,9 +332,6 @@ const VercelNFTCard = ({ nft }) => {
     }
     // Card click handling - can be expanded later if needed
   };
-  
-  // Check if user is authenticated with Farcaster
-  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
   
   return (
     <div 
@@ -673,241 +589,14 @@ const VercelNFTCard = ({ nft }) => {
         </div>
       </div>
       
-      {/* Collection Friends Modal - integrated directly into the card */}
+      {/* Use the standalone CollectionFriendsModal component instead of inline implementation */}
       {showFriendsModal && (
-        <div 
-          className="collection-friends-overlay"
-          onClick={handleCloseFriendsModal}
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 10000,
-            backdropFilter: 'blur(4px)'
-          }}
-          onMouseLeave={(e) => e.stopPropagation()}
-        >
-          <div 
-            className="collection-friends-modal"
-            onClick={handleModalClick}
-            style={{
-              backgroundColor: '#ffffff',
-              maxWidth: '350px',
-              width: '90%',
-              borderRadius: '12px',
-              boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
-              display: 'flex',
-              flexDirection: 'column',
-              maxHeight: '80vh',
-              position: 'relative',
-              zIndex: 10001,
-              overflow: 'hidden',
-              color: '#333'
-            }}
-          >
-            <div className="modal-header" style={{
-              display: 'flex', 
-              justifyContent: 'space-between', 
-              alignItems: 'center',
-              padding: '16px 20px',
-              borderBottom: '1px solid #eee'
-            }}>
-              <h2 className="modal-title" style={{
-                margin: 0,
-                fontSize: '1.1rem',
-                fontWeight: 600,
-                color: '#333'
-              }}>
-                {collection ? `${collection} Owners` : 'Collection Owners'}
-              </h2>
-              <button 
-                className="modal-close" 
-                onClick={handleCloseFriendsModal}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: '1.5rem',
-                  lineHeight: 1,
-                  padding: '5px',
-                  margin: '-5px',
-                  color: '#666'
-                }}
-              >×</button>
-            </div>
-            
-            <div className="collection-friends-content" style={{
-              padding: '16px',
-              overflowY: 'auto',
-              maxHeight: 'calc(80vh - 70px)',
-              flex: 1,
-              backgroundColor: '#ffffff'
-            }}>
-              {usingMockData && (
-                <div className="mock-data-notice" style={{
-                  backgroundColor: '#f0f8ff',
-                  border: '1px solid #bad6ff',
-                  borderRadius: '8px',
-                  padding: '10px 15px',
-                  marginBottom: '20px'
-                }}>
-                  <p style={{color: '#3473e0', fontSize: '14px', margin: 0}}>
-                    Using sample data for demonstration.
-                  </p>
-                </div>
-              )}
-              
-              <div className="collection-info" style={{marginBottom: '20px'}}>
-                <p style={{textAlign: 'center', fontSize: '14px', color: '#333'}}>
-                  {totalFriends > 0 
-                    ? `${totalFriends} friends own NFTs from this collection` 
-                    : 'No friends found with NFTs from this collection'}
-                </p>
-              </div>
-              
-              {isLoadingFriends ? (
-                <div className="loading-container" style={{
-                  display: 'flex', 
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  minHeight: '100px'
-                }}>
-                  <div className="loading-spinner" style={{
-                    border: '4px solid rgba(0, 0, 0, 0.1)',
-                    borderRadius: '50%',
-                    borderTop: '4px solid #3772ff',
-                    width: '30px',
-                    height: '30px',
-                    animation: 'spin 1s linear infinite',
-                    marginBottom: '16px'
-                  }}></div>
-                  <p style={{color: '#333'}}>Loading friends...</p>
-                </div>
-              ) : friendsError && !usingMockData ? (
-                <div className="error-message" style={{
-                  backgroundColor: '#fff2f0',
-                  border: '1px solid #ffccc7',
-                  borderRadius: '8px',
-                  padding: '15px',
-                  margin: '20px 0',
-                  textAlign: 'center'
-                }}>
-                  <p style={{color: '#333'}}>Error loading collection friends</p>
-                  <button 
-                    onClick={() => window.location.reload()}
-                    style={{
-                      backgroundColor: '#3772ff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      padding: '8px 16px',
-                      marginTop: '10px',
-                      cursor: 'pointer',
-                      fontWeight: 500
-                    }}
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : friends.length === 0 ? (
-                <div className="no-results" style={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  minHeight: '100px',
-                  color: '#666',
-                  textAlign: 'center',
-                  padding: '20px'
-                }}>
-                  <p>No friends found with NFTs from this collection.</p>
-                </div>
-              ) : (
-                <div className="friends-list" style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  {friends.map(friend => (
-                    <a 
-                      key={friend.id || friend.fid} 
-                      href={`https://warpcast.com/${friend.username}`}
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="friend-item"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        padding: '12px',
-                        borderRadius: '8px',
-                        backgroundColor: '#f9f9f9',
-                        transition: 'background-color 0.2s',
-                        textDecoration: 'none',
-                        color: '#333',
-                        marginBottom: '8px'
-                      }}
-                    >
-                      <div className="friend-avatar" style={{
-                        width: '32px',
-                        height: '32px',
-                        borderRadius: '50%',
-                        overflow: 'hidden',
-                        marginRight: '12px',
-                        backgroundColor: '#e5e5e5',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        {friend.pfp ? (
-                          <img 
-                            src={friend.pfp} 
-                            alt={friend.displayName}
-                            style={{
-                              width: '100%',
-                              height: '100%',
-                              objectFit: 'cover'
-                            }}
-                          />
-                        ) : (
-                          <div className="avatar-placeholder" style={{
-                            color: '#666',
-                            fontSize: '14px',
-                            fontWeight: 'bold'
-                          }}>
-                            {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="friend-info" style={{flex: 1}}>
-                        <div className="friend-name" style={{
-                          fontSize: '14px',
-                          fontWeight: 500,
-                          marginBottom: '2px'
-                        }}>
-                          {friend.displayName || friend.username}
-                        </div>
-                        <div className="friend-username" style={{
-                          fontSize: '12px',
-                          color: '#666'
-                        }}>
-                          @{friend.username}
-                        </div>
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <CollectionFriendsModal
+          isOpen={showFriendsModal}
+          onClose={handleCloseFriendsModal}
+          contractAddress={contractAddress}
+          collectionName={collection}
+        />
       )}
     </div>
   );
