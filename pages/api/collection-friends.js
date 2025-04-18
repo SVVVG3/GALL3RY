@@ -91,22 +91,26 @@ export default async function handler(req, res) {
 
     while (hasMoreFollowing) {
       try {
-        // Build Neynar API URL for following list - UPDATED to match all-in-one.js
-        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+        // Build Neynar API URL for following list - Using the correct format from documentation
+        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?fid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
         
+        // Using the correct header format from documentation
         const followingResponse = await axios.get(neynarUrl, {
           headers: {
             'Accept': 'application/json',
-            'api_key': NEYNAR_API_KEY
+            'x-api-key': NEYNAR_API_KEY
           }
         });
         
-        if (followingResponse.data && followingResponse.data.result && followingResponse.data.result.users) {
-          followingList = [...followingList, ...followingResponse.data.result.users];
+        // Parsing the response structure correctly according to documentation
+        if (followingResponse.data && followingResponse.data.users) {
+          // Extract user objects from the follower objects
+          const users = followingResponse.data.users.map(follower => follower.user);
+          followingList = [...followingList, ...users];
           
-          // Check if there's more data to fetch
-          if (followingResponse.data.result.next && followingResponse.data.result.next.cursor) {
-            followingCursor = followingResponse.data.result.next.cursor;
+          // Check if there's more data to fetch using the correct response structure
+          if (followingResponse.data.next && followingResponse.data.next.cursor) {
+            followingCursor = followingResponse.data.next.cursor;
           } else {
             hasMoreFollowing = false;
           }
@@ -115,6 +119,10 @@ export default async function handler(req, res) {
         }
       } catch (error) {
         console.error('Error fetching following list from Neynar:', error.message);
+        if (error.response) {
+          console.error('Error response data:', error.response.data);
+          console.error('Error response status:', error.response.status);
+        }
         return res.status(500).json({ 
           error: 'Neynar API error', 
           message: error.message || 'Failed to fetch following list'
