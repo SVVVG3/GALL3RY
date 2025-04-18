@@ -139,7 +139,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
-        <div className="modal-body">
+        <div className="collection-friends-content">
           <div className="collection-info">
             <p>Friends who hold NFTs from {collectionName || 'this collection'}</p>
           </div>

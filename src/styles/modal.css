@@ -24,6 +24,9 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
   animation: modal-appear 0.2s ease-out;
   color: #333;
+  margin: 0 auto;
+  left: 0;
+  right: 0;
 }
 
 .modal-header {
