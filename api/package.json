@@ -1,4 +1,5 @@
 {
   "name": "gall3ry-api",
-  "private": true
+  "private": true,
+  "type": "commonjs"
 } 
