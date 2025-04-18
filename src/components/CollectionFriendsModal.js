@@ -42,21 +42,30 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
       setError(null);
       
       try {
-        // Try both endpoints for better reliability
+        // Try all endpoints for better reliability, including mock as a last resort
         const apiEndpoints = [
-          `/api/all-in-one?action=collectionFriends&contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
           `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
-          `/api/collection-friends-debug?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`
+          `/api/all-in-one?action=collectionFriends&contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
+          `/api/collection-friends-debug?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
+          `/api/neynar-test?fid=${profile.fid}`, // Test Neynar API to help diagnose
+          `/api/collection-friends-mock?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50` // Mock endpoint as last resort
         ];
         
         let response = null;
         let succeeded = false;
         let lastError = null;
+        let usingMock = false;
         
         for (const endpoint of apiEndpoints) {
           try {
             console.log(`Trying collection friends endpoint: ${endpoint}`);
             response = await fetch(endpoint);
+            
+            // Check if this is the mock endpoint
+            if (endpoint.includes('mock') && response.ok) {
+              usingMock = true;
+              console.log('Using mock data as fallback');
+            }
             
             if (response.ok) {
               succeeded = true;
@@ -81,6 +90,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
         setFriends(data.friends || []);
         setTotalFriends(data.totalFriends || 0);
         setHasMore(data.hasMore || false);
+        
+        // If we're using mock data, show a warning to the user
+        if (usingMock) {
+          setError('Could not connect to Farcaster. Showing mock data for demonstration.');
+        }
       } catch (error) {
         console.error('Error fetching collection friends:', error);
         setError(error.message || 'Failed to load friends data');

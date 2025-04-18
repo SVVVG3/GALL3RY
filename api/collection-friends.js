@@ -91,42 +91,125 @@ module.exports = async function handler(req, res) {
     
     // STEP 1: Get following list from Neynar
     console.log(`[CollectionFriends Direct] Fetching following list for FID: ${fid}`);
+    console.log(`[CollectionFriends Direct] Using Neynar API key: ${NEYNAR_API_KEY.substring(0, 4)}...`);
+
+    // Validate FID is a numeric value
+    if (isNaN(parseInt(fid, 10))) {
+      console.error('[CollectionFriends Direct] Invalid FID format. Must be a numeric value.');
+      return res.status(400).json({
+        error: 'Invalid parameter format',
+        message: 'FID must be a numeric value'
+      });
+    }
+
     let followingList = [];
     let followingCursor = null;
     let hasMoreFollowing = true;
-    
-    while (hasMoreFollowing) {
-      try {
-        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+
+    try {
+      // First try the v2 endpoint
+      const neynarV2Url = `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+      
+      console.log(`[CollectionFriends Direct] Making Neynar API call to: ${neynarV2Url}`);
+      
+      const followingResponse = await axios.get(neynarV2Url, {
+        headers: {
+          'Accept': 'application/json',
+          'api_key': NEYNAR_API_KEY
+        },
+        timeout: 10000 // 10 second timeout
+      });
+      
+      if (followingResponse.data?.result?.users) {
+        followingList = [...followingList, ...followingResponse.data.result.users];
         
-        const followingResponse = await axios.get(neynarUrl, {
-          headers: {
-            'Accept': 'application/json',
-            'api_key': NEYNAR_API_KEY
-          }
-        });
-        
-        if (followingResponse.data?.result?.users) {
-          followingList = [...followingList, ...followingResponse.data.result.users];
-          
-          if (followingResponse.data.result.next?.cursor) {
-            followingCursor = followingResponse.data.result.next.cursor;
-          } else {
-            hasMoreFollowing = false;
-          }
-        } else {
-          hasMoreFollowing = false;
+        if (followingResponse.data.result.next?.cursor) {
+          followingCursor = followingResponse.data.result.next.cursor;
         }
-      } catch (error) {
-        console.error('[CollectionFriends Direct] Neynar API error:', error.message);
-        return res.status(500).json({ 
-          error: 'Neynar API error', 
-          message: error.message || 'Failed to fetch following list'
+        
+        console.log(`[CollectionFriends Direct] Successfully fetched ${followingResponse.data.result.users.length} following users from Neynar`);
+      } else {
+        console.log('[CollectionFriends Direct] No users found in Neynar response or unexpected response format');
+        console.log('Response data:', JSON.stringify(followingResponse.data).substring(0, 200) + '...');
+      }
+    } catch (error) {
+      console.error('[CollectionFriends Direct] Neynar API error:', error);
+      
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        // that falls out of the range of 2xx
+        console.error('Neynar error response data:', error.response.data);
+        console.error('Neynar error response status:', error.response.status);
+        console.error('Neynar error response headers:', error.response.headers);
+        
+        // Try fallback to v1 API if the error is about v2 being deprecated
+        if (error.response.status === 400 || error.response.status === 404) {
+          try {
+            console.log('[CollectionFriends Direct] Attempting fallback to Neynar v1 API...');
+            const neynarV1Url = `https://api.neynar.com/v1/farcaster/following?fid=${fid}&limit=100`;
+            
+            const v1Response = await axios.get(neynarV1Url, {
+              headers: {
+                'Accept': 'application/json',
+                'api_key': NEYNAR_API_KEY
+              },
+              timeout: 10000
+            });
+            
+            if (v1Response.data?.result?.users) {
+              followingList = [...followingList, ...v1Response.data.result.users];
+              console.log(`[CollectionFriends Direct] Successfully fetched ${v1Response.data.result.users.length} following users from Neynar v1 API`);
+            }
+          } catch (v1Error) {
+            console.error('[CollectionFriends Direct] Neynar v1 API fallback also failed:', v1Error.message);
+          }
+        }
+        
+        // If we still have no following list, try a mock list for debugging
+        if (followingList.length === 0) {
+          console.log('[CollectionFriends Direct] Using mock data for debugging');
+          return res.status(500).json({
+            error: 'Neynar API error',
+            message: error.response?.data?.message || error.message || 'Failed to fetch following list',
+            neynarStatus: error.response?.status,
+            responseData: error.response?.data,
+            apiKey: NEYNAR_API_KEY.substring(0, 4) + '...' + NEYNAR_API_KEY.slice(-4),
+            debug: true
+          });
+        }
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('Neynar error request:', error.request);
+        return res.status(500).json({
+          error: 'Neynar API network error',
+          message: 'No response received from Neynar API',
+          debug: true
+        });
+      } else {
+        // Something happened in setting up the request that triggered an Error
+        console.error('Neynar error:', error.message);
+        return res.status(500).json({
+          error: 'Neynar API client error',
+          message: error.message,
+          debug: true
         });
       }
     }
-    
+
     console.log(`[CollectionFriends Direct] Found ${followingList.length} following users`);
+
+    // Only proceed if we have some following users
+    if (followingList.length === 0) {
+      console.log('[CollectionFriends Direct] No following users found, returning empty result');
+      const emptyResult = {
+        contractAddress,
+        friends: [],
+        totalFriends: 0,
+        error: 'No following users found'
+      };
+      
+      return res.status(200).json(emptyResult);
+    }
     
     // Extract addresses
     let uniqueFollowingAddresses = [];
