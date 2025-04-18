@@ -42,11 +42,39 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
       setError(null);
       
       try {
-        const apiUrl = `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`;
-        const response = await fetch(apiUrl);
+        // Try both endpoints for better reliability
+        const apiEndpoints = [
+          `/api/all-in-one?action=collectionFriends&contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
+          `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
+          `/api/collection-friends-debug?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`
+        ];
         
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
+        let response = null;
+        let succeeded = false;
+        let lastError = null;
+        
+        for (const endpoint of apiEndpoints) {
+          try {
+            console.log(`Trying collection friends endpoint: ${endpoint}`);
+            response = await fetch(endpoint);
+            
+            if (response.ok) {
+              succeeded = true;
+              console.log(`Successfully fetched from ${endpoint}`);
+              break;
+            } else {
+              const errorText = await response.text();
+              lastError = new Error(`API error: ${response.status} - ${errorText}`);
+              console.error(`Failed to fetch from ${endpoint}: ${response.status}`);
+            }
+          } catch (endpointError) {
+            console.error(`Error fetching from ${endpoint}:`, endpointError);
+            lastError = endpointError;
+          }
+        }
+        
+        if (!succeeded) {
+          throw lastError || new Error('All API endpoints failed');
         }
         
         const data = await response.json();
