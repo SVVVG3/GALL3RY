@@ -22,6 +22,7 @@ const path = require('path');
 const axios = require('axios');
 const { parse } = require('url');
 const fs = require('fs');
+const net = require('net'); // Add net module for socket connections
 const compression = require('compression');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 
