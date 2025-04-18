@@ -1,10 +1,14 @@
 import React from 'react';
+import { useNFT } from '../contexts/NFTContext';
 import '../styles/FarcasterUserSearch.css';
 
 /**
  * NFT Sort Controls Component
+ * Provides UI for sorting NFTs by different criteria and changing sort order
  */
-const NFTSortControls = ({ sortBy, setSortBy, sortOrder, setSortOrder }) => {
+const NFTSortControls = () => {
+  const { sortBy, setSortBy, sortOrder, setSortOrder } = useNFT();
+
   const toggleSortOrder = () => {
     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
   };

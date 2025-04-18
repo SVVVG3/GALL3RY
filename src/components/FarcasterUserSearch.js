@@ -6,6 +6,7 @@ import { FaSort } from 'react-icons/fa';
 import '../styles/FarcasterUserSearch.css';
 import '../styles/FarcasterProfile.css';
 import safeStorage from '../utils/storage';
+import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
 import { fetchFarcasterUser, fetchAddressesForFid } from '../services/farcasterService';
 import { fetchNftsForAddresses } from '../services/alchemyService';
@@ -697,35 +698,13 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           <div className="nft-container">
             <div className="nft-header">
               <div className="nft-header-left">
-                <div className="nft-search-bar">
-                  <input
-                    type="text"
-                    placeholder="Search NFTs by name or collection..."
-                    value={nftSearchQuery}
-                    onChange={(e) => setNftSearchQuery(e.target.value)}
-                    className="nft-filter-input"
-                  />
-                  {nftSearchQuery && (
-                    <button 
-                      className="nft-filter-clear" 
-                      onClick={() => setNftSearchQuery('')}
-                      aria-label="Clear search"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
+                <NFTSearchBar />
               </div>
               
               {/* Add sort controls if NFTs are available */}
               {userNfts.length > 0 && (
                 <div className="nft-header-right">
-                  <NFTSortControls 
-                    sortBy={sortBy} 
-                    setSortBy={setSortBy} 
-                    sortOrder={sortOrder} 
-                    setSortOrder={setSortOrder}
-                  />
+                  <NFTSortControls />
                 </div>
               )}
             </div>
