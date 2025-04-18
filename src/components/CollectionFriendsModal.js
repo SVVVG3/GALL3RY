@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
@@ -11,206 +11,179 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   const { isAuthenticated } = useAuth();
   const { profile } = useProfile();
   
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [friends, setFriends] = useState([]);
   const [totalFriends, setTotalFriends] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
   const [usingMockData, setUsingMockData] = useState(false);
   
-  // Close modal when Escape key is pressed
+  // Close modal when user hits escape key
   useEffect(() => {
-    const handleEscapeKey = (e) => {
-      if (e.key === 'Escape' && isOpen) {
+    const handleEscKey = (event) => {
+      if (event.key === 'Escape') {
         onClose();
       }
     };
-    
-    document.addEventListener('keydown', handleEscapeKey);
+
+    window.addEventListener('keydown', handleEscKey);
     return () => {
-      document.removeEventListener('keydown', handleEscapeKey);
+      window.removeEventListener('keydown', handleEscKey);
     };
-  }, [isOpen, onClose]);
+  }, [onClose]);
   
-  // Fetch collection friends when modal opens
+  // Fetch collection friends from multiple API endpoints with retries
   useEffect(() => {
+    if (!isOpen || !contractAddress || !profile?.fid) return;
+
     const fetchCollectionFriends = async () => {
-      if (!isOpen || !contractAddress || !profile?.fid) {
-        return;
-      }
-      
-      setLoading(true);
+      setIsLoading(true);
       setError(null);
       setUsingMockData(false);
-      
+
       try {
-        // Try all endpoints for better reliability, including mock as a last resort
-        const apiEndpoints = [
-          `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
-          `/api/all-in-one?action=collectionFriends&contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
-          `/api/collection-friends-debug?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`,
-          `/api/neynar-test?fid=${profile.fid}`, // Test Neynar API to help diagnose
-          `/api/collection-friends-mock?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50` // Mock endpoint as last resort
-        ];
+        // Try primary API endpoint first
+        const apiUrl = `/api/collection-friends?contractAddress=${contractAddress}&fid=${profile.fid}`;
+        const response = await fetch(apiUrl);
         
-        let response = null;
-        let succeeded = false;
-        let lastError = null;
-        
-        for (const endpoint of apiEndpoints) {
-          try {
-            console.log(`Trying collection friends endpoint: ${endpoint}`);
-            response = await fetch(endpoint);
-            
-            // Check if this is the mock endpoint
-            if (endpoint.includes('mock') && response.ok) {
-              setUsingMockData(true);
-              console.log('Using mock data as fallback');
-            }
-            
-            if (response.ok) {
-              succeeded = true;
-              console.log(`Successfully fetched from ${endpoint}`);
-              break;
-            } else {
-              const errorText = await response.text();
-              lastError = new Error(`API error: ${response.status} - ${errorText}`);
-              console.error(`Failed to fetch from ${endpoint}: ${response.status}`);
-            }
-          } catch (endpointError) {
-            console.error(`Error fetching from ${endpoint}:`, endpointError);
-            lastError = endpointError;
-          }
-        }
-        
-        if (!succeeded) {
-          throw lastError || new Error('All API endpoints failed');
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
         }
         
         const data = await response.json();
         setFriends(data.friends || []);
-        setTotalFriends(data.totalFriends || 0);
-        setHasMore(data.hasMore || false);
+        setTotalFriends(data.total || data.friends?.length || 0);
+        setIsLoading(false);
       } catch (error) {
-        console.error('Error fetching collection friends:', error);
-        setError(error.message || 'Failed to load friends data');
-        // Fallback to mock data if all API calls fail
+        console.error("Error fetching collection friends from primary API:", error);
+        
         try {
-          const mockResponse = await fetch(`/api/collection-friends-mock?contractAddress=${contractAddress}&fid=${profile.fid}&limit=50`);
-          if (mockResponse.ok) {
-            const mockData = await mockResponse.json();
-            setFriends(mockData.friends || []);
-            setTotalFriends(mockData.totalFriends || 0);
-            setHasMore(mockData.hasMore || false);
-            setUsingMockData(true);
-            setError(null); // Clear the error since we have mock data
+          // Try secondary API endpoint
+          const backupApiUrl = `/api/collection-friends-backup?contractAddress=${contractAddress}&fid=${profile.fid}`;
+          const backupResponse = await fetch(backupApiUrl);
+          
+          if (!backupResponse.ok) {
+            throw new Error(`Backup API returned ${backupResponse.status}`);
           }
-        } catch (mockError) {
-          console.error('Even mock data failed to load:', mockError);
+          
+          const backupData = await backupResponse.json();
+          setFriends(backupData.friends || []);
+          setTotalFriends(backupData.total || backupData.friends?.length || 0);
+          setIsLoading(false);
+        } catch (backupError) {
+          console.error("Error fetching from backup API:", backupError);
+          
+          // Use mock data as last resort
+          console.log("Using mock data as fallback");
+          const mockFriends = generateMockFriends();
+          setFriends(mockFriends);
+          setTotalFriends(mockFriends.length);
+          setUsingMockData(true);
+          setIsLoading(false);
         }
-      } finally {
-        setLoading(false);
       }
     };
-    
+
     fetchCollectionFriends();
   }, [isOpen, contractAddress, profile?.fid]);
   
-  // Stop scroll on body when modal is open
+  // Prevent body scrolling when modal is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = '';
     }
     
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = '';
     };
   }, [isOpen]);
+  
+  // Generate mock friends data for fallback
+  const generateMockFriends = useCallback(() => {
+    const names = [
+      "Alex", "Jordan", "Taylor", "Morgan", "Casey", 
+      "Riley", "Avery", "Quinn", "Rowan", "Skyler"
+    ];
+    
+    return Array.from({ length: 8 }, (_, i) => ({
+      id: `mock-${i}`,
+      username: `${names[i % names.length].toLowerCase()}${100 + i}`,
+      displayName: names[i % names.length],
+      pfp: null, // No profile picture for mock data
+      fid: 1000 + i
+    }));
+  }, []);
   
   if (!isOpen) return null;
   
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content collection-friends-modal" onClick={e => e.stopPropagation()}>
+      <div 
+        className="collection-friends-modal"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="modal-header">
-          <h3 className="modal-title">Collection Friends</h3>
+          <h2 className="modal-title">
+            {collectionName ? `${collectionName} Owners` : 'Collection Owners'}
+          </h2>
           <button className="modal-close" onClick={onClose}>×</button>
         </div>
         
         <div className="collection-friends-content">
-          <div className="collection-info">
-            <p>Friends who hold NFTs from {collectionName || 'this collection'}</p>
-          </div>
-          
           {usingMockData && (
             <div className="mock-data-notice">
-              <p>Using sample data for demonstration. Connect to Farcaster to see your real friends.</p>
+              <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
             </div>
           )}
           
-          {loading && (
+          <div className="collection-info">
+            <p>
+              {totalFriends > 0 
+                ? `${totalFriends} friends own NFTs from this collection` 
+                : 'No friends found with NFTs from this collection'}
+            </p>
+          </div>
+          
+          {isLoading ? (
             <div className="loading-container">
               <div className="loading-spinner"></div>
-              <p>Finding friends who hold this collection...</p>
+              <p>Loading friends...</p>
             </div>
-          )}
-          
-          {error && !usingMockData && (
+          ) : error && !usingMockData ? (
             <div className="error-message">
-              <p>{error}</p>
-              <button onClick={() => {
-                setLoading(true);
-                setError(null);
-                // Re-trigger the useEffect by changing a dependency
-                setFriends([]);
-              }}>Try Again</button>
+              <p>Error loading collection friends: {error.message}</p>
+              <button onClick={() => window.location.reload()}>Retry</button>
             </div>
-          )}
-          
-          {!loading && !error && friends.length === 0 && (
+          ) : friends.length === 0 ? (
             <div className="no-results">
-              <p>None of your Farcaster friends hold NFTs from this collection.</p>
+              <p>No friends found with NFTs from this collection.</p>
             </div>
-          )}
-          
-          {!loading && friends.length > 0 && (
+          ) : (
             <div className="friends-list">
               {friends.map(friend => (
                 <a 
-                  key={friend.fid} 
+                  key={friend.id || friend.fid} 
                   href={`https://warpcast.com/${friend.username}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="friend-card"
                 >
                   <div className="friend-avatar">
-                    {friend.pfpUrl ? (
-                      <img 
-                        src={friend.pfpUrl} 
-                        alt={`${friend.username}'s profile`} 
-                        onError={(e) => {
-                          e.target.onerror = null;
-                          e.target.src = '/assets/placeholder-profile.png';
-                        }}
-                      />
+                    {friend.pfp ? (
+                      <img src={friend.pfp} alt={friend.displayName} />
                     ) : (
-                      <div className="avatar-placeholder">{friend.username.charAt(0).toUpperCase()}</div>
+                      <div className="avatar-placeholder">
+                        {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
+                      </div>
                     )}
                   </div>
                   <div className="friend-info">
-                    <div className="friend-name">{friend.displayName}</div>
+                    <div className="friend-name">{friend.displayName || friend.username}</div>
                     <div className="friend-username">@{friend.username}</div>
                   </div>
                 </a>
               ))}
-            </div>
-          )}
-          
-          {hasMore && (
-            <div className="load-more">
-              <p>There are more friends who hold this collection.</p>
             </div>
           )}
         </div>
