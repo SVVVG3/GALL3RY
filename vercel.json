@@ -19,6 +19,10 @@
     "api/alchemy.js": {
       "memory": 1024,
       "maxDuration": 15
+    },
+    "api/collection-friends.js": {
+      "memory": 1024,
+      "maxDuration": 30
     }
   },
   "rewrites": [
@@ -37,6 +41,10 @@
     {
       "source": "/api/alchemy",
       "destination": "/api/alchemy.js"
+    },
+    {
+      "source": "/api/collection-friends",
+      "destination": "/api/collection-friends.js"
     },
     {
       "source": "/(.*)",
@@ -72,6 +80,8 @@
     "REACT_APP_ZAPPER_API_KEY": "0b615d5f-ef05-42fb-95d3-a5e180d316cf",
     "ALCHEMY_API_KEY": "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak",
     "REACT_APP_ALCHEMY_API_KEY": "-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak",
+    "NEYNAR_API_KEY": "NEYNAR_API_DOCS",
+    "REACT_APP_NEYNAR_API_KEY": "NEYNAR_API_DOCS",
     "REACT_APP_API_URL": "https://gall3ry.vercel.app/api",
     "DEBUG": "true"
   }
