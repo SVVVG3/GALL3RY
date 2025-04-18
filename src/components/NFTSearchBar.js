@@ -11,12 +11,15 @@ const NFTSearchBar = () => {
 
   return (
     <div className="nft-search-bar">
+      <label htmlFor="nft-search" className="sr-only">Search NFTs</label>
       <input
+        id="nft-search"
         type="text"
         placeholder="Search NFTs by name or collection..."
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className="nft-filter-input"
+        aria-label="Search NFTs by name or collection"
       />
       {searchQuery && (
         <button 
