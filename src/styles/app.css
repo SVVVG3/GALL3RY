@@ -1084,4 +1084,46 @@ a:hover {
 .dropdown-item.sign-out {
   border-top: 1px solid #e5e7eb;
   color: #dc2626;
+}
+
+/* Mobile Enhancements */
+@media (max-width: 480px) {
+  .app-header {
+    padding: 10px 0;
+  }
+  
+  .logo-link {
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+  
+  .auth-container {
+    padding-right: 5px;
+  }
+  
+  /* Improve mobile readability */
+  .app-content {
+    padding: 10px;
+  }
+  
+  /* Larger tap targets */
+  .btn,
+  button,
+  .dropdown-item {
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+  
+  /* Better font sizing for mobile */
+  h1 {
+    font-size: 1.8rem;
+  }
+  
+  h2 {
+    font-size: 1.5rem;
+  }
+  
+  h3 {
+    font-size: 1.3rem;
+  }
 } 

@@ -530,6 +530,64 @@
     width: 100%;
     border-radius: 8px;
   }
+  
+  .nft-section .nft-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  
+  .nft-container {
+    padding: 0 5px;
+  }
+  
+  .sort-option, 
+  .sort-button,
+  .sort-order-toggle {
+    padding: 10px 12px;
+    min-height: 44px; /* Larger tap target */
+  }
+  
+  .nft-filter-input {
+    padding: 12px;
+    height: 44px;
+  }
+  
+  .nft-filter-clear {
+    width: 30px;
+    height: 30px;
+  }
+  
+  .farcaster-search-container {
+    padding: 10px;
+  }
+  
+  .user-profile {
+    padding: 15px;
+  }
+  
+  .profile-image img,
+  .nft-image {
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+  
+  .nft-card {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  .nft-details {
+    padding: 10px;
+  }
+  
+  .nft-name {
+    font-size: 0.95rem;
+    margin-bottom: 3px;
+  }
+  
+  .nft-collection {
+    font-size: 0.8rem;
+  }
 }
 
 @media (min-width: 481px) and (max-width: 768px) {  
@@ -752,13 +810,11 @@
 .sort-option:hover {
   background-color: #7c3aed;
   color: white;
-  border-color: #7c3aed;
 }
 
 .sort-option.active {
   background-color: #8b5cf6;
   color: white;
-  border-color: #8b5cf6;
 }
 
 /* Media query for mobile adjustments */
@@ -1200,11 +1256,12 @@
 }
 
 .sort-button:hover {
-  background-color: #e0e0e0;
+  background-color: #7c3aed;
+  color: white;
 }
 
 .sort-button.active {
-  background-color: #1d9bf0;
+  background-color: #8b5cf6;
   color: white;
 }
 
@@ -1586,9 +1643,9 @@
 }
 
 .sort-order-toggle:hover {
-  background-color: #8b5cf6;
+  background-color: #7c3aed;
   color: white;
-  border-color: #8b5cf6;
+  border-color: #7c3aed;
 }
 
 /* Responsive styles for sorting */
