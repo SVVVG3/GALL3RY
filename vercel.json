@@ -4,15 +4,16 @@
   "outputDirectory": "build",
   "framework": "create-react-app",
   "functions": {
-    "api/unified-api.js": {
+    "api/all-in-one.js": {
       "memory": 1024,
       "maxDuration": 60
     }
   },
+  "excludeFiles": "api/**/*.js",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/unified-api.js"
+      "destination": "/api/all-in-one.js"
     },
     {
       "source": "/(.*)",
