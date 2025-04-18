@@ -377,7 +377,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           // Fetch with proper error handling
           try {
             const result = await fetchAllNFTsForWallets(addresses, {
-              excludeSpam: true
+              excludeSpam: true,
+              fetchAll: true
             });
             
             // Enhanced debugging logs
@@ -540,7 +541,8 @@ const FarcasterUserSearch = ({ initialUsername }) => {
           }
           
           result = await fetchAllNFTsForWallets(addresses, {
-            excludeSpam: true
+            excludeSpam: true,
+            fetchAll: true
           });
           
           // Verify the result structure

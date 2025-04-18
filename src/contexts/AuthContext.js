@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useProfile } from '@farcaster/auth-kit';
 
 // Check if we're in a browser environment
@@ -55,16 +55,17 @@ export const useAuth = () => {
   const context = useContext(AuthContext);
   const farcasterAuth = useProfile();
   
-  // Log Farcaster Auth profile data for debugging
-  if (farcasterAuth.isAuthenticated && farcasterAuth.profile) {
+  // Only log profile details on first authentication or when FID changes
+  const profileFid = farcasterAuth.profile?.fid;
+  
+  // Using useMemo to create a properly formatted profile object that doesn't change unnecessarily
+  const formattedProfile = useMemo(() => {
+    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) {
+      return null;
+    }
+  
+    // Only log profile data once when authenticated or when profile changes
     console.log('Farcaster Auth Profile:', farcasterAuth.profile);
-    console.log('Profile picture fields:', {
-      pfp: farcasterAuth.profile?.pfp,
-      pfpType: typeof farcasterAuth.profile?.pfp,
-      pfpUrl: typeof farcasterAuth.profile?.pfp === 'object' ? farcasterAuth.profile?.pfp?.url : farcasterAuth.profile?.pfp,
-      username: farcasterAuth.profile?.username,
-      fid: farcasterAuth.profile?.fid || 'No fid'
-    });
     
     // Store user info in localStorage for persistence
     if (isBrowser) {
@@ -78,13 +79,6 @@ export const useAuth = () => {
         console.warn('Failed to save user info to localStorage:', e);
       }
     }
-  }
-  
-  // Create a properly formatted profile object from Farcaster Auth data
-  const getFormattedProfile = () => {
-    if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) {
-      return null;
-    }
     
     return {
       fid: farcasterAuth.profile.fid,
@@ -97,13 +91,13 @@ export const useAuth = () => {
       // Include the raw profile for debugging
       _rawProfile: farcasterAuth.profile
     };
-  };
+  }, [farcasterAuth.isAuthenticated, farcasterAuth.profile]);
   
   // Merge our context with Farcaster Auth Kit data
   return {
     ...context,
     isAuthenticated: farcasterAuth.isAuthenticated,
-    profile: getFormattedProfile(),
+    profile: formattedProfile,
     loading: farcasterAuth.loading,
   };
 };

@@ -82,7 +82,7 @@ const alchemyService = {
   
   /**
    * Get NFTs owned by an address
-   * Updated for Alchemy NFT API v3
+   * Updated for Alchemy NFT API v3 with full pagination support
    */
   async getNftsForOwner(ownerAddress, options = {}) {
     const { 
@@ -90,7 +90,8 @@ const alchemyService = {
       pageKey, 
       pageSize = 100,
       excludeSpam = true,
-      excludeAirdrops = true
+      excludeAirdrops = true,
+      fetchAll = true  // New option to fetch all pages
     } = options;
     
     const chainId = this.getChainId(network);
@@ -101,36 +102,66 @@ const alchemyService = {
       if (excludeSpam) filters.push('SPAM');
       if (excludeAirdrops) filters.push('AIRDROPS');
       
-      const params = {
-        endpoint: 'getNFTsForOwner',
-        chain: chainId,
-        owner: ownerAddress,
-        pageSize,
-        withMetadata: true,
-        excludeFilters: filters.length > 0 ? filters : null,
-        pageKey: pageKey || undefined
-      };
+      // If fetchAll is true, we'll collect all pages of NFTs
+      let allNfts = [];
+      let currentPageKey = pageKey;
+      let totalFetched = 0;
+      let hasMorePages = true;
       
-      console.log(`Fetching NFTs for ${ownerAddress} on ${chainId} with filters: ${filters.join(', ')}`);
-      
-      // Use the dynamically updated ALCHEMY_ENDPOINT instead of calling getBaseUrl()
-      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
-      
-      // Log response for debugging
-      console.log(`Received ${response.data?.ownedNfts?.length || 0} NFTs from Alchemy on ${chainId}`);
-      
-      // Add chain/network info to each NFT
-      const nfts = (response.data?.ownedNfts || []).map(nft => ({
-        ...nft,
-        network: chainId,
-        ownerAddress
-      }));
+      // Loop to fetch all pages if fetchAll is true
+      while (hasMorePages) {
+        const params = {
+          endpoint: 'getNFTsForOwner',
+          chain: chainId,
+          owner: ownerAddress,
+          pageSize,
+          withMetadata: true,
+          excludeFilters: filters.length > 0 ? filters : null,
+          pageKey: currentPageKey || undefined
+        };
+        
+        console.log(`Fetching NFTs for ${ownerAddress} on ${chainId}${currentPageKey ? ' (continuation page)' : ''} with filters: ${filters.join(', ')}`);
+        
+        // Use the dynamically updated ALCHEMY_ENDPOINT instead of calling getBaseUrl()
+        const response = await axios.get(ALCHEMY_ENDPOINT, { params });
+        
+        // Get NFTs from this page
+        const nftsFromPage = (response.data?.ownedNfts || []).map(nft => ({
+          ...nft,
+          network: chainId,
+          ownerAddress
+        }));
+        
+        // Add to our collection
+        allNfts = [...allNfts, ...nftsFromPage];
+        totalFetched += nftsFromPage.length;
+        
+        // Log progress
+        console.log(`Received ${nftsFromPage.length} NFTs from Alchemy on ${chainId}${currentPageKey ? ' (continuation page)' : ''}, total: ${totalFetched}`);
+        
+        // Update pageKey for next iteration
+        currentPageKey = response.data?.pageKey;
+        
+        // Determine if we should continue pagination
+        hasMorePages = fetchAll && !!currentPageKey;
+        
+        // Safety check - don't loop infinitely
+        if (totalFetched >= 1000) {
+          console.warn(`Reached safety limit of 1000 NFTs for ${ownerAddress} on ${chainId}, stopping pagination`);
+          hasMorePages = false;
+        }
+        
+        // If we're not fetching all pages, break after first request
+        if (!fetchAll) {
+          break;
+        }
+      }
       
       return {
-        nfts,
-        pageKey: response.data?.pageKey,
-        totalCount: response.data?.totalCount || 0,
-        hasMore: !!response.data?.pageKey
+        nfts: allNfts,
+        pageKey: currentPageKey,
+        totalCount: totalFetched,
+        hasMore: !!currentPageKey
       };
     } catch (error) {
       console.error(`Error fetching NFTs on ${chainId} for ${ownerAddress}:`, error.message);
@@ -153,9 +184,10 @@ const alchemyService = {
     // Get the chains to fetch from
     const chains = options.chains || SUPPORTED_CHAINS.map(c => c.id);
     const pageSize = options.pageSize || 100;
+    const fetchAll = options.fetchAll !== false; // Default to true
     
     try {
-      console.log(`Fetching NFTs across ${chains.length} chains for ${ownerAddress}`);
+      console.log(`Fetching NFTs across ${chains.length} chains for ${ownerAddress}${fetchAll ? ' (all pages)' : ''}`);
       
       // Make parallel requests to all chains
       const results = await Promise.allSettled(
@@ -164,7 +196,8 @@ const alchemyService = {
             network: chainId,
             pageSize,
             excludeSpam: options.excludeSpam !== false,
-            excludeAirdrops: options.excludeAirdrops !== false
+            excludeAirdrops: options.excludeAirdrops !== false,
+            fetchAll: fetchAll
           })
         )
       );

@@ -51,7 +51,8 @@ export const NFTProvider = ({ children }) => {
       const result = await fetchNftsForAddresses(normalizedAddresses, {
         ...options,
         excludeSpam: options.excludeSpam !== false, // Default to true unless explicitly set to false
-        excludeAirdrops: true // Always filter out airdrops
+        excludeAirdrops: true, // Always filter out airdrops
+        fetchAll: options.fetchAll !== false // Default to true unless explicitly set to false
       });
       
       console.log(`Fetched ${result.nfts?.length || 0} NFTs total`);
