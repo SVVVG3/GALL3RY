@@ -402,6 +402,15 @@ const VercelNFTCard = ({ nft }) => {
   // Check if user is authenticated with Farcaster
   const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
   
+  // Add missing handleCardClick function
+  const handleCardClick = (e) => {
+    // Prevent propagation if we have friends modal open
+    if (showFriendsModal) {
+      e.stopPropagation();
+    }
+    // Card click handling - can be expanded later if needed
+  };
+  
   return (
     <div className="nft-card vercel-nft-card" onClick={handleCardClick}>
       {/* NFT Media Container - OUTSIDE the Link to prevent click capturing */}
