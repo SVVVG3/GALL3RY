@@ -91,38 +91,93 @@ export default async function handler(req, res) {
 
     while (hasMoreFollowing) {
       try {
-        // Build Neynar API URL for following list - Using the correct format from documentation
-        const neynarUrl = `https://api.neynar.com/v2/farcaster/following?fid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`;
+        // Try multiple URL formats for the Neynar API
+        const urlFormats = [
+          { url: `https://api.neynar.com/v2/farcaster/following?fid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`, param: 'fid' },
+          { url: `https://api.neynar.com/v2/farcaster/following?viewerFid=${fid}&limit=100${followingCursor ? `&cursor=${followingCursor}` : ''}`, param: 'viewerFid' }
+        ];
         
-        // Using the correct header format from documentation
-        const followingResponse = await axios.get(neynarUrl, {
-          headers: {
-            'Accept': 'application/json',
-            'x-api-key': NEYNAR_API_KEY
+        // Try different header formats too
+        const headerFormats = [
+          { header: 'x-api-key', value: NEYNAR_API_KEY },
+          { header: 'api_key', value: NEYNAR_API_KEY }
+        ];
+        
+        let followingResponse = null;
+        let succeeded = false;
+        
+        // Try all combinations
+        for (const urlFormat of urlFormats) {
+          for (const headerFormat of headerFormats) {
+            // Skip if we already succeeded
+            if (succeeded) continue;
+            
+            try {
+              console.log(`Trying Neynar API with ${urlFormat.param} parameter and ${headerFormat.header} header`);
+              
+              const headers = {
+                'Accept': 'application/json'
+              };
+              headers[headerFormat.header] = headerFormat.value;
+              
+              followingResponse = await axios.get(urlFormat.url, { headers, timeout: 10000 });
+              
+              // If we get here, the request succeeded
+              succeeded = true;
+              console.log(`Neynar API request succeeded with ${urlFormat.param} parameter and ${headerFormat.header} header`);
+              
+              // Extract users based on the response format
+              let users = [];
+              
+              if (followingResponse.data.users) {
+                // Format 1: Direct users array with potential follower objects
+                if (followingResponse.data.users[0] && followingResponse.data.users[0].object === 'follower') {
+                  users = followingResponse.data.users.map(follower => follower.user);
+                } else {
+                  users = followingResponse.data.users;
+                }
+                
+                followingList = [...followingList, ...users];
+                
+                // Check if there's more data to fetch
+                if (followingResponse.data.next && followingResponse.data.next.cursor) {
+                  followingCursor = followingResponse.data.next.cursor;
+                } else {
+                  hasMoreFollowing = false;
+                }
+              } else if (followingResponse.data.result && followingResponse.data.result.users) {
+                // Format 2: Result -> users nested structure
+                users = followingResponse.data.result.users;
+                followingList = [...followingList, ...users];
+                
+                // Check if there's more data to fetch
+                if (followingResponse.data.result.next && followingResponse.data.result.next.cursor) {
+                  followingCursor = followingResponse.data.result.next.cursor;
+                } else {
+                  hasMoreFollowing = false;
+                }
+              } else {
+                // Unknown format - log and stop pagination
+                console.error('Unknown response format from Neynar API:', Object.keys(followingResponse.data));
+                hasMoreFollowing = false;
+              }
+              
+              break; // Break inner loop on success
+            } catch (error) {
+              console.log(`Neynar API attempt failed: ${error.message}`);
+              // Continue to next attempt
+            }
           }
-        });
-        
-        // Parsing the response structure correctly according to documentation
-        if (followingResponse.data && followingResponse.data.users) {
-          // Extract user objects from the follower objects
-          const users = followingResponse.data.users.map(follower => follower.user);
-          followingList = [...followingList, ...users];
           
-          // Check if there's more data to fetch using the correct response structure
-          if (followingResponse.data.next && followingResponse.data.next.cursor) {
-            followingCursor = followingResponse.data.next.cursor;
-          } else {
-            hasMoreFollowing = false;
-          }
-        } else {
-          hasMoreFollowing = false;
+          if (succeeded) break; // Break outer loop on success
+        }
+        
+        // If none of the attempts succeeded, throw an error
+        if (!succeeded) {
+          throw new Error('All Neynar API request attempts failed');
         }
       } catch (error) {
         console.error('Error fetching following list from Neynar:', error.message);
-        if (error.response) {
-          console.error('Error response data:', error.response.data);
-          console.error('Error response status:', error.response.status);
-        }
         return res.status(500).json({ 
           error: 'Neynar API error', 
           message: error.message || 'Failed to fetch following list'
