@@ -24,7 +24,7 @@ const { parse } = require('url');
 const fs = require('fs');
 const compression = require('compression');
 const { createProxyMiddleware } = require('http-proxy-middleware');
-const apiRoutes = require('./api/index.js'); // Import API routes from api/index.js
+const apiRoutes = require('./api/vercel-local-bridge.js'); // Import API routes using Vercel-compatible bridge
 const net = require('net');
 
 const app = express();
@@ -1092,7 +1092,7 @@ app.get('/test-nft-image', async (req, res) => {
 });
 
 // Mount API routes - prioritize the all-in-one handler over legacy routes
-app.use('/api', apiRoutes); // API routes from api/index.js (all-in-one handler)
+app.use('/api', apiRoutes); // API routes from api/vercel-local-bridge.js (all-in-one handler)
 
 // Fall back to legacy API routes for any routes not handled by all-in-one
 app.use('/api', apiRouter);
