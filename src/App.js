@@ -110,6 +110,20 @@ function App() {
     return <LoadingScreen />;
   }
   
+  // Set meta tags for mobile
+  useEffect(() => {
+    // Set theme-color meta tag to white to match body
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+    if (metaThemeColor) {
+      metaThemeColor.setAttribute('content', '#ffffff');
+    } else {
+      const meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      meta.content = '#ffffff';
+      document.head.appendChild(meta);
+    }
+  }, []);
+  
   // Return the app with a proper provider hierarchy
   return (
     <ErrorBoundary

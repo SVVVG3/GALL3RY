@@ -25,9 +25,14 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-  background-color: #f9fafb;
+  background-color: #ffffff;
   color: #111827;
   line-height: 1.5;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  position: relative;
 }
 
 .container {
@@ -96,9 +101,10 @@ a:hover {
 }
 
 .app-header {
-  background-color: white;
-  border-bottom: 1px solid #e5e7eb;
+  background-color: #8b5cf6;
+  border-bottom: none;
   padding: 1rem 0;
+  color: white;
 }
 
 .app-header .container {
@@ -408,68 +414,61 @@ a:hover {
 
 /* Navigation */
 .app-header {
-  background-color: #ffffff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 15px 0;
+  background-color: #8b5cf6;
+  border-bottom: none;
+  padding: 1rem 0;
+  color: white;
 }
 
 .app-header .container {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+  align-items: center;
 }
 
 .logo h1 {
-  margin: 0;
   font-size: 1.5rem;
   font-weight: 700;
-  color: #4f46e5;
+  background: linear-gradient(to right, #8b5cf6, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .main-nav {
   display: flex;
-  gap: 20px;
+  gap: 1.5rem;
 }
 
 .main-nav a {
   color: #4b5563;
-  text-decoration: none;
-  padding: 5px 0;
   font-weight: 500;
-  position: relative;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid transparent;
+}
+
+.main-nav a:hover {
+  color: #1f2937;
 }
 
 .main-nav a.active {
-  color: #4f46e5;
-}
-
-.main-nav a.active:after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: #4f46e5;
+  color: #8b5cf6;
+  border-bottom-color: #8b5cf6;
 }
 
 .auth-actions {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 1rem;
 }
 
 .user-greeting {
-  font-size: 0.9rem;
-  color: #4b5563;
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
 /* Footer */
 .app-footer {
-  background-color: #f9fafb;
+  background-color: #ffffff;
   padding: 20px 0;
   border-top: 1px solid #e5e7eb;
 }
@@ -618,6 +617,28 @@ a:hover {
   
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+  
+  html {
+    background-color: #ffffff;
+  }
+  
+  body {
+    background-color: #ffffff;
+  }
+  
+  /* Prevent overscroll purple bg */
+  body::before,
+  body::after {
+    content: "";
+    display: block;
+    height: 1px;
+    background-color: #ffffff;
+  }
+  
+  /* Ensure footer background is white */
+  .app-footer {
+    background-color: #ffffff;
   }
 }
 
@@ -1025,14 +1046,14 @@ a:hover {
   display: flex;
   align-items: center;
   padding: 0.5rem 0.75rem;
-  background-color: #f3f4f6;
+  background-color: rgba(255, 255, 255, 0.15);
   border-radius: 9999px;
   cursor: pointer;
   transition: background-color 0.2s;
 }
 
 .user-profile-button:hover {
-  background-color: #e5e7eb;
+  background-color: rgba(255, 255, 255, 0.25);
 }
 
 .profile-username {
@@ -1126,4 +1147,25 @@ a:hover {
   h3 {
     font-size: 1.3rem;
   }
+}
+
+.app-header .logo-link {
+  color: white;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.5rem;
+}
+
+.app-header .user-profile-button {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.app-header .user-profile-button:hover {
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.app-header .dropdown-menu {
+  background-color: white;
+  color: #333;
 } 
