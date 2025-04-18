@@ -115,13 +115,25 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     }));
   }, []);
   
+  // Prevent click events from bubbling up and closing the modal unexpectedly
+  const handleModalClick = (e) => {
+    e.stopPropagation();
+    e.preventDefault(); // Prevent any default behavior
+  };
+  
   if (!isOpen) return null;
   
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div 
+      className="modal-overlay" 
+      onClick={onClose}
+      onMouseMove={(e) => e.stopPropagation()}
+    >
       <div 
         className="collection-friends-modal"
-        onClick={e => e.stopPropagation()}
+        onClick={handleModalClick}
+        onMouseOver={handleModalClick}
+        onMouseLeave={handleModalClick}
       >
         <div className="modal-header">
           <h2 className="modal-title">
