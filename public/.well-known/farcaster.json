@@ -1,0 +1,12 @@
+{
+  "frame": {
+    "version": "1",
+    "name": "GALL3RY",
+    "iconUrl": "https://gall3ry.vercel.app/logo512.png",
+    "homeUrl": "https://gall3ry.vercel.app/",
+    "imageUrl": "https://gall3ry.vercel.app/og-image.png",
+    "buttonTitle": "🖼️ Open GALL3RY",
+    "splashImageUrl": "https://gall3ry.vercel.app/logo512.png",
+    "splashBackgroundColor": "#f5f5f5"
+  }
+} 
