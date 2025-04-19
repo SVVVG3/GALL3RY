@@ -11,21 +11,25 @@ import { AuthKitProvider } from '@farcaster/auth-kit';
 // Import the SDK directly and initialize IMMEDIATELY at the top level
 import { sdk } from '@farcaster/frame-sdk';
 
-// Initialize the SDK as early as possible
-let sdkInitialized = false;
+// Initialize the SDK as early as possible - before ANY other code
 try {
+  // Following the official docs, initialize immediately
   sdk.init();
-  sdkInitialized = true;
   console.log("SDK initialized successfully");
   
-  // SAFE: Only log primitive boolean values about SDK state, never the actual objects
+  // SAFE: Only log primitive boolean values
   console.log("SDK state after init:", {
-    initialized: !!sdk.initialized,
+    initialized: true,
     hasContext: sdk && !!sdk.context,
-    hasUser: sdk && sdk.context && sdk.context.user ? true : false,
-    hasViewerFid: sdk && sdk.context && sdk.context.viewerFid ? true : false,
-    actionsAvailable: sdk && sdk.actions ? Object.keys(sdk.actions || {}).length > 0 : false
+    hasUser: sdk && sdk.context && sdk.context.user ? true : false
   });
+  
+  // Immediately try to dismiss splash screen as recommended in docs
+  if (sdk.actions && typeof sdk.actions.ready === 'function') {
+    sdk.actions.ready().catch(e => {
+      console.warn("Early splash screen dismissal failed:", e.message || "Unknown error");
+    });
+  }
 } catch (error) {
   console.error("Failed to initialize SDK:", error.message || "Unknown error");
 }
