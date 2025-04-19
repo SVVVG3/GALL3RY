@@ -8,6 +8,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
+import { ProfileProvider } from './contexts/ProfileContext';
 
 // Error Boundary Component to catch errors
 class ErrorBoundary extends React.Component {
@@ -83,9 +84,11 @@ try {
     <React.StrictMode>
       <ErrorBoundary>
         <AuthProvider>
-          <WalletProvider>
-            <App />
-          </WalletProvider>
+          <ProfileProvider>
+            <WalletProvider>
+              <App />
+            </WalletProvider>
+          </ProfileProvider>
         </AuthProvider>
       </ErrorBoundary>
     </React.StrictMode>
