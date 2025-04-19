@@ -219,6 +219,8 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         return { success: false, error: "SDK not available" };
       }
       
+      // IMPORTANT: Never log or stringify the SDK object directly
+      // Only log primitive property existence to avoid Symbol.toPrimitive errors
       console.log("SDK status:", {
         defined: !!sdk,
         hasContext: sdk && !!sdk.context,
@@ -228,21 +230,28 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       
       // STEP 1: First try to get user from sdk.context directly
       if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+        // Only log primitive values, never the entire object
         console.log("Found user in sdk.context:", {
           hasFid: !!sdk.context.user.fid,
           hasUsername: !!sdk.context.user.username
         });
         
         try {
-          // Create a clean object with primitive values
+          // Create a clean plain object with only primitives
+          // NEVER include the original SDK objects
           const userData = {
-            fid: Number(sdk.context.user.fid),
-            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
-            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
-            pfp: { url: sdk.context.user.pfpUrl || null }
+            fid: Number(sdk.context.user.fid || 0),
+            username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                        (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+            pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
           };
           
-          console.log("Created user data from context:", userData);
+          // Only log our clean object
+          console.log("Created user data:", {
+            hasFid: !!userData.fid,
+            hasUsername: !!userData.username
+          });
           
           // Store as JSON in localStorage
           localStorage.setItem('farcaster_user', JSON.stringify(userData));
@@ -253,7 +262,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
             await login(userData);
           }
           
-          // Dispatch event
+          // Dispatch event with our clean object
           const event = new CustomEvent('miniAppAuthenticated', {
             detail: {
               fid: userData.fid,
@@ -286,12 +295,13 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       
       // Generate nonce for authentication
       const nonce = generateNonce();
-      console.log("Generated nonce:", nonce);
+      console.log("Generated nonce for authentication");
       
       try {
         console.log("Calling sdk.actions.signIn()");
+        // Don't log the actual sign-in result, only that it completed
         const signInResult = await sdk.actions.signIn({ nonce });
-        console.log("Sign-in result:", signInResult);
+        console.log("Sign-in completed");
         
         // After sign-in, check context again
         let userData = null;
@@ -299,32 +309,57 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         // Try to get user info from context after sign-in
         if (sdk.context && sdk.context.user && sdk.context.user.fid) {
           userData = {
-            fid: Number(sdk.context.user.fid),
-            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
-            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
-            pfp: { url: sdk.context.user.pfpUrl || null }
+            fid: Number(sdk.context.user.fid || 0),
+            username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                        (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+            pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
           };
-          console.log("Got user data from context after sign-in:", userData);
+          console.log("Got user data from context after sign-in");
         }
         // If no context, try to extract from sign-in result
-        else if (signInResult && signInResult.message) {
+        else if (signInResult) {
           try {
-            // Attempt to parse message for user info
-            const message = typeof signInResult.message === 'string' 
-              ? JSON.parse(signInResult.message) 
-              : signInResult.message;
+            // Be very careful with the sign-in result
+            // Only extract primitives if possible
+            let message = null;
             
+            // Handle message carefully
+            if (signInResult.message) {
+              if (typeof signInResult.message === 'string') {
+                try {
+                  message = JSON.parse(signInResult.message);
+                } catch (parseError) {
+                  console.log("Message is not JSON, using as-is");
+                  // If not parseable, it might be a simple string
+                }
+              } else if (typeof signInResult.message === 'object') {
+                // Copy only primitive values to avoid Symbol issues
+                message = {};
+                for (const key in signInResult.message) {
+                  if (Object.prototype.hasOwnProperty.call(signInResult.message, key)) {
+                    const value = signInResult.message[key];
+                    if (typeof value !== 'function' && typeof value !== 'symbol' && key !== 'toJSON') {
+                      message[key] = value;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // If we have an fid, create a user object
             if (message && message.fid) {
               userData = {
-                fid: Number(message.fid),
-                username: message.username || `user${message.fid}`,
-                displayName: message.displayName || message.username || `User ${message.fid}`,
-                pfp: { url: message.pfpUrl || null }
+                fid: Number(message.fid || 0),
+                username: message.username ? String(message.username) : `user${message.fid}`,
+                displayName: message.displayName ? String(message.displayName) : 
+                            (message.username ? String(message.username) : `User ${message.fid}`),
+                pfp: { url: message.pfpUrl ? String(message.pfpUrl) : null }
               };
-              console.log("Extracted user data from sign-in result:", userData);
+              console.log("Extracted user data from sign-in result");
             }
           } catch (parseError) {
-            console.error("Error parsing sign-in result:", parseError);
+            console.error("Error safely extracting data from sign-in result:", parseError);
           }
         }
         
@@ -338,7 +373,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
             await login(userData);
           }
           
-          // Dispatch event
+          // Dispatch event with clean data
           const event = new CustomEvent('miniAppAuthenticated', {
             detail: {
               fid: userData.fid,
@@ -360,7 +395,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         setAuthError("Couldn't get user info");
         return { success: false, error: "No user info after sign-in" };
       } catch (error) {
-        console.error("Sign-in error:", error);
+        console.error("Sign-in error:", error.message || "Unknown error");
         
         if (error.name === 'RejectedByUser') {
           console.log("User rejected sign-in");
@@ -368,11 +403,13 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           return { success: false, error: "User rejected sign-in", rejected: true };
         }
         
+        // Avoid stringifying the entire error object
         setAuthError(`Authentication failed: ${error.message || "Unknown error"}`);
         return { success: false, error: error.message || "Unknown error" };
       }
     } catch (error) {
-      console.error("Overall error in directMiniAppSignIn:", error);
+      // Avoid logging the entire error object
+      console.error("Overall error in directMiniAppSignIn:", error.message || "Unknown error");
       setAuthError(`Authentication error: ${error.message || "Unknown error"}`);
       return { success: false, error: error.message || "Unknown error" };
     }
