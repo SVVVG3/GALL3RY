@@ -119,10 +119,9 @@ a:hover {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 0.9rem 20px;
-  width: 100%;
   box-sizing: border-box;
   background-color: white;
 }
@@ -189,10 +188,9 @@ a:hover {
 
 .app-content {
   flex: 1;
+  padding: 20px;
   width: 100%;
   margin: 0 auto;
-  padding: 20px;
-  box-sizing: border-box;
 }
 
 .app-footer {
@@ -222,9 +220,8 @@ a:hover {
 /* Home Page Styles */
 .home-container {
   width: 100%;
-  max-width: 95vw;
   margin: 0 auto;
-  padding: 1rem 1rem;
+  padding: 40px 20px;
 }
 
 .hero-section {
@@ -512,7 +509,7 @@ a:hover {
 }
 
 .app-footer .container {
-  max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 0 20px;
   text-align: center;
@@ -569,7 +566,7 @@ a:hover {
 
 /* Home Page */
 .home-container {
-  max-width: 95vw;
+  width: 100%;
   margin: 0 auto;
   padding: 40px 20px;
 }
@@ -1224,11 +1221,11 @@ a:hover {
 
 @media (min-width: 1440px) {
   .app-content {
-    max-width: 1400px;
+    width: 100%;
   }
   
   .container {
-    max-width: 90vw;
+    width: 100%;
   }
 }
 

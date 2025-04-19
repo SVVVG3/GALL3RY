@@ -1291,7 +1291,6 @@ img {
 /* Updated Wallet Addresses Styling */
 .wallet-addresses {
   width: 100%;
-  max-width: 400px;
   margin-top: 1rem;
 }
 
@@ -1344,7 +1343,7 @@ img {
 
 /* Center the search container and user profile */
 .farcaster-search-container {
-  max-width: 95vw;
+  width: 100%;
   margin: 0 auto;
 }
 
@@ -1408,7 +1407,7 @@ img {
 
 .content-wrapper {
   margin: 2rem auto;
-  max-width: 95vw;
+  width: 100%;
   padding: 0 1rem;
   text-align: center;
 }
@@ -1430,7 +1429,6 @@ img {
   width: 100%;
   margin: 20px auto;
   padding: 0 16px;
-  max-width: 1400px;
 }
 
 /* NFT image specific fixes to ensure images display properly */
