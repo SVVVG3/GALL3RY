@@ -11,38 +11,23 @@ import { AuthKitProvider } from '@farcaster/auth-kit';
 // Import the SDK directly and initialize IMMEDIATELY at the top level
 import { sdk } from '@farcaster/frame-sdk';
 
-// Initialize immediately, before any React code runs
-if (typeof window !== 'undefined') {
-  try {
-    // Initialize SDK as early as possible
-    if (sdk && typeof sdk.init === 'function') {
-      sdk.init();
-      console.log('✅ SDK initialized via sdk.init()');
-    }
-    
-    // Log SDK status for debugging
-    console.log('SDK initialization status:', {
-      sdkDefined: typeof sdk !== 'undefined',
-      sdkVersion: sdk?.version,
-      sdkInitialized: sdk?.initialized,
-      actionsAvailable: sdk && typeof sdk.actions !== 'undefined',
-      signInAvailable: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
-      readyAvailable: sdk && sdk.actions && typeof sdk.actions.ready === 'function',
-      getContextAvailable: sdk && typeof sdk.getContext === 'function'
-    });
-    
-    // Log user context if available - this is key for auto-authentication
-    if (sdk.context) {
-      console.log('SDK context available at initialization:', sdk.context);
-      if (sdk.context.user) {
-        console.log('User found in SDK context at initialization:', sdk.context.user);
-      }
-    } else {
-      console.log('No SDK context available at initialization');
-    }
-  } catch (error) {
-    console.error('❌ Error initializing SDK:', error);
-  }
+// Initialize the SDK as early as possible
+let sdkInitialized = false;
+try {
+  sdk.init();
+  sdkInitialized = true;
+  console.log("SDK initialized successfully");
+  
+  // Log the SDK state for debugging
+  console.log("SDK state after init:", {
+    initialized: sdk.initialized,
+    hasContext: !!sdk.context,
+    hasUser: sdk.context && sdk.context.user ? true : false,
+    hasViewerFid: sdk.context && sdk.context.viewerFid ? true : false,
+    actions: Object.keys(sdk.actions || {})
+  });
+} catch (error) {
+  console.error("Failed to initialize SDK:", error);
 }
 
 // Import Mini App utilities
@@ -164,6 +149,27 @@ const getWarpcastContext = async () => {
     console.warn('Error getting early context:', e);
   }
   return null;
+};
+
+// Helper function to get user info from SDK context
+const getUserInfoFromContext = () => {
+  if (!sdk || !sdk.context || !sdk.context.user) {
+    return null;
+  }
+  
+  try {
+    // Create a clean object with just the properties we need
+    return {
+      fid: Number(sdk.context.user.fid),
+      username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+      displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                  (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+      pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
+    };
+  } catch (error) {
+    console.error("Error extracting user info from context:", error);
+    return null;
+  }
 };
 
 // Main App function with simplified provider hierarchy

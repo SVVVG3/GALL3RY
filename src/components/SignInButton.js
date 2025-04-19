@@ -209,189 +209,171 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
 
   // Direct implementation of sign-in using the SDK
   const directMiniAppSignIn = async () => {
-    console.log("Attempting direct SDK sign-in");
+    console.log("Starting direct Mini App sign-in flow");
     
     try {
-      // Check if SDK is available
+      // Check if SDK is defined
       if (!sdk) {
-        console.error("SDK not available");
+        console.error("SDK is undefined in directMiniAppSignIn");
         setAuthError("SDK not available");
         return { success: false, error: "SDK not available" };
       }
       
-      // STEP 1: Check for user info directly in sdk.context (fastest path)
-      console.log("Checking sdk.context for user info:", sdk.context);
+      console.log("SDK status:", {
+        defined: !!sdk,
+        hasContext: sdk && !!sdk.context,
+        hasActions: sdk && !!sdk.actions,
+        hasSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function'
+      });
+      
+      // STEP 1: First try to get user from sdk.context directly
       if (sdk.context && sdk.context.user && sdk.context.user.fid) {
-        console.log("Found user info directly in sdk.context:", sdk.context.user);
-        const user = sdk.context.user;
-        
-        const userInfo = {
-          fid: user.fid,
-          username: user.username || `user${user.fid}`,
-          displayName: user.displayName || user.username || `User ${user.fid}`,
-          pfp: { url: user.pfpUrl || null }
-        };
-        
-        // Store in localStorage
-        try {
-          localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-        } catch (e) {
-          console.error("Error storing in localStorage:", e);
-        }
-        
-        // Update auth context
-        if (typeof login === 'function') {
-          await login(userInfo);
-        }
-        
-        // Dispatch event
-        const event = new CustomEvent('miniAppAuthenticated', {
-          detail: userInfo
+        console.log("Found user in sdk.context:", {
+          hasFid: !!sdk.context.user.fid,
+          hasUsername: !!sdk.context.user.username
         });
-        window.dispatchEvent(event);
         
-        if (typeof onSuccess === 'function') {
-          onSuccess(userInfo);
-        }
-        
-        return { success: true, user: userInfo };
-      }
-      
-      // STEP 2: Try getContext() method if available
-      if (typeof sdk.getContext === 'function') {
         try {
-          console.log("Getting user context with sdk.getContext()");
-          const context = await sdk.getContext();
+          // Create a clean object with primitive values
+          const userData = {
+            fid: Number(sdk.context.user.fid),
+            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+            pfp: { url: sdk.context.user.pfpUrl || null }
+          };
           
-          if (context && context.user && context.user.fid) {
-            console.log("Got user context:", context.user);
-            const userInfo = {
-              fid: context.user.fid,
-              username: context.user.username || `user${context.user.fid}`,
-              displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
-              pfp: { url: context.user.pfpUrl || null }
-            };
-            
-            // Store in localStorage
-            localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-            localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-            
-            // Update auth context
-            if (typeof login === 'function') {
-              await login(userInfo);
-            }
-            
-            // Dispatch event
-            const event = new CustomEvent('miniAppAuthenticated', {
-              detail: userInfo
-            });
-            window.dispatchEvent(event);
-            
-            if (typeof onSuccess === 'function') {
-              onSuccess(userInfo);
-            }
-            
-            return { success: true, user: userInfo };
+          console.log("Created user data from context:", userData);
+          
+          // Store as JSON in localStorage
+          localStorage.setItem('farcaster_user', JSON.stringify(userData));
+          localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+          
+          // Update auth context
+          if (typeof login === 'function') {
+            await login(userData);
           }
-        } catch (e) {
-          console.error("Error getting context:", e);
+          
+          // Dispatch event
+          const event = new CustomEvent('miniAppAuthenticated', {
+            detail: {
+              fid: userData.fid,
+              username: userData.username,
+              displayName: userData.displayName,
+              pfp: userData.pfp
+            }
+          });
+          window.dispatchEvent(event);
+          console.log("Dispatched authentication event");
+          
+          if (typeof onSuccess === 'function') {
+            onSuccess(userData);
+          }
+          
+          return { success: true, user: userData };
+        } catch (error) {
+          console.error("Error processing context:", error);
         }
+      } else {
+        console.log("No user found in sdk.context, will try sign-in");
       }
       
-      // STEP 3: Only if no context is available, try sign-in
+      // STEP 2: If no context, try sign-in
       if (!sdk.actions || typeof sdk.actions.signIn !== 'function') {
         console.error("SignIn action not available");
         setAuthError("SignIn action not available");
         return { success: false, error: "SignIn action not available" };
       }
       
-      // Generate a nonce for authentication
+      // Generate nonce for authentication
       const nonce = generateNonce();
-      console.log("Generated nonce for authentication:", nonce);
+      console.log("Generated nonce:", nonce);
       
       try {
-        // Use a timeout to prevent hanging
-        const signInPromise = sdk.actions.signIn({ nonce });
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Sign-in timeout')), 5000);
-        });
+        console.log("Calling sdk.actions.signIn()");
+        const signInResult = await sdk.actions.signIn({ nonce });
+        console.log("Sign-in result:", signInResult);
         
-        // Simple sign-in call with timeout
-        await Promise.race([signInPromise, timeoutPromise]);
-        console.log("Sign-in successful");
+        // After sign-in, check context again
+        let userData = null;
         
-        // Try to get context again after sign-in
-        let userInfo = null;
-        
-        // Check context again after sign-in
+        // Try to get user info from context after sign-in
         if (sdk.context && sdk.context.user && sdk.context.user.fid) {
-          const user = sdk.context.user;
-          userInfo = {
-            fid: user.fid,
-            username: user.username || `user${user.fid}`,
-            displayName: user.displayName || user.username || `User ${user.fid}`,
-            pfp: { url: user.pfpUrl || null }
+          userData = {
+            fid: Number(sdk.context.user.fid),
+            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+            pfp: { url: sdk.context.user.pfpUrl || null }
           };
-        } else if (typeof sdk.getContext === 'function') {
+          console.log("Got user data from context after sign-in:", userData);
+        }
+        // If no context, try to extract from sign-in result
+        else if (signInResult && signInResult.message) {
           try {
-            const newContext = await sdk.getContext();
-            if (newContext && newContext.user && newContext.user.fid) {
-              userInfo = {
-                fid: newContext.user.fid,
-                username: newContext.user.username || `user${newContext.user.fid}`,
-                displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
-                pfp: { url: newContext.user.pfpUrl || null }
+            // Attempt to parse message for user info
+            const message = typeof signInResult.message === 'string' 
+              ? JSON.parse(signInResult.message) 
+              : signInResult.message;
+            
+            if (message && message.fid) {
+              userData = {
+                fid: Number(message.fid),
+                username: message.username || `user${message.fid}`,
+                displayName: message.displayName || message.username || `User ${message.fid}`,
+                pfp: { url: message.pfpUrl || null }
               };
+              console.log("Extracted user data from sign-in result:", userData);
             }
-          } catch (e) {
-            console.error("Error getting context after sign-in:", e);
+          } catch (parseError) {
+            console.error("Error parsing sign-in result:", parseError);
           }
         }
         
-        if (userInfo) {
-          // Store user info and update auth state
-          localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+        if (userData) {
+          // Store user info
+          localStorage.setItem('farcaster_user', JSON.stringify(userData));
+          localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
           
+          // Update auth context
           if (typeof login === 'function') {
-            await login(userInfo);
+            await login(userData);
           }
           
           // Dispatch event
           const event = new CustomEvent('miniAppAuthenticated', {
-            detail: userInfo
+            detail: {
+              fid: userData.fid,
+              username: userData.username,
+              displayName: userData.displayName,
+              pfp: userData.pfp
+            }
           });
           window.dispatchEvent(event);
           
           if (typeof onSuccess === 'function') {
-            onSuccess(userInfo);
+            onSuccess(userData);
           }
           
-          return { success: true, user: userInfo };
+          return { success: true, user: userData };
         }
         
-        // If we get here, sign-in worked but we couldn't get user info
-        console.error("Sign-in succeeded but couldn't get user info");
-        setAuthError("Couldn't get user info after sign-in");
+        console.error("Couldn't get user info after sign-in");
+        setAuthError("Couldn't get user info");
         return { success: false, error: "No user info after sign-in" };
       } catch (error) {
         console.error("Sign-in error:", error);
-        console.error("Error stack:", error.stack);
         
-        // Check specifically for RejectedByUser error
         if (error.name === 'RejectedByUser') {
-          console.log("User rejected sign-in request");
+          console.log("User rejected sign-in");
           setAuthError("Sign-in was cancelled");
           return { success: false, error: "User rejected sign-in", rejected: true };
         }
         
         setAuthError(`Authentication failed: ${error.message || "Unknown error"}`);
-        return { success: false, error: error.message || "Unknown error during sign-in" };
+        return { success: false, error: error.message || "Unknown error" };
       }
     } catch (error) {
       console.error("Overall error in directMiniAppSignIn:", error);
-      setAuthError(`Authentication failed: ${error.message || "Unknown error"}`);
+      setAuthError(`Authentication error: ${error.message || "Unknown error"}`);
       return { success: false, error: error.message || "Unknown error" };
     }
   };
