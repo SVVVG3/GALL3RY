@@ -64,31 +64,54 @@ module.exports = async (req, res) => {
     console.log(`Message type: ${typeof message}, length: ${message?.length || 0}`);
     console.log(`Signature type: ${typeof signature}, length: ${signature?.length || 0}`);
     
+    // For debugging in Vercel - log the complete objects
+    console.log('Message content:', message);
+    console.log('Signature:', signature);
+    
     // Verify the message and signature
     try {
+      // Add debug mode to get more details
       const verifyResult = await verifySignInMessage({
         message,
         signature,
         domain: FARCASTER_DOMAIN, // This should match the domain in your Mini App configuration
+        debug: true
       });
       
-      console.log('Verification result:', verifyResult);
+      console.log('Complete verification result:', JSON.stringify(verifyResult, null, 2));
       
       if (!verifyResult.success) {
         console.error('Verification failed:', verifyResult.error);
         return res.status(401).json({ error: `Verification failed: ${verifyResult.error}` });
       }
       
-      // Extract user info from the successful result
-      const { fid, username, displayName, pfpUrl } = verifyResult.data.userInfo;
+      // According to the docs, the structure is different based on the version
+      // Let's handle both potential structures
+      let userData;
       
-      // Create user data object
-      const userData = {
-        fid: String(fid),
-        username: username || `user${fid}`,
-        displayName: displayName || username || `User ${fid}`,
-        pfp: { url: pfpUrl || null }
-      };
+      if (verifyResult.data && verifyResult.data.userInfo) {
+        // New structure
+        const { fid, username, displayName, pfpUrl } = verifyResult.data.userInfo;
+        userData = {
+          fid: String(fid),
+          username: username || `user${fid}`,
+          displayName: displayName || username || `User ${fid}`,
+          pfp: { url: pfpUrl || null }
+        };
+      } else if (verifyResult.data) {
+        // Old structure - direct properties on data
+        const { fid, username, displayName, pfpUrl } = verifyResult.data;
+        userData = {
+          fid: String(fid),
+          username: username || `user${fid}`,
+          displayName: displayName || username || `User ${fid}`,
+          pfp: { url: pfpUrl || null }
+        };
+      } else {
+        // Fallback in case of unexpected structure
+        console.error('Unexpected verification result structure:', verifyResult);
+        return res.status(500).json({ error: 'Invalid verification result structure' });
+      }
       
       console.log(`Successfully verified user: ${userData.username} (FID: ${userData.fid})`);
       

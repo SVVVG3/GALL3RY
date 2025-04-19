@@ -1,8 +1,17 @@
 {
   "version": 2,
-  "buildCommand": "npm run vercel-build",
+  "buildCommand": "node vercel-build.js",
   "outputDirectory": "build",
-  "framework": "create-react-app",
+  "framework": null,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "installCommand": "npm install --no-save puppeteer"
+      }
+    }
+  ],
   "functions": {
     "api/all-in-one.js": {
       "memory": 1024,
@@ -41,6 +50,50 @@
           "value": "nosniff"
         }
       ]
+    },
+    {
+      "source": "/.well-known/farcaster/(.*)",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/farcaster.json",
+      "headers": [
+        {
+          "key": "Content-Type",
+          "value": "application/json"
+        },
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).png",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
+    },
+    {
+      "source": "/(.*).jpg",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
     }
   ],
   "env": {
@@ -51,6 +104,7 @@
     "NEYNAR_API_KEY": "NEYNAR_API_DOCS",
     "REACT_APP_NEYNAR_API_KEY": "NEYNAR_API_DOCS",
     "REACT_APP_API_URL": "https://gall3ry.vercel.app/api",
+    "FARCASTER_DOMAIN": "gall3ry.vercel.app",
     "DEBUG": "true"
   }
 }

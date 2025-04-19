@@ -399,7 +399,15 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       // Send the message and signature to our server for verification
       try {
         console.log("Sending sign-in data to server for verification");
-        const verifyResponse = await fetch('/api/verify-siwf', {
+        
+        // Determine the API URL based on the environment
+        const apiUrl = process.env.NODE_ENV === 'production' 
+          ? `${window.location.origin}/api/verify-siwf`
+          : '/api/verify-siwf';
+        
+        console.log(`Using API URL: ${apiUrl}`);
+        
+        const verifyResponse = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -410,8 +418,16 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           })
         });
         
+        console.log("Server response status:", verifyResponse.status);
+        
         if (!verifyResponse.ok) {
-          const errorData = await verifyResponse.json().catch(() => ({ error: 'Unknown error' }));
+          let errorData;
+          try {
+            errorData = await verifyResponse.json();
+          } catch (e) {
+            errorData = { error: 'Failed to parse error response' };
+          }
+          
           console.error("Server verification failed:", errorData);
           throw new Error(`Verification failed: ${errorData.error || verifyResponse.statusText}`);
         }
