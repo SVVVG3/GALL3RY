@@ -91,51 +91,84 @@ const ButtonContainer = styled.button`
  * With error handling and safe localStorage access
  * Supports both web and Mini App authentication methods
  */
-const SignInButton = ({ className, fullWidth, loading, size = "md", children, ...props }) => {
-  const { user, isAuthenticated, signIn, signOut, setAuthenticating } = useAuth();
-  const farcasterProfile = FarcasterUseProfile();
-  const navigate = useNavigate();
-  const [isSigningIn, setIsSigningIn] = useState(false);
-  const isMiniApp = isMiniAppEnvironment();
-  const buttonRef = useRef(null);
-  const [error, setError] = useState(null);
-
-  // Listen for miniAppAuthenticated event
+const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showLabel = true, miniAppMode = 'auto' }) => {
+  const [authError, setAuthError] = useState(null);
+  const { isAuthenticated, user, loading } = useAuth();
+  const { profile } = useProfile();
+  
+  // Additional state for the mini app environment
+  const [isMiniApp, setIsMiniApp] = useState(false);
+  const [miniAppAuthInProgress, setMiniAppAuthInProgress] = useState(false);
+  
   useEffect(() => {
-    if (!isMiniApp) return; // Only apply in Mini App environment
+    // Check if we're in a mini app environment
+    const isInMiniApp = isMiniAppEnvironment();
+    setIsMiniApp(isInMiniApp);
     
+    // Listen for mini app authentication events
     const handleMiniAppAuth = (event) => {
-      console.log("Mini App authentication detected", event.detail);
-      // Force refresh component when Mini App auth happens
-      if (event.detail && event.detail.userInfo) {
-        setIsSigningIn(false);
+      console.log('Received miniAppAuthenticated event with data:', event.detail);
+      
+      if (event.detail) {
+        // Make sure we have the username in the event detail
+        if (event.detail.username) {
+          console.log('Mini app authentication successful with username:', event.detail.username);
+          
+          // Call onSuccess callback if provided
+          if (typeof onSuccess === 'function') {
+            onSuccess({
+              fid: event.detail.fid,
+              username: event.detail.username,
+              displayName: event.detail.displayName || event.detail.username,
+              pfp: event.detail.pfp
+            });
+          }
+        } else {
+          console.error('Mini app authentication event missing username!', event.detail);
+          setAuthError('Failed to get username from authentication');
+          
+          // Call onError callback if provided
+          if (typeof onError === 'function') {
+            onError(new Error('Authentication missing username'));
+          }
+        }
       }
     };
     
     window.addEventListener('miniAppAuthenticated', handleMiniAppAuth);
     
-    // Check if we have user info in localStorage from Mini App
-    const storedUserInfo = localStorage.getItem('miniAppUserInfo');
-    if (storedUserInfo && !isAuthenticated && !user) {
-      try {
-        const parsedUserInfo = JSON.parse(storedUserInfo);
-        if (parsedUserInfo && parsedUserInfo.fid) {
-          if (window.updateAuthState) {
-            window.updateAuthState({
-              user: parsedUserInfo,
-              isAuthenticated: true
-            });
-          }
-        }
-      } catch (e) {
-        console.error("Error parsing stored Mini App user info", e);
-      }
-    }
-    
+    // Clean up event listener
     return () => {
       window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
     };
-  }, [isAuthenticated, user, isMiniApp]);
+  }, [onSuccess, onError]);
+  
+  // Auto-authenticate in mini app environment if desired
+  useEffect(() => {
+    const autoAuth = async () => {
+      if (isMiniApp && (miniAppMode === 'auto' || miniAppMode === true) && !isAuthenticated && !miniAppAuthInProgress) {
+        try {
+          setMiniAppAuthInProgress(true);
+          console.log('Auto-initiating mini app authentication');
+          const result = await handleMiniAppAuthentication();
+          
+          if (result && result.success && result.user) {
+            console.log('Auto mini app authentication successful:', result.user);
+          } else {
+            console.warn('Auto mini app authentication failed:', result?.error || 'Unknown error');
+            setAuthError('Failed to authenticate automatically');
+          }
+        } catch (error) {
+          console.error('Error during auto mini app authentication:', error);
+          setAuthError('Error during authentication');
+        } finally {
+          setMiniAppAuthInProgress(false);
+        }
+      }
+    };
+    
+    autoAuth();
+  }, [isMiniApp, miniAppMode, isAuthenticated, miniAppAuthInProgress]);
 
   // Create a global function to update auth state (used by miniAppUtils)
   useEffect(() => {
@@ -172,8 +205,7 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
 
   const handleSignIn = async () => {
     try {
-      setIsSigningIn(true);
-      setError(null);
+      setAuthError(null);
 
       if (isMiniApp) {
         console.log("SignInButton: Detected Mini App environment, authenticating...");
@@ -219,7 +251,6 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
             window.dispatchEvent(authEvent);
             
             console.log("SignInButton: Successfully authenticated using SDK context");
-            setIsSigningIn(false);
             return;
           }
           
@@ -257,7 +288,6 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
                 window.dispatchEvent(authEvent);
                 
                 console.log("SignInButton: Successfully authenticated with sdk.actions.signIn");
-                setIsSigningIn(false);
                 return;
               } else {
                 // If we can't get user info from context, fall back to handleMiniAppAuthentication
@@ -265,7 +295,7 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
               }
             } else {
               console.error("SignInButton: Sign in failed, invalid result", signInResult);
-              setError("Sign in failed: Invalid result from SDK");
+              setAuthError("Sign in failed: Invalid result from SDK");
             }
           } else {
             console.log("SignInButton: sdk.actions.signIn not available, using fallback");
@@ -273,11 +303,10 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
           }
           
           console.log("SignInButton: Mini App authentication completed");
-          setIsSigningIn(false);
+          return;
         } catch (miniAppError) {
           console.error("SignInButton: Mini App authentication failed:", miniAppError);
-          setError(`Mini App authentication failed: ${miniAppError.message || 'Unknown error'}`);
-          setIsSigningIn(false);
+          setAuthError(`Mini App authentication failed: ${miniAppError.message || 'Unknown error'}`);
           return;
         }
       } else {
@@ -286,8 +315,7 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
       }
     } catch (e) {
       console.error("SignInButton: Authentication error:", e);
-      setError(`Authentication failed: ${e?.message || "Unknown error"}`);
-      setIsSigningIn(false);
+      setAuthError(`Authentication failed: ${e?.message || "Unknown error"}`);
     }
   };
 
@@ -325,17 +353,16 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
     return (
       <ButtonContainer
         onClick={handleSignIn}
-        disabled={isSigningIn || loading}
+        disabled={loading}
         fullWidth={fullWidth}
         aria-label="Sign in with Farcaster"
         className={className}
       >
         <span style={{ display: 'flex', alignItems: 'center' }}>
           <FarcasterLogoSvg />
-          {isSigningIn || loading ? "Signing In..." : "Sign in"}
+          {loading ? "Signing In..." : "Sign in"}
         </span>
-        {isSigningIn && <span style={{ marginLeft: 8, fontSize: 12 }}>Authenticating with Farcaster...</span>}
-        {error && <div style={{ color: 'red', marginTop: 8, fontSize: 12 }}>{error}</div>}
+        {authError && <div style={{ color: 'red', marginTop: 8, fontSize: 12 }}>{authError}</div>}
         {children}
       </ButtonContainer>
     );
@@ -345,7 +372,7 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
   return (
     <div ref={buttonRef} className={className}>
       <FarcasterSignInButton />
-      {isSigningIn && <span>Signing in...</span>}
+      {loading && <span>Signing in...</span>}
     </div>
   );
 };

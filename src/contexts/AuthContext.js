@@ -127,31 +127,73 @@ export const AuthProvider = ({ children }) => {
   // Create a reference to expose this context for direct imperative updates
   const authContextRef = React.useRef(null);
   
+  // Make authContextRef globally accessible for handleMiniAppAuthentication
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window._authContext = authContextRef;
+    }
+  }, []);
+  
+  useEffect(() => {
+    // Set if we're in a mini app environment
     setIsInMiniApp(isMiniAppEnvironment());
     
-    // Check if we have stored auth data
+    // Check for stored authentication data
     if (isBrowser) {
       try {
-        const storedAuth = localStorage.getItem('farcaster_user');
-        if (storedAuth) {
-          const parsedAuth = JSON.parse(storedAuth);
-          // Handle app reload with stored auth data
-          if (parsedAuth.fid) {
-            fetchUserDataByFid(parsedAuth.fid)
-              .then(userData => {
-                if (userData) {
-                  setMiniAppProfile(userData);
-                  setIsMiniAppAuthenticated(true);
-                }
-              })
-              .catch(err => console.warn('Error restoring auth:', err));
+        // Try to read stored user info
+        const storedUserInfo = localStorage.getItem('farcaster_user');
+        
+        if (storedUserInfo) {
+          console.log('Found stored user info in localStorage');
+          const userInfo = JSON.parse(storedUserInfo);
+          
+          if (userInfo && userInfo.fid) {
+            console.log('Setting mini app authentication from stored data', userInfo);
+            
+            // Create a profile from the stored data
+            setMiniAppProfile({
+              fid: userInfo.fid, 
+              username: userInfo.username || `user${userInfo.fid}`,
+              displayName: userInfo.displayName || userInfo.username || `User ${userInfo.fid}`,
+              avatarUrl: userInfo.pfp?.url || null
+            });
+            
+            setIsMiniAppAuthenticated(true);
           }
         }
-      } catch (e) {
-        console.warn('Error reading stored auth data:', e);
+      } catch (error) {
+        console.error('Error loading stored authentication data:', error);
       }
     }
+    
+    // Listen for mini app authentication events
+    const handleMiniAppAuth = (event) => {
+      console.log('AuthContext: Received miniAppAuthenticated event', event.detail);
+      
+      if (event.detail && event.detail.fid) {
+        // Update the mini app profile
+        setMiniAppProfile({
+          fid: event.detail.fid,
+          username: event.detail.username || `user${event.detail.fid}`,
+          displayName: event.detail.displayName || event.detail.username || `User ${event.detail.fid}`,
+          avatarUrl: event.detail.pfp?.url || null
+        });
+        
+        setIsMiniAppAuthenticated(true);
+      }
+    };
+    
+    window.addEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    
+    return () => {
+      window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
+      
+      // Clean up global reference
+      if (typeof window !== 'undefined') {
+        window._authContext = null;
+      }
+    };
   }, []);
   
   // Fetch user data from Farcaster API by FID

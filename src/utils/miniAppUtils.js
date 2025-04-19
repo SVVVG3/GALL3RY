@@ -172,359 +172,86 @@ export const setupMiniAppEventListeners = () => {
  */
 export const handleMiniAppAuthentication = async () => {
   try {
-    logDebug('==========================================');
-    logDebug('Starting Mini App Authentication process');
-    logDebug('==========================================');
+    console.log('Mini App Authentication: Starting authentication process');
     
-    // Check if we're actually in a Mini App environment first
-    const isInMiniApp = isMiniAppEnvironment();
-    logDebug(`Running in Mini App environment: ${isInMiniApp}`);
-    
-    if (!isInMiniApp) {
-      logDebug('Not in Mini App environment, authentication cannot proceed');
-      return null;
+    // First check if the Mini App SDK is initialized
+    if (!window.miniApp) {
+      console.error('Mini App Authentication: SDK not initialized');
+      return { success: false, error: 'SDK not initialized' };
     }
-    
-    // Generate a secure nonce for authentication
-    const generateNonce = () => {
-      const array = new Uint8Array(16);
-      window.crypto.getRandomValues(array);
-      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-    };
-    
-    const nonce = generateNonce();
-    logDebug('Generated authentication nonce:', nonce);
-    
-    // Check for previously stored user info
-    const storedUserInfo = localStorage.getItem('miniAppUserInfo');
-    if (storedUserInfo) {
-      try {
-        const parsedUserInfo = JSON.parse(storedUserInfo);
-        logDebug('Found stored user info in localStorage:', parsedUserInfo);
-        
-        // We'll still continue with authentication to ensure we have fresh data
-      } catch (e) {
-        logDebug('Error parsing stored user info:', e);
-      }
-    } else {
-      logDebug('No stored user info found in localStorage');
-    }
-    
-    // Detailed logging of SDK status
-    const sdkStatus = {
-      sdkExists: typeof sdk !== 'undefined',
-      sdkDefined: sdk !== null && sdk !== undefined,
-      sdkType: sdk ? typeof sdk : 'undefined',
-      actionsExists: sdk && typeof sdk.actions !== 'undefined',
-      actionsType: sdk && sdk.actions ? typeof sdk.actions : 'undefined',
-      signInExists: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
-      signInType: sdk && sdk.actions && sdk.actions.signIn ? typeof sdk.actions.signIn : 'undefined',
-      contextExists: sdk && typeof sdk.context !== 'undefined',
-      contextType: sdk && sdk.context ? typeof sdk.context : 'undefined',
-      getContextExists: sdk && typeof sdk.getContext === 'function',
-      getContextType: sdk && sdk.getContext ? typeof sdk.getContext : 'undefined',
-      userExists: sdk && sdk.context && typeof sdk.context.user !== 'undefined',
-      userType: sdk && sdk.context && sdk.context.user ? typeof sdk.context.user : 'undefined',
-      miniAppExists: typeof window.miniApp !== 'undefined',
-      getUserInfoExists: typeof window.miniApp !== 'undefined' && typeof window.miniApp.getUserInfo === 'function'
-    };
-    
-    logDebug('Detailed SDK Status:', sdkStatus);
-    
-    // Option 1: Try window.miniApp.getUserInfo first (this should be prioritized)
-    if (window.miniApp && typeof window.miniApp.getUserInfo === 'function') {
-      logDebug('Trying window.miniApp.getUserInfo method first');
-      
-      try {
-        logDebug('Calling window.miniApp.getUserInfo()');
-        const userInfo = await window.miniApp.getUserInfo();
-        logDebug('Got user info from window.miniApp.getUserInfo:', userInfo);
 
-        if (userInfo && userInfo.fid) {
-          // Store auth info in localStorage for persistence
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-          logDebug('Stored user info in localStorage');
-          
-          // Make sure this gets updated in the app state
-          if (window.updateAuthState) {
-            window.updateAuthState({
-              user: {
-                fid: userInfo.fid,
-                username: userInfo.username,
-                displayName: userInfo.displayName,
-                pfp: userInfo.pfp
-              },
-              isAuthenticated: true
-            });
-            logDebug('Updated auth state via window.updateAuthState');
-          } else {
-            logDebug('window.updateAuthState not available');
-          }
-          
-          // Dispatch a custom event to notify components about authentication
-          const authEvent = new CustomEvent('miniAppAuthenticated', { 
-            detail: { userInfo }
-          });
-          window.dispatchEvent(authEvent);
-          logDebug('Dispatched miniAppAuthenticated event');
-          
-          return userInfo;
-        } else {
-          logDebug('User info from window.miniApp.getUserInfo missing FID:', userInfo);
-        }
-      } catch (miniAppError) {
-        logDebug('Error using window.miniApp.getUserInfo:', miniAppError);
-        // Continue to fallback methods
+    // Get cached user info from localStorage if available
+    const cachedUserInfo = localStorage.getItem('farcaster_user');
+    let userInfo = null;
+
+    if (cachedUserInfo) {
+      try {
+        userInfo = JSON.parse(cachedUserInfo);
+        console.log('Mini App Authentication: Found cached user info', userInfo);
+      } catch (e) {
+        console.warn('Mini App Authentication: Error parsing cached user info', e);
       }
-    } else {
-      logDebug('window.miniApp.getUserInfo not available, trying other methods');
     }
-    
-    // Option 2: Try to get context user directly
-    if (sdk && sdk.context && sdk.context.user && sdk.context.user.fid) {
-      logDebug('Found user in existing SDK context:', sdk.context.user);
+
+    // If we don't have cached user info or it's incomplete, fetch it from the SDK
+    if (!userInfo || !userInfo.username) {
+      console.log('Mini App Authentication: Fetching user info from SDK');
+      try {
+        // Get user info from the mini app SDK
+        userInfo = await window.miniApp.getUserInfo();
+        console.log('Mini App Authentication: SDK returned user info', userInfo);
+        
+        // Store the user info in localStorage for persistence
+        localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
+      } catch (error) {
+        console.error('Mini App Authentication: Error getting user info from SDK', error);
+      }
+    }
+
+    // If we have user info with FID, consider it a successful authentication
+    if (userInfo && userInfo.fid) {
+      console.log('Mini App Authentication: Successfully authenticated user with FID', userInfo.fid);
       
-      const userInfo = {
-        fid: sdk.context.user.fid,
-        username: sdk.context.user.username || `user${sdk.context.user.fid}`,
-        displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
-        pfp: { url: sdk.context.user.pfpUrl || null }
-      };
+      // Get any auth context that might exist from React
+      const authContext = window._authContext || null;
       
-      logDebug('Created user info from context:', userInfo);
-      
-      // Store auth info in localStorage for persistence
-      localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-      logDebug('Stored user info in localStorage');
-      
-      // Make sure this gets updated in the app state
-      if (window.updateAuthState) {
-        window.updateAuthState({
-          user: userInfo,
-          isAuthenticated: true
+      // Directly set the mini app profile in the auth context if available
+      if (authContext && authContext.current && typeof authContext.current.login === 'function') {
+        console.log('Mini App Authentication: Updating auth context with user info');
+        await authContext.current.login({
+          fid: userInfo.fid,
+          username: userInfo.username
         });
-        logDebug('Updated auth state via window.updateAuthState');
       } else {
-        logDebug('window.updateAuthState not available');
+        console.log('Mini App Authentication: Auth context not available, dispatching event');
+        // Dispatch an event for components to listen for
+        const event = new CustomEvent('miniAppAuthenticated', {
+          detail: {
+            fid: userInfo.fid,
+            username: userInfo.username,
+            displayName: userInfo.displayName || userInfo.username,
+            pfp: userInfo.pfp
+          }
+        });
+        window.dispatchEvent(event);
       }
       
-      // Dispatch a custom event to notify components about authentication
-      const authEvent = new CustomEvent('miniAppAuthenticated', { 
-        detail: { userInfo }
-      });
-      window.dispatchEvent(authEvent);
-      logDebug('Dispatched miniAppAuthenticated event');
-      
-      return userInfo;
-    } else {
-      logDebug('No user found in SDK context, trying to getContext() if available');
-    }
-    
-    // Option 3: Try to call getContext() if available
-    if (sdk && typeof sdk.getContext === 'function') {
-      try {
-        logDebug('Calling sdk.getContext()');
-        const context = await sdk.getContext();
-        logDebug('Got context from sdk.getContext():', context);
-        
-        if (context && context.user && context.user.fid) {
-          logDebug('Found user in retrieved context:', context.user);
-          
-          const userInfo = {
-            fid: context.user.fid,
-            username: context.user.username || `user${context.user.fid}`,
-            displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
-            pfp: { url: context.user.pfpUrl || null }
-          };
-          
-          logDebug('Created user info from retrieved context:', userInfo);
-          
-          // Store auth info in localStorage for persistence
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-          logDebug('Stored user info in localStorage');
-          
-          // Make sure this gets updated in the app state
-          if (window.updateAuthState) {
-            window.updateAuthState({
-              user: userInfo,
-              isAuthenticated: true
-            });
-            logDebug('Updated auth state via window.updateAuthState');
-          } else {
-            logDebug('window.updateAuthState not available');
-          }
-          
-          // Dispatch a custom event to notify components about authentication
-          const authEvent = new CustomEvent('miniAppAuthenticated', { 
-            detail: { userInfo }
-          });
-          window.dispatchEvent(authEvent);
-          logDebug('Dispatched miniAppAuthenticated event');
-          
-          return userInfo;
-        } else {
-          logDebug('No user found in retrieved context or user missing fid');
+      return { 
+        success: true, 
+        user: {
+          fid: userInfo.fid,
+          username: userInfo.username,
+          displayName: userInfo.displayName || userInfo.username,
+          pfp: userInfo.pfp
         }
-      } catch (e) {
-        logDebug('Error calling sdk.getContext():', e);
-      }
+      };
     } else {
-      logDebug('sdk.getContext is not available');
+      console.error('Mini App Authentication: Failed to get valid user info');
+      return { success: false, error: 'Failed to get valid user info' };
     }
-    
-    // Option 4: Use the Farcaster Frame SDK signIn action
-    if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
-      logDebug('Attempting authentication via sdk.actions.signIn()');
-      
-      try {
-        logDebug('Calling sdk.actions.signIn() with nonce:', nonce);
-        const signInResult = await sdk.actions.signIn({ nonce });
-        logDebug('Sign in result:', signInResult);
-        
-        if (signInResult && signInResult.message) {
-          logDebug('Sign in returned a message:', signInResult.message);
-          
-          // Extract FID from the message
-          const fidMatch = signInResult.message.match(/(?:fid|FID):\s*(\d+)/i);
-          const fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
-          
-          if (fid) {
-            logDebug('Extracted FID from message:', fid);
-            
-            // For simplicity in this example, we'll use the FID to construct user info
-            // In a real app, you would verify the message on your server first
-            const userInfo = {
-              fid,
-              username: `user${fid}`,
-              displayName: `User ${fid}`,
-              pfp: {
-                url: null
-              }
-            };
-            
-            logDebug('Created initial user info from FID:', userInfo);
-            
-            // Try to get more user info from context if available
-            try {
-              if (sdk.context && sdk.context.user) {
-                logDebug('Enhancing user info from context after signIn');
-                userInfo.username = sdk.context.user.username || userInfo.username;
-                userInfo.displayName = sdk.context.user.displayName || userInfo.displayName;
-                if (sdk.context.user.pfpUrl) {
-                  userInfo.pfp = { url: sdk.context.user.pfpUrl };
-                }
-                logDebug('Enhanced user info:', userInfo);
-              } else {
-                logDebug('No SDK context available to enhance user info after signIn');
-              }
-              
-              // Also try to use getContext if available
-              if (typeof sdk.getContext === 'function') {
-                try {
-                  logDebug('Attempting to call getContext after signIn');
-                  const context = await sdk.getContext();
-                  logDebug('Got context after signIn:', context);
-                  
-                  if (context && context.user) {
-                    userInfo.username = context.user.username || userInfo.username;
-                    userInfo.displayName = context.user.displayName || userInfo.displayName;
-                    if (context.user.pfpUrl) {
-                      userInfo.pfp = { url: context.user.pfpUrl };
-                    }
-                    logDebug('Enhanced user info from getContext after signIn:', userInfo);
-                  }
-                } catch (e) {
-                  logDebug('Error calling getContext after signIn:', e);
-                }
-              }
-            } catch (e) {
-              logDebug('Error enhancing user info after signIn:', e);
-            }
-            
-            // Store auth info in localStorage for persistence
-            localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-            logDebug('Stored user info in localStorage');
-            
-            // Make sure this gets updated in the app state
-            if (window.updateAuthState) {
-              window.updateAuthState({
-                user: userInfo,
-                isAuthenticated: true
-              });
-              logDebug('Updated auth state via window.updateAuthState');
-            } else {
-              logDebug('window.updateAuthState not available');
-            }
-            
-            // Dispatch a custom event to notify components about authentication
-            const authEvent = new CustomEvent('miniAppAuthenticated', { 
-              detail: { userInfo }
-            });
-            window.dispatchEvent(authEvent);
-            logDebug('Dispatched miniAppAuthenticated event');
-            
-            return userInfo;
-          } else {
-            logDebug('Could not extract FID from sign-in message:', signInResult.message);
-          }
-        } else {
-          logDebug('Sign in result missing message:', signInResult);
-        }
-      } catch (signInError) {
-        logDebug('Error during sdk.actions.signIn:', signInError);
-        // Continue to fallback method
-      }
-    } else {
-      logDebug('sdk.actions.signIn not available');
-    }
-    
-    // Option 5: Last resort - check if we already have localStorage data as fallback
-    const existingUserInfo = localStorage.getItem('miniAppUserInfo');
-    if (existingUserInfo) {
-      try {
-        logDebug('Trying to use existing localStorage user info as last resort');
-        const userInfo = JSON.parse(existingUserInfo);
-        logDebug('Parsed localStorage user info:', userInfo);
-        
-        if (userInfo && userInfo.fid) {
-          logDebug('Using localStorage user info as fallback authentication method');
-          
-          // Make sure this gets updated in the app state
-          if (window.updateAuthState) {
-            window.updateAuthState({
-              user: userInfo,
-              isAuthenticated: true
-            });
-            logDebug('Updated auth state via window.updateAuthState');
-          } else {
-            logDebug('window.updateAuthState not available');
-          }
-          
-          // Dispatch a custom event to notify components about authentication
-          const authEvent = new CustomEvent('miniAppAuthenticated', { 
-            detail: { userInfo }
-          });
-          window.dispatchEvent(authEvent);
-          logDebug('Dispatched miniAppAuthenticated event');
-          
-          return userInfo;
-        } else {
-          logDebug('localStorage user info missing FID or invalid:', userInfo);
-        }
-      } catch (e) {
-        logDebug('Error parsing localStorage user info:', e);
-      }
-    }
-    
-    logDebug('All authentication methods failed');
-    return null;
   } catch (error) {
-    logDebug('Uncaught error in Mini App Authentication:', error);
-    return null;
-  } finally {
-    logDebug('==========================================');
-    logDebug('Mini App Authentication process completed');
-    logDebug('==========================================');
+    console.error('Mini App Authentication: Unexpected error during authentication', error);
+    return { success: false, error: error.message || 'Unknown error during authentication' };
   }
 };
 
