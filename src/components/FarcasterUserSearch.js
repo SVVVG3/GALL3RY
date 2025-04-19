@@ -14,7 +14,7 @@ import { fetchNftsForAddresses } from '../services/alchemyService';
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
  */
-const FarcasterUserSearch = ({ initialUsername }) => {
+const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const { 
     fetchAllNFTsForWallets, 
     isLoading: isNftLoading,
@@ -35,6 +35,15 @@ const FarcasterUserSearch = ({ initialUsername }) => {
   
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
+  
+  // Notify parent component when NFTs are displayed
+  useEffect(() => {
+    if (onNFTsDisplayChange && typeof onNFTsDisplayChange === 'function') {
+      // We have NFTs to display if userProfile exists and userNfts has items
+      const hasNFTsToDisplay = Boolean(userProfile && userNfts.length > 0);
+      onNFTsDisplayChange(hasNFTsToDisplay);
+    }
+  }, [userProfile, userNfts, onNFTsDisplayChange]);
   
   // Get sorted NFTs
   const sortedNfts = useCallback(() => {

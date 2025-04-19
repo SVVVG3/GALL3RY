@@ -11,6 +11,7 @@
   margin: 0 auto;
 }
 
+/* Initial search-section styles - compact for initial search */
 .search-section {
   max-width: 600px;
   margin: 0 auto;
@@ -19,6 +20,13 @@
   padding-top: 80px;
   width: 100%;
   box-sizing: border-box;
+  transition: max-width 0.3s ease-in-out;
+}
+
+/* Expanded search-section for when NFTs are shown */
+.search-section.nfts-displayed {
+  max-width: 1200px;
+  padding: 0 20px;
 }
 
 .search-title {
@@ -47,6 +55,11 @@
     width: 100%;
     padding-left: 15px;
     padding-right: 15px;
+  }
+  
+  .search-section.nfts-displayed {
+    padding-left: 10px;
+    padding-right: 10px;
   }
   
   .search-title {
