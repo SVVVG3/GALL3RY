@@ -59,36 +59,50 @@ const MiniAppAuthHandler = () => {
           try {
             sdk.init();
           } catch (initError) {
-            console.error('MiniAppAuthHandler: Error initializing SDK:', initError);
+            console.error('MiniAppAuthHandler: Error initializing SDK:', initError.message || 'Unknown error');
           }
         }
         
         // STEP 2: Check if user info is directly available in context
-        console.log('MiniAppAuthHandler: Checking sdk.context directly:', sdk.context);
+        // SAFE: Only log booleans about existence, not the actual objects
+        console.log('MiniAppAuthHandler: SDK context check:', {
+          hasContext: !!sdk.context,
+          hasUser: sdk.context && !!sdk.context.user,
+          hasFid: sdk.context && sdk.context.user && !!sdk.context.user.fid
+        });
         
         // First try direct context access (most reliable and fastest)
         if (sdk.context && sdk.context.user && sdk.context.user.fid) {
-          console.log('MiniAppAuthHandler: Found user in sdk.context:', sdk.context.user);
+          // SAFE: Only log what properties exist, not their values
+          console.log('MiniAppAuthHandler: Found user properties:', {
+            hasFid: !!sdk.context.user.fid,
+            hasUsername: !!sdk.context.user.username,
+            hasDisplayName: !!sdk.context.user.displayName,
+            hasPfp: !!sdk.context.user.pfpUrl
+          });
           
+          // SAFE: Create a clean object with only primitive values
           const userData = {
-            fid: sdk.context.user.fid,
-            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
-            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
-            pfp: sdk.context.user.pfpUrl ? { url: sdk.context.user.pfpUrl } : null
+            fid: Number(sdk.context.user.fid || 0),
+            username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                        (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+            pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
           };
           
-          console.log('MiniAppAuthHandler: Found valid user data in context:', userData);
+          // SAFE: Log only the keys, not the values
+          console.log('MiniAppAuthHandler: Created user data object with keys:', Object.keys(userData));
           
           // Store in localStorage for persistence
           try {
             localStorage.setItem('farcaster_user', JSON.stringify(userData));
             localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
           } catch (storageError) {
-            console.error('Error storing user data:', storageError);
+            console.error('Error storing user data:', storageError.message || 'Unknown error');
           }
           
           // Login with user data
-          console.log('MiniAppAuthHandler: Auto-login with context data:', userData);
+          console.log('MiniAppAuthHandler: Auto-login with FID:', userData.fid);
           await login(userData);
           
           setAuthAttempted(true);
@@ -100,19 +114,25 @@ const MiniAppAuthHandler = () => {
         // STEP 3: Try getContext() method if direct context access failed
         if (typeof sdk.getContext === 'function') {
           try {
-            console.log('MiniAppAuthHandler: Getting context with sdk.getContext()');
-            const context = await sdk.getContext();
-            console.log('MiniAppAuthHandler: Context result:', context);
+            console.log('MiniAppAuthHandler: Calling sdk.getContext()');
+            // Store raw context in a variable but don't log it directly
+            const rawContext = await sdk.getContext();
             
-            if (context && context.user && context.user.fid) {
-              // Found authenticated user in context
-              console.log('MiniAppAuthHandler: Found authenticated user:', context.user);
-              
+            // SAFE: Log only existence of properties
+            console.log('MiniAppAuthHandler: getContext result:', {
+              hasData: !!rawContext,
+              hasUser: rawContext && !!rawContext.user,
+              hasFid: rawContext && rawContext.user && !!rawContext.user.fid
+            });
+            
+            if (rawContext && rawContext.user && rawContext.user.fid) {
+              // SAFE: Create a clean object with only primitive values
               const userData = {
-                fid: context.user.fid,
-                username: context.user.username || `user${context.user.fid}`,
-                displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
-                pfp: context.user.pfpUrl ? { url: context.user.pfpUrl } : null
+                fid: Number(rawContext.user.fid || 0),
+                username: rawContext.user.username ? String(rawContext.user.username) : `user${rawContext.user.fid}`,
+                displayName: rawContext.user.displayName ? String(rawContext.user.displayName) : 
+                           (rawContext.user.username ? String(rawContext.user.username) : `User ${rawContext.user.fid}`),
+                pfp: { url: rawContext.user.pfpUrl ? String(rawContext.user.pfpUrl) : null }
               };
               
               // Store in localStorage
@@ -120,11 +140,11 @@ const MiniAppAuthHandler = () => {
                 localStorage.setItem('farcaster_user', JSON.stringify(userData));
                 localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
               } catch (storageError) {
-                console.error('Error storing user data:', storageError);
+                console.error('Error storing user data:', storageError.message || 'Unknown error');
               }
               
               // Login with user data
-              console.log('MiniAppAuthHandler: Auto-login with data:', userData);
+              console.log('MiniAppAuthHandler: Auto-login with FID:', userData.fid);
               await login(userData);
               
               setAuthAttempted(true);
@@ -133,7 +153,7 @@ const MiniAppAuthHandler = () => {
               return;
             }
           } catch (contextError) {
-            console.error('MiniAppAuthHandler: Error getting context:', contextError);
+            console.error('MiniAppAuthHandler: Error getting context:', contextError.message || 'Unknown error');
           }
         }
         
@@ -150,18 +170,21 @@ const MiniAppAuthHandler = () => {
               setTimeout(() => reject(new Error('Sign-in timeout')), 5000);
             });
             
-            // Race against timeout
+            // Race against timeout - don't log the result directly
             await Promise.race([signInPromise, timeoutPromise]);
+            console.log('MiniAppAuthHandler: Sign-in completed');
             
             // Try to get context again after sign-in
             if (typeof sdk.getContext === 'function') {
               const newContext = await sdk.getContext();
               if (newContext && newContext.user && newContext.user.fid) {
+                // SAFE: Create a clean object with only primitive values
                 const userData = {
-                  fid: newContext.user.fid,
-                  username: newContext.user.username || `user${newContext.user.fid}`,
-                  displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
-                  pfp: newContext.user.pfpUrl ? { url: newContext.user.pfpUrl } : null
+                  fid: Number(newContext.user.fid || 0),
+                  username: newContext.user.username ? String(newContext.user.username) : `user${newContext.user.fid}`,
+                  displayName: newContext.user.displayName ? String(newContext.user.displayName) : 
+                             (newContext.user.username ? String(newContext.user.username) : `User ${newContext.user.fid}`),
+                  pfp: { url: newContext.user.pfpUrl ? String(newContext.user.pfpUrl) : null }
                 };
                 
                 // Store & login with user data
@@ -170,12 +193,13 @@ const MiniAppAuthHandler = () => {
                 await login(userData);
               }
             } else if (sdk.context && sdk.context.user) {
-              // Check context again after sign-in
+              // SAFE: Create a clean object with only primitive values
               const userData = {
-                fid: sdk.context.user.fid,
-                username: sdk.context.user.username || `user${sdk.context.user.fid}`,
-                displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
-                pfp: sdk.context.user.pfpUrl ? { url: sdk.context.user.pfpUrl } : null
+                fid: Number(sdk.context.user.fid || 0),
+                username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+                displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                           (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+                pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
               };
               
               // Store & login with user data
@@ -185,12 +209,12 @@ const MiniAppAuthHandler = () => {
             }
           } catch (signInError) {
             // Silent auth failed - this is expected if user needs to approve
-            console.log('MiniAppAuthHandler: Silent authentication failed:', signInError);
+            console.log('MiniAppAuthHandler: Silent authentication failed:', signInError.message || 'Unknown error');
           }
         }
         
       } catch (error) {
-        console.error('MiniAppAuthHandler: Error during authentication:', error);
+        console.error('MiniAppAuthHandler: Error during authentication:', error.message || 'Unknown error');
       } finally {
         setIsAuthenticating(false);
         setAuthAttempted(true);
@@ -203,7 +227,12 @@ const MiniAppAuthHandler = () => {
     
     // Listen for miniAppAuthenticated events
     const handleAuthenticated = (event) => {
-      console.log('MiniAppAuthHandler: Caught miniAppAuthenticated event:', event.detail);
+      // SAFE: Only log the FID and username, not the full detail object
+      if (event.detail && event.detail.fid) {
+        console.log('MiniAppAuthHandler: Authenticated event with FID:', event.detail.fid);
+      } else {
+        console.log('MiniAppAuthHandler: Authenticated event received but missing FID');
+      }
       
       if (event.detail && !isAuthenticated) {
         const userInfo = event.detail;

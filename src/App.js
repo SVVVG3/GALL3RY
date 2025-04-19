@@ -18,16 +18,16 @@ try {
   sdkInitialized = true;
   console.log("SDK initialized successfully");
   
-  // Log the SDK state for debugging
+  // SAFE: Only log primitive boolean values about SDK state, never the actual objects
   console.log("SDK state after init:", {
-    initialized: sdk.initialized,
-    hasContext: !!sdk.context,
-    hasUser: sdk.context && sdk.context.user ? true : false,
-    hasViewerFid: sdk.context && sdk.context.viewerFid ? true : false,
-    actions: Object.keys(sdk.actions || {})
+    initialized: !!sdk.initialized,
+    hasContext: sdk && !!sdk.context,
+    hasUser: sdk && sdk.context && sdk.context.user ? true : false,
+    hasViewerFid: sdk && sdk.context && sdk.context.viewerFid ? true : false,
+    actionsAvailable: sdk && sdk.actions ? Object.keys(sdk.actions || {}).length > 0 : false
   });
 } catch (error) {
-  console.error("Failed to initialize SDK:", error);
+  console.error("Failed to initialize SDK:", error.message || "Unknown error");
 }
 
 // Import Mini App utilities
@@ -158,16 +158,26 @@ const getUserInfoFromContext = () => {
   }
   
   try {
-    // Create a clean object with just the properties we need
-    return {
-      fid: Number(sdk.context.user.fid),
-      username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
-      displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
-                  (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+    // SAFE: Create a clean object with ONLY primitive values
+    // NEVER return or log the original SDK objects directly
+    const userData = {
+      fid: sdk.context.user.fid ? Number(sdk.context.user.fid) : null,
+      username: sdk.context.user.username ? String(sdk.context.user.username) : null,
+      displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : null,
       pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
     };
+    
+    // Add fallbacks for missing values
+    if (userData.fid && !userData.username) {
+      userData.username = `user${userData.fid}`;
+    }
+    if (userData.fid && !userData.displayName) {
+      userData.displayName = userData.username || `User ${userData.fid}`;
+    }
+    
+    return userData;
   } catch (error) {
-    console.error("Error extracting user info from context:", error);
+    console.error("Error extracting user info from context:", error.message || "Unknown error");
     return null;
   }
 };
@@ -194,47 +204,74 @@ function App() {
           setIsMiniApp(true);
           
           try {
+            // SAFE: Log only boolean values about availability
             console.log('🔍 Checking SDK status:', { 
               sdkDefined: !!sdk, 
-              actionsAvailable: sdk?.actions ? 'yes' : 'no',
-              getContextAvailable: typeof sdk?.getContext === 'function' ? 'yes' : 'no',
-              readyAvailable: typeof sdk?.ready === 'function' ? 'yes' : 'no'
+              actionsAvailable: sdk && sdk.actions ? true : false,
+              getContextAvailable: sdk && typeof sdk.getContext === 'function' ? true : false,
+              readyAvailable: sdk && typeof sdk.ready === 'function' ? true : false
             });
             
             // STEP 1: Try to get context directly at startup
             let context = null;
             try {
               console.log('🔍 Checking for user context');
-              context = await sdk.getContext();
-              if (context && context.user && context.user.fid) {
-                console.log('✅ Found authenticated user in context:', context.user);
-                setMiniAppContext(context);
+              // Don't store the raw context - extract only what we need immediately
+              const rawContext = await sdk.getContext();
+              // Only check if we have valid user data, don't log the raw context
+              if (rawContext && rawContext.user && rawContext.user.fid) {
+                console.log('✅ Found authenticated user in context with fid:', 
+                  rawContext.user.fid ? Number(rawContext.user.fid) : 'none');
                 
-                // If we have user data in context, prepare it for use
-                const { user } = context;
-                const userData = {
-                  fid: user.fid,
-                  username: user.username || `user${user.fid}`,
-                  displayName: user.displayName || `User ${user.fid}`,
-                  pfp: user.pfpUrl ? { url: user.pfpUrl } : null
-                };
+                // Store only safe insets data in our state
+                if (rawContext.safeAreaInsets) {
+                  setMiniAppContext({
+                    safeAreaInsets: {
+                      top: Number(rawContext.safeAreaInsets.top || 0),
+                      right: Number(rawContext.safeAreaInsets.right || 0),
+                      bottom: Number(rawContext.safeAreaInsets.bottom || 0),
+                      left: Number(rawContext.safeAreaInsets.left || 0)
+                    },
+                    hideHeader: !!rawContext.hideHeader
+                  });
+                }
                 
-                console.log('🔑 Found user data in context:', userData);
+                // Extract user data safely using our helper function
+                const userData = getUserInfoFromContext();
                 
-                // Store the user info in localStorage for persistence
-                localStorage.setItem('farcaster_user', JSON.stringify(userData));
-                localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
-                
-                // Dispatch event for components to react to authentication
-                const authEvent = new CustomEvent('miniAppAuthenticated', { 
-                  detail: userData
-                });
-                window.dispatchEvent(authEvent);
+                if (userData && userData.fid) {
+                  console.log('🔑 Found valid user data with username:', userData.username || 'unknown');
+                  
+                  // Store the user info in localStorage for persistence
+                  try {
+                    localStorage.setItem('farcaster_user', JSON.stringify(userData));
+                    localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+                  } catch (storageError) {
+                    console.error('Failed to store user data:', storageError.message || 'Unknown error');
+                  }
+                  
+                  // Dispatch event for components to react to authentication
+                  try {
+                    const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                      detail: {
+                        fid: userData.fid,
+                        username: userData.username,
+                        displayName: userData.displayName,
+                        pfp: userData.pfp
+                      }
+                    });
+                    window.dispatchEvent(authEvent);
+                  } catch (eventError) {
+                    console.error('Failed to dispatch auth event:', eventError.message || 'Unknown error');
+                  }
+                } else {
+                  console.log('⚠️ User data extraction failed');
+                }
               } else {
                 console.log('⚠️ No authenticated user found in context');
               }
             } catch (contextError) {
-              console.warn('Could not get context:', contextError);
+              console.warn('Could not get context:', contextError.message || 'Unknown error');
             }
             
             // STEP 2: Dismiss splash screen regardless of auth status
