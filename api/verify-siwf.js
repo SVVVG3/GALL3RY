@@ -64,18 +64,6 @@ module.exports = async (req, res) => {
     console.log(`Message type: ${typeof message}, length: ${message?.length || 0}`);
     console.log(`Signature type: ${typeof signature}, length: ${signature?.length || 0}`);
     
-    // For debugging: always return a successful response during testing
-    // Remove this in production
-    const mockUserData = {
-      fid: 12345,
-      username: "test_user",
-      displayName: "Test User",
-      pfp: { url: null }
-    };
-    
-    // Comment this out to test actual verification
-    return res.status(200).json(mockUserData);
-    
     // Verify the message and signature
     try {
       const verifyResult = await verifySignInMessage({
@@ -84,22 +72,25 @@ module.exports = async (req, res) => {
         domain: FARCASTER_DOMAIN, // This should match the domain in your Mini App configuration
       });
       
+      console.log('Verification result:', verifyResult);
+      
       if (!verifyResult.success) {
         console.error('Verification failed:', verifyResult.error);
         return res.status(401).json({ error: `Verification failed: ${verifyResult.error}` });
       }
       
-      const { fid, username, displayName, pfpUrl } = verifyResult.data;
+      // Extract user info from the successful result
+      const { fid, username, displayName, pfpUrl } = verifyResult.data.userInfo;
       
       // Create user data object
       const userData = {
-        fid,
-        username,
-        displayName: displayName || username,
+        fid: String(fid),
+        username: username || `user${fid}`,
+        displayName: displayName || username || `User ${fid}`,
         pfp: { url: pfpUrl || null }
       };
       
-      console.log(`Successfully verified user: ${username} (FID: ${fid})`);
+      console.log(`Successfully verified user: ${userData.username} (FID: ${userData.fid})`);
       
       // Return the verified user data
       return res.status(200).json(userData);

@@ -396,25 +396,78 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       const result = await sdk.actions.signIn({ nonce });
       console.log("Sign in result:", result);
       
-      // After sign-in, wait briefly and then get the user info from the context
-      await new Promise(resolve => setTimeout(resolve, 300));
-      
-      // Try to get updated context after sign-in
+      // Send the message and signature to our server for verification
       try {
+        console.log("Sending sign-in data to server for verification");
+        const verifyResponse = await fetch('/api/verify-siwf', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            message: result.message,
+            signature: result.signature
+          })
+        });
+        
+        if (!verifyResponse.ok) {
+          const errorData = await verifyResponse.json().catch(() => ({ error: 'Unknown error' }));
+          console.error("Server verification failed:", errorData);
+          throw new Error(`Verification failed: ${errorData.error || verifyResponse.statusText}`);
+        }
+        
+        // Get verified user data from server
+        const userData = await verifyResponse.json();
+        console.log("Server verified user data:", userData);
+        
+        if (userData && userData.fid) {
+          // Store in localStorage
+          try {
+            localStorage.setItem('farcaster_user', JSON.stringify(userData));
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+          } catch (e) {
+            console.error("Failed to save to localStorage:", e);
+          }
+          
+          // Update auth context
+          if (typeof login === 'function') {
+            login(userData);
+          }
+          
+          // Dispatch event
+          const event = new CustomEvent('miniAppAuthenticated', { detail: userData });
+          window.dispatchEvent(event);
+          
+          return true;
+        } else {
+          console.error("Invalid user data returned from server");
+          return false;
+        }
+      } catch (verifyError) {
+        console.error("Error during server verification:", verifyError);
+        
+        // Fallback to context if server verification fails
+        console.log("Attempting fallback to context after sign-in");
+        
+        // Try to get updated context after sign-in
         let userInfo = null;
         
         // Try getContext method first
         if (typeof sdk.getContext === 'function') {
-          const context = await sdk.getContext();
-          console.log("Context after sign-in:", context);
-          
-          if (context && context.user && context.user.fid) {
-            userInfo = {
-              fid: String(context.user.fid),
-              username: context.user.username,
-              displayName: context.user.displayName || context.user.username,
-              pfp: { url: context.user.pfpUrl || null }
-            };
+          try {
+            const context = await sdk.getContext();
+            console.log("Context after sign-in fallback:", context);
+            
+            if (context && context.user && context.user.fid) {
+              userInfo = {
+                fid: String(context.user.fid),
+                username: context.user.username,
+                displayName: context.user.displayName || context.user.username,
+                pfp: { url: context.user.pfpUrl || null }
+              };
+            }
+          } catch (e) {
+            console.warn("Error accessing context in fallback:", e);
           }
         }
         
@@ -448,7 +501,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         }
         
         if (userInfo) {
-          console.log("User authenticated:", userInfo);
+          console.log("User authenticated via fallback:", userInfo);
           
           // Store in localStorage
           try {
@@ -469,12 +522,9 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           
           return true;
         }
-      } catch (e) {
-        console.error("Error getting user context after sign in:", e);
+        
+        return false;
       }
-      
-      console.error("Failed to get user info after sign-in");
-      return false;
     } catch (e) {
       console.error("Error during sign in:", e);
       if (e.message && e.message.includes('User rejected the request')) {
