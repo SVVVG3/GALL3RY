@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 // Import the hook directly to avoid initialization issues
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
+import { sdk } from '@farcaster/frame-sdk';
 
 // We won't dynamically import the Farcaster components to avoid initialization issues
 import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
@@ -55,44 +56,34 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
   const farcasterProfile = useProfile();
   
   const [isInMiniApp, setIsInMiniApp] = useState(false);
-  
-  // Check if running in Mini App environment
-  useEffect(() => {
-    setIsInMiniApp(isMiniAppEnvironment());
-  }, []);
-  
-  // Add direct console logging of Farcaster profile data
-  useEffect(() => {
-    if (farcasterProfile.isAuthenticated && farcasterProfile.profile) {
-      console.log('Raw Farcaster Profile in SignInButton:', farcasterProfile.profile);
-      console.log('Profile picture fields:', {
-        pfp: farcasterProfile.profile?.pfp,
-        pfpType: typeof farcasterProfile.profile?.pfp,
-        pfpUrl: typeof farcasterProfile.profile?.pfp === 'object' ? farcasterProfile.profile?.pfp?.url : farcasterProfile.profile?.pfp,
-        avatarUrl: profile?.avatarUrl
-      });
-    }
-  }, [farcasterProfile.isAuthenticated, farcasterProfile.profile, profile]);
-  
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [redirected, setRedirected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const navigate = useNavigate();
   
+  // Check if running in Mini App environment
+  useEffect(() => {
+    setIsInMiniApp(isMiniAppEnvironment());
+  }, []);
+  
   // Auto-redirect to profile page after sign-in
   useEffect(() => {
     if (isAuthenticated && profile && profile.username && !redirected) {
-      console.log('User authenticated, redirecting to profile page:', profile.username);
+      console.log('User authenticated, profile available:', profile);
       setRedirected(true);
-      navigate(`/user/${profile.username}`);
+      
+      // If in a Mini App, we might want to skip redirection or handle it differently
+      if (!isInMiniApp) {
+        navigate(`/user/${profile.username}`);
+      }
     }
     
     // Reset redirected state if user logs out
     if (!isAuthenticated) {
       setRedirected(false);
     }
-  }, [isAuthenticated, profile, navigate, redirected]);
+  }, [isAuthenticated, profile, navigate, redirected, isInMiniApp]);
   
   // Handle sign out with extra error protection
   const handleSignOut = async () => {
@@ -122,7 +113,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     }
   };
 
-  // Handle Mini App Sign In
+  // Handle Mini App Sign In - using direct SDK access
   const handleMiniAppSignIn = async () => {
     try {
       setIsLoading(true);
@@ -131,35 +122,53 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       // Generate a secure nonce
       const nonce = generateNonce();
       
-      // Use the Mini App SDK to initiate sign in
-      const authResult = await handleMiniAppAuthentication(nonce);
-      
-      if (authResult) {
-        console.log('Mini App authentication successful:', authResult);
+      // Use the SDK directly to avoid any issues
+      if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+        console.log('Using Farcaster Frame SDK for sign-in');
+        const authResult = await sdk.actions.signIn({ nonce });
+        console.log('Mini App direct auth result:', authResult);
         
         // Process the authentication result
-        // We'll need to handle this on the server side in a production app
-        // For now, we'll simulate a successful login with the authResult
-        
-        // Extract user info from the message
-        const messageLines = authResult.message.split('\n');
-        const fidLine = messageLines.find(line => line.includes('FID:'));
-        const fid = fidLine ? parseInt(fidLine.split(':')[1].trim()) : null;
-        
-        if (fid) {
-          // Fetch user info from your API using the FID
-          // For now, simulating with a simple login
-          await login({ fid });
+        if (authResult) {
+          // Try to extract FID from the message
+          let fid = null;
           
-          // Call success callback if provided
-          if (onSuccess && typeof onSuccess === 'function') {
-            onSuccess();
+          // Check for FID in data first
+          if (authResult.data?.fid) {
+            fid = authResult.data.fid;
           }
-        } else {
-          throw new Error('Could not extract FID from authentication result');
+          // Fall back to parsing from message
+          else if (authResult.message) {
+            const fidMatch = authResult.message.match(/(?:fid|FID):\s*(\d+)/i);
+            fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
+          }
+          
+          if (fid) {
+            console.log('Extracted FID from auth result:', fid);
+            // Create user info with FID
+            const userInfo = {
+              fid,
+              username: authResult.data?.username || `user${fid}`,
+              displayName: authResult.data?.displayName || `User ${fid}`,
+              token: authResult.signature,
+              message: authResult.message
+            };
+            
+            // Login with this user info
+            await login(userInfo);
+            
+            // Call success callback if provided
+            if (onSuccess && typeof onSuccess === 'function') {
+              onSuccess(userInfo);
+            }
+            
+            return;
+          }
         }
+        
+        throw new Error('Could not extract user info from authentication result');
       } else {
-        throw new Error('Authentication in Mini App environment failed');
+        throw new Error('Sign-in function not available in this environment');
       }
     } catch (error) {
       console.error('Error signing in via Mini App:', error);
@@ -210,77 +219,58 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
   
   // If authenticated, show user profile with dropdown
   if (isAuthenticated && profile) {
-    console.log('Rendering authenticated user profile:', {
-      username: profile.username,
-      avatarUrl: profile.avatarUrl,
-      _rawProfile: profile._rawProfile,
-      isLoggedIn: isAuthenticated
-    });
-    
     return (
-      <>
-        {/* Add style tag with mobile-specific styles */}
-        <style>{mobileStyles}</style>
-        <div className="user-profile-dropdown">
-          <div 
-            className="user-profile-button"
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-          >
-            <span className="profile-username">@{profile.username}</span>
-            <svg 
-              className={`dropdown-arrow ${dropdownOpen ? 'open' : ''}`} 
-              xmlns="http://www.w3.org/2000/svg" 
-              width="16" 
-              height="16" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2" 
-              strokeLinecap="round" 
-              strokeLinejoin="round"
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-          </div>
-          
-          {dropdownOpen && (
-            <div className="dropdown-menu">
-              <Link 
-                to={`/user/${profile.username}`} 
-                className="dropdown-item"
-                onClick={() => setDropdownOpen(false)}
-              >
-                My Profile
-              </Link>
-              <button 
-                onClick={handleSignOut}
-                className="dropdown-item sign-out"
-              >
-                Sign Out
-              </button>
-            </div>
-          )}
+      <div className="user-profile-dropdown">
+        <div 
+          className="user-profile-button"
+          onClick={() => setDropdownOpen(!dropdownOpen)}
+        >
+          <img 
+            src={profile.avatarUrl || profile.pfp || 'https://warpcast.com/~/icon-512.png'} 
+            alt={profile.username}
+            className="profile-avatar" 
+            style={{width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px'}}
+          />
+          <span className="profile-username">@{profile.username}</span>
         </div>
-      </>
+        
+        {dropdownOpen && (
+          <div className="dropdown-menu">
+            <Link 
+              to={`/user/${profile.username}`} 
+              className="dropdown-item"
+              onClick={() => setDropdownOpen(false)}
+            >
+              My Gallery
+            </Link>
+            <button 
+              className="dropdown-item sign-out"
+              onClick={handleSignOut}
+            >
+              Sign Out
+            </button>
+          </div>
+        )}
+      </div>
     );
   }
   
-  // If in Mini App environment, show Mini App sign in button
+  // Not authenticated - show sign in button
+  // Use different button for Mini App vs Web
   if (isInMiniApp) {
     return (
-      <button 
-        className="btn btn-primary mini-app-sign-in-button"
+      <button
         onClick={handleMiniAppSignIn}
+        className="btn btn-primary signin-button"
+        disabled={isLoading}
       >
-        Sign in with Farcaster
+        Sign In with Farcaster
       </button>
     );
   }
   
-  // Default for unauthenticated web app - use Farcaster Auth Kit
-  return (
-    <FarcasterSignInButton />
-  );
+  // For web, use the Farcaster Auth Kit button
+  return <FarcasterSignInButton />;
 };
 
 // Fallback button shown when the real one fails

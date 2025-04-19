@@ -22,6 +22,8 @@ export const isMiniAppEnvironment = () => {
                            (window.navigator.userAgent.includes('Farcaster') || 
                             window.navigator.userAgent.includes('Warpcast'));
     
+    logDebug(`Mini App environment check: isFrame=${isFrame}, inIframe=${inIframe}, hasFarcasterInUA=${hasFarcasterInUA}`);
+    
     return isFrame || inIframe || hasFarcasterInUA;
   } catch (e) {
     console.warn('Error checking Mini App environment:', e);
@@ -48,6 +50,8 @@ export const initializeMiniApp = async () => {
     if (sdk.actions && typeof sdk.actions.ready === 'function') {
       await sdk.actions.ready();
       logDebug('Mini App ready() called successfully');
+    } else {
+      logDebug('sdk.actions.ready is not available, cannot dismiss splash screen');
     }
     
     // Try to get context
@@ -64,6 +68,17 @@ export const initializeMiniApp = async () => {
     return context;
   } catch (e) {
     logDebug('Error in initializeMiniApp:', e);
+    
+    // Always try to call ready() one more time to ensure splash screen is dismissed
+    try {
+      if (sdk.actions && typeof sdk.actions.ready === 'function') {
+        await sdk.actions.ready();
+        logDebug('Secondary ready() call succeeded');
+      }
+    } catch (e2) {
+      logDebug('Secondary ready() call also failed:', e2);
+    }
+    
     return { error: e.message };
   }
 };
@@ -101,6 +116,7 @@ export const setupMiniAppEventListeners = () => {
  */
 export const handleMiniAppAuthentication = async (nonce) => {
   if (!isMiniAppEnvironment()) {
+    logDebug('Not in Mini App environment, cannot authenticate');
     return null;
   }
 
@@ -108,14 +124,49 @@ export const handleMiniAppAuthentication = async (nonce) => {
     // Check if the SDK has the actions.signIn method
     if (sdk.actions && typeof sdk.actions.signIn === 'function') {
       // For Mini App environment, we can use the SDK's signIn method
-      const authResult = await sdk.actions.signIn({ nonce });
+      logDebug('Calling sdk.actions.signIn with nonce:', nonce.substring(0, 6) + '...');
+      
+      // Create a timeout to prevent hanging if signIn never resolves
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Authentication timed out')), 5000);
+      });
+      
+      // Race the actual sign-in against the timeout
+      const authResult = await Promise.race([
+        sdk.actions.signIn({ nonce }),
+        timeoutPromise
+      ]);
+      
+      logDebug('Auth result received:', authResult);
+      
+      // Ensure splash screen is dismissed after auth regardless of success/failure
+      try {
+        if (sdk.actions && typeof sdk.actions.ready === 'function') {
+          await sdk.actions.ready();
+          logDebug('Splash screen dismissed after auth');
+        }
+      } catch (e) {
+        logDebug('Error dismissing splash screen after auth:', e);
+      }
+      
       return authResult;
     } else {
-      console.warn('signIn method not available in this SDK version');
+      logDebug('signIn method not available in this SDK version');
       return null;
     }
   } catch (e) {
-    console.error('Error authenticating in Mini App:', e);
+    logDebug('Error authenticating in Mini App:', e);
+    
+    // Ensure splash screen is dismissed even if auth fails
+    try {
+      if (sdk.actions && typeof sdk.actions.ready === 'function') {
+        await sdk.actions.ready();
+        logDebug('Splash screen dismissed after auth error');
+      }
+    } catch (e2) {
+      logDebug('Error dismissing splash screen after auth error:', e2);
+    }
+    
     return null;
   }
 };

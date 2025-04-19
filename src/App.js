@@ -24,6 +24,7 @@ import safeStorage from './utils/storage';
 import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
+import MiniAppAuthHandler from './components/MiniAppAuthHandler';
 
 // Import the SDK directly at the top level to ensure it's available immediately
 import { sdk } from '@farcaster/frame-sdk';
@@ -129,13 +130,18 @@ function App() {
             
             // STEP 1: Dismiss splash screen first (try again even though we did it before React rendered)
             console.log('🔄 Calling ready() to dismiss splash screen');
+            let splashDismissed = false;
             try {
-              await dismissSplashScreen();
+              splashDismissed = await dismissSplashScreen();
             } catch (readyError) {
               console.warn('Could not dismiss splash screen:', readyError);
             }
             
-            // STEP 2: Only after splash screen dismissal, try to get context
+            if (!splashDismissed) {
+              console.log('⚠️ First attempt to dismiss splash screen failed, will try again');
+            }
+            
+            // STEP 2: Only after splash screen dismissal attempt, try to get context
             let context = null;
             try {
               // Try to get context if needed for your app
@@ -148,7 +154,8 @@ function App() {
               console.warn('Could not get context:', contextError);
             }
             
-            // STEP 3: Only after splash screen dismissal, try authentication
+            // STEP 3: Try authentication but don't block on it
+            let authCompleted = false;
             try {
               // Generate a secure nonce for authentication
               const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -156,33 +163,72 @@ function App() {
               // Use direct SDK import rather than dynamic import
               if (sdk.actions && typeof sdk.actions.signIn === 'function') {
                 console.log('🔑 Attempting authentication');
-                const authResult = await sdk.actions.signIn({ nonce });
-                console.log('Authentication result:', authResult);
                 
-                // Process auth result if needed
+                // Start auth but don't await it to avoid blocking the app
+                const authPromise = sdk.actions.signIn({ nonce });
+                
+                // Set a timeout to ensure we continue even if auth hangs
+                const authTimeoutPromise = new Promise((resolve) => {
+                  setTimeout(() => {
+                    console.log('⏱️ Authentication timed out, continuing with app initialization');
+                    resolve(null);
+                  }, 2000); // 2 second timeout
+                });
+                
+                // Race the auth promise against the timeout
+                const authResult = await Promise.race([authPromise, authTimeoutPromise]);
+                
+                if (authResult) {
+                  console.log('Authentication result:', authResult);
+                  authCompleted = true;
+                }
               }
             } catch (authError) {
               console.warn('Authentication error:', authError);
-              // Continue even if auth fails - some features might be limited
+              // Continue even if auth fails - MiniAppAuthHandler will try again
             }
             
-            // STEP 4: Set up event listeners for Mini App interactions
-            setupMiniAppEventListeners();
+            // STEP 4: Try to dismiss splash screen again if not already done
+            if (!splashDismissed) {
+              console.log('🔄 Trying to dismiss splash screen again');
+              try {
+                await dismissSplashScreen();
+              } catch (secondReadyError) {
+                console.warn('Second attempt to dismiss splash screen failed:', secondReadyError);
+              }
+            }
             
-            console.log('Mini App fully initialized');
+            // STEP 5: Set up event listeners for Mini App interactions
+            try {
+              setupMiniAppEventListeners();
+            } catch (eventError) {
+              console.warn('Error setting up event listeners:', eventError);
+            }
+            
+            console.log('Mini App fully initialized, auth completed:', authCompleted);
           } catch (miniAppError) {
             console.error('Error initializing Mini App:', miniAppError);
             // Continue with regular web app rendering even if Mini App init fails
+            
+            // Try to dismiss splash screen one last time
+            try {
+              await dismissSplashScreen();
+            } catch (e) {
+              console.error('Final attempt to dismiss splash screen failed:', e);
+            }
           }
         } else {
           console.log('Running in standard web environment');
         }
         
-        // Force the splash screen to be dismissed after 5 seconds as an emergency fallback
+        // Force the splash screen to be dismissed after 3 seconds as an emergency fallback
         setTimeout(() => {
-          console.log('🚨 Emergency splash screen timeout - forcing app to show');
+          if (isInMiniApp) {
+            console.log('🚨 Emergency splash screen timeout - forcing dismissal');
+            dismissSplashScreen().catch(e => console.error('Emergency splash screen dismissal failed:', e));
+          }
           setLoading(false);
-        }, 5000);
+        }, 3000);
         
         // Complete loading and show UI
         setLoading(false);
@@ -190,6 +236,11 @@ function App() {
         console.error('Error during app initialization:', error);
         setAppError(error);
         setLoading(false);
+        
+        // Even in error state, try to dismiss splash screen
+        if (isMiniAppEnvironment()) {
+          dismissSplashScreen().catch(e => {});
+        }
       }
     };
     
@@ -241,6 +292,9 @@ function App() {
         <AuthProvider>
           <WalletProvider>
             <Router>
+              {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
+              {isMiniApp && <MiniAppAuthHandler />}
+              
               <div className="app" style={appStyles}>
                 {/* Hide header in Mini App if needed or adjust its appearance */}
                 {(!isMiniApp || (isMiniApp && !miniAppContext?.hideHeader)) && (
