@@ -280,4 +280,39 @@ export const composeCast = async ({ text, embeds }) => {
     console.error('Error composing cast in Mini App:', e);
     return null;
   }
+};
+
+/**
+ * Prompts the user to add the Mini App to their collection in Farcaster
+ * This function will show the user a dialog to add the app
+ * @returns {Promise<boolean>} True if the app was added, false otherwise
+ */
+export const promptAddFrame = async () => {
+  if (!isMiniAppEnvironment()) {
+    // In web app, maybe show a message that this feature is only available in Mini App
+    console.log('Add frame is only available in Mini App environment');
+    return false;
+  }
+
+  try {
+    // Check if the SDK has the actions.addFrame method
+    if (sdk.actions && typeof sdk.actions.addFrame === 'function') {
+      logDebug('Prompting user to add frame');
+      await sdk.actions.addFrame();
+      logDebug('User added frame successfully');
+      return true;
+    } else {
+      console.warn('addFrame method not available in this SDK version');
+      return false;
+    }
+  } catch (e) {
+    if (e.name === 'RejectedByUser') {
+      logDebug('User rejected adding the app');
+    } else if (e.name === 'InvalidDomainManifestJson') {
+      console.error('Invalid manifest.json:', e);
+    } else {
+      console.error('Error adding frame in Mini App:', e);
+    }
+    return false;
+  }
 }; 
