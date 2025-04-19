@@ -57,7 +57,8 @@
     "frame"
   ],
   "splash": {
-    "image_url": "/logo512.png",
+    "image_url": "https://gall3ry.vercel.app/logo512.png",
     "background_color": "#f5f5f5"
-  }
+  },
+  "domain": "https://gall3ry.vercel.app"
 } 
