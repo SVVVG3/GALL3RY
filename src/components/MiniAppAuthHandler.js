@@ -3,6 +3,13 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from '../contexts/AuthContext';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 
+// Generate a secure nonce for authentication
+const generateNonce = () => {
+  const array = new Uint8Array(16);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+};
+
 /**
  * MiniAppAuthHandler - Handles silent authentication in Mini App environment
  * 
@@ -10,135 +17,199 @@ import { isMiniAppEnvironment } from '../utils/miniAppUtils';
  * where the user is already authenticated in their Farcaster client (like Warpcast)
  */
 const MiniAppAuthHandler = () => {
-  const { login, isAuthenticated, profile, setAuthenticating } = useAuth();
+  const { login, isAuthenticated, setAuthenticating } = useAuth();
   const [authAttempted, setAuthAttempted] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   
-  // Check if we're specifically in Warpcast mobile
-  const isWarpcastMobile = typeof window !== 'undefined' && 
-                         (window.navigator.userAgent.includes('Warpcast') || 
-                          typeof window.__WARPCAST__ !== 'undefined' ||
-                          (typeof window.webkit !== 'undefined' && 
-                           /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent)));
-
   useEffect(() => {
-    // Only attempt auto-login once when the component mounts
-    // and only if the user is not already authenticated
-    if (!authAttempted && !isAuthenticated) {
-      const attemptSilentSignIn = async () => {
-        try {
-          console.log("MiniAppAuthHandler: Attempting silent sign-in...");
-          console.log("MiniAppAuthHandler: isWarpcastMobile =", isWarpcastMobile);
-          setIsAuthenticating(true);
-          
-          // APPROACH 1: First try to get user data from context directly
-          // This is the most reliable method on Warpcast mobile
+    const attemptAuth = async () => {
+      // Don't try to authenticate if we've already attempted or are already authenticated
+      if (authAttempted || isAuthenticated || isAuthenticating) {
+        return;
+      }
+      
+      // Check if we're in a Mini App environment
+      const isMiniApp = isMiniAppEnvironment();
+      console.log('MiniAppAuthHandler: Environment check:', { isMiniApp, isAuthenticated });
+      
+      if (!isMiniApp) {
+        console.log('MiniAppAuthHandler: Not in Mini App environment, skipping auto-auth');
+        setAuthAttempted(true);
+        return;
+      }
+      
+      try {
+        setIsAuthenticating(true);
+        setAuthenticating?.(true);
+        
+        console.log('MiniAppAuthHandler: Starting auto-authentication');
+        
+        // STEP 1: Check if SDK is available and initialized
+        if (!sdk) {
+          console.error('MiniAppAuthHandler: SDK not available');
+          setAuthAttempted(true);
+          setIsAuthenticating(false);
+          setAuthenticating?.(false);
+          return;
+        }
+        
+        // Ensure SDK is initialized
+        if (!sdk.initialized && typeof sdk.init === 'function') {
+          console.log('MiniAppAuthHandler: Initializing SDK');
           try {
-            console.log("MiniAppAuthHandler: Checking for context first");
+            sdk.init();
+          } catch (initError) {
+            console.error('MiniAppAuthHandler: Error initializing SDK:', initError);
+          }
+        }
+        
+        // STEP 2: Try to get user context directly first (fastest path)
+        if (typeof sdk.getContext === 'function') {
+          try {
+            console.log('MiniAppAuthHandler: Getting context with sdk.getContext()');
             const context = await sdk.getContext();
-            console.log("MiniAppAuthHandler: Raw context data:", context);
+            console.log('MiniAppAuthHandler: Context result:', context);
             
             if (context && context.user && context.user.fid) {
+              // Found authenticated user in context
+              console.log('MiniAppAuthHandler: Found authenticated user:', context.user);
+              
               const userData = {
                 fid: context.user.fid,
                 username: context.user.username || `user${context.user.fid}`,
-                displayName: context.user.displayName || `User ${context.user.fid}`,
-                pfp: context.user.pfpUrl || null,
-                token: 'context-auth' // Special marker to indicate auth from context
+                displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
+                pfp: context.user.pfpUrl ? { url: context.user.pfpUrl } : null
               };
               
-              console.log("MiniAppAuthHandler: Successfully got user from context:", userData);
-              login(userData);
-              setIsAuthenticating(false);
+              // Store in localStorage
+              try {
+                localStorage.setItem('farcaster_user', JSON.stringify(userData));
+                localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+              } catch (storageError) {
+                console.error('Error storing user data:', storageError);
+              }
+              
+              // Login with user data
+              console.log('MiniAppAuthHandler: Auto-login with data:', userData);
+              await login(userData);
+              
               setAuthAttempted(true);
+              setIsAuthenticating(false);
+              setAuthenticating?.(false);
               return;
-            } else {
-              console.log("MiniAppAuthHandler: No user found in context, falling back to signIn");
             }
           } catch (contextError) {
-            console.warn("MiniAppAuthHandler: Error getting context:", contextError);
-          }
-          
-          // APPROACH 2: If context doesn't have user data, try the signIn method
-          // Generate a secure nonce - this is required by the SDK
-          const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-          
-          console.log("MiniAppAuthHandler: Attempting signIn with nonce");
-          // Use the SDK's signIn method which should work silently in Warpcast
-          const signInResult = await sdk.actions.signIn({ nonce });
-          
-          console.log("MiniAppAuthHandler: Raw sign-in result:", signInResult);
-          
-          if (signInResult && (signInResult.success || signInResult.message)) {
-            console.log("MiniAppAuthHandler: Silent sign-in successful", signInResult);
-            
-            // Try to extract user data from the response - first from context if available
-            let userData = null;
-            
-            // If we couldn't get data from context before, try from the sign-in result
-            if (!userData) {
-              // Try multiple ways to extract FID from the response
-              let fid = null;
-              
-              // Option 1: Direct data access
-              if (signInResult.data?.fid) {
-                fid = signInResult.data.fid;
-              } 
-              // Option 2: Parse from message
-              else if (signInResult.message) {
-                const fidMatch = signInResult.message.match(/(?:fid|FID):\s*(\d+)/i);
-                if (fidMatch && fidMatch[1]) {
-                  fid = parseInt(fidMatch[1], 10);
-                }
-              }
-              
-              if (fid) {
-                // Process the result to get the user info
-                userData = {
-                  fid: fid,
-                  username: signInResult.data?.username || `user${fid}`,
-                  displayName: signInResult.data?.displayName || `User ${fid}`,
-                  pfp: signInResult.data?.pfp?.url || null,
-                  verifications: signInResult.data?.verifications || [],
-                  token: signInResult.signature || '',
-                  // Include the raw data for debugging
-                  _rawAuthResult: signInResult
-                };
-                
-                console.log("MiniAppAuthHandler: Extracted user data from sign-in result:", userData);
-              }
-            }
-            
-            if (userData) {
-              // Update the auth context
-              login(userData);
-              return;
-            }
-            
-            console.warn("MiniAppAuthHandler: Could not extract FID from sign-in result");
-          } else {
-            console.warn("MiniAppAuthHandler: Silent sign-in failed", signInResult?.error || "No valid result");
-          }
-        } catch (error) {
-          console.error("MiniAppAuthHandler: Error during silent sign-in", error);
-        } finally {
-          setIsAuthenticating(false);
-          setAuthAttempted(true);
-          
-          // Ensure splash screen is dismissed even if auth fails
-          try {
-            await sdk.actions.ready();
-          } catch (e) {
-            console.warn("MiniAppAuthHandler: Error dismissing splash screen after auth", e);
+            console.error('MiniAppAuthHandler: Error getting context:', contextError);
           }
         }
-      };
+        
+        // STEP 3: Try context property as fallback
+        if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+          console.log('MiniAppAuthHandler: Found user in context property:', sdk.context.user);
+          
+          const userData = {
+            fid: sdk.context.user.fid,
+            username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+            displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+            pfp: sdk.context.user.pfpUrl ? { url: sdk.context.user.pfpUrl } : null
+          };
+          
+          // Store in localStorage
+          try {
+            localStorage.setItem('farcaster_user', JSON.stringify(userData));
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+          } catch (storageError) {
+            console.error('Error storing user data:', storageError);
+          }
+          
+          // Login with user data
+          console.log('MiniAppAuthHandler: Auto-login from context property with data:', userData);
+          await login(userData);
+          
+          setAuthAttempted(true);
+          setIsAuthenticating(false);
+          setAuthenticating?.(false);
+          return;
+        }
+        
+        // STEP 4: Try silent sign-in as last resort
+        if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+          try {
+            console.log('MiniAppAuthHandler: Attempting silent authentication');
+            const nonce = generateNonce();
+            
+            // Set a timeout to prevent hanging
+            const signInPromise = sdk.actions.signIn({ nonce });
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Sign-in timeout')), 5000);
+            });
+            
+            // Race against timeout
+            const signInResult = await Promise.race([signInPromise, timeoutPromise]);
+            console.log('MiniAppAuthHandler: Silent auth result:', signInResult);
+            
+            // After sign-in, try to get context again
+            if (typeof sdk.getContext === 'function') {
+              const newContext = await sdk.getContext();
+              if (newContext && newContext.user && newContext.user.fid) {
+                const userData = {
+                  fid: newContext.user.fid,
+                  username: newContext.user.username || `user${newContext.user.fid}`,
+                  displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
+                  pfp: newContext.user.pfpUrl ? { url: newContext.user.pfpUrl } : null
+                };
+                
+                // Store & login with user data
+                localStorage.setItem('farcaster_user', JSON.stringify(userData));
+                localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+                await login(userData);
+                
+                setAuthAttempted(true);
+                setIsAuthenticating(false);
+                setAuthenticating?.(false);
+                return;
+              }
+            }
+          } catch (signInError) {
+            // Silent auth failed - this is expected if user needs to approve
+            console.log('MiniAppAuthHandler: Silent authentication failed:', signInError);
+          }
+        }
+        
+        console.log('MiniAppAuthHandler: All auto-authentication methods failed');
+      } catch (error) {
+        console.error('MiniAppAuthHandler: Error during authentication:', error);
+      } finally {
+        setIsAuthenticating(false);
+        setAuthAttempted(true);
+        setAuthenticating?.(false);
+      }
+    };
+    
+    // Try auto-authentication on mount
+    attemptAuth();
+    
+    // Listen for miniAppAuthenticated events
+    const handleAuthenticated = (event) => {
+      console.log('MiniAppAuthHandler: Caught miniAppAuthenticated event:', event.detail);
       
-      attemptSilentSignIn();
-    }
-  }, [isAuthenticated, login, authAttempted, setIsAuthenticating, isWarpcastMobile]);
-
-  // This is a silent authentication component, so it doesn't render anything visible
+      if (event.detail && !isAuthenticated) {
+        const userInfo = event.detail;
+        
+        if (userInfo.fid) {
+          login(userInfo);
+        }
+      }
+    };
+    
+    window.addEventListener('miniAppAuthenticated', handleAuthenticated);
+    
+    return () => {
+      window.removeEventListener('miniAppAuthenticated', handleAuthenticated);
+    };
+  }, [authAttempted, isAuthenticated, isAuthenticating, login, setAuthenticating]);
+  
+  // This is a transparent component, it doesn't render anything
   return null;
 };
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import './App.css';
 import './styles/app.css';
@@ -7,6 +7,36 @@ import './styles/errors.css'; // Import our new error styles
 // Import Farcaster Auth Kit styles
 import '@farcaster/auth-kit/styles.css';
 import { AuthKitProvider } from '@farcaster/auth-kit';
+
+// Import the SDK directly and initialize IMMEDIATELY at the top level
+import { sdk, immediate } from '@farcaster/frame-sdk';
+
+// Initialize immediately, before any React code runs
+if (typeof window !== 'undefined') {
+  try {
+    immediate();
+    console.log('💫 SDK initialized immediately via immediate()');
+    
+    // Also initialize in the standard way as backup
+    if (!sdk.initialized && typeof sdk.init === 'function') {
+      sdk.init();
+      console.log('✅ SDK initialized via sdk.init()');
+    }
+    
+    // Log SDK status for debugging
+    console.log('SDK initialization status:', {
+      sdkDefined: typeof sdk !== 'undefined',
+      sdkVersion: sdk?.version,
+      sdkInitialized: sdk?.initialized,
+      actionsAvailable: sdk && typeof sdk.actions !== 'undefined',
+      signInAvailable: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
+      readyAvailable: sdk && sdk.actions && typeof sdk.actions.ready === 'function',
+      getContextAvailable: sdk && typeof sdk.getContext === 'function'
+    });
+  } catch (error) {
+    console.error('❌ Error initializing SDK:', error);
+  }
+}
 
 // Import Mini App utilities
 import { initializeMiniApp, setupMiniAppEventListeners, isMiniAppEnvironment } from './utils/miniAppUtils';
@@ -25,45 +55,6 @@ import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
 import MiniAppAuthHandler from './components/MiniAppAuthHandler';
-
-// Import the SDK directly at the top level to ensure it's available immediately
-import { sdk } from '@farcaster/frame-sdk';
-
-// Log the SDK initialization state to help with debugging
-console.log('App.js: SDK initialization check', {
-  sdkDefined: typeof sdk !== 'undefined',
-  sdkVersion: sdk?.version,
-  actionsAvailable: sdk && typeof sdk.actions !== 'undefined',
-  signInAvailable: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
-  readyAvailable: sdk && sdk.actions && typeof sdk.actions.ready === 'function'
-});
-
-// Try to initialize the SDK immediately
-const immediateInitSDK = () => {
-  try {
-    if (typeof window !== 'undefined' && typeof sdk !== 'undefined') {
-      console.log('App.js: Attempting immediate SDK initialization');
-      // Check if we're in a Mini App environment
-      const isInMiniApp = isMiniAppEnvironment();
-      
-      if (isInMiniApp && sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
-        console.log('App.js: Calling sdk.actions.ready() for immediate initialization');
-        sdk.actions.ready().then(() => {
-          console.log('App.js: SDK ready() call successful');
-        }).catch(error => {
-          console.error('App.js: Error calling SDK ready():', error);
-        });
-      } else {
-        console.log('App.js: Not in Mini App environment or SDK ready() not available');
-      }
-    }
-  } catch (error) {
-    console.error('App.js: Error during immediate SDK initialization:', error);
-  }
-};
-
-// Call the initialization function
-immediateInitSDK();
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -129,10 +120,20 @@ class ErrorBoundary extends React.Component {
 const dismissSplashScreen = async () => {
   console.log('⚠️ Attempting to dismiss splash screen');
   try {
-    // Just call ready() directly with the SDK we imported
-    await sdk.actions.ready();
-    console.log('✅ Called ready() successfully');
-    return true;
+    // Make sure SDK is initialized
+    if (sdk && !sdk.initialized && typeof sdk.init === 'function') {
+      sdk.init();
+    }
+    
+    // Call ready() to dismiss splash screen
+    if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+      await sdk.actions.ready();
+      console.log('✅ Called ready() successfully');
+      return true;
+    } else {
+      console.warn('⚠️ sdk.actions.ready is not available');
+      return false;
+    }
   } catch (e) {
     console.error('❌ Error calling ready():', e);
     return false;
@@ -144,10 +145,10 @@ if (typeof window !== 'undefined') {
   dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
 }
 
-// Add this function before the App component
+// Simple function to get user context
 const getWarpcastContext = async () => {
   try {
-    if (typeof sdk.getContext === 'function') {
+    if (sdk && typeof sdk.getContext === 'function') {
       const context = await sdk.getContext();
       console.log('Early context check:', context);
       return context;
@@ -164,8 +165,9 @@ function App() {
   const [appError, setAppError] = useState(null);
   const [miniAppContext, setMiniAppContext] = useState(null);
   const [isMiniApp, setIsMiniApp] = useState(false);
+  const authContextRef = useRef(null);
   
-  // Initialize app on mount - reduced timer for faster loading
+  // Initialize the app on mount
   useEffect(() => {
     const initApp = async () => {
       try {
@@ -173,105 +175,50 @@ function App() {
         const isInMiniApp = isMiniAppEnvironment();
         setIsMiniApp(isInMiniApp);
         
-        // If we're in a Mini App environment, initialize it early to avoid white screen
+        // If we're in a Mini App environment, initialize it early 
         if (isInMiniApp) {
+          console.log('📱 Running in Mini App environment');
+          setIsMiniApp(true);
+          
           try {
-            console.log('Running in Mini App environment, initializing...');
+            console.log('🔍 Checking SDK status:', { 
+              sdkDefined: !!sdk, 
+              actionsAvailable: sdk?.actions ? 'yes' : 'no',
+              getContextAvailable: typeof sdk?.getContext === 'function' ? 'yes' : 'no',
+              readyAvailable: typeof sdk?.ready === 'function' ? 'yes' : 'no'
+            });
             
-            // Initialize the global miniApp object for SDK access
-            if (typeof window !== 'undefined' && !window.miniApp) {
-              window.miniApp = {
-                getUserInfo: async () => {
-                  console.log('Getting user info from Mini App SDK');
-                  try {
-                    // Try to get context from the SDK
-                    const context = await sdk.getContext();
-                    console.log('Got context from SDK:', context);
-                    
-                    if (context && context.user) {
-                      return {
-                        fid: context.user.fid,
-                        username: context.user.username || `user${context.user.fid}`,
-                        displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
-                        pfp: {
-                          url: context.user.pfpUrl || null
-                        }
-                      };
-                    }
-                    // Fallback to empty user info
-                    return null;
-                  } catch (error) {
-                    console.error('Error getting Mini App user info:', error);
-                    return null;
-                  }
-                }
-              };
-            }
-            
-            // STEP 1: Try to get context FIRST - before anything else
+            // STEP 1: Try to get context directly at startup
             let context = null;
             try {
-              console.log('🔍 Checking for Warpcast context');
-              context = await getWarpcastContext();
+              console.log('🔍 Checking for user context');
+              context = await sdk.getContext();
               if (context && context.user && context.user.fid) {
                 console.log('✅ Found authenticated user in context:', context.user);
                 setMiniAppContext(context);
                 
-                // If we have user data in context, auto-login the user
+                // If we have user data in context, prepare it for use
                 const { user } = context;
                 const userData = {
                   fid: user.fid,
                   username: user.username || `user${user.fid}`,
                   displayName: user.displayName || `User ${user.fid}`,
-                  pfp: user.pfpUrl ? { url: user.pfpUrl } : null,
-                  token: 'context-auth' // Mark as context-based auth
+                  pfp: user.pfpUrl ? { url: user.pfpUrl } : null
                 };
                 
-                console.log('🔑 Auto-login from context with user data:', userData);
+                console.log('🔑 Found user data in context:', userData);
                 
                 // Store the user info in localStorage for persistence
+                localStorage.setItem('farcaster_user', JSON.stringify(userData));
                 localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
-                
-                // Try to update auth state if the function is available
-                if (window.updateAuthState) {
-                  window.updateAuthState({
-                    user: userData,
-                    isAuthenticated: true
-                  });
-                }
                 
                 // Dispatch event for components to react to authentication
                 const authEvent = new CustomEvent('miniAppAuthenticated', { 
-                  detail: { userInfo: userData }
+                  detail: userData
                 });
                 window.dispatchEvent(authEvent);
               } else {
                 console.log('⚠️ No authenticated user found in context');
-                
-                // Try silent authentication after context check fails
-                try {
-                  if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
-                    // Generate a secure nonce
-                    const generateNonce = () => {
-                      const array = new Uint8Array(16);
-                      window.crypto.getRandomValues(array);
-                      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-                    };
-                    
-                    console.log('Attempting silent authentication...');
-                    const nonce = generateNonce();
-                    const signInResult = await sdk.actions.signIn({ nonce });
-                    console.log('Silent auth result:', signInResult);
-                    
-                    // Process result - in a real app, you'd validate this on your server
-                    if (signInResult && signInResult.message) {
-                      console.log('Silent authentication successful');
-                    }
-                  }
-                } catch (authError) {
-                  console.log('Silent authentication not available:', authError);
-                  // This is fine - user can click sign-in button later
-                }
               }
             } catch (contextError) {
               console.warn('Could not get context:', contextError);
@@ -287,63 +234,17 @@ function App() {
               console.warn('Could not dismiss splash screen:', readyError);
             }
             
-            // STEP 3: Try authentication but don't block on it
-            let authCompleted = false;
-            try {
-              // Generate a secure nonce for authentication
-              const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-              
-              // Use direct SDK import rather than dynamic import
-              if (sdk.actions && typeof sdk.actions.signIn === 'function') {
-                console.log('🔑 Attempting authentication');
-                
-                // Start auth but don't await it to avoid blocking the app
-                const authPromise = sdk.actions.signIn({ nonce });
-                
-                // Set a timeout to ensure we continue even if auth hangs
-                const authTimeoutPromise = new Promise((resolve) => {
-                  setTimeout(() => {
-                    console.log('⏱️ Authentication timed out, continuing with app initialization');
-                    resolve(null);
-                  }, 2000); // 2 second timeout
-                });
-                
-                // Race the auth promise against the timeout
-                const authResult = await Promise.race([authPromise, authTimeoutPromise]);
-                
-                if (authResult) {
-                  console.log('Authentication result:', authResult);
-                  authCompleted = true;
-                }
-              }
-            } catch (authError) {
-              console.warn('Authentication error:', authError);
-              // Continue even if auth fails - MiniAppAuthHandler will try again
-            }
-            
-            // STEP 4: Try to dismiss splash screen again if not already done
-            if (!splashDismissed) {
-              console.log('🔄 Trying to dismiss splash screen again');
-              try {
-                await dismissSplashScreen();
-              } catch (secondReadyError) {
-                console.warn('Second attempt to dismiss splash screen failed:', secondReadyError);
-              }
-            }
-            
-            // STEP 5: Set up event listeners for Mini App interactions
+            // STEP 3: Set up event listeners for Mini App interactions
             try {
               setupMiniAppEventListeners();
             } catch (eventError) {
               console.warn('Error setting up event listeners:', eventError);
             }
             
-            console.log('Mini App fully initialized, auth completed:', authCompleted);
           } catch (miniAppError) {
             console.error('Error initializing Mini App:', miniAppError);
-            // Continue with regular web app rendering even if Mini App init fails
             
-            // Try to dismiss splash screen one last time
+            // Try to dismiss splash screen as a last resort
             try {
               await dismissSplashScreen();
             } catch (e) {
@@ -378,6 +279,12 @@ function App() {
     };
     
     initApp();
+
+    // Initialize the Mini App SDK
+    if (typeof window !== 'undefined') {
+      // Make auth context available globally for components that need it
+      window.authContextRef = authContextRef;
+    }
   }, []);
   
   // Handle any critical app errors
@@ -425,7 +332,7 @@ function App() {
         walletConnectProjectId: process.env.REACT_APP_WALLET_CONNECT_ID || 'DEFAULT',
         transport: 'deferredInjected' // Use deferred to prevent conflicts with other providers
       }}>
-        <AuthProvider>
+        <AuthProvider ref={authContextRef}>
           <WalletProvider>
             <Router>
               {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
