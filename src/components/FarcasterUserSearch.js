@@ -581,6 +581,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             className="search-input"
             aria-label="Farcaster username"
             disabled={isSearching}
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck="false"
           />
           <button 
             type="submit"

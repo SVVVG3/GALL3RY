@@ -3,19 +3,16 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif;
-  font-style: normal !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
 }
 
 /* Explicit styling for all headings to prevent browser defaults */
 h1, h2, h3, h4, h5, h6 {
-  font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-  font-style: normal !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
   font-weight: 700;
   line-height: 1.2;
   color: var(--color-gray-900);
-  text-transform: none !important;
-  letter-spacing: normal !important;
+  margin-bottom: 0.5rem;
 }
 
 :root {

@@ -47,6 +47,8 @@
   font-size: 16px;
   color: #666;
   margin-bottom: 20px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 400;
 }
 
 .search-input-wrapper {

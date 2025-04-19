@@ -4,10 +4,10 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#6100FF" />
+    <meta name="theme-color" content="#8B5CF6" />
     <meta
       name="description"
-      content="View your Ethereum NFTs in a beautiful gallery"
+      content="GALL3RY - A modern NFT gallery and discovery platform for Farcaster users"
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
     <!-- Content Security Policy to allow images from various sources -->
@@ -17,48 +17,16 @@
       user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
     -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-    <!-- Global font enforcement to ensure Comic Sans is used throughout the app -->
+    <!-- Global font settings -->
     <style>
-      /* 
-      @font-face {
-        font-family: 'Comic Sans';
-        src: local('Comic Sans MS'), local('Comic Sans');
-        font-style: normal !important;
-        font-display: swap;
+      /* Modern font settings - ensuring clean readable text */
+      html, body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
-      
-      @font-face {
-        font-family: 'Comic Sans MS';
-        src: local('Comic Sans MS'), local('Comic Sans');
-        font-style: normal !important;
-        font-display: swap;
-      }
-      
-      html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, 
-      blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, 
-      img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, 
-      i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, 
-      caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas, details, 
-      embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, 
-      section, summary, time, mark, audio, video, input, textarea, button, select {
-        font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-        font-style: normal !important;
-      }
-      
-      @media (max-width: 768px) {
-        body * {
-          font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-          font-style: normal !important;
-          text-transform: none !important;
-          letter-spacing: normal !important;
-        }
-        
-        h1, h2, h3, h4, h5, h6, p, div, span, button, input, a {
-          font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-          font-style: normal !important;
-        }
-      }
-      */
 
       /* Special styles for NFT images - ensure they display properly */
       .nft-image img, 
