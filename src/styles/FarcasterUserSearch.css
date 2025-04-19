@@ -704,68 +704,47 @@
 
 /* NFT section */
 .nft-section {
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  max-width: 100%;
   margin-top: 20px;
+  padding: 0 5px;
+}
+
+/* IMPORTANT: All NFT grid layout styles have been moved to NFTGrid.css.
+   Only container width settings remain here. */
+
+.nft-grid-wrapper {
   width: 100%;
+  margin-top: 10px;
 }
 
-.nft-section h2 {
-  font-size: 1.5rem;
-  margin-bottom: 10px;
+/* NFT Count Info */
+.nft-count-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 15px 0 10px;
+  padding: 0 5px;
+  font-size: 0.9rem;
+  color: var(--color-gray-700);
 }
 
-/* NFT Grid specific styles */
-.nft-section .nft-grid {
-  /* Remove grid properties to avoid conflicts with NFTGrid.css */
-  /* Just set width to 100% to ensure it takes full width */
-  width: 100%;
+.nft-count {
+  font-weight: 600;
+  color: var(--color-gray-900);
 }
 
-@media (min-width: 768px) {
-  .nft-section .nft-grid {
-    /* Only keep width property */
-    width: 100%;
-  }
-  
-  .user-profile {
-    max-width: 95%;
-    width: 100%;
-  }
-  
-  .farcaster-search-container {
-    max-width: 1200px;
-    width: 95%;
-  }
-  
-  .nft-container {
-    max-width: 100%;
-    padding: 0 20px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .nft-section .nft-grid {
-    /* Remove grid properties */
-    width: 100%;
-  }
-}
-
-@media (min-width: 1440px) {
-  .nft-section .nft-grid {
-    /* Remove grid properties */
-    width: 100%;
-  }
-  
-  .farcaster-search-container,
-  .user-profile {
-    max-width: 1400px;
-  }
-}
-
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .nft-section {
-    padding: 0 10px;
+    padding: 0;
+  }
+  
+  .nft-count-info {
+    padding: 0;
+    margin: 10px 0;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
   }
 }
 
@@ -1601,4 +1580,269 @@
   .nft-card:hover .nft-image {
     transform: scale(1.05);
   }
+}
+
+/* NFT Section and Display Container */
+.nft-container {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.nft-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.nft-header-left {
+  flex: 1;
+  min-width: 200px;
+}
+
+.nft-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* NFT display area - IMPORTANT: Let NFTGrid.css handle the actual grid */
+.nft-display {
+  width: 100%;
+  margin: 0 auto;
+  padding: 0;
+}
+
+/* Specific NFT Sort Controls */
+.nft-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sort-options {
+  display: flex;
+  gap: 8px;
+}
+
+.sort-option {
+  padding: 6px 12px;
+  border-radius: 8px;
+  background-color: #8b5cf6;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sort-option:hover {
+  background-color: #7c3aed;
+  transform: translateY(-1px);
+}
+
+.sort-option.active {
+  background-color: #6d28d9;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.sort-order-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+
+.sort-order-toggle:hover {
+  background-color: #7c3aed;
+  transform: translateY(-1px);
+}
+
+/* Mobile-specific styles */
+@media (max-width: 600px) {
+  .nft-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .nft-header-left,
+  .nft-header-right {
+    width: 100%;
+  }
+  
+  .nft-sort-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .sort-options {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  
+  .sort-option {
+    padding: 4px 8px;
+    font-size: 12px;
+    flex: 1;
+    text-align: center;
+    min-width: 60px;
+  }
+}
+
+/* Loading spinner */
+.loading-spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  width: 100%;
+  text-align: center;
+}
+
+.loading-spinner-container p {
+  margin-top: 1rem;
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+/* Username-FID container spacing fix */
+.username-fid-container {
+  display: flex;
+  align-items: center;
+  gap: 5px; /* Reduced from 10px */
+  margin-top: 4px;
+}
+
+/* Load more button container */
+.load-more-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin: 30px 0;
+}
+
+.load-more-button {
+  padding: 10px 16px;
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.load-more-button:hover {
+  background-color: #7c3aed;
+  transform: translateY(-1px);
+}
+
+.load-more-button:disabled {
+  background-color: #d1d5db;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* NFT count between username and wallet toggle */
+.nft-total-count {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 2px auto 2px;
+  padding: 4px 10px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.nft-total-count p {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* User profile section improvements */
+.user-profile {
+  background-color: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.profile-info {
+  width: 100%;
+}
+
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .profile-header {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .profile-image-name {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    width: 100%;
+  }
+  
+  .wallet-info {
+    width: 100%;
+    margin-top: 10px;
+  }
+}
+
+/* Fix NFT grid container in mobile view */
+@media (max-width: 480px) {
+  .nft-display {
+    padding: 0;
+  }
+  
+  .nft-container {
+    padding: 0;
+  }
+}
+
+/* Ensure NFTGrid has proper spacing in the FarcasterUserSearch component */
+.farcaster-search-container .nft-grid {
+  padding-top: 10px !important;
+  padding-bottom: 30px !important;
+}
+
+/* Clear any floats to prevent layout issues */
+.nft-section {
+  clear: both;
+  width: 100%;
 } 
