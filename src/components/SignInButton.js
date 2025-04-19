@@ -188,6 +188,41 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
           const nonce = generateNonce();
           console.log("SignInButton: Generated nonce for authentication:", nonce);
           
+          // Check if user is already authenticated in SDK context first
+          if (sdk && sdk.context && sdk.context.user) {
+            // User is already authenticated in the Farcaster client
+            console.log("SignInButton: User already authenticated in SDK context:", sdk.context.user);
+            
+            // Extract user info from context
+            const userInfo = {
+              fid: sdk.context.user.fid,
+              username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+              displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+              pfp: { url: sdk.context.user.pfpUrl || null }
+            };
+            
+            // Store auth info in localStorage for persistence
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+            
+            // Update app state
+            if (window.updateAuthState) {
+              window.updateAuthState({
+                user: userInfo,
+                isAuthenticated: true
+              });
+            }
+            
+            // Dispatch auth event
+            const authEvent = new CustomEvent('miniAppAuthenticated', { 
+              detail: { userInfo }
+            });
+            window.dispatchEvent(authEvent);
+            
+            console.log("SignInButton: Successfully authenticated using SDK context");
+            setIsSigningIn(false);
+            return;
+          }
+          
           if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
             console.log("SignInButton: Using sdk.actions.signIn for authentication");
             const signInResult = await sdk.actions.signIn({ nonce });
@@ -196,9 +231,38 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
             if (signInResult && signInResult.message) {
               console.log("SignInButton: Received valid sign-in message");
               
-              // We'll still call handleMiniAppAuthentication to process the result
-              // and extract user information from the SDK context
-              await handleMiniAppAuthentication();
+              // In a full implementation, you would send this message to your server for verification
+              // For now, we'll try to get user info from context after sign-in
+              if (sdk && sdk.context && sdk.context.user) {
+                const userInfo = {
+                  fid: sdk.context.user.fid,
+                  username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+                  displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+                  pfp: { url: sdk.context.user.pfpUrl || null }
+                };
+                
+                // Store auth info and update app state
+                localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+                if (window.updateAuthState) {
+                  window.updateAuthState({
+                    user: userInfo,
+                    isAuthenticated: true
+                  });
+                }
+                
+                // Dispatch auth event
+                const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                  detail: { userInfo }
+                });
+                window.dispatchEvent(authEvent);
+                
+                console.log("SignInButton: Successfully authenticated with sdk.actions.signIn");
+                setIsSigningIn(false);
+                return;
+              } else {
+                // If we can't get user info from context, fall back to handleMiniAppAuthentication
+                await handleMiniAppAuthentication();
+              }
             } else {
               console.error("SignInButton: Sign in failed, invalid result", signInResult);
               setError("Sign in failed: Invalid result from SDK");
@@ -208,23 +272,21 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
             await handleMiniAppAuthentication();
           }
           
-          console.log("SignInButton: Mini App authentication completed successfully");
+          console.log("SignInButton: Mini App authentication completed");
           setIsSigningIn(false);
-          return;
         } catch (miniAppError) {
           console.error("SignInButton: Mini App authentication failed:", miniAppError);
           setError(`Mini App authentication failed: ${miniAppError.message || 'Unknown error'}`);
           setIsSigningIn(false);
           return;
         }
+      } else {
+        console.log('SignInButton: Using web authentication flow');
+        await signInWithFarcaster(props.callbackPath || '/');
       }
-
-      console.log('SignInButton: Using web authentication flow');
-      await signInWithFarcaster(props.callbackPath || '/');
     } catch (e) {
       console.error("SignInButton: Authentication error:", e);
       setError(`Authentication failed: ${e?.message || "Unknown error"}`);
-    } finally {
       setIsSigningIn(false);
     }
   };
