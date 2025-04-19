@@ -103,6 +103,24 @@ function App() {
         let miniAppInitialized = false;
         if (isInMiniApp) {
           try {
+            console.log('Running in Mini App environment, initializing...');
+            
+            // Generate a secure nonce for authentication
+            const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+            
+            // Try to authenticate the user with Farcaster if needed
+            try {
+              const { handleMiniAppAuthentication } = await import('./utils/miniAppUtils');
+              const authResult = await handleMiniAppAuthentication(nonce);
+              if (authResult) {
+                console.log('User authenticated with Farcaster');
+                // Here you could send the auth result to your backend if needed
+              }
+            } catch (authError) {
+              console.warn('Authentication error:', authError);
+              // Continue even if auth fails - some features might be limited
+            }
+            
             // Initialize Mini App SDK and get context right away
             // Tell Farcaster we're getting ready to display content
             const context = await initializeMiniApp({
@@ -114,7 +132,7 @@ function App() {
             // Set up event listeners for Mini App interactions
             setupMiniAppEventListeners();
             
-            console.log('Running in Mini App environment with context:', context);
+            console.log('Mini App initialized with context:', context);
           } catch (miniAppError) {
             console.error('Error initializing Mini App:', miniAppError);
             // Continue with regular web app rendering even if Mini App init fails
