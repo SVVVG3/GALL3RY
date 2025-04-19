@@ -14,6 +14,15 @@ import { isMiniAppEnvironment, handleMiniAppAuthentication } from '../utils/mini
 const isBrowser = typeof window !== 'undefined' && 
                  window.document !== undefined;
 
+// Check for direct Warpcast mobile environment
+const isWarpcastMobile = () => {
+  return typeof window !== 'undefined' && 
+    (window.navigator.userAgent.includes('Warpcast') || 
+     typeof window.__WARPCAST__ !== 'undefined' ||
+     (typeof window.webkit !== 'undefined' && 
+      /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent)));
+};
+
 // Add a small CSS block for mobile-specific styles
 const mobileStyles = `
   @media (max-width: 768px) {
@@ -56,6 +65,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
   const farcasterProfile = useProfile();
   
   const [isInMiniApp, setIsInMiniApp] = useState(false);
+  const [isInWarpcastMobile, setIsInWarpcastMobile] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [redirected, setRedirected] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -65,7 +75,36 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
   // Check if running in Mini App environment
   useEffect(() => {
     setIsInMiniApp(isMiniAppEnvironment());
-  }, []);
+    setIsInWarpcastMobile(isWarpcastMobile());
+    
+    // If we're in Warpcast mobile, prioritize context-based auth immediately
+    if (isWarpcastMobile() && !isAuthenticated) {
+      console.log("SignInButton: Detected Warpcast mobile, attempting immediate context auth");
+      (async () => {
+        try {
+          setIsLoading(true);
+          const context = await sdk.getContext();
+          
+          if (context && context.user && context.user.fid) {
+            const userData = {
+              fid: context.user.fid,
+              username: context.user.username || `user${context.user.fid}`,
+              displayName: context.user.displayName || `User ${context.user.fid}`,
+              pfp: context.user.pfpUrl || null,
+              token: 'context-auth' // Special marker to indicate auth from context
+            };
+            
+            console.log("SignInButton: Auto-login from Warpcast context:", userData);
+            await login(userData);
+          }
+        } catch (error) {
+          console.warn("SignInButton: Error in initial context check:", error);
+        } finally {
+          setIsLoading(false);
+        }
+      })();
+    }
+  }, [isAuthenticated, login]);
   
   // Auto-redirect to profile page after sign-in
   useEffect(() => {
@@ -299,13 +338,26 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
   
   // If in Mini App environment, use the Mini App SignInButton
   if (isInMiniApp) {
+    // Special case for Warpcast Mobile - show a more specific button
+    if (isInWarpcastMobile) {
+      return (
+        <button 
+          className="btn btn-primary sign-in-button warpcast-mobile-signin"
+          onClick={handleMiniAppSignIn}
+          disabled={isLoading}
+        >
+          {isLoading ? 'Signing In...' : 'Sign In with Warpcast'}
+        </button>
+      );
+    }
+    
     return (
       <button 
         className="btn btn-primary sign-in-button mini-app-signin"
         onClick={handleMiniAppSignIn}
         disabled={isLoading}
       >
-        {isLoading ? 'Signing In...' : 'Sign In with Warpcast'}
+        {isLoading ? 'Signing In...' : 'Sign In with Farcaster'}
       </button>
     );
   }

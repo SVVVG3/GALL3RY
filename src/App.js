@@ -108,6 +108,20 @@ if (typeof window !== 'undefined') {
   dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
 }
 
+// Add this function before the App component
+const getWarpcastContext = async () => {
+  try {
+    if (typeof sdk.getContext === 'function') {
+      const context = await sdk.getContext();
+      console.log('Early context check:', context);
+      return context;
+    }
+  } catch (e) {
+    console.warn('Error getting early context:', e);
+  }
+  return null;
+};
+
 // Main App function with simplified provider hierarchy
 function App() {
   const [loading, setLoading] = useState(true);
@@ -123,35 +137,49 @@ function App() {
         const isInMiniApp = isMiniAppEnvironment();
         setIsMiniApp(isInMiniApp);
         
-        // If we're in a Mini App, initialize it early to avoid white screen
+        // If we're in a Mini App environment, initialize it early to avoid white screen
         if (isInMiniApp) {
           try {
             console.log('Running in Mini App environment, initializing...');
             
-            // STEP 1: Dismiss splash screen first (try again even though we did it before React rendered)
-            console.log('🔄 Calling ready() to dismiss splash screen');
-            let splashDismissed = false;
-            try {
-              splashDismissed = await dismissSplashScreen();
-            } catch (readyError) {
-              console.warn('Could not dismiss splash screen:', readyError);
-            }
-            
-            if (!splashDismissed) {
-              console.log('⚠️ First attempt to dismiss splash screen failed, will try again');
-            }
-            
-            // STEP 2: Only after splash screen dismissal attempt, try to get context
+            // STEP 1: Try to get context FIRST - before anything else
             let context = null;
             try {
-              // Try to get context if needed for your app
-              if (typeof sdk.getContext === 'function') {
-                context = await sdk.getContext();
-                console.log('Got Mini App context:', context);
+              console.log('🔍 Checking for Warpcast context');
+              context = await getWarpcastContext();
+              if (context && context.user && context.user.fid) {
+                console.log('✅ Found authenticated user in context:', context.user);
                 setMiniAppContext(context);
+                
+                // If we have user data in context, auto-login the user
+                const { user } = context;
+                const userData = {
+                  fid: user.fid,
+                  username: user.username || `user${user.fid}`,
+                  displayName: user.displayName || `User ${user.fid}`,
+                  pfp: user.pfpUrl || null,
+                  token: 'context-auth' // Mark as context-based auth
+                };
+                
+                console.log('🔑 Auto-login from context with user data:', userData);
+                // Import useAuth directly from context if you need to access login function here
+                // Otherwise use your app's authentication state management
+                // login(userData);
+              } else {
+                console.log('⚠️ No authenticated user found in context');
               }
             } catch (contextError) {
               console.warn('Could not get context:', contextError);
+            }
+            
+            // STEP 2: Dismiss splash screen regardless of auth status
+            let splashDismissed = false;
+            try {
+              console.log('🔄 Calling ready() to dismiss splash screen');
+              await dismissSplashScreen();
+              splashDismissed = true;
+            } catch (readyError) {
+              console.warn('Could not dismiss splash screen:', readyError);
             }
             
             // STEP 3: Try authentication but don't block on it

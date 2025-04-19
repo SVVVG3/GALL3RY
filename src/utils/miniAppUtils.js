@@ -34,7 +34,14 @@ export const isMiniAppEnvironment = () => {
     const isMobileUA = typeof window !== 'undefined' && 
                       (/Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent));
     
-    // Method 5: Try to access context (for newer SDK versions)
+    // Method 5: Directly try to access specific Warpcast webview context variables
+    // This is a more specific check for the Warpcast WebView environment
+    const hasWarpcastBridge = typeof window !== 'undefined' && 
+                             (typeof window.webkit !== 'undefined' || 
+                              typeof window.ReactNativeWebView !== 'undefined' ||
+                              typeof window.__WARPCAST__ !== 'undefined');
+    
+    // Method 6: Try to access context (for newer SDK versions)
     let hasContext = false;
     if (sdkExists && typeof sdk.getContext === 'function') {
       try {
@@ -43,9 +50,21 @@ export const isMiniAppEnvironment = () => {
       } catch (e) {}
     }
     
-    const isInMiniApp = isFrame || inIframe || hasFarcasterInUA || (isMobileUA && hasContext);
+    // For debug: Check if we're in a mobile browser but not directly in Warpcast
+    const isMobileBrowser = isMobileUA && !hasWarpcastBridge && !hasFarcasterInUA;
     
-    logDebug(`Mini App environment check: isFrame=${isFrame}, inIframe=${inIframe}, hasFarcasterInUA=${hasFarcasterInUA}, isMobileUA=${isMobileUA}, hasContext=${hasContext}, FINAL=${isInMiniApp}`);
+    // Prioritize most reliable detection methods
+    const isInMiniApp = isFrame || hasWarpcastBridge || hasFarcasterInUA || inIframe || (isMobileUA && hasContext);
+    
+    logDebug(`Mini App environment detailed check:
+      isFrame=${isFrame}, 
+      inIframe=${inIframe}, 
+      hasFarcasterInUA=${hasFarcasterInUA}, 
+      isMobileUA=${isMobileUA},
+      hasWarpcastBridge=${hasWarpcastBridge},
+      isMobileBrowser=${isMobileBrowser},
+      hasContext=${hasContext}, 
+      FINAL=${isInMiniApp}`);
     
     return isInMiniApp;
   } catch (e) {
@@ -144,6 +163,15 @@ export const handleMiniAppAuthentication = async (nonce) => {
   }
 
   try {
+    // Define a flag to track if we're in Warpcast mobile environment
+    // This is more accurate checking both UA and specific WebView markers
+    const isMobileWarpcast = typeof window !== 'undefined' && 
+                           (window.navigator.userAgent.includes('Warpcast') ||
+                            typeof window.__WARPCAST__ !== 'undefined' ||
+                            (typeof window.webkit !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent)));
+    
+    logDebug(`Authentication environment check: isMobileWarpcast=${isMobileWarpcast}`);
+    
     // First, try to get context to see if user is already authenticated
     // This is especially relevant for mobile Warpcast users
     if (typeof sdk.getContext === 'function') {
@@ -152,6 +180,7 @@ export const handleMiniAppAuthentication = async (nonce) => {
         logDebug('Got Mini App context:', context);
         
         if (context && context.user && context.user.fid) {
+          logDebug('Found authenticated user in context!', context.user);
           // User is already authenticated in Warpcast, we can use this data
           return {
             success: true,
@@ -175,11 +204,14 @@ export const handleMiniAppAuthentication = async (nonce) => {
     // Check if the SDK has the actions.signIn method
     if (sdk.actions && typeof sdk.actions.signIn === 'function') {
       // For Mini App environment, we can use the SDK's signIn method
-      logDebug('Calling sdk.actions.signIn with nonce:', nonce.substring(0, 6) + '...');
+      logDebug(`Calling sdk.actions.signIn with nonce (isMobileWarpcast=${isMobileWarpcast})`);
+      
+      // If we're on mobile Warpcast, use a longer timeout since silent auth should work
+      const timeoutDuration = isMobileWarpcast ? 10000 : 5000;
       
       // Create a timeout to prevent hanging if signIn never resolves
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Authentication timed out')), 5000);
+        setTimeout(() => reject(new Error('Authentication timed out')), timeoutDuration);
       });
       
       // Race the actual sign-in against the timeout

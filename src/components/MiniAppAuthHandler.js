@@ -13,6 +13,13 @@ const MiniAppAuthHandler = () => {
   const { login, isAuthenticated, profile, setAuthenticating } = useAuth();
   const [authAttempted, setAuthAttempted] = useState(false);
   const [isAuthenticating, setIsAuthenticating] = useState(false);
+  
+  // Check if we're specifically in Warpcast mobile
+  const isWarpcastMobile = typeof window !== 'undefined' && 
+                         (window.navigator.userAgent.includes('Warpcast') || 
+                          typeof window.__WARPCAST__ !== 'undefined' ||
+                          (typeof window.webkit !== 'undefined' && 
+                           /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent)));
 
   useEffect(() => {
     // Only attempt auto-login once when the component mounts
@@ -21,11 +28,42 @@ const MiniAppAuthHandler = () => {
       const attemptSilentSignIn = async () => {
         try {
           console.log("MiniAppAuthHandler: Attempting silent sign-in...");
+          console.log("MiniAppAuthHandler: isWarpcastMobile =", isWarpcastMobile);
           setIsAuthenticating(true);
           
+          // APPROACH 1: First try to get user data from context directly
+          // This is the most reliable method on Warpcast mobile
+          try {
+            console.log("MiniAppAuthHandler: Checking for context first");
+            const context = await sdk.getContext();
+            console.log("MiniAppAuthHandler: Raw context data:", context);
+            
+            if (context && context.user && context.user.fid) {
+              const userData = {
+                fid: context.user.fid,
+                username: context.user.username || `user${context.user.fid}`,
+                displayName: context.user.displayName || `User ${context.user.fid}`,
+                pfp: context.user.pfpUrl || null,
+                token: 'context-auth' // Special marker to indicate auth from context
+              };
+              
+              console.log("MiniAppAuthHandler: Successfully got user from context:", userData);
+              login(userData);
+              setIsAuthenticating(false);
+              setAuthAttempted(true);
+              return;
+            } else {
+              console.log("MiniAppAuthHandler: No user found in context, falling back to signIn");
+            }
+          } catch (contextError) {
+            console.warn("MiniAppAuthHandler: Error getting context:", contextError);
+          }
+          
+          // APPROACH 2: If context doesn't have user data, try the signIn method
           // Generate a secure nonce - this is required by the SDK
           const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
           
+          console.log("MiniAppAuthHandler: Attempting signIn with nonce");
           // Use the SDK's signIn method which should work silently in Warpcast
           const signInResult = await sdk.actions.signIn({ nonce });
           
@@ -37,27 +75,7 @@ const MiniAppAuthHandler = () => {
             // Try to extract user data from the response - first from context if available
             let userData = null;
             
-            try {
-              // Check if we can get user data from context first (most reliable on mobile)
-              const context = await sdk.getContext();
-              console.log("MiniAppAuthHandler: Got context:", context);
-              
-              if (context && context.user && context.user.fid) {
-                userData = {
-                  fid: context.user.fid,
-                  username: context.user.username || `user${context.user.fid}`,
-                  displayName: context.user.displayName || `User ${context.user.fid}`,
-                  pfp: context.user.pfpUrl || null,
-                  token: signInResult.signature || '',
-                  _rawAuthResult: signInResult
-                };
-                console.log("MiniAppAuthHandler: Extracted user data from context:", userData);
-              }
-            } catch (contextError) {
-              console.warn("MiniAppAuthHandler: Error getting context:", contextError);
-            }
-            
-            // If we couldn't get data from context, try from the sign-in result
+            // If we couldn't get data from context before, try from the sign-in result
             if (!userData) {
               // Try multiple ways to extract FID from the response
               let fid = null;
@@ -118,7 +136,7 @@ const MiniAppAuthHandler = () => {
       
       attemptSilentSignIn();
     }
-  }, [isAuthenticated, login, authAttempted, setIsAuthenticating]);
+  }, [isAuthenticated, login, authAttempted, setIsAuthenticating, isWarpcastMobile]);
 
   // This is a silent authentication component, so it doesn't render anything visible
   return null;
