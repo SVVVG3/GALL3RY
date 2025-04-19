@@ -25,6 +25,9 @@ import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
 
+// Import the SDK directly at the top level to ensure it's available immediately
+import { sdk } from '@farcaster/frame-sdk';
+
 // Loading component for suspense fallback
 const LoadingScreen = () => (
   <div className="loading-container">
@@ -84,6 +87,26 @@ class ErrorBoundary extends React.Component {
   }
 }
 
+// Add a new function to handle splash screen dismissal
+// This needs to be as simple as possible
+const dismissSplashScreen = async () => {
+  console.log('⚠️ Attempting to dismiss splash screen');
+  try {
+    // Just call ready() directly with the SDK we imported
+    await sdk.actions.ready();
+    console.log('✅ Called ready() successfully');
+    return true;
+  } catch (e) {
+    console.error('❌ Error calling ready():', e);
+    return false;
+  }
+};
+
+// Try to dismiss splash screen as early as possible - before React even renders
+if (typeof window !== 'undefined') {
+  dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+}
+
 // Main App function with simplified provider hierarchy
 function App() {
   const [loading, setLoading] = useState(true);
@@ -100,106 +123,50 @@ function App() {
         setIsMiniApp(isInMiniApp);
         
         // If we're in a Mini App, initialize it early to avoid white screen
-        let miniAppInitialized = false;
         if (isInMiniApp) {
           try {
             console.log('Running in Mini App environment, initializing...');
             
-            // First, initialize Mini App SDK to dismiss splash screen immediately
-            console.log('⚠️ Calling initializeMiniApp to hide splash screen BEFORE authentication');
-            
-            // Force the splash screen to be dismissed after 5 seconds as an emergency fallback
-            const splashTimeout = setTimeout(() => {
-              console.log('🚨 Emergency splash screen timeout - forcing display of app');
-              setLoading(false); // Force loading to complete
-              
-              // Try to hide the splash element directly if it exists (aggressive approach)
-              try {
-                const splashElements = document.querySelectorAll('[data-splash], .splash-screen, #splash');
-                if (splashElements.length > 0) {
-                  console.log('🔍 Found potential splash elements:', splashElements.length);
-                  splashElements.forEach(el => {
-                    el.style.display = 'none';
-                    console.log('🔲 Hiding splash element:', el);
-                  });
-                }
-              } catch (e) {
-                console.warn('Error hiding splash elements:', e);
-              }
-            }, 5000);
-            
-            const context = await initializeMiniApp({
-              disableNativeGestures: false
-            });
-            console.log('✅ Splash screen dismissal requested');
-            
-            // Clear the timeout if we successfully initialize
-            clearTimeout(splashTimeout);
-            
-            // Try one more time to call ready directly just to be safe
+            // STEP 1: Dismiss splash screen first (try again even though we did it before React rendered)
+            console.log('🔄 Calling ready() to dismiss splash screen');
             try {
-              const { sdk } = await import('@farcaster/frame-sdk');
-              if (sdk.actions && typeof sdk.actions.ready === 'function') {
-                console.log('🔄 Making one final direct ready() call for extra certainty');
-                await sdk.actions.ready();
-                console.log('✅ Final ready call successful');
-              }
-            } catch (finalReadyError) {
-              console.warn('Final ready call failed:', finalReadyError);
+              await dismissSplashScreen();
+            } catch (readyError) {
+              console.warn('Could not dismiss splash screen:', readyError);
             }
             
-            // NOW attempt authentication AFTER splash screen should be dismissed
-            console.log('🔑 Now attempting authentication AFTER splash screen dismissal');
-            
-            // Generate a secure nonce for authentication
-            const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-            
-            // Try to authenticate the user with Farcaster if needed
-            let authResult = null;
+            // STEP 2: Only after splash screen dismissal, try to get context
+            let context = null;
             try {
-              const { handleMiniAppAuthentication } = await import('./utils/miniAppUtils');
-              authResult = await handleMiniAppAuthentication(nonce);
+              // Try to get context if needed for your app
+              if (typeof sdk.getContext === 'function') {
+                context = await sdk.getContext();
+                console.log('Got Mini App context:', context);
+                setMiniAppContext(context);
+              }
+            } catch (contextError) {
+              console.warn('Could not get context:', contextError);
+            }
+            
+            // STEP 3: Only after splash screen dismissal, try authentication
+            try {
+              // Generate a secure nonce for authentication
+              const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
               
-              if (authResult) {
-                console.log('Received auth result from Farcaster', authResult);
+              // Use direct SDK import rather than dynamic import
+              if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+                console.log('🔑 Attempting authentication');
+                const authResult = await sdk.actions.signIn({ nonce });
+                console.log('Authentication result:', authResult);
                 
-                // Import and use the auth context to save authentication state
-                try {
-                  // Get the auth context to update state
-                  const authContext = document.querySelector('[data-auth-context]')?.__authContext;
-                  
-                  if (authContext && typeof authContext.login === 'function') {
-                    // Extract FID from the message if possible
-                    const fidMatch = authResult.message && authResult.message.match(/fid: (\d+)/);
-                    const fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
-                    
-                    if (fid) {
-                      console.log(`Extracted FID ${fid} from auth message, updating auth state`);
-                      // Update the auth context with the new auth state
-                      authContext.login({ 
-                        fid, 
-                        token: authResult.signature, 
-                        message: authResult.message 
-                      });
-                    }
-                  } else {
-                    console.log('Auth context not available yet, will rely on the component authentication');
-                  }
-                } catch (authContextError) {
-                  console.warn('Error updating auth context:', authContextError);
-                }
-              } else {
-                console.log('No auth result returned, user may have cancelled');
+                // Process auth result if needed
               }
             } catch (authError) {
               console.warn('Authentication error:', authError);
               // Continue even if auth fails - some features might be limited
             }
             
-            setMiniAppContext(context);
-            miniAppInitialized = true;
-            
-            // Set up event listeners for Mini App interactions
+            // STEP 4: Set up event listeners for Mini App interactions
             setupMiniAppEventListeners();
             
             console.log('Mini App fully initialized');
@@ -211,20 +178,11 @@ function App() {
           console.log('Running in standard web environment');
         }
         
-        // Set theme-color meta tag to white to match body
-        try {
-          const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-          if (metaThemeColor) {
-            metaThemeColor.setAttribute('content', '#ffffff');
-          } else {
-            const meta = document.createElement('meta');
-            meta.name = 'theme-color';
-            meta.content = '#ffffff';
-            document.head.appendChild(meta);
-          }
-        } catch (error) {
-          console.error('Failed to set theme-color:', error);
-        }
+        // Force the splash screen to be dismissed after 5 seconds as an emergency fallback
+        setTimeout(() => {
+          console.log('🚨 Emergency splash screen timeout - forcing app to show');
+          setLoading(false);
+        }, 5000);
         
         // Complete loading and show UI
         setLoading(false);

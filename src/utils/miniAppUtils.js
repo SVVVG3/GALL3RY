@@ -9,211 +9,62 @@ function logDebug(...args) {
   }
 }
 
-// Log SDK availability and version
-try {
-  if (typeof sdk !== 'undefined') {
-    logDebug('Frame SDK detected:', sdk);
-    logDebug('SDK version:', sdk.version || 'unknown');
-    logDebug('SDK methods:', Object.keys(sdk));
-    if (sdk.actions) {
-      logDebug('SDK actions:', Object.keys(sdk.actions));
-    }
-  } else {
-    logDebug('Frame SDK not detected');
-  }
-} catch (e) {
-  logDebug('Error checking SDK:', e);
-}
-
-// DO NOT call ready at the module level - this can cause issues
-// Instead, we'll make multiple attempts to call ready in the initialization function
-
-/**
- * Utility functions for Farcaster Mini App integration
- * These utilities allow our app to work both as a regular web app and as a Mini App
- * without breaking existing functionality
- */
-
 /**
  * Check if the current app is running inside a Farcaster Mini App container
  * @returns {boolean} True if running in a Mini App, false otherwise
  */
 export const isMiniAppEnvironment = () => {
-  // Check if we're in a frame/mobile webview using the SDK
+  // Simple check to determine if we're in a Mini App environment
   try {
-    // Check if we're in a Farcaster client by looking for specific indicators
-    const inFarcasterWebView = typeof window !== 'undefined' && 
-      (window.navigator.userAgent.includes('Farcaster') || 
-       window.navigator.userAgent.includes('Warpcast') ||
-       window.location.href.includes('warpcast.com') ||
-       window.parent !== window);
+    const isFrame = typeof sdk !== 'undefined' && typeof sdk.isFrame === 'function' && sdk.isFrame();
+    const inIframe = typeof window !== 'undefined' && window.self !== window.top;
+    const hasFarcasterInUA = typeof window !== 'undefined' && 
+                           (window.navigator.userAgent.includes('Farcaster') || 
+                            window.navigator.userAgent.includes('Warpcast'));
     
-    logDebug('Checking Mini App environment:');
-    logDebug('- inFarcasterWebView:', inFarcasterWebView);
-    logDebug('- userAgent:', window.navigator.userAgent);
-    logDebug('- location:', window.location.href);
-    logDebug('- is iframe:', window.self !== window.top);
-    logDebug('- is mobile:', /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
-      
-    // First try the SDK isFrame method if available
-    if (typeof sdk.isFrame === 'function') {
-      const isFrame = sdk.isFrame();
-      logDebug('- sdk.isFrame() result:', isFrame);
-      return isFrame;
-    }
-    
-    logDebug('- sdk.isFrame not available, using fallbacks');
-    
-    // Fall back to checking for the postMessage API which is used by the SDK
-    const result = inFarcasterWebView || (typeof window !== 'undefined' && 
-      typeof window.parent !== 'undefined' && 
-      window.parent !== window);
-      
-    logDebug('- Final environment detection result:', result);
-    return result;
+    return isFrame || inIframe || hasFarcasterInUA;
   } catch (e) {
     console.warn('Error checking Mini App environment:', e);
-    
-    // Fall back to checking if we're in an iframe as a last resort
-    const isIframe = typeof window !== 'undefined' && window.self !== window.top;
-    logDebug('- Error occurred, fallback to iframe check:', isIframe);
-    return isIframe;
+    return false;
   }
 };
 
-// A safety flag to ensure we don't call ready multiple times
-let readyCalled = false;
-
 /**
  * Initialize the Mini App SDK if we're in a Mini App environment
- * Call this early in the app initialization
- * @param {Object} options - Options for initialization
- * @param {boolean} options.disableNativeGestures - Whether to disable native gestures
+ * This is now a simple wrapper that just calls ready() - main logic is in App.js
  * @returns {Promise<void>}
  */
-export const initializeMiniApp = async (options = {}) => {
+export const initializeMiniApp = async () => {
   const isInMiniApp = isMiniAppEnvironment();
-  logDebug(`initializeMiniApp called, isInMiniApp=${isInMiniApp}`, options);
+  logDebug(`initializeMiniApp called, isInMiniApp=${isInMiniApp}`);
   
   if (!isInMiniApp) {
     logDebug('Not in Mini App environment, skipping initialization');
-    return;
+    return null;
   }
 
-  // CRITICAL: The priority is to dismiss the splash screen first
-  logDebug('🚨 PRIORITY: Dismissing splash screen first, before any other operations');
-  
   try {
-    // Make IMMEDIATE call to ready() - this is the most important thing
-    if (sdk.actions && typeof sdk.actions.ready === 'function' && !readyCalled) {
-      logDebug('Making IMMEDIATE call to sdk.actions.ready()');
-      try {
-        // Don't await this call - we want it to happen immediately
-        sdk.actions.ready({
-          disableNativeGestures: options.disableNativeGestures || false
-        }).then(() => {
-          logDebug('✓ Immediate ready() call succeeded');
-          readyCalled = true;
-        }).catch(e => {
-          logDebug('✗ Immediate ready() call failed:', e);
-        });
-        
-        // Mark as called anyway to prevent duplicate calls
-        readyCalled = true;
-      } catch (readyError) {
-        logDebug('Error in immediate ready() call:', readyError);
-      }
-    }
-    
-    // Use a timeout to ensure ready is called even if there's a delay
-    // This is especially important for mobile environments
-    setTimeout(() => {
-      if (!readyCalled && sdk.actions && typeof sdk.actions.ready === 'function') {
-        logDebug('Calling ready from safety timeout');
-        sdk.actions.ready({
-          disableNativeGestures: options.disableNativeGestures || false
-        }).catch(e => {
-          logDebug('Timeout ready call failed:', e);
-        });
-        readyCalled = true;
-      }
-    }, 2000);
-
-    logDebug('Initializing Mini App and telling Farcaster we are ready...');
-    
-    // Now try a second, awaited call to ready to ensure we get the context
+    // Just call ready() - this should dismiss the splash screen
     if (sdk.actions && typeof sdk.actions.ready === 'function') {
-      logDebug('Making awaited call to sdk.actions.ready()');
-      try {
-        await sdk.actions.ready({
-          disableNativeGestures: options.disableNativeGestures || false
-        });
-        logDebug('Mini App initialized successfully with sdk.actions.ready()');
-        readyCalled = true;
-      } catch (readyError) {
-        logDebug('Error calling sdk.actions.ready():', readyError);
-        // Don't throw here, try other methods
-      }
-    } 
-    // Fallback to other methods if actions.ready is not available
-    else if (typeof sdk.ready === 'function') {
-      logDebug('Falling back to sdk.ready() method');
-      try {
-        await sdk.ready();
-        logDebug('Mini App initialized with legacy sdk.ready() method');
-        readyCalled = true;
-      } catch (readyError) {
-        logDebug('Error calling sdk.ready():', readyError);
-        // Don't throw here
-      }
-    } 
-    else if (readyCalled) {
-      logDebug('Ready was already called, skipping initialization');
-    }
-    else {
-      logDebug('No ready method available in SDK');
-      console.warn('No ready method available in this SDK version. The app may not display properly in Farcaster.');
+      await sdk.actions.ready();
+      logDebug('Mini App ready() called successfully');
     }
     
-    // Try to get client context if available
+    // Try to get context
     let context = null;
     if (typeof sdk.getContext === 'function') {
-      logDebug('Attempting to get context');
       try {
         context = await sdk.getContext();
         logDebug('Mini App context received:', context);
-      } catch (contextError) {
-        logDebug('Could not get Mini App context:', contextError);
-        console.warn('Could not get Mini App context:', contextError);
+      } catch (error) {
+        logDebug('Error getting context:', error);
       }
-    } else {
-      logDebug('getContext method not available');
     }
     
     return context;
   } catch (e) {
-    logDebug('Error in initializeMiniApp, but continuing:', e);
-    console.warn('Error in initializeMiniApp, but continuing:', e);
-    
-    // Try one more time to call ready if it hasn't been called yet
-    if (!readyCalled && sdk.actions && typeof sdk.actions.ready === 'function') {
-      try {
-        logDebug('Final attempt to call ready after error');
-        await sdk.actions.ready({
-          disableNativeGestures: options.disableNativeGestures || false
-        });
-        readyCalled = true;
-        logDebug('Final ready call succeeded');
-      } catch (finalError) {
-        logDebug('Final ready call also failed:', finalError);
-      }
-    }
-    
-    // Return an error object rather than throwing
-    return {
-      error: e.message,
-      errorType: e.name
-    };
+    logDebug('Error in initializeMiniApp:', e);
+    return { error: e.message };
   }
 };
 
@@ -235,12 +86,10 @@ export const setupMiniAppEventListeners = () => {
   // Listen for events from the Farcaster client
   sdk.on('frameAdded', () => {
     console.log('App was added to user collection');
-    // Could trigger analytics event or update UI
   });
   
   sdk.on('frameRemoved', () => {
     console.log('App was removed from user collection');
-    // Could trigger analytics event or update UI
   });
 };
 
@@ -277,24 +126,16 @@ export const handleMiniAppAuthentication = async (nonce) => {
  * @returns {Promise<void>}
  */
 export const viewFarcasterProfile = async (fid) => {
-  if (!isMiniAppEnvironment()) {
+  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.viewProfile !== 'function') {
     // In web app, navigate to the profile page
     window.location.href = `/profile/${fid}`;
     return;
   }
 
   try {
-    // Check if the SDK has the actions.viewProfile method
-    if (sdk.actions && typeof sdk.actions.viewProfile === 'function') {
-      // In Mini App, use the SDK to view the profile
-      await sdk.actions.viewProfile({ fid });
-    } else {
-      console.warn('viewProfile method not available in this SDK version');
-      window.location.href = `/profile/${fid}`;
-    }
+    await sdk.actions.viewProfile({ fid });
   } catch (e) {
     console.error('Error viewing profile in Mini App:', e);
-    // Fallback to regular navigation
     window.location.href = `/profile/${fid}`;
   }
 };
@@ -307,21 +148,13 @@ export const viewFarcasterProfile = async (fid) => {
  * @returns {Promise<Object|null>} Cast result or null if not in Mini App environment
  */
 export const composeCast = async ({ text, embeds }) => {
-  if (!isMiniAppEnvironment()) {
-    // In web app, maybe show a message that this feature is only available in Mini App
+  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.composeCast !== 'function') {
     console.log('Compose cast is only available in Mini App environment');
     return null;
   }
 
   try {
-    // Check if the SDK has the actions.composeCast method
-    if (sdk.actions && typeof sdk.actions.composeCast === 'function') {
-      const result = await sdk.actions.composeCast({ text, embeds });
-      return result;
-    } else {
-      console.warn('composeCast method not available in this SDK version');
-      return null;
-    }
+    return await sdk.actions.composeCast({ text, embeds });
   } catch (e) {
     console.error('Error composing cast in Mini App:', e);
     return null;
@@ -330,32 +163,21 @@ export const composeCast = async ({ text, embeds }) => {
 
 /**
  * Prompts the user to add the Mini App to their collection in Farcaster
- * This function will show the user a dialog to add the app
  * @returns {Promise<boolean>} True if the app was added, false otherwise
  */
 export const promptAddFrame = async () => {
-  if (!isMiniAppEnvironment()) {
-    // In web app, maybe show a message that this feature is only available in Mini App
+  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.addFrame !== 'function') {
     console.log('Add frame is only available in Mini App environment');
     return false;
   }
 
   try {
-    // Check if the SDK has the actions.addFrame method
-    if (sdk.actions && typeof sdk.actions.addFrame === 'function') {
-      logDebug('Prompting user to add frame');
-      await sdk.actions.addFrame();
-      logDebug('User added frame successfully');
-      return true;
-    } else {
-      console.warn('addFrame method not available in this SDK version');
-      return false;
-    }
+    await sdk.actions.addFrame();
+    logDebug('User added frame successfully');
+    return true;
   } catch (e) {
     if (e.name === 'RejectedByUser') {
       logDebug('User rejected adding the app');
-    } else if (e.name === 'InvalidDomainManifestJson') {
-      console.error('Invalid manifest.json:', e);
     } else {
       console.error('Error adding frame in Mini App:', e);
     }
