@@ -302,6 +302,9 @@ function App() {
       } 
     : {};
   
+  // Add miniApp class name for CSS targeting
+  const appClassName = isMiniApp ? 'app mini-app' : 'app';
+  
   // Return the app with a proper provider hierarchy
   return (
     <ErrorBoundary
@@ -323,7 +326,7 @@ function App() {
               {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
               {isMiniApp && <MiniAppAuthHandler />}
               
-              <div className="app" style={appStyles}>
+              <div className={appClassName} style={appStyles}>
                 {/* Hide header in Mini App if needed or adjust its appearance */}
                 {(!isMiniApp || (isMiniApp && !miniAppContext?.hideHeader)) && (
                   <header className="app-header">

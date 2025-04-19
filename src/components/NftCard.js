@@ -16,7 +16,7 @@ import CollectionFriendsModal from './CollectionFriendsModal';
  * - Collection friends button for Farcaster users
  */
 const NFTCard = ({ nft }) => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
   const [media, setMedia] = useState({
     status: 'loading', // loading, loaded, error
@@ -357,8 +357,18 @@ const NFTCard = ({ nft }) => {
     setShowFriendsModal(false);
   };
   
-  // Check if user is authenticated with Farcaster
-  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
+  // Enhanced check for user authentication across all environments
+  // Check if user is authenticated with Farcaster OR through Mini App auth
+  const userFid = profile?.fid || authProfile?.fid;
+  const showFriendsButton = isAuthenticated && userFid && contractAddress;
+
+  console.log('NFTCard auth state:', { 
+    isAuthenticated, 
+    hasAuthProfile: !!authProfile, 
+    hasFarcasterProfile: !!profile,
+    userFid,
+    showFriendsButton 
+  });
   
   return (
     <>

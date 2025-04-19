@@ -342,7 +342,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     if (isInWarpcastMobile) {
       return (
         <button 
-          className="btn btn-primary sign-in-button warpcast-mobile-signin"
+          className="btn btn-primary sign-in-button"
           onClick={handleMiniAppSignIn}
           disabled={isLoading}
         >
@@ -353,7 +353,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     
     return (
       <button 
-        className="btn btn-primary sign-in-button mini-app-signin"
+        className="btn btn-primary sign-in-button"
         onClick={handleMiniAppSignIn}
         disabled={isLoading}
       >

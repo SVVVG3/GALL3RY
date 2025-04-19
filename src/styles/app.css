@@ -1250,4 +1250,73 @@ a:hover {
   .app-header .logo-link {
     font-size: 1.5rem;
   }
+}
+
+/* Add specific styles for Mini App environment */
+/* Ensure profile display is visible and properly styled in Warpcast Mini App */
+.mini-app .user-profile-dropdown {
+  display: flex;
+  align-items: center;
+  position: relative;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.mini-app .user-profile-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-app .profile-username {
+  font-size: 14px;
+  font-weight: 500;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-app .profile-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+/* Ensure the sign-in button has consistent styling across environments */
+.sign-in-button {
+  background-color: #8a63d2; /* Match Farcaster purple */
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.sign-in-button:hover {
+  background-color: #6c4da7;
+}
+
+/* Also ensure collection friends button is visible */
+.collection-friends-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #8a63d2;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease-in-out;
+}
+
+.collection-friends-button:hover {
+  background-color: #6c4da7;
 } 
