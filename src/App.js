@@ -112,9 +112,22 @@ function App() {
             try {
               const { handleMiniAppAuthentication } = await import('./utils/miniAppUtils');
               const authResult = await handleMiniAppAuthentication(nonce);
+              
               if (authResult) {
-                console.log('User authenticated with Farcaster');
-                // Here you could send the auth result to your backend if needed
+                console.log('Received auth result from Farcaster', authResult);
+                
+                // Don't wait for verification to complete to avoid blocking app loading
+                // Instead, just log the result and continue with initialization
+                try {
+                  // You'd normally verify this on your server
+                  // For now, just log it and continue
+                  console.log('Authentication successful with message:', 
+                    authResult.message && authResult.message.substring(0, 50) + '...');
+                } catch (verifyError) {
+                  console.warn('Error verifying auth message:', verifyError);
+                }
+              } else {
+                console.log('No auth result returned, user may have cancelled');
               }
             } catch (authError) {
               console.warn('Authentication error:', authError);
@@ -123,9 +136,12 @@ function App() {
             
             // Initialize Mini App SDK and get context right away
             // Tell Farcaster we're getting ready to display content
+            // NOTE: Call ready() even if authentication fails
+            console.log('Calling initializeMiniApp to hide splash screen');
             const context = await initializeMiniApp({
               disableNativeGestures: false
             });
+            console.log('Splash screen should now be hidden');
             setMiniAppContext(context);
             miniAppInitialized = true;
             
