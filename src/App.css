@@ -1107,28 +1107,107 @@ img {
   letter-spacing: 1px;
 }
 
-/* Mobile specific overrides to ensure proper font rendering */
-@media (max-width: 768px) {
-  body, 
-  body * {
-    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-    font-style: normal !important;
+/* User Profile Dropdown Styles */
+.user-profile-dropdown {
+  position: relative;
+}
+
+/* User Profile Dropdown Styling */
+.user-profile-dropdown {
+  position: relative;
+}
+
+.user-profile-button {
+  display: flex;
+  align-items: center;
+  background-color: white;
+  border-radius: 20px;
+  padding: 4px 12px 4px 4px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+
+.user-profile-button:hover {
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Specific styling for the profile avatar in the header */
+.user-profile-button .profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  margin-right: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  .profile-image {
+    width: 80px;
+    height: 80px;
   }
   
-  h1, h2, h3, h4, h5, h6, 
-  .heading-logo, 
-  .subheading, 
-  p, 
-  button, 
-  input, 
-  a, 
-  span, 
-  div {
-    font-family: 'Comic Sans MS', 'Comic Sans', sans-serif !important;
-    font-style: normal !important;
-    text-transform: none !important;
-    letter-spacing: normal !important;
+  .profile-display-name {
+    font-size: 1.25rem;
   }
+  
+  .wallet-addresses {
+    max-width: 100%;
+  }
+  
+  /* Make profile avatar smaller in header for mobile */
+  .user-profile-button .profile-avatar {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.content-wrapper {
+  margin: 2rem auto;
+  width: 100%;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+/* App container */
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-gray-50);
+  overflow-x: hidden; /* Prevent horizontal scroll */
+}
+
+/* NFT grid specific fixes */
+.nft-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  width: 100%;
+  margin: 20px auto;
+  padding: 0 16px;
+}
+
+/* NFT image specific fixes to ensure images display properly */
+.nft-image {
+  width: 100%;
+  position: relative;
+  padding-top: 100%;
+  overflow: hidden;
+  border-radius: 12px 12px 0 0;
+  background-color: #f5f5f5;
+}
+
+.nft-image img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center;
+  border-radius: 12px 12px 0 0;
 }
 
 /* User Profile Dropdown Styles */
@@ -1355,99 +1434,3 @@ img {
 }
 
 /* User Profile Dropdown Styling */
-.user-profile-dropdown {
-  position: relative;
-}
-
-.user-profile-button {
-  display: flex;
-  align-items: center;
-  background-color: white;
-  border-radius: 20px;
-  padding: 4px 12px 4px 4px;
-  cursor: pointer;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s ease;
-}
-
-.user-profile-button:hover {
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-}
-
-/* Specific styling for the profile avatar in the header */
-.user-profile-button .profile-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  margin-right: 8px;
-}
-
-/* Responsive adjustments */
-@media (max-width: 640px) {
-  .profile-image {
-    width: 80px;
-    height: 80px;
-  }
-  
-  .profile-display-name {
-    font-size: 1.25rem;
-  }
-  
-  .wallet-addresses {
-    max-width: 100%;
-  }
-  
-  /* Make profile avatar smaller in header for mobile */
-  .user-profile-button .profile-avatar {
-    width: 28px;
-    height: 28px;
-  }
-}
-
-.content-wrapper {
-  margin: 2rem auto;
-  width: 100%;
-  padding: 0 1rem;
-  text-align: center;
-}
-
-/* App container */
-.app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--color-gray-50);
-  overflow-x: hidden; /* Prevent horizontal scroll */
-}
-
-/* NFT grid specific fixes */
-.nft-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-  width: 100%;
-  margin: 20px auto;
-  padding: 0 16px;
-}
-
-/* NFT image specific fixes to ensure images display properly */
-.nft-image {
-  width: 100%;
-  position: relative;
-  padding-top: 100%;
-  overflow: hidden;
-  border-radius: 12px 12px 0 0;
-  background-color: #f5f5f5;
-}
-
-.nft-image img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  object-position: center;
-  border-radius: 12px 12px 0 0;
-}

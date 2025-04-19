@@ -1233,4 +1233,21 @@ a:hover {
   .app-content {
     padding: 10px;
   }
+}
+
+@media (max-width: 480px) {
+  .app-header-container {
+    padding: 0.8rem 12px;
+    flex-wrap: nowrap;
+  }
+  
+  .auth-container {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .app-header .logo-link {
+    font-size: 1.5rem;
+  }
 } 
