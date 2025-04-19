@@ -173,27 +173,30 @@ body {
   color: var(--color-primary);
 }
 
-/* NFT Grid Styling */
+/* NFT Grid Styling - Container only */
 .nft-grid-container {
   width: 100%;
   padding: 0;
   overflow: hidden;
-  max-width: 95vw;
+  max-width: 95vw; /* Keep for container width */
   margin: 0 auto;
 }
 
-.nft-grid {
+/* Remove grid definitions - let NFTGrid.css handle these */
+/* Comments remain to show what was here */
+/* .nft-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
   gap: 24px;
   padding: 16px 0;
   width: 100%;
-}
+} */
 
+/* Media query container adjustments only */
 @media (min-width: 1400px) {
-  .nft-grid {
+  /* .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  }
+  } */
   
   .nft-grid-container,
   .farcaster-search-container {
@@ -202,11 +205,11 @@ body {
 }
 
 @media (max-width: 640px) {
-  .nft-grid {
+  /* .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 16px;
     padding: 12px 0;
-  }
+  } */
 }
 
 .nft-grid-item {
