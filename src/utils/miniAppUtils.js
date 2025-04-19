@@ -168,45 +168,113 @@ export const setupMiniAppEventListeners = () => {
 /**
  * Handle authentication within a Mini App context
  * Uses existing Farcaster auth or sign-in method depending on environment
- * @param {string} nonce - A secure nonce for authentication (if using SIWF)
  * @returns {Promise<Object|null>} Auth result or null if not in Mini App environment
  */
 export const handleMiniAppAuthentication = async () => {
   try {
     console.log('Handling Mini App Authentication');
-    if (!window.miniApp) {
-      console.error('Mini App SDK not initialized');
-      return null;
-    }
-
-    const userInfo = await window.miniApp.getUserInfo();
-    console.log('Mini App User Info:', userInfo);
-
-    if (userInfo && userInfo.fid) {
-      // Store auth info in localStorage for persistence
-      localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+    
+    // Generate a secure nonce for authentication
+    const generateNonce = () => {
+      const array = new Uint8Array(16);
+      window.crypto.getRandomValues(array);
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    };
+    
+    const nonce = generateNonce();
+    console.log('Using nonce for authentication:', nonce);
+    
+    // Use the Farcaster Frame SDK signIn action - this is the proper way to authenticate in Mini Apps
+    if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
+      console.log('Using sdk.actions.signIn for authentication');
+      const signInResult = await sdk.actions.signIn({ nonce });
+      console.log('Sign in result:', signInResult);
       
-      // Make sure this gets updated in the app state
-      if (window.updateAuthState) {
-        window.updateAuthState({
-          user: {
-            fid: userInfo.fid,
-            username: userInfo.username,
-            displayName: userInfo.displayName,
-            pfp: userInfo.pfp
-          },
-          isAuthenticated: true
-        });
+      if (signInResult && signInResult.message) {
+        // Extract FID from the message
+        const fidMatch = signInResult.message.match(/(?:fid|FID):\s*(\d+)/i);
+        const fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
+        
+        if (fid) {
+          // For simplicity in this example, we'll use the FID to construct user info
+          // In a real app, you would verify the message on your server first
+          const userInfo = {
+            fid,
+            username: `user${fid}`,
+            displayName: `User ${fid}`,
+            pfp: {
+              url: null
+            }
+          };
+          
+          // Try to get more user info from context if available
+          try {
+            if (sdk.context && sdk.context.user) {
+              userInfo.username = sdk.context.user.username || userInfo.username;
+              userInfo.displayName = sdk.context.user.displayName || userInfo.displayName;
+              if (sdk.context.user.pfpUrl) {
+                userInfo.pfp = { url: sdk.context.user.pfpUrl };
+              }
+            }
+          } catch (e) {
+            console.warn('Error getting user context:', e);
+          }
+          
+          // Store auth info in localStorage for persistence
+          localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+          
+          // Make sure this gets updated in the app state
+          if (window.updateAuthState) {
+            window.updateAuthState({
+              user: userInfo,
+              isAuthenticated: true
+            });
+          }
+          
+          // Dispatch a custom event to notify components about authentication
+          const authEvent = new CustomEvent('miniAppAuthenticated', { 
+            detail: { userInfo }
+          });
+          window.dispatchEvent(authEvent);
+          
+          return userInfo;
+        }
       }
-      
-      // Dispatch a custom event to notify components about authentication
-      const authEvent = new CustomEvent('miniAppAuthenticated', { 
-        detail: { userInfo }
-      });
-      window.dispatchEvent(authEvent);
-      
-      return userInfo;
     }
+    // Fallback to older window.miniApp method if needed
+    else if (window.miniApp && typeof window.miniApp.getUserInfo === 'function') {
+      console.log('Falling back to window.miniApp.getUserInfo');
+      const userInfo = await window.miniApp.getUserInfo();
+      console.log('Mini App User Info:', userInfo);
+
+      if (userInfo && userInfo.fid) {
+        // Store auth info in localStorage for persistence
+        localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+        
+        // Make sure this gets updated in the app state
+        if (window.updateAuthState) {
+          window.updateAuthState({
+            user: {
+              fid: userInfo.fid,
+              username: userInfo.username,
+              displayName: userInfo.displayName,
+              pfp: userInfo.pfp
+            },
+            isAuthenticated: true
+          });
+        }
+        
+        // Dispatch a custom event to notify components about authentication
+        const authEvent = new CustomEvent('miniAppAuthenticated', { 
+          detail: { userInfo }
+        });
+        window.dispatchEvent(authEvent);
+        
+        return userInfo;
+      }
+    }
+    
+    console.log('No authentication method available');
     return null;
   } catch (error) {
     console.error('Error in Mini App Authentication:', error);

@@ -203,6 +203,14 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
           src="/assets/farcaster-logo.svg"
           className="h-4 w-auto"
           alt="Farcaster"
+          onError={(e) => {
+            // Fallback to inline SVG if the image fails to load
+            e.target.outerHTML = `<svg width="16" height="16" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" class="h-4 w-auto">
+              <path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#472A91"/>
+              <path d="M26.2558 10.41C24.1707 10.41 22.4921 11.4257 21.4302 13.4571H21.3385V10.6997H15.8496V29.7183H21.5219V20.2169C21.5219 18.6323 22.5837 17.5249 24.079 17.5249C25.5742 17.5249 26.5444 18.6323 26.5444 20.2169V29.7183H32.2167V19.4778C32.2167 13.9212 30.0399 10.41 26.2558 10.41Z" fill="white"/>
+              <path d="M8.41913 29.7183H14.0914V10.6997H8.41913V29.7183Z" fill="white"/>
+            </svg>`;
+          }}
         />
         {isSigningIn || loading ? "Signing In..." : "Sign in"}
         {children}

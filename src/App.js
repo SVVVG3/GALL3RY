@@ -187,16 +187,55 @@ function App() {
                   fid: user.fid,
                   username: user.username || `user${user.fid}`,
                   displayName: user.displayName || `User ${user.fid}`,
-                  pfp: user.pfpUrl || null,
+                  pfp: user.pfpUrl ? { url: user.pfpUrl } : null,
                   token: 'context-auth' // Mark as context-based auth
                 };
                 
                 console.log('🔑 Auto-login from context with user data:', userData);
-                // Import useAuth directly from context if you need to access login function here
-                // Otherwise use your app's authentication state management
-                // login(userData);
+                
+                // Store the user info in localStorage for persistence
+                localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+                
+                // Try to update auth state if the function is available
+                if (window.updateAuthState) {
+                  window.updateAuthState({
+                    user: userData,
+                    isAuthenticated: true
+                  });
+                }
+                
+                // Dispatch event for components to react to authentication
+                const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                  detail: { userInfo: userData }
+                });
+                window.dispatchEvent(authEvent);
               } else {
                 console.log('⚠️ No authenticated user found in context');
+                
+                // Try silent authentication after context check fails
+                try {
+                  if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
+                    // Generate a secure nonce
+                    const generateNonce = () => {
+                      const array = new Uint8Array(16);
+                      window.crypto.getRandomValues(array);
+                      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+                    };
+                    
+                    console.log('Attempting silent authentication...');
+                    const nonce = generateNonce();
+                    const signInResult = await sdk.actions.signIn({ nonce });
+                    console.log('Silent auth result:', signInResult);
+                    
+                    // Process result - in a real app, you'd validate this on your server
+                    if (signInResult && signInResult.message) {
+                      console.log('Silent authentication successful');
+                    }
+                  }
+                } catch (authError) {
+                  console.log('Silent authentication not available:', authError);
+                  // This is fine - user can click sign-in button later
+                }
               }
             } catch (contextError) {
               console.warn('Could not get context:', contextError);
