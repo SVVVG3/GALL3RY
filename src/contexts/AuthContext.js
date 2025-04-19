@@ -124,8 +124,34 @@ export const AuthProvider = ({ children }) => {
   // Check if we're in a Mini App environment
   const [isInMiniApp, setIsInMiniApp] = useState(false);
   
+  // Create a reference to expose this context for direct imperative updates
+  const authContextRef = React.useRef(null);
+  
   useEffect(() => {
     setIsInMiniApp(isMiniAppEnvironment());
+    
+    // Check if we have stored auth data
+    if (isBrowser) {
+      try {
+        const storedAuth = localStorage.getItem('farcaster_user');
+        if (storedAuth) {
+          const parsedAuth = JSON.parse(storedAuth);
+          // Handle app reload with stored auth data
+          if (parsedAuth.fid) {
+            fetchUserDataByFid(parsedAuth.fid)
+              .then(userData => {
+                if (userData) {
+                  setMiniAppProfile(userData);
+                  setIsMiniAppAuthenticated(true);
+                }
+              })
+              .catch(err => console.warn('Error restoring auth:', err));
+          }
+        }
+      } catch (e) {
+        console.warn('Error reading stored auth data:', e);
+      }
+    }
   }, []);
   
   // Fetch user data from Farcaster API by FID
@@ -171,11 +197,19 @@ export const AuthProvider = ({ children }) => {
         
         // If we have FID data (from Mini App auth), fetch the complete profile
         if (authData && authData.fid) {
+          console.log('Logging in with FID data in AuthContext:', authData.fid);
+          
           // Fetch user data based on FID
           const userData = await fetchUserDataByFid(authData.fid);
           
           // Store the profile data
-          setMiniAppProfile(userData);
+          setMiniAppProfile({
+            ...userData,
+            // Use FID from auth data
+            fid: authData.fid,
+            // Use token if provided
+            token: authData.token
+          });
           setIsMiniAppAuthenticated(true);
           
           // Store token if provided
@@ -183,6 +217,11 @@ export const AuthProvider = ({ children }) => {
             setToken(authData.token);
             if (isBrowser) {
               localStorage.setItem('auth_token', authData.token);
+              // Also store minimal user info for persistence
+              localStorage.setItem('farcaster_user', JSON.stringify({
+                fid: authData.fid,
+                timestamp: new Date().toISOString()
+              }));
             }
           }
           
@@ -217,8 +256,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Expose the auth context through the ref for direct manipulation
+  authContextRef.current = value;
+
+  // Expose auth context on a DOM element for access from outside React
   return (
     <AuthContext.Provider value={value}>
+      <div 
+        style={{ display: 'none' }} 
+        data-auth-context="true" 
+        ref={node => {
+          if (node) {
+            node.__authContext = value;
+          }
+        }}
+      />
       {children}
     </AuthContext.Provider>
   );

@@ -109,22 +109,38 @@ function App() {
             const nonce = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
             
             // Try to authenticate the user with Farcaster if needed
+            let authResult = null;
             try {
               const { handleMiniAppAuthentication } = await import('./utils/miniAppUtils');
-              const authResult = await handleMiniAppAuthentication(nonce);
+              authResult = await handleMiniAppAuthentication(nonce);
               
               if (authResult) {
                 console.log('Received auth result from Farcaster', authResult);
                 
-                // Don't wait for verification to complete to avoid blocking app loading
-                // Instead, just log the result and continue with initialization
+                // Import and use the auth context to save authentication state
                 try {
-                  // You'd normally verify this on your server
-                  // For now, just log it and continue
-                  console.log('Authentication successful with message:', 
-                    authResult.message && authResult.message.substring(0, 50) + '...');
-                } catch (verifyError) {
-                  console.warn('Error verifying auth message:', verifyError);
+                  // Get the auth context to update state
+                  const authContext = document.querySelector('[data-auth-context]')?.__authContext;
+                  
+                  if (authContext && typeof authContext.login === 'function') {
+                    // Extract FID from the message if possible
+                    const fidMatch = authResult.message && authResult.message.match(/fid: (\d+)/);
+                    const fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
+                    
+                    if (fid) {
+                      console.log(`Extracted FID ${fid} from auth message, updating auth state`);
+                      // Update the auth context with the new auth state
+                      authContext.login({ 
+                        fid, 
+                        token: authResult.signature, 
+                        message: authResult.message 
+                      });
+                    }
+                  } else {
+                    console.log('Auth context not available yet, will rely on the component authentication');
+                  }
+                } catch (authContextError) {
+                  console.warn('Error updating auth context:', authContextError);
                 }
               } else {
                 console.log('No auth result returned, user may have cancelled');
@@ -134,21 +150,33 @@ function App() {
               // Continue even if auth fails - some features might be limited
             }
             
-            // Initialize Mini App SDK and get context right away
+            // Initialize Mini App SDK and get context right away regardless of auth status
             // Tell Farcaster we're getting ready to display content
-            // NOTE: Call ready() even if authentication fails
-            console.log('Calling initializeMiniApp to hide splash screen');
+            console.log('⚠️ Calling initializeMiniApp to hide splash screen');
             const context = await initializeMiniApp({
               disableNativeGestures: false
             });
-            console.log('Splash screen should now be hidden');
+            console.log('✅ Splash screen dismissal requested');
+            
+            // Try one more time to call ready directly just to be safe
+            try {
+              const { sdk } = await import('@farcaster/frame-sdk');
+              if (sdk.actions && typeof sdk.actions.ready === 'function') {
+                console.log('🔄 Making one final direct ready() call for extra certainty');
+                await sdk.actions.ready();
+                console.log('✅ Final ready call successful');
+              }
+            } catch (finalReadyError) {
+              console.warn('Final ready call failed:', finalReadyError);
+            }
+            
             setMiniAppContext(context);
             miniAppInitialized = true;
             
             // Set up event listeners for Mini App interactions
             setupMiniAppEventListeners();
             
-            console.log('Mini App initialized with context:', context);
+            console.log('Mini App fully initialized');
           } catch (miniAppError) {
             console.error('Error initializing Mini App:', miniAppError);
             // Continue with regular web app rendering even if Mini App init fails

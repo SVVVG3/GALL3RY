@@ -25,24 +25,8 @@ try {
   logDebug('Error checking SDK:', e);
 }
 
-// Try to call ready as early as possible - this is a "defensive" approach
-// since the documentation says to call it as soon as possible
-try {
-  if (
-    typeof window !== 'undefined' && 
-    window.self !== window.top && 
-    sdk && 
-    sdk.actions && 
-    typeof sdk.actions.ready === 'function'
-  ) {
-    logDebug('Calling sdk.actions.ready() early at module level');
-    sdk.actions.ready().catch(e => {
-      logDebug('Early sdk.actions.ready() call failed:', e);
-    });
-  }
-} catch (e) {
-  logDebug('Error in early ready call:', e);
-}
+// DO NOT call ready at the module level - this can cause issues
+// Instead, we'll make multiple attempts to call ready in the initialization function
 
 /**
  * Utility functions for Farcaster Mini App integration
@@ -60,6 +44,7 @@ export const isMiniAppEnvironment = () => {
     // Check if we're in a Farcaster client by looking for specific indicators
     const inFarcasterWebView = typeof window !== 'undefined' && 
       (window.navigator.userAgent.includes('Farcaster') || 
+       window.navigator.userAgent.includes('Warpcast') ||
        window.location.href.includes('warpcast.com') ||
        window.parent !== window);
     
@@ -68,6 +53,7 @@ export const isMiniAppEnvironment = () => {
     logDebug('- userAgent:', window.navigator.userAgent);
     logDebug('- location:', window.location.href);
     logDebug('- is iframe:', window.self !== window.top);
+    logDebug('- is mobile:', /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent));
       
     // First try the SDK isFrame method if available
     if (typeof sdk.isFrame === 'function') {
@@ -95,6 +81,9 @@ export const isMiniAppEnvironment = () => {
   }
 };
 
+// A safety flag to ensure we don't call ready multiple times
+let readyCalled = false;
+
 /**
  * Initialize the Mini App SDK if we're in a Mini App environment
  * Call this early in the app initialization
@@ -112,10 +101,25 @@ export const initializeMiniApp = async (options = {}) => {
   }
 
   try {
+    // Use a timeout to ensure ready is called even if there's a delay
+    // This is especially important for mobile environments
+    setTimeout(() => {
+      if (!readyCalled && sdk.actions && typeof sdk.actions.ready === 'function') {
+        logDebug('Calling ready from safety timeout');
+        sdk.actions.ready({
+          disableNativeGestures: options.disableNativeGestures || false
+        }).catch(e => {
+          logDebug('Timeout ready call failed:', e);
+        });
+        readyCalled = true;
+      }
+    }, 2000);
+
     logDebug('Initializing Mini App and telling Farcaster we are ready...');
     
+    // Make multiple immediate attempts to call ready
     // First attempt to call sdk.actions.ready directly as shown in the docs
-    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+    if (sdk.actions && typeof sdk.actions.ready === 'function' && !readyCalled) {
       logDebug('Using sdk.actions.ready() method');
       // Tell Farcaster our app is ready to be displayed
       try {
@@ -123,22 +127,27 @@ export const initializeMiniApp = async (options = {}) => {
           disableNativeGestures: options.disableNativeGestures || false
         });
         logDebug('Mini App initialized successfully with sdk.actions.ready()');
+        readyCalled = true;
       } catch (readyError) {
         logDebug('Error calling sdk.actions.ready():', readyError);
-        throw readyError;
+        // Don't throw here, try other methods
       }
     } 
     // Fallback to other methods if actions.ready is not available
-    else if (typeof sdk.ready === 'function') {
+    else if (typeof sdk.ready === 'function' && !readyCalled) {
       logDebug('Falling back to sdk.ready() method');
       try {
         await sdk.ready();
         logDebug('Mini App initialized with legacy sdk.ready() method');
+        readyCalled = true;
       } catch (readyError) {
         logDebug('Error calling sdk.ready():', readyError);
-        throw readyError;
+        // Don't throw here
       }
     } 
+    else if (readyCalled) {
+      logDebug('Ready was already called, skipping initialization');
+    }
     else {
       logDebug('No ready method available in SDK');
       console.warn('No ready method available in this SDK version. The app may not display properly in Farcaster.');
@@ -161,9 +170,24 @@ export const initializeMiniApp = async (options = {}) => {
     
     return context;
   } catch (e) {
-    logDebug('Critical error initializing Mini App:', e);
-    console.error('Error initializing Mini App:', e);
-    // Still attempt to return something even if there's an error
+    logDebug('Error in initializeMiniApp, but continuing:', e);
+    console.warn('Error in initializeMiniApp, but continuing:', e);
+    
+    // Try one more time to call ready if it hasn't been called yet
+    if (!readyCalled && sdk.actions && typeof sdk.actions.ready === 'function') {
+      try {
+        logDebug('Final attempt to call ready after error');
+        await sdk.actions.ready({
+          disableNativeGestures: options.disableNativeGestures || false
+        });
+        readyCalled = true;
+        logDebug('Final ready call succeeded');
+      } catch (finalError) {
+        logDebug('Final ready call also failed:', finalError);
+      }
+    }
+    
+    // Return an error object rather than throwing
     return {
       error: e.message,
       errorType: e.name
