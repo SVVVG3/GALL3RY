@@ -27,6 +27,7 @@ function ensurePackageInstalled(packageName) {
 // Ensure critical packages are installed
 console.log('🔍 Verifying essential packages...');
 ensurePackageInstalled('@farcaster/frame-sdk@0.0.35');
+ensurePackageInstalled('react-toastify');
 
 // Function to update OG image URL in index.html
 function updateOgImageUrls() {

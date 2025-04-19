@@ -2,7 +2,14 @@ import React, { useState, useEffect, Suspense, useRef, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+
+// Add a try-catch for styles import to prevent build failures
+try {
+  require('react-toastify/dist/ReactToastify.css');
+} catch (e) {
+  console.warn('Could not load ReactToastify.css', e);
+}
+
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
