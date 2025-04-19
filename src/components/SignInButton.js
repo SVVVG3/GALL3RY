@@ -356,21 +356,32 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         // If no user info from context, try sign-in
         if (!userInfo) {
           console.log("No user info from context, trying signIn");
-          // Use the imported sdk instead of window.sdk
-          const result = await sdk.signIn({ nonce });
-          console.log("Sign in result:", result);
-          
-          if (result && typeof result === 'object') {
-            // Try to get user info from result
-            const fid = result.fid ? String(result.fid) : null;
-            const username = result.username ? String(result.username) : null;
-            const displayName = result.displayName ? String(result.displayName) : null;
-            const pfp = result.pfp ? String(result.pfp) : null;
-            
-            if (fid) {
-              userInfo = { fid, username, displayName, pfp };
-              console.log("User info from signIn result:", userInfo);
+          // Use the correct SDK function: sdk.actions.signIn instead of sdk.signIn
+          try {
+            // Check if actions is available
+            if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+              const result = await sdk.actions.signIn({ nonce });
+              console.log("Sign in result:", result);
+              
+              if (result && typeof result === 'object') {
+                // Try to get user info from result
+                const fid = result.fid ? String(result.fid) : null;
+                const username = result.username ? String(result.username) : null;
+                const displayName = result.displayName ? String(result.displayName) : null;
+                const pfp = result.pfp ? String(result.pfp) : null;
+                
+                if (fid) {
+                  userInfo = { fid, username, displayName, pfp };
+                  console.log("User info from signIn result:", userInfo);
+                }
+              }
+            } else {
+              console.error("SDK actions.signIn method not available");
+              return false;
             }
+          } catch (e) {
+            console.error("Error calling signIn:", e);
+            return false;
           }
         }
         
