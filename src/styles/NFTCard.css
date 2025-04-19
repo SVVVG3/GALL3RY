@@ -158,6 +158,22 @@
   height: 16px;
 }
 
+/* Ensure SVG icon is visible on mobile devices */
+@media (max-width: 768px) {
+  .collection-friends-button {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .collection-friends-button svg {
+    width: 18px;
+    height: 18px;
+    display: block !important; /* Force display on mobile */
+    fill: none;
+    stroke: currentColor;
+  }
+}
+
 /* Modify the nft-details to have proper positioning for the button */
 .nft-details {
   position: relative;
