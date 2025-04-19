@@ -60,7 +60,6 @@ import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
 import MiniAppAuthHandler from './components/MiniAppAuthHandler';
-import { NetworkStatus } from './components/NetworkStatus';
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
