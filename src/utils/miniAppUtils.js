@@ -100,7 +100,31 @@ export const initializeMiniApp = async (options = {}) => {
     return;
   }
 
+  // CRITICAL: The priority is to dismiss the splash screen first
+  logDebug('🚨 PRIORITY: Dismissing splash screen first, before any other operations');
+  
   try {
+    // Make IMMEDIATE call to ready() - this is the most important thing
+    if (sdk.actions && typeof sdk.actions.ready === 'function' && !readyCalled) {
+      logDebug('Making IMMEDIATE call to sdk.actions.ready()');
+      try {
+        // Don't await this call - we want it to happen immediately
+        sdk.actions.ready({
+          disableNativeGestures: options.disableNativeGestures || false
+        }).then(() => {
+          logDebug('✓ Immediate ready() call succeeded');
+          readyCalled = true;
+        }).catch(e => {
+          logDebug('✗ Immediate ready() call failed:', e);
+        });
+        
+        // Mark as called anyway to prevent duplicate calls
+        readyCalled = true;
+      } catch (readyError) {
+        logDebug('Error in immediate ready() call:', readyError);
+      }
+    }
+    
     // Use a timeout to ensure ready is called even if there's a delay
     // This is especially important for mobile environments
     setTimeout(() => {
@@ -117,11 +141,9 @@ export const initializeMiniApp = async (options = {}) => {
 
     logDebug('Initializing Mini App and telling Farcaster we are ready...');
     
-    // Make multiple immediate attempts to call ready
-    // First attempt to call sdk.actions.ready directly as shown in the docs
-    if (sdk.actions && typeof sdk.actions.ready === 'function' && !readyCalled) {
-      logDebug('Using sdk.actions.ready() method');
-      // Tell Farcaster our app is ready to be displayed
+    // Now try a second, awaited call to ready to ensure we get the context
+    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+      logDebug('Making awaited call to sdk.actions.ready()');
       try {
         await sdk.actions.ready({
           disableNativeGestures: options.disableNativeGestures || false
@@ -134,7 +156,7 @@ export const initializeMiniApp = async (options = {}) => {
       }
     } 
     // Fallback to other methods if actions.ready is not available
-    else if (typeof sdk.ready === 'function' && !readyCalled) {
+    else if (typeof sdk.ready === 'function') {
       logDebug('Falling back to sdk.ready() method');
       try {
         await sdk.ready();
