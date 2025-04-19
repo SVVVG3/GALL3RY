@@ -9,16 +9,13 @@ import '@farcaster/auth-kit/styles.css';
 import { AuthKitProvider } from '@farcaster/auth-kit';
 
 // Import the SDK directly and initialize IMMEDIATELY at the top level
-import { sdk, immediate } from '@farcaster/frame-sdk';
+import { sdk } from '@farcaster/frame-sdk';
 
 // Initialize immediately, before any React code runs
 if (typeof window !== 'undefined') {
   try {
-    immediate();
-    console.log('💫 SDK initialized immediately via immediate()');
-    
-    // Also initialize in the standard way as backup
-    if (!sdk.initialized && typeof sdk.init === 'function') {
+    // Initialize SDK as early as possible
+    if (sdk && typeof sdk.init === 'function') {
       sdk.init();
       console.log('✅ SDK initialized via sdk.init()');
     }
