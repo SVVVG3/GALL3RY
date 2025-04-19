@@ -216,6 +216,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
   );
 
   const handleSignIn = async () => {
+    console.log("SignInButton: handleSignIn called");
     try {
       setAuthError(null);
 
@@ -290,13 +291,28 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
 
   // In Mini App environment, use our custom button
   if (isMiniApp) {
+    console.log("SignInButton: Rendering Mini App sign-in button");
     return (
-      <ButtonContainer
+      <button
         onClick={handleSignIn}
         disabled={loading}
-        fullWidth={fullWidth}
-        aria-label="Sign in with Farcaster"
-        className={className}
+        className={`sign-in-button ${className || ''}`}
+        style={{
+          backgroundColor: '#8864FB',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '8px',
+          padding: '12px 16px',
+          borderRadius: '8px',
+          border: 'none',
+          fontWeight: '600',
+          fontSize: '16px',
+          cursor: loading ? 'not-allowed' : 'pointer',
+          width: fullWidth ? '100%' : 'auto',
+          ...buttonStyle
+        }}
       >
         <span style={{ display: 'flex', alignItems: 'center' }}>
           <FarcasterLogoSvg />
@@ -304,7 +320,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         </span>
         {authError && <div style={{ color: 'red', marginTop: 8, fontSize: 12 }}>{authError}</div>}
         {children}
-      </ButtonContainer>
+      </button>
     );
   }
 

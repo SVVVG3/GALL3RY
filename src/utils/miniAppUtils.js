@@ -4,6 +4,15 @@ import React from 'react';
 // Add detailed debugging at the top of the file
 const DEBUG_MINI_APP = true;
 
+// Add an immediate debug check of the SDK to see if it's loading
+console.log('miniAppUtils.js loaded, SDK status:', {
+  sdkDefined: typeof sdk !== 'undefined',
+  sdkActions: sdk && typeof sdk.actions !== 'undefined',
+  sdkContext: sdk && typeof sdk.context !== 'undefined',
+  actionsSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
+  actionsReady: sdk && sdk.actions && typeof sdk.actions.ready === 'function'
+});
+
 function logDebug(...args) {
   if (DEBUG_MINI_APP) {
     console.log('[MINI APP DEBUG]', ...args);
@@ -166,6 +175,13 @@ export const handleMiniAppAuthentication = async () => {
       console.error('Mini App Authentication: Frame SDK not initialized');
       return { success: false, error: 'Frame SDK not initialized' };
     }
+    
+    // Log the SDK state for debugging
+    console.log('SDK state during authentication:', {
+      sdkDefined: typeof sdk !== 'undefined',
+      sdkActions: sdk && typeof sdk.actions !== 'undefined',
+      actionsSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function'
+    });
 
     // Generate a secure nonce for authentication
     const generateNonce = () => {
@@ -179,6 +195,7 @@ export const handleMiniAppAuthentication = async () => {
     
     try {
       // Use the SDK's signIn method to authenticate the user
+      console.log('Mini App Authentication: Calling sdk.actions.signIn with nonce:', nonce);
       const signInResult = await sdk.actions.signIn({ nonce });
       console.log('Mini App Authentication: Sign in successful', signInResult);
       
@@ -236,12 +253,14 @@ export const handleMiniAppAuthentication = async () => {
         return { success: false, error: 'No valid user context after sign in' };
       }
     } catch (error) {
+      console.error('Mini App Authentication: Error during sign in', error);
+      
+      // Check specifically for RejectedByUser error
       if (error.name === 'RejectedByUser') {
         console.log('Mini App Authentication: User rejected sign in request');
         return { success: false, error: 'User rejected sign in', rejected: true };
       }
       
-      console.error('Mini App Authentication: Error during sign in', error);
       return { success: false, error: error.message || 'Error during sign in' };
     }
   } catch (error) {

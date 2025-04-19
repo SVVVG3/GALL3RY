@@ -29,6 +29,42 @@ import MiniAppAuthHandler from './components/MiniAppAuthHandler';
 // Import the SDK directly at the top level to ensure it's available immediately
 import { sdk } from '@farcaster/frame-sdk';
 
+// Log the SDK initialization state to help with debugging
+console.log('App.js: SDK initialization check', {
+  sdkDefined: typeof sdk !== 'undefined',
+  sdkVersion: sdk?.version,
+  actionsAvailable: sdk && typeof sdk.actions !== 'undefined',
+  signInAvailable: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
+  readyAvailable: sdk && sdk.actions && typeof sdk.actions.ready === 'function'
+});
+
+// Try to initialize the SDK immediately
+const immediateInitSDK = () => {
+  try {
+    if (typeof window !== 'undefined' && typeof sdk !== 'undefined') {
+      console.log('App.js: Attempting immediate SDK initialization');
+      // Check if we're in a Mini App environment
+      const isInMiniApp = isMiniAppEnvironment();
+      
+      if (isInMiniApp && sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+        console.log('App.js: Calling sdk.actions.ready() for immediate initialization');
+        sdk.actions.ready().then(() => {
+          console.log('App.js: SDK ready() call successful');
+        }).catch(error => {
+          console.error('App.js: Error calling SDK ready():', error);
+        });
+      } else {
+        console.log('App.js: Not in Mini App environment or SDK ready() not available');
+      }
+    }
+  } catch (error) {
+    console.error('App.js: Error during immediate SDK initialization:', error);
+  }
+};
+
+// Call the initialization function
+immediateInitSDK();
+
 // Loading component for suspense fallback
 const LoadingScreen = () => (
   <div className="loading-container">
