@@ -30,12 +30,29 @@ if (typeof window !== 'undefined') {
   const initSDK = () => {
     try {
       console.log("Initializing Farcaster SDK...");
-      // Simple initialization
-      sdk.init();
-      console.log("✅ SDK initialized successfully");
       
-      // Also expose to window.sdk for compatibility
-      window.sdk = sdk;
+      // Safely initialize SDK based on its actual structure
+      if (sdk) {
+        // Check if SDK has init method directly
+        if (typeof sdk.init === 'function') {
+          sdk.init();
+          console.log("✅ SDK initialized with sdk.init()");
+        } 
+        // Check if SDK is already initialized property
+        else if (typeof sdk.initialized !== 'undefined') {
+          console.log("✅ SDK already initialized");
+        }
+        // Log error if no init method found
+        else {
+          console.warn("⚠️ SDK init method not found, using as-is");
+        }
+        
+        // Expose SDK globally for components that might use window.sdk
+        window.sdk = sdk;
+        console.log("✅ SDK exposed globally");
+      } else {
+        console.warn("⚠️ SDK not available");
+      }
     } catch (e) {
       console.error("❌ SDK init error:", e.message || String(e));
     }
@@ -132,22 +149,40 @@ class ErrorBoundary extends React.Component {
 const dismissSplashScreen = async () => {
   console.log('⚠️ Attempting to dismiss splash screen');
   try {
-    // Make sure SDK is initialized
-    if (sdk && !sdk.initialized && typeof sdk.init === 'function') {
-      sdk.init();
-    }
-    
-    // Call ready() to dismiss splash screen
-    if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
-      await sdk.actions.ready();
-      console.log('✅ Called ready() successfully');
-      return true;
-    } else {
-      console.warn('⚠️ sdk.actions.ready is not available');
+    if (!sdk) {
+      console.warn('⚠️ SDK not available for dismissing splash screen');
       return false;
     }
+    
+    // Try different methods to dismiss splash screen
+    
+    // Method 1: Try sdk.actions.ready()
+    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+      try {
+        await sdk.actions.ready();
+        console.log('✅ Called sdk.actions.ready() successfully');
+        return true;
+      } catch (e) {
+        console.warn('⚠️ sdk.actions.ready() failed:', e);
+      }
+    }
+    
+    // Method 2: Try sdk.ready()
+    if (typeof sdk.ready === 'function') {
+      try {
+        await sdk.ready();
+        console.log('✅ Called sdk.ready() successfully');
+        return true;
+      } catch (e) {
+        console.warn('⚠️ sdk.ready() failed:', e);
+      }
+    }
+    
+    // If we get here, none of the methods worked
+    console.warn('⚠️ No suitable ready() method found in SDK');
+    return false;
   } catch (e) {
-    console.error('❌ Error calling ready():', e);
+    console.error('❌ Error trying to dismiss splash screen:', e);
     return false;
   }
 };
@@ -231,7 +266,7 @@ const getUserInfoFromContext = async () => {
 };
 
 // Main App function with simplified provider hierarchy
-function App() {
+function AppContent() {
   const [loading, setLoading] = useState(true);
   const [appError, setAppError] = useState(null);
   const [miniAppContext, setMiniAppContext] = useState(null);
@@ -449,60 +484,67 @@ function App() {
       }}>
         <AuthProvider ref={authContextRef}>
           <WalletProvider>
-            <Router>
-              {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
-              {isMiniApp && <MiniAppAuthHandler />}
-              
-              <div className={appClassName} style={appStyles}>
-                {/* Hide header in Mini App if needed or adjust its appearance */}
-                {(!isMiniApp || (isMiniApp && !miniAppContext?.hideHeader)) && (
-                  <header className="app-header">
-                    <div className="app-header-container">
-                      <Link to="/" className="logo-link">GALL3RY</Link>
-                      <div className="auth-container">
-                        <AuthStatusIndicator />
-                        <SignInButton />
-                      </div>
+            {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
+            {isMiniApp && <MiniAppAuthHandler />}
+            
+            <div className={appClassName} style={appStyles}>
+              {/* Hide header in Mini App if needed or adjust its appearance */}
+              {(!isMiniApp || (isMiniApp && !miniAppContext?.hideHeader)) && (
+                <header className="app-header">
+                  <div className="app-header-container">
+                    <Link to="/" className="logo-link">GALL3RY</Link>
+                    <div className="auth-container">
+                      <AuthStatusIndicator />
+                      <SignInButton />
                     </div>
-                  </header>
-                )}
-                
-                <main className="app-content">
-                  <Routes>
-                    <Route path="/" element={<HomePage />} />
-                    <Route path="/simple" element={<SimpleGalleryPage />} />
-                    <Route path="/me" element={
-                      <NFTProvider>
-                        <UserProfilePage />
-                      </NFTProvider>
-                    } />
-                    <Route path="/user/:username" element={
-                      <NFTProvider>
-                        <UserProfilePage />
-                      </NFTProvider>
-                    } />
-                  </Routes>
-                </main>
-                
-                {/* Conditionally show footer based on environment */}
-                {!isMiniApp && (
-                  <footer className="app-footer">
-                    <span>vibe coded with 💜 by</span><a 
-                      href="https://warpcast.com/svvvg3.eth" 
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="footer-link"
-                    >
-                      @svvvg3.eth
-                    </a>
-                  </footer>
-                )}
-              </div>
-            </Router>
+                  </div>
+                </header>
+              )}
+              
+              <main className="app-content">
+                <Routes>
+                  <Route path="/" element={<HomePage />} />
+                  <Route path="/simple" element={<SimpleGalleryPage />} />
+                  <Route path="/me" element={
+                    <NFTProvider>
+                      <UserProfilePage />
+                    </NFTProvider>
+                  } />
+                  <Route path="/user/:username" element={
+                    <NFTProvider>
+                      <UserProfilePage />
+                    </NFTProvider>
+                  } />
+                </Routes>
+              </main>
+              
+              {/* Conditionally show footer based on environment */}
+              {!isMiniApp && (
+                <footer className="app-footer">
+                  <span>vibe coded with 💜 by</span><a 
+                    href="https://warpcast.com/svvvg3.eth" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="footer-link"
+                  >
+                    @svvvg3.eth
+                  </a>
+                </footer>
+              )}
+            </div>
           </WalletProvider>
         </AuthProvider>
       </AuthKitProvider>
     </ErrorBoundary>
+  );
+}
+
+// Main wrapper component that provides the router
+function App() {
+  return (
+    <Router>
+      <AppContent />
+    </Router>
   );
 }
 
