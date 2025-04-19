@@ -17,7 +17,8 @@
 /* Primary Grid Layout - The Source of Truth */
 .nft-grid {
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  grid-auto-rows: 1fr !important; 
   grid-gap: 20px !important;
   padding: 1rem 0 !important;
   width: 100% !important;
@@ -39,26 +40,26 @@
 
 @media (min-width: 481px) and (max-width: 768px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
     grid-gap: 14px !important;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1024px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)) !important;
   }
 }
 
 @media (min-width: 1025px) and (max-width: 1440px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
   }
 }
 
 @media (min-width: 1441px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
   }
   
   .nft-grid-container {

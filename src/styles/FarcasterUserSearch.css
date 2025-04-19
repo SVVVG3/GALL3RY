@@ -1842,7 +1842,8 @@
 .farcaster-search-container .nft-grid {
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  grid-auto-rows: 1fr !important;
   grid-gap: 20px !important;
 }
 
@@ -1855,6 +1856,9 @@
 .nft-section .nft-grid-container {
   width: 100% !important;
   max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
 }
 
 /* Mobile media query */
@@ -1876,7 +1880,7 @@
 /* Tablet media query */
 @media (min-width: 481px) and (max-width: 768px) {
   .farcaster-search-container .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
     grid-gap: 14px !important;
   }
 } 
