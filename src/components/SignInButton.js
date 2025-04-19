@@ -3,7 +3,8 @@ import React, { useState, useEffect, useCallback, Suspense, useRef } from 'react
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { sdk } from '@farcaster/frame-sdk';
-import { useRouter } from 'next/router';
+// Remove Next.js router import and use useNavigate from react-router-dom instead
+// import { useRouter } from 'next/router';
 import { cn } from '../utils/cn';
 import Avatar from './Avatar';
 
@@ -65,7 +66,7 @@ const generateNonce = () => {
 function SignInButton({ className, fullWidth, loading, size = "md", children, ...props }) {
   const { user, isAuthenticated, signIn, signOut } = useAuth();
   const buttonRef = useRef(null);
-  const router = useRouter();
+  const navigate = useNavigate();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const isMiniApp = useIsMiniApp();
 
@@ -138,7 +139,7 @@ function SignInButton({ className, fullWidth, loading, size = "md", children, ..
     return (
       <div className="flex items-center">
         <button
-          onClick={() => router.push(`/${user.username}`)}
+          onClick={() => navigate(`/${user.username}`)}
           className={cn(
             "flex items-center gap-2 rounded-md text-sm font-medium",
             className
