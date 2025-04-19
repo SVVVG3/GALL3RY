@@ -7,12 +7,14 @@ import { sdk } from '@farcaster/frame-sdk';
 // import { useRouter } from 'next/router';
 import { cn } from '../utils/cn';
 import Avatar from './Avatar';
+import styled from 'styled-components';
+import { FiArrowRight } from 'react-icons/fi';
+import { handleMiniAppAuthentication, isMiniAppEnvironment } from '../utils/miniAppUtils';
+import { signInWithFarcaster } from '../utils/authUtils';
+import { useProfile } from '../contexts/ProfileContext';
 
 // We won't dynamically import the Farcaster components to avoid initialization issues
-import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
-
-// Import Mini App utilities
-import { isMiniAppEnvironment, handleMiniAppAuthentication, useIsMiniApp } from '../utils/miniAppUtils';
+import { SignInButton as FarcasterSignInButton, useProfile as FarcasterUseProfile } from '@farcaster/auth-kit';
 
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
@@ -58,18 +60,45 @@ const generateNonce = () => {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
+const ButtonContainer = styled.button`
+  background-color: #8864FB; /* Farcaster purple */
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 600;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  width: ${props => props.fullWidth ? '100%' : 'auto'};
+  
+  &:hover {
+    background-color: #7551ea;
+  }
+  
+  &:disabled {
+    background-color: #9e85e6;
+    cursor: not-allowed;
+  }
+`;
+
 /**
  * Enhanced SignInButton Component
  * With error handling and safe localStorage access
  * Supports both web and Mini App authentication methods
  */
 const SignInButton = ({ className, fullWidth, loading, size = "md", children, ...props }) => {
-  const { user, isAuthenticated, signIn, signOut } = useAuth();
-  const farcasterProfile = useProfile();
+  const { user, isAuthenticated, signIn, signOut, setAuthenticating } = useAuth();
+  const farcasterProfile = FarcasterUseProfile();
   const navigate = useNavigate();
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const isMiniApp = useIsMiniApp();
+  const isMiniApp = isMiniAppEnvironment();
   const buttonRef = useRef(null);
+  const [error, setError] = useState(null);
 
   // Listen for miniAppAuthenticated event
   useEffect(() => {
@@ -124,29 +153,77 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
     };
   }, [signIn, isMiniApp]);
 
+  // Create an inline SVG for the Farcaster logo to ensure it always renders
+  const FarcasterLogoSvg = () => (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 32 32" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ marginRight: '6px' }}
+    >
+      <path 
+        d="M16 0C7.163 0 0 7.163 0 16C0 24.837 7.163 32 16 32C24.837 32 32 24.837 32 16C32 7.163 24.837 0 16 0ZM10.24 6.4H21.76V12.8C21.76 14.256 21.183 15.652 20.154 16.681C19.126 17.709 17.73 18.286 16.274 18.286H10.24V6.4ZM6.4 25.6V6.4H8.96V19.525C8.96 19.871 9.097 20.203 9.342 20.448C9.588 20.692 9.92 20.829 10.266 20.829H16.274C18.314 20.829 20.27 20.036 21.712 18.595C23.153 17.153 23.946 15.197 23.946 13.157V6.4H25.6V25.6H23.04V22.4H8.96V25.6H6.4Z" 
+        fill="currentColor"
+      />
+    </svg>
+  );
+
   const handleSignIn = async () => {
-    setIsSigningIn(true);
-    
     try {
+      setIsSigningIn(true);
+      setError(null);
+
       if (isMiniApp) {
-        await handleMiniAppAuthentication();
-      } else {
-        // Use the normal sign-in method for web environment
-        // This invokes the FarcasterSignInButton's functionality
-        if (buttonRef.current) {
-          // Find and click the auth-kit button
-          const authKitButton = buttonRef.current.querySelector('.fc-authkit-signin-button');
-          if (authKitButton) {
-            authKitButton.click();
+        console.log("SignInButton: Detected Mini App environment, authenticating...");
+        try {
+          // Generate a secure nonce for authentication
+          const generateNonce = () => {
+            const array = new Uint8Array(16);
+            window.crypto.getRandomValues(array);
+            return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+          };
+          
+          const nonce = generateNonce();
+          console.log("SignInButton: Generated nonce for authentication:", nonce);
+          
+          if (sdk && sdk.actions && typeof sdk.actions.signIn === 'function') {
+            console.log("SignInButton: Using sdk.actions.signIn for authentication");
+            const signInResult = await sdk.actions.signIn({ nonce });
+            console.log("SignInButton: Sign in result:", signInResult);
+            
+            if (signInResult && signInResult.message) {
+              console.log("SignInButton: Received valid sign-in message");
+              
+              // We'll still call handleMiniAppAuthentication to process the result
+              // and extract user information from the SDK context
+              await handleMiniAppAuthentication();
+            } else {
+              console.error("SignInButton: Sign in failed, invalid result", signInResult);
+              setError("Sign in failed: Invalid result from SDK");
+            }
           } else {
-            console.error("Could not find Farcaster auth-kit button");
-            // Fallback to direct signIn if available
-            if (signIn) await signIn();
+            console.log("SignInButton: sdk.actions.signIn not available, using fallback");
+            await handleMiniAppAuthentication();
           }
+          
+          console.log("SignInButton: Mini App authentication completed successfully");
+          setIsSigningIn(false);
+          return;
+        } catch (miniAppError) {
+          console.error("SignInButton: Mini App authentication failed:", miniAppError);
+          setError(`Mini App authentication failed: ${miniAppError.message || 'Unknown error'}`);
+          setIsSigningIn(false);
+          return;
         }
       }
-    } catch (error) {
-      console.error("Sign in error:", error);
+
+      console.log('SignInButton: Using web authentication flow');
+      await signInWithFarcaster(props.callbackPath || '/');
+    } catch (e) {
+      console.error("SignInButton: Authentication error:", e);
+      setError(`Authentication failed: ${e?.message || "Unknown error"}`);
     } finally {
       setIsSigningIn(false);
     }
@@ -184,37 +261,21 @@ const SignInButton = ({ className, fullWidth, loading, size = "md", children, ..
   // In Mini App environment, use our custom button
   if (isMiniApp) {
     return (
-      <button
+      <ButtonContainer
         onClick={handleSignIn}
         disabled={isSigningIn || loading}
-        className={cn(
-          "flex items-center justify-center gap-2 rounded-md auth-kit-style",
-          "bg-[#9272F2] text-white px-4 py-2 font-medium hover:bg-[#7C5CD6] transition-all",
-          "border border-[#9272F2] text-sm",
-          {
-            "w-full": fullWidth,
-            "opacity-50 cursor-not-allowed": isSigningIn || loading,
-          },
-          className
-        )}
-        {...props}
+        fullWidth={fullWidth}
+        aria-label="Sign in with Farcaster"
+        className={className}
       >
-        <img
-          src="/assets/farcaster-logo.svg"
-          className="h-4 w-auto"
-          alt="Farcaster"
-          onError={(e) => {
-            // Fallback to inline SVG if the image fails to load
-            e.target.outerHTML = `<svg width="16" height="16" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" class="h-4 w-auto">
-              <path d="M20 40C31.0457 40 40 31.0457 40 20C40 8.9543 31.0457 0 20 0C8.9543 0 0 8.9543 0 20C0 31.0457 8.9543 40 20 40Z" fill="#472A91"/>
-              <path d="M26.2558 10.41C24.1707 10.41 22.4921 11.4257 21.4302 13.4571H21.3385V10.6997H15.8496V29.7183H21.5219V20.2169C21.5219 18.6323 22.5837 17.5249 24.079 17.5249C25.5742 17.5249 26.5444 18.6323 26.5444 20.2169V29.7183H32.2167V19.4778C32.2167 13.9212 30.0399 10.41 26.2558 10.41Z" fill="white"/>
-              <path d="M8.41913 29.7183H14.0914V10.6997H8.41913V29.7183Z" fill="white"/>
-            </svg>`;
-          }}
-        />
-        {isSigningIn || loading ? "Signing In..." : "Sign in"}
+        <span style={{ display: 'flex', alignItems: 'center' }}>
+          <FarcasterLogoSvg />
+          {isSigningIn || loading ? "Signing In..." : "Sign in"}
+        </span>
+        {isSigningIn && <span style={{ marginLeft: 8, fontSize: 12 }}>Authenticating with Farcaster...</span>}
+        {error && <div style={{ color: 'red', marginTop: 8, fontSize: 12 }}>{error}</div>}
         {children}
-      </button>
+      </ButtonContainer>
     );
   }
 
