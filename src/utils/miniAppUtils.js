@@ -1,5 +1,49 @@
 import { sdk } from '@farcaster/frame-sdk';
 
+// Add detailed debugging at the top of the file
+const DEBUG_MINI_APP = true;
+
+function logDebug(...args) {
+  if (DEBUG_MINI_APP) {
+    console.log('[MINI APP DEBUG]', ...args);
+  }
+}
+
+// Log SDK availability and version
+try {
+  if (typeof sdk !== 'undefined') {
+    logDebug('Frame SDK detected:', sdk);
+    logDebug('SDK version:', sdk.version || 'unknown');
+    logDebug('SDK methods:', Object.keys(sdk));
+    if (sdk.actions) {
+      logDebug('SDK actions:', Object.keys(sdk.actions));
+    }
+  } else {
+    logDebug('Frame SDK not detected');
+  }
+} catch (e) {
+  logDebug('Error checking SDK:', e);
+}
+
+// Try to call ready as early as possible - this is a "defensive" approach
+// since the documentation says to call it as soon as possible
+try {
+  if (
+    typeof window !== 'undefined' && 
+    window.self !== window.top && 
+    sdk && 
+    sdk.actions && 
+    typeof sdk.actions.ready === 'function'
+  ) {
+    logDebug('Calling sdk.actions.ready() early at module level');
+    sdk.actions.ready().catch(e => {
+      logDebug('Early sdk.actions.ready() call failed:', e);
+    });
+  }
+} catch (e) {
+  logDebug('Error in early ready call:', e);
+}
+
 /**
  * Utility functions for Farcaster Mini App integration
  * These utilities allow our app to work both as a regular web app and as a Mini App
@@ -13,10 +57,41 @@ import { sdk } from '@farcaster/frame-sdk';
 export const isMiniAppEnvironment = () => {
   // Check if we're in a frame/mobile webview using the SDK
   try {
-    return typeof sdk.isFrame === 'function' ? sdk.isFrame() : false;
+    // Check if we're in a Farcaster client by looking for specific indicators
+    const inFarcasterWebView = typeof window !== 'undefined' && 
+      (window.navigator.userAgent.includes('Farcaster') || 
+       window.location.href.includes('warpcast.com') ||
+       window.parent !== window);
+    
+    logDebug('Checking Mini App environment:');
+    logDebug('- inFarcasterWebView:', inFarcasterWebView);
+    logDebug('- userAgent:', window.navigator.userAgent);
+    logDebug('- location:', window.location.href);
+    logDebug('- is iframe:', window.self !== window.top);
+      
+    // First try the SDK isFrame method if available
+    if (typeof sdk.isFrame === 'function') {
+      const isFrame = sdk.isFrame();
+      logDebug('- sdk.isFrame() result:', isFrame);
+      return isFrame;
+    }
+    
+    logDebug('- sdk.isFrame not available, using fallbacks');
+    
+    // Fall back to checking for the postMessage API which is used by the SDK
+    const result = inFarcasterWebView || (typeof window !== 'undefined' && 
+      typeof window.parent !== 'undefined' && 
+      window.parent !== window);
+      
+    logDebug('- Final environment detection result:', result);
+    return result;
   } catch (e) {
     console.warn('Error checking Mini App environment:', e);
-    return false;
+    
+    // Fall back to checking if we're in an iframe as a last resort
+    const isIframe = typeof window !== 'undefined' && window.self !== window.top;
+    logDebug('- Error occurred, fallback to iframe check:', isIframe);
+    return isIframe;
   }
 };
 
@@ -28,29 +103,71 @@ export const isMiniAppEnvironment = () => {
  * @returns {Promise<void>}
  */
 export const initializeMiniApp = async (options = {}) => {
-  if (!isMiniAppEnvironment()) {
+  const isInMiniApp = isMiniAppEnvironment();
+  logDebug(`initializeMiniApp called, isInMiniApp=${isInMiniApp}`, options);
+  
+  if (!isInMiniApp) {
+    logDebug('Not in Mini App environment, skipping initialization');
     return;
   }
 
   try {
-    // Initialize the SDK and tell Farcaster our interface is ready to display
+    logDebug('Initializing Mini App and telling Farcaster we are ready...');
+    
+    // First attempt to call sdk.actions.ready directly as shown in the docs
     if (sdk.actions && typeof sdk.actions.ready === 'function') {
-      await sdk.actions.ready({
-        disableNativeGestures: options.disableNativeGestures || false
-      });
-      console.log('Mini App initialized successfully');
-      
-      // Get client context if available
-      if (typeof sdk.getContext === 'function') {
-        const context = await sdk.getContext();
-        console.log('Mini App context:', context);
-        return context;
+      logDebug('Using sdk.actions.ready() method');
+      // Tell Farcaster our app is ready to be displayed
+      try {
+        await sdk.actions.ready({
+          disableNativeGestures: options.disableNativeGestures || false
+        });
+        logDebug('Mini App initialized successfully with sdk.actions.ready()');
+      } catch (readyError) {
+        logDebug('Error calling sdk.actions.ready():', readyError);
+        throw readyError;
+      }
+    } 
+    // Fallback to other methods if actions.ready is not available
+    else if (typeof sdk.ready === 'function') {
+      logDebug('Falling back to sdk.ready() method');
+      try {
+        await sdk.ready();
+        logDebug('Mini App initialized with legacy sdk.ready() method');
+      } catch (readyError) {
+        logDebug('Error calling sdk.ready():', readyError);
+        throw readyError;
+      }
+    } 
+    else {
+      logDebug('No ready method available in SDK');
+      console.warn('No ready method available in this SDK version. The app may not display properly in Farcaster.');
+    }
+    
+    // Try to get client context if available
+    let context = null;
+    if (typeof sdk.getContext === 'function') {
+      logDebug('Attempting to get context');
+      try {
+        context = await sdk.getContext();
+        logDebug('Mini App context received:', context);
+      } catch (contextError) {
+        logDebug('Could not get Mini App context:', contextError);
+        console.warn('Could not get Mini App context:', contextError);
       }
     } else {
-      console.log('sdk.actions.ready function not available in this version');
+      logDebug('getContext method not available');
     }
+    
+    return context;
   } catch (e) {
+    logDebug('Critical error initializing Mini App:', e);
     console.error('Error initializing Mini App:', e);
+    // Still attempt to return something even if there's an error
+    return {
+      error: e.message,
+      errorType: e.name
+    };
   }
 };
 
