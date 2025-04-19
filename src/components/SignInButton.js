@@ -363,17 +363,31 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
               const result = await sdk.actions.signIn({ nonce });
               console.log("Sign in result:", result);
               
-              if (result && typeof result === 'object') {
-                // Try to get user info from result
-                const fid = result.fid ? String(result.fid) : null;
-                const username = result.username ? String(result.username) : null;
-                const displayName = result.displayName ? String(result.displayName) : null;
-                const pfp = result.pfp ? String(result.pfp) : null;
+              if (result && typeof result === 'object' && result.message) {
+                // Extract FID from the message
+                const fidMatch = result.message.match(/farcaster:\/\/fid\/(\d+)/);
+                console.log("FID match:", fidMatch);
                 
-                if (fid) {
-                  userInfo = { fid, username, displayName, pfp };
-                  console.log("User info from signIn result:", userInfo);
+                if (fidMatch && fidMatch[1]) {
+                  const fid = fidMatch[1];
+                  
+                  // Create a user object with the extracted FID
+                  // Since we don't have username/displayName, we'll use placeholders
+                  userInfo = { 
+                    fid: String(fid),
+                    username: `user${fid}`, 
+                    displayName: `User ${fid}`, 
+                    pfp: null,
+                    // Store the signature and message for verification if needed
+                    signature: result.signature,
+                    message: result.message 
+                  };
+                  console.log("Created user info from FID:", userInfo);
+                } else {
+                  console.error("Could not extract FID from message:", result.message);
                 }
+              } else {
+                console.error("Invalid sign in result format:", result);
               }
             } else {
               console.error("SDK actions.signIn method not available");
