@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { sdk } from '@farcaster/frame-sdk';
 import { useRouter } from 'next/router';
 import { cn } from '../utils/cn';
-import { Avatar } from '@/components/ui/avatar';
+import Avatar from './Avatar';
 
 // We won't dynamically import the Farcaster components to avoid initialization issues
 import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
