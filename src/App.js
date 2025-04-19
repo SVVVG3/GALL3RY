@@ -30,6 +30,16 @@ if (typeof window !== 'undefined') {
       readyAvailable: sdk && sdk.actions && typeof sdk.actions.ready === 'function',
       getContextAvailable: sdk && typeof sdk.getContext === 'function'
     });
+    
+    // Log user context if available - this is key for auto-authentication
+    if (sdk.context) {
+      console.log('SDK context available at initialization:', sdk.context);
+      if (sdk.context.user) {
+        console.log('User found in SDK context at initialization:', sdk.context.user);
+      }
+    } else {
+      console.log('No SDK context available at initialization');
+    }
   } catch (error) {
     console.error('❌ Error initializing SDK:', error);
   }
