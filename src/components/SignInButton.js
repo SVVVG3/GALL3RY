@@ -445,21 +445,28 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
 
       if (isMiniApp) {
         console.log("SignInButton: Detected Mini App environment, authenticating...");
+        // Set loading state immediately to show feedback
+        setMiniAppAuthInProgress(true);
+        
         try {
           // Use direct SDK implementation
+          console.log("SignInButton: Attempting direct Mini App authentication");
           const result = await directMiniAppSignIn(login);
           console.log("SignInButton: Authentication result:", result);
           
           if (result) {
             console.log("SignInButton: Successfully authenticated");
+            setMiniAppAuthInProgress(false);
             return;
           } else {
             console.error("SignInButton: Authentication failed");
             setAuthError("Authentication failed");
+            setMiniAppAuthInProgress(false);
           }
         } catch (miniAppError) {
           console.error("SignInButton: Mini App authentication failed:", miniAppError);
           setAuthError(`Authentication failed: ${miniAppError.message || 'Unknown error'}`);
+          setMiniAppAuthInProgress(false);
           return;
         }
       } else {
@@ -469,6 +476,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     } catch (e) {
       console.error("SignInButton: Authentication error:", e);
       setAuthError(`Authentication failed: ${e?.message || "Unknown error"}`);
+      setMiniAppAuthInProgress(false);
     }
   };
 
@@ -506,8 +514,16 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     console.log("SignInButton: Rendering Mini App sign-in button");
     return (
       <button
-        onClick={handleSignIn}
-        disabled={loading}
+        onClick={(event) => {
+          console.log("SignInButton: Button clicked in Mini App");
+          // Explicitly prevent default
+          if (event) event.preventDefault();
+          // Force handleSignIn with a small delay to ensure SDK is ready
+          setTimeout(() => {
+            handleSignIn();
+          }, 100);
+        }}
+        disabled={loading || miniAppAuthInProgress}
         className={`sign-in-button ${className || ''}`}
         style={{
           backgroundColor: '#8864FB',
@@ -521,14 +537,17 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           border: 'none',
           fontWeight: '600',
           fontSize: '16px',
-          cursor: loading ? 'not-allowed' : 'pointer',
+          cursor: loading || miniAppAuthInProgress ? 'not-allowed' : 'pointer',
           width: fullWidth ? '100%' : 'auto',
+          // Add a more prominent appearance
+          boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+          transition: 'all 0.2s ease',
           ...buttonStyle
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center' }}>
           <FarcasterLogoSvg />
-          {loading ? "Signing In..." : "Sign in"}
+          {loading || miniAppAuthInProgress ? "Signing In..." : "Sign in with Farcaster"}
         </span>
         {authError && <div style={{ color: 'red', marginTop: 8, fontSize: 12 }}>{authError}</div>}
         {children}
@@ -576,4 +595,4 @@ class ErrorBoundaryWrapper extends React.Component {
   }
 }
 
-export default SignInButton; 
+export default SignInButton;
