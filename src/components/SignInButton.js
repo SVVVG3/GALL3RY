@@ -9,7 +9,7 @@ import { cn } from '../utils/cn';
 import Avatar from './Avatar';
 import styled from 'styled-components';
 import { FiArrowRight } from 'react-icons/fi';
-import { handleMiniAppAuthentication, isMiniAppEnvironment } from '../utils/miniAppUtils';
+import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 import { signInWithFarcaster } from '../utils/authUtils';
 import { useProfile } from '../contexts/ProfileContext';
 
@@ -60,32 +60,6 @@ const generateNonce = () => {
   return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
 };
 
-const ButtonContainer = styled.button`
-  background-color: #8864FB; /* Farcaster purple */
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: none;
-  font-weight: 600;
-  font-size: 16px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  width: ${props => props.fullWidth ? '100%' : 'auto'};
-  
-  &:hover {
-    background-color: #7551ea;
-  }
-  
-  &:disabled {
-    background-color: #9e85e6;
-    cursor: not-allowed;
-  }
-`;
-
 /**
  * Enhanced SignInButton Component
  * With error handling and safe localStorage access
@@ -93,7 +67,7 @@ const ButtonContainer = styled.button`
  */
 const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showLabel = true, miniAppMode = 'auto', fullWidth, children, ...props }) => {
   const [authError, setAuthError] = useState(null);
-  const { isAuthenticated, user, loading } = useAuth();
+  const { isAuthenticated, user, loading, login } = useAuth();
   const { profile } = useProfile();
   const navigate = useNavigate();
   const buttonRef = useRef(null);
@@ -112,21 +86,28 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       console.log('Received miniAppAuthenticated event with data:', event.detail);
       
       if (event.detail) {
+        // Get user info from the event detail
+        const userInfo = event.detail;
+        
         // Make sure we have the username in the event detail
-        if (event.detail.username) {
-          console.log('Mini app authentication successful with username:', event.detail.username);
+        if (userInfo.username || userInfo.fid) {
+          // Ensure username exists, use fid as fallback
+          const username = userInfo.username || `user${userInfo.fid}`;
+          console.log('Mini app authentication successful with username:', username);
+          
+          // Update the local state if needed
           
           // Call onSuccess callback if provided
           if (typeof onSuccess === 'function') {
             onSuccess({
-              fid: event.detail.fid,
-              username: event.detail.username,
-              displayName: event.detail.displayName || event.detail.username,
-              pfp: event.detail.pfp
+              fid: userInfo.fid,
+              username: username,
+              displayName: userInfo.displayName || username,
+              pfp: userInfo.pfp
             });
           }
         } else {
-          console.error('Mini app authentication event missing username!', event.detail);
+          console.error('Mini app authentication event missing username and fid!', event.detail);
           setAuthError('Failed to get username from authentication');
           
           // Call onError callback if provided
@@ -152,14 +133,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         try {
           setMiniAppAuthInProgress(true);
           console.log('Auto-initiating mini app authentication');
-          const result = await handleMiniAppAuthentication();
-          
-          if (result && result.success && result.user) {
-            console.log('Auto mini app authentication successful:', result.user);
-          } else {
-            console.warn('Auto mini app authentication failed:', result?.error || 'Unknown error');
-            setAuthError('Failed to authenticate automatically');
-          }
+          await directMiniAppSignIn();
         } catch (error) {
           console.error('Error during auto mini app authentication:', error);
           setAuthError('Error during authentication');
@@ -178,17 +152,35 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     
     window.updateAuthState = ({ user, isAuthenticated }) => {
       // This will be called from miniAppUtils.js when auth happens
-      // We no longer need to use signIn.update, as we're dispatching an event now
       console.log('SignInButton: updateAuthState called with', { user, isAuthenticated });
+      
+      if (!user || !user.fid) {
+        console.error('SignInButton: updateAuthState called with invalid user data', user);
+        return;
+      }
+      
+      // Ensure username exists
+      const username = user.username || `user${user.fid}`;
+      
+      // Store user info in localStorage for persistence
+      const userInfo = {
+        fid: user.fid,
+        username: username,
+        displayName: user.displayName || username,
+        pfp: user.pfp || { url: null }
+      };
+      
+      // Store in both localStorage keys for consistency
+      try {
+        localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
+        localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+      } catch (e) {
+        console.error('Error storing user info in localStorage:', e);
+      }
       
       // Dispatch an event that our context will pick up
       const event = new CustomEvent('miniAppAuthenticated', {
-        detail: {
-          fid: user.fid,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          pfp: user.pfp
-        }
+        detail: userInfo
       });
       window.dispatchEvent(event);
     };
@@ -215,6 +207,155 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     </svg>
   );
 
+  // Direct implementation of sign-in using the SDK
+  const directMiniAppSignIn = async () => {
+    console.log("Attempting direct SDK sign-in");
+    
+    try {
+      // Check if SDK is available
+      if (!sdk || !sdk.actions || typeof sdk.actions.signIn !== 'function') {
+        console.error("SDK not properly initialized or signIn action not available");
+        setAuthError("SDK not available");
+        return { success: false, error: "SDK not available" };
+      }
+      
+      // Generate a nonce for authentication
+      const nonce = generateNonce();
+      console.log("Generated nonce for authentication:", nonce);
+      
+      // Call SDK's signIn method directly as per documentation
+      console.log("Calling sdk.actions.signIn...");
+      const signInResult = await sdk.actions.signIn({ nonce });
+      console.log("Sign-in result:", signInResult);
+      
+      // Get user info from context if available
+      let userInfo = null;
+      
+      // First try to get context from getContext method if available
+      try {
+        if (typeof sdk.getContext === 'function') {
+          console.log("Trying to get user info from sdk.getContext()");
+          const context = await sdk.getContext();
+          console.log("Context from getContext:", context);
+          
+          if (context && context.user && context.user.fid) {
+            userInfo = {
+              fid: context.user.fid,
+              username: context.user.username || `user${context.user.fid}`,
+              displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
+              pfp: { url: context.user.pfpUrl || null }
+            };
+            console.log("Got user info from getContext:", userInfo);
+          }
+        }
+      } catch (contextError) {
+        console.log("Error getting context from getContext:", contextError);
+      }
+      
+      // If getContext didn't work, try the sdk.context property
+      if (!userInfo && sdk.context && sdk.context.user) {
+        console.log("User context available from sdk.context:", sdk.context.user);
+        const user = sdk.context.user;
+        userInfo = {
+          fid: user.fid,
+          username: user.username || `user${user.fid}`,
+          displayName: user.displayName || user.username || `User ${user.fid}`,
+          pfp: { url: user.pfpUrl || null }
+        };
+        console.log("Got user info from sdk.context:", userInfo);
+      }
+      
+      // If no context available, try to extract from sign-in result as last resort
+      if (!userInfo && signInResult && signInResult.message) {
+        console.log("No user context available, trying to extract from sign-in result");
+        try {
+          // Try to parse the JWT token from the message
+          if (signInResult.message.includes('.')) {
+            const message = JSON.parse(atob(signInResult.message.split('.')[1]));
+            console.log("Parsed message from signInResult:", message);
+            
+            if (message.fid) {
+              userInfo = {
+                fid: message.fid,
+                username: message.username || `user${message.fid}`,
+                displayName: message.displayName || message.username || `User ${message.fid}`,
+                pfp: { url: null }
+              };
+              console.log("Extracted user info from sign-in result:", userInfo);
+            }
+          }
+        } catch (e) {
+          console.error("Could not parse user info from sign-in result", e);
+        }
+      }
+      
+      // If we still don't have user info, check if it's available in localStorage
+      if (!userInfo) {
+        try {
+          const storedUserInfo = localStorage.getItem('farcaster_user');
+          if (storedUserInfo) {
+            const parsedUserInfo = JSON.parse(storedUserInfo);
+            if (parsedUserInfo && parsedUserInfo.fid) {
+              userInfo = parsedUserInfo;
+              console.log("Retrieved user info from localStorage:", userInfo);
+            }
+          }
+        } catch (e) {
+          console.error("Error retrieving user info from localStorage:", e);
+        }
+      }
+      
+      if (userInfo && userInfo.fid) {
+        // Ensure username is present
+        if (!userInfo.username) {
+          userInfo.username = `user${userInfo.fid}`;
+          console.log("Added default username to user info:", userInfo);
+        }
+        
+        // Store ALL user info fields in localStorage
+        localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
+        console.log("Stored user info in localStorage:", userInfo);
+        
+        // ALSO store in miniAppUserInfo for consistency with other parts of the app
+        localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+        
+        // Update auth context if login function available
+        if (login) {
+          console.log("Calling login function with user info:", userInfo);
+          await login(userInfo);
+        }
+        
+        // Dispatch event for components to listen for
+        const event = new CustomEvent('miniAppAuthenticated', {
+          detail: userInfo
+        });
+        window.dispatchEvent(event);
+        
+        if (onSuccess) {
+          onSuccess(userInfo);
+        }
+        
+        return { success: true, user: userInfo, signInResult };
+      } else {
+        console.error("No valid user info after sign-in");
+        setAuthError("Failed to get user info");
+        return { success: false, error: "No valid user info after sign-in" };
+      }
+    } catch (error) {
+      console.error("Error during sign-in:", error);
+      
+      // Check specifically for RejectedByUser error
+      if (error.name === 'RejectedByUser') {
+        console.log("User rejected sign-in request");
+        setAuthError("Sign-in was cancelled");
+        return { success: false, error: "User rejected sign-in", rejected: true };
+      }
+      
+      setAuthError(`Authentication failed: ${error.message || "Unknown error"}`);
+      return { success: false, error: error.message || "Unknown error during sign-in" };
+    }
+  };
+
   const handleSignIn = async () => {
     console.log("SignInButton: handleSignIn called");
     try {
@@ -223,18 +364,12 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       if (isMiniApp) {
         console.log("SignInButton: Detected Mini App environment, authenticating...");
         try {
-          // Use the handleMiniAppAuthentication function which now correctly uses sdk.actions.signIn
-          const result = await handleMiniAppAuthentication();
+          // Use direct SDK implementation
+          const result = await directMiniAppSignIn();
           console.log("SignInButton: Authentication result:", result);
           
           if (result.success) {
             console.log("SignInButton: Successfully authenticated");
-            
-            // Call onSuccess callback if provided
-            if (typeof onSuccess === 'function') {
-              onSuccess(result.user);
-            }
-            
             return;
           } else {
             if (result.rejected) {
