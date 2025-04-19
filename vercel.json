@@ -10,14 +10,16 @@
       "config": {
         "installCommand": "npm install --no-save puppeteer"
       }
+    },
+    {
+      "src": "api/all-in-one.js",
+      "use": "@vercel/node",
+      "config": {
+        "memory": 1024,
+        "maxDuration": 60
+      }
     }
   ],
-  "functions": {
-    "api/all-in-one.js": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
