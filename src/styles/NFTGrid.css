@@ -28,13 +28,18 @@
 /* Responsive Grid Layouts */
 @media (max-width: 480px) {
   .nft-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    grid-gap: 12px !important;
+    grid-template-columns: 1fr !important;
+    grid-gap: 16px !important;
   }
   
   .nft-grid-container {
     max-width: 100% !important;
-    padding: 0 10px !important;
+    padding: 0 15px !important;
+  }
+  
+  .nft-card-container {
+    max-width: 100%;
+    margin: 0 auto 16px;
   }
 }
 

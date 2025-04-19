@@ -525,24 +525,7 @@
   }
   
   .nft-container {
-    padding: 0 5px;
-  }
-  
-  .sort-option, 
-  .sort-button,
-  .sort-order-toggle {
-    padding: 10px 12px;
-    min-height: 44px; /* Larger tap target */
-  }
-  
-  .nft-filter-input {
-    padding: 12px;
-    height: 44px;
-  }
-  
-  .nft-filter-clear {
-    width: 30px;
-    height: 30px;
+    padding: 0 10px;
   }
   
   .farcaster-search-container {
@@ -560,14 +543,38 @@
     object-fit: cover;
   }
   
-  /* Don't override NFTGrid styles */
-  /*.nft-image {
-    width: 100%;
-    height: auto;
-    object-fit: contain;
-  }*/
+  /* Sort button styling for mobile */
+  .sort-option, 
+  .sort-button,
+  .sort-order-toggle {
+    padding: 10px 12px;
+    min-height: 44px; /* Larger tap target */
+  }
   
+  .nft-filter-input {
+    padding: 12px;
+    height: 44px;
+  }
+  
+  .nft-filter-clear {
+    width: 30px;
+    height: 30px;
+  }
+  
+  /* NFT grid styling for mobile */
+  .farcaster-search-container .nft-grid {
+    grid-template-columns: 1fr !important;
+    grid-gap: 16px !important;
+  }
+  
+  .nft-display {
+    padding: 0;
+  }
+  
+  /* Improve mobile card appearance */
   .nft-card {
+    max-width: 100%;
+    margin: 0 auto;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
   
@@ -575,13 +582,14 @@
     padding: 10px;
   }
   
-  .nft-name {
-    font-size: 0.95rem;
-    margin-bottom: 3px;
+  /* Increase title size for better readability in single column */
+  .nft-title {
+    font-size: 16px;
+    margin-bottom: 4px;
   }
   
   .nft-collection {
-    font-size: 0.8rem;
+    font-size: 14px;
   }
 }
 
@@ -1387,17 +1395,32 @@
   
   .sort-options {
     flex: 1;
-    flex-wrap: wrap;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
+    margin-bottom: 8px;
+    width: 100%;
   }
   
   .sort-option {
-    padding: 8px 12px;
-    font-size: 13px;
+    padding: 10px;
+    font-size: 14px;
     text-align: center;
-    flex-grow: 1;
-    max-width: calc(25% - 6px);
+    width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: none;
+  }
+  
+  /* Create a second row for sort order toggle */
+  .sort-order-toggle {
+    margin-left: auto;
+    margin-right: 0;
+    width: auto;
+    min-width: 40px;
+    padding: 10px;
+    justify-content: center;
   }
 }
 
@@ -1868,12 +1891,27 @@
   }
   
   .farcaster-search-container .nft-grid {
-    grid-template-columns: repeat(2, 1fr) !important;
-    grid-gap: 12px !important;
+    grid-template-columns: 1fr !important;
+    grid-gap: 16px !important;
   }
   
   .nft-display {
     padding: 0;
+  }
+  
+  /* Improve mobile card appearance */
+  .nft-card {
+    max-width: 100%;
+    margin: 0 auto;
+  }
+  
+  /* Increase title size for better readability in single column */
+  .nft-title {
+    font-size: 16px;
+  }
+  
+  .nft-collection {
+    font-size: 14px;
   }
 }
 
@@ -1882,5 +1920,44 @@
   .farcaster-search-container .nft-grid {
     grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) !important;
     grid-gap: 14px !important;
+  }
+}
+
+/* =========================================
+   FINAL OVERRIDES FOR MOBILE NFT GRID
+   ========================================= */
+
+/* Override grid layout for mobile - IMPORTANT: Keep this at the end of the file */
+@media (max-width: 480px) {
+  /* Display as a single column */
+  .nft-grid,
+  .farcaster-search-container .nft-grid {
+    grid-template-columns: 1fr !important;
+    grid-gap: 16px !important;
+  }
+  
+  /* Fix sort options layout on mobile */
+  .sort-options {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    width: 100% !important;
+    margin-bottom: 8px !important;
+  }
+  
+  .sort-option {
+    padding: 10px !important;
+    font-size: 14px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-height: 44px !important;
+    max-width: none !important;
+  }
+  
+  /* Adjust card sizing for single column layout */
+  .nft-card-container,
+  .nft-card {
+    max-width: 100% !important;
+    margin: 0 auto 16px !important;
   }
 } 
