@@ -8,6 +8,9 @@ import './styles/errors.css'; // Import our new error styles
 import '@farcaster/auth-kit/styles.css';
 import { AuthKitProvider } from '@farcaster/auth-kit';
 
+// Import Mini App utilities
+import { initializeMiniApp, setupMiniAppEventListeners, isMiniAppEnvironment } from './utils/miniAppUtils';
+
 // Import all components directly to avoid lazy loading issues
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
@@ -85,29 +88,55 @@ class ErrorBoundary extends React.Component {
 function App() {
   const [loading, setLoading] = useState(true);
   const [appError, setAppError] = useState(null);
+  const [miniAppContext, setMiniAppContext] = useState(null);
+  const [isMiniApp, setIsMiniApp] = useState(false);
   
   // Initialize app on mount - reduced timer for faster loading
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 100); // Reduced from 1000ms to 100ms
-    
-    // Set theme-color meta tag to white to match body
-    try {
-      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
-      if (metaThemeColor) {
-        metaThemeColor.setAttribute('content', '#ffffff');
-      } else {
-        const meta = document.createElement('meta');
-        meta.name = 'theme-color';
-        meta.content = '#ffffff';
-        document.head.appendChild(meta);
+    const initApp = async () => {
+      try {
+        // Check if we're in a Mini App environment
+        const isInMiniApp = isMiniAppEnvironment();
+        setIsMiniApp(isInMiniApp);
+        
+        if (isInMiniApp) {
+          // Initialize Mini App SDK and get context
+          const context = await initializeMiniApp();
+          setMiniAppContext(context);
+          
+          // Set up event listeners for Mini App interactions
+          setupMiniAppEventListeners();
+          
+          console.log('Running in Mini App environment with context:', context);
+        } else {
+          console.log('Running in standard web environment');
+        }
+        
+        // Set theme-color meta tag to white to match body
+        try {
+          const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+          if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', '#ffffff');
+          } else {
+            const meta = document.createElement('meta');
+            meta.name = 'theme-color';
+            meta.content = '#ffffff';
+            document.head.appendChild(meta);
+          }
+        } catch (error) {
+          console.error('Failed to set theme-color:', error);
+        }
+        
+        // Complete loading
+        setLoading(false);
+      } catch (error) {
+        console.error('Error during app initialization:', error);
+        setAppError(error);
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Failed to set theme-color:', error);
-    }
+    };
     
-    return () => clearTimeout(timer);
+    initApp();
   }, []);
   
   // Handle any critical app errors
@@ -124,6 +153,18 @@ function App() {
   if (loading) {
     return <LoadingScreen />;
   }
+  
+  // Adjust styles for Mini App environment if needed
+  const appStyles = isMiniApp 
+    ? { 
+        maxWidth: '100%', 
+        padding: miniAppContext?.safeAreaInsets 
+          ? `${miniAppContext.safeAreaInsets.top}px ${miniAppContext.safeAreaInsets.right}px ${miniAppContext.safeAreaInsets.bottom}px ${miniAppContext.safeAreaInsets.left}px` 
+          : '0',
+        height: '100vh',
+        overflowY: 'auto'
+      } 
+    : {};
   
   // Return the app with a proper provider hierarchy
   return (
@@ -143,16 +184,19 @@ function App() {
         <AuthProvider>
           <WalletProvider>
             <Router>
-              <div className="app">
-                <header className="app-header">
-                  <div className="app-header-container">
-                    <Link to="/" className="logo-link">GALL3RY</Link>
-                    <div className="auth-container">
-                      <AuthStatusIndicator />
-                      <SignInButton />
+              <div className="app" style={appStyles}>
+                {/* Hide header in Mini App if needed or adjust its appearance */}
+                {(!isMiniApp || (isMiniApp && !miniAppContext?.hideHeader)) && (
+                  <header className="app-header">
+                    <div className="app-header-container">
+                      <Link to="/" className="logo-link">GALL3RY</Link>
+                      <div className="auth-container">
+                        <AuthStatusIndicator />
+                        <SignInButton />
+                      </div>
                     </div>
-                  </div>
-                </header>
+                  </header>
+                )}
                 
                 <main className="app-content">
                   <Routes>
@@ -171,16 +215,19 @@ function App() {
                   </Routes>
                 </main>
                 
-                <footer className="app-footer">
-                  <span>vibe coded with 💜 by</span><a 
-                    href="https://warpcast.com/svvvg3.eth" 
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="footer-link"
-                  >
-                    @svvvg3.eth
-                  </a>
-                </footer>
+                {/* Conditionally show footer based on environment */}
+                {!isMiniApp && (
+                  <footer className="app-footer">
+                    <span>vibe coded with 💜 by</span><a 
+                      href="https://warpcast.com/svvvg3.eth" 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="footer-link"
+                    >
+                      @svvvg3.eth
+                    </a>
+                  </footer>
+                )}
               </div>
             </Router>
           </WalletProvider>

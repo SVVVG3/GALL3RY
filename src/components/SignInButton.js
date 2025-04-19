@@ -6,6 +6,9 @@ import { Link, useNavigate } from 'react-router-dom';
 // We won't dynamically import the Farcaster components to avoid initialization issues
 import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
 
+// Import Mini App utilities
+import { isMiniAppEnvironment, handleMiniAppAuthentication } from '../utils/miniAppUtils';
+
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
                  window.document !== undefined;
@@ -34,14 +37,29 @@ const mobileStyles = `
   }
 `;
 
+// Generate a secure nonce for authentication
+const generateNonce = () => {
+  const array = new Uint8Array(16);
+  window.crypto.getRandomValues(array);
+  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+};
+
 /**
  * Enhanced SignInButton Component
  * With error handling and safe localStorage access
+ * Supports both web and Mini App authentication methods
  */
 const SignInButton = ({ onSuccess, redirectPath }) => {
-  const { isAuthenticated, logout, profile } = useAuth();
+  const { isAuthenticated, logout, profile, login } = useAuth();
   // Direct access to Farcaster auth kit for sign-in events
   const farcasterProfile = useProfile();
+  
+  const [isInMiniApp, setIsInMiniApp] = useState(false);
+  
+  // Check if running in Mini App environment
+  useEffect(() => {
+    setIsInMiniApp(isMiniAppEnvironment());
+  }, []);
   
   // Add direct console logging of Farcaster profile data
   useEffect(() => {
@@ -101,6 +119,53 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       setDropdownOpen(false);
       // Reset redirect flag
       setRedirected(false);
+    }
+  };
+
+  // Handle Mini App Sign In
+  const handleMiniAppSignIn = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      
+      // Generate a secure nonce
+      const nonce = generateNonce();
+      
+      // Use the Mini App SDK to initiate sign in
+      const authResult = await handleMiniAppAuthentication(nonce);
+      
+      if (authResult) {
+        console.log('Mini App authentication successful:', authResult);
+        
+        // Process the authentication result
+        // We'll need to handle this on the server side in a production app
+        // For now, we'll simulate a successful login with the authResult
+        
+        // Extract user info from the message
+        const messageLines = authResult.message.split('\n');
+        const fidLine = messageLines.find(line => line.includes('FID:'));
+        const fid = fidLine ? parseInt(fidLine.split(':')[1].trim()) : null;
+        
+        if (fid) {
+          // Fetch user info from your API using the FID
+          // For now, simulating with a simple login
+          await login({ fid });
+          
+          // Call success callback if provided
+          if (onSuccess && typeof onSuccess === 'function') {
+            onSuccess();
+          }
+        } else {
+          throw new Error('Could not extract FID from authentication result');
+        }
+      } else {
+        throw new Error('Authentication in Mini App environment failed');
+      }
+    } catch (error) {
+      console.error('Error signing in via Mini App:', error);
+      setError(error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -200,54 +265,21 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     );
   }
   
-  // If not authenticated, use the Farcaster auth button directly
+  // If in Mini App environment, show Mini App sign in button
+  if (isInMiniApp) {
+    return (
+      <button 
+        className="btn btn-primary mini-app-sign-in-button"
+        onClick={handleMiniAppSignIn}
+      >
+        Sign in with Farcaster
+      </button>
+    );
+  }
+  
+  // Default for unauthenticated web app - use Farcaster Auth Kit
   return (
-    <ErrorBoundaryWrapper>
-      <FarcasterSignInButton 
-        onSuccess={(result) => {
-          console.log('Farcaster sign-in success:', result);
-          
-          // Log success for debugging
-          if (isBrowser && window.sessionStorage) {
-            try {
-              window.sessionStorage.setItem('farcaster_auth_debug', 
-                JSON.stringify({
-                  timestamp: new Date().toISOString(),
-                  success: true,
-                  username: result?.username || 'unknown'
-                })
-              );
-            } catch (e) {
-              console.error('Failed to save auth debug info:', e);
-            }
-          }
-          
-          // onSuccess callback will be handled by the useEffect hook
-          if (onSuccess && typeof onSuccess === 'function') {
-            onSuccess(result);
-          }
-        }}
-        onError={(error) => {
-          console.error('Farcaster sign-in error:', error);
-          setError(error || new Error("Sign in failed"));
-          
-          // Log error for debugging
-          if (isBrowser && window.sessionStorage) {
-            try {
-              window.sessionStorage.setItem('farcaster_auth_error', 
-                JSON.stringify({
-                  timestamp: new Date().toISOString(),
-                  message: error?.message || 'Unknown error',
-                  stack: error?.stack
-                })
-              );
-            } catch (e) {
-              console.error('Failed to save auth error info:', e);
-            }
-          }
-        }}
-      />
-    </ErrorBoundaryWrapper>
+    <FarcasterSignInButton />
   );
 };
 

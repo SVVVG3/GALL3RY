@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useProfile } from '@farcaster/auth-kit';
+import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 
 // Check if we're in a browser environment
 const isBrowser = typeof window !== 'undefined';
@@ -61,6 +62,10 @@ export const useAuth = () => {
   // Using useMemo to create a properly formatted profile object that doesn't change unnecessarily
   const formattedProfile = useMemo(() => {
     if (!farcasterAuth.isAuthenticated || !farcasterAuth.profile) {
+      // Check if we have manually set profile data (for Mini App auth)
+      if (context.miniAppProfile) {
+        return context.miniAppProfile;
+      }
       return null;
     }
   
@@ -91,37 +96,124 @@ export const useAuth = () => {
       // Include the raw profile for debugging
       _rawProfile: farcasterAuth.profile
     };
-  }, [farcasterAuth.isAuthenticated, farcasterAuth.profile]);
+  }, [farcasterAuth.isAuthenticated, farcasterAuth.profile, context.miniAppProfile]);
+  
+  // Determine if authenticated in any environment (web or Mini App)
+  const isAuthenticated = farcasterAuth.isAuthenticated || context.isMiniAppAuthenticated;
+  
+  // Use Mini App profile if available, otherwise use the regular profile
+  const profile = context.miniAppProfile || formattedProfile;
   
   // Merge our context with Farcaster Auth Kit data
   return {
     ...context,
-    isAuthenticated: farcasterAuth.isAuthenticated,
-    profile: formattedProfile,
-    loading: farcasterAuth.loading,
+    isAuthenticated,
+    profile,
+    loading: farcasterAuth.loading || context.loading,
   };
 };
 
 // Auth provider component
 export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(null);
+  const [miniAppProfile, setMiniAppProfile] = useState(null);
+  const [isMiniAppAuthenticated, setIsMiniAppAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  
+  // Check if we're in a Mini App environment
+  const [isInMiniApp, setIsInMiniApp] = useState(false);
+  
+  useEffect(() => {
+    setIsInMiniApp(isMiniAppEnvironment());
+  }, []);
+  
+  // Fetch user data from Farcaster API by FID
+  const fetchUserDataByFid = async (fid) => {
+    try {
+      setLoading(true);
+      // In a real implementation, you would make an API call to fetch user data
+      // For now, we'll simulate a response
+      
+      // This simulates fetching data from your API
+      // In a real app, you would fetch this data from Farcaster's API or your own backend
+      const userData = {
+        fid,
+        username: `user${fid}`, // Simulate username based on FID
+        displayName: `User ${fid}`,
+        avatarUrl: `https://warpcast.com/~/icon-512.png`, // Default avatar
+        // Other profile data...
+      };
+      
+      return userData;
+    } catch (error) {
+      console.error('Error fetching user data:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Values to share in context (these will be merged with Farcaster Auth Kit in useAuth)
   const value = {
     token,
-    // These methods will use Farcaster Auth Kit under the hood
-    login: async () => {
-      // No need to implement actual login logic here as it's handled by Farcaster Auth Kit
-      return { success: true };
+    miniAppProfile,
+    isMiniAppAuthenticated,
+    loading,
+    error,
+    isInMiniApp,
+    
+    // Login method that works in both environments
+    login: async (authData) => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // If we have FID data (from Mini App auth), fetch the complete profile
+        if (authData && authData.fid) {
+          // Fetch user data based on FID
+          const userData = await fetchUserDataByFid(authData.fid);
+          
+          // Store the profile data
+          setMiniAppProfile(userData);
+          setIsMiniAppAuthenticated(true);
+          
+          // Store token if provided
+          if (authData.token) {
+            setToken(authData.token);
+            if (isBrowser) {
+              localStorage.setItem('auth_token', authData.token);
+            }
+          }
+          
+          return { success: true, profile: userData };
+        }
+        
+        // Web app login is handled by Farcaster Auth Kit
+        return { success: true };
+      } catch (err) {
+        setError(err);
+        return { success: false, error: err };
+      } finally {
+        setLoading(false);
+      }
     },
+    
+    // Logout method that works in both environments
     logout: () => {
-      // No need to implement actual logout logic here as it's handled by Farcaster Auth Kit
-      // The local token might still be useful for API calls
+      // Reset all auth state
       setToken(null);
+      setMiniAppProfile(null);
+      setIsMiniAppAuthenticated(false);
+      
+      // Clear stored data
       if (isBrowser) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('auth_profile');
+        localStorage.removeItem('farcaster_user');
       }
+      
+      // Note: Farcaster Auth Kit logout is handled by the kit itself
     }
   };
 

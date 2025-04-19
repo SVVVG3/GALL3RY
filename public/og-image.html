@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>GALL3RY OG Image</title>
+  <style>
+    body, html {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+        'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+        sans-serif;
+      background-color: #f5f5f5;
+      height: 640px;
+      width: 1200px;
+      overflow: hidden;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      padding: 40px;
+      box-sizing: border-box;
+      background: linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 40px;
+      max-width: 800px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      width: 240px;
+      height: 280px;
+      position: relative;
+    }
+    .card-image {
+      height: 220px;
+      width: 100%;
+      background-color: #7C3AED;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 30px;
+    }
+    .card-title {
+      padding: 12px;
+      font-weight: 600;
+      font-size: 16px;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .title {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #333;
+      text-align: center;
+    }
+    .subtitle {
+      font-size: 22px;
+      color: #666;
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    .footer {
+      position: absolute;
+      bottom: 30px;
+      font-size: 18px;
+      color: #666;
+    }
+    .accent {
+      color: #6100FF;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="title">GALL3RY</h1>
+    <p class="subtitle">Discover & explore NFT collections for Farcaster users</p>
+    
+    <div class="grid">
+      <div class="card">
+        <div class="card-image">NFT</div>
+        <div class="card-title">Purple Collection #1</div>
+      </div>
+      <div class="card">
+        <div class="card-image">NFT</div>
+        <div class="card-title">Purple Collection #2</div>
+      </div>
+      <div class="card">
+        <div class="card-image">NFT</div>
+        <div class="card-title">Purple Collection #3</div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      by <span class="accent">@svvvg3.eth</span> on Farcaster
+    </div>
+  </div>
+</body>
+</html> 

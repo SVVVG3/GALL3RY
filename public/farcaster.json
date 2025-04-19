@@ -1,0 +1,63 @@
+{
+  "name": "GALL3RY",
+  "description": "View and explore Farcaster users' NFT collections",
+  "version": "1.0.0",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "mini_app": {
+    "app_id": "gall3ry",
+    "themes": {
+      "light": {
+        "accent_color": "#6100FF"
+      },
+      "dark": {
+        "accent_color": "#7C3AED"
+      }
+    },
+    "permissions": [
+      "sign_in",
+      "add_frame",
+      "wallet",
+      "compose_cast"
+    ]
+  },
+  "screenshots": [
+    {
+      "src": "/screenshot1.png",
+      "sizes": "1284x2778",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "Home screen"
+    },
+    {
+      "src": "/screenshot2.png",
+      "sizes": "1284x2778",
+      "type": "image/png",
+      "platform": "narrow",
+      "label": "User profile view"
+    }
+  ],
+  "author": {
+    "name": "@svvvg3.eth",
+    "url": "https://warpcast.com/svvvg3.eth",
+    "fid": "6841"
+  },
+  "repository": "https://github.com/SVVVG3/GALL3RY",
+  "interfaces": [
+    "frame"
+  ],
+  "splash": {
+    "image_url": "/logo512.png",
+    "background_color": "#f5f5f5"
+  }
+} 
