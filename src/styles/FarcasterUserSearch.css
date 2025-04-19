@@ -704,7 +704,15 @@
 
 /* NFT section */
 .nft-section {
-  margin-bottom: 30px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 20px;
+  width: 100%;
+}
+
+.nft-section h2 {
+  font-size: 1.5rem;
+  margin-bottom: 10px;
 }
 
 /* NFT Section Header with Sorting Options */
@@ -968,151 +976,51 @@
 
 /* NFT Grid specific styles */
 .nft-section .nft-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  width: 100%;
+  /* Don't define grid display or columns here to avoid conflicts */
 }
 
-@media (min-width: 768px) {
-  .nft-section .nft-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-  }
-  
-  .user-profile {
-    max-width: 95%;
-    width: 100%;
-  }
-  
-  .farcaster-search-container {
-    max-width: 1200px;
-    width: 95%;
-  }
-  
-  .nft-container {
-    max-width: 100%;
-    padding: 0 20px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .nft-section .nft-grid {
-    grid-template-columns: repeat(4, 1fr);
-    gap: 24px;
-  }
-}
-
-@media (min-width: 1440px) {
-  .nft-section .nft-grid {
-    grid-template-columns: repeat(5, 1fr);
-  }
-  
-  .farcaster-search-container,
-  .user-profile {
-    max-width: 1400px;
+@media (max-width: 768px) {
+  .nft-section {
+    padding: 0 10px;
   }
 }
 
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
-  /* Ensure all text is Comic Sans with NO cursive styling */
-  .farcaster-user-search,
-  .farcaster-user-search *,
-  .farcaster-user-search h1,
-  .farcaster-user-search h2,
-  .farcaster-user-search h3,
-  .farcaster-user-search h4,
-  .farcaster-user-search h5,
-  .farcaster-user-search h6,
-  .farcaster-user-search p,
-  .farcaster-user-search button,
-  .farcaster-user-search input,
-  .farcaster-user-search a,
-  .nft-section-header h3,
-  .sort-option,
-  .nft-section h3,
-  .sort-options button,
-  .nft-filter-input,
-  .nft-filter-clear,
-  .filter-results-count,
-  .nft-count,
-  .nft-count-number {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  /* Mobile styles for text */
+  .user-search-form input[type="text"],
+  .user-search-form button {
     font-style: normal !important;
-    text-transform: none !important;
-    letter-spacing: normal !important;
+    font-family: var(--main-font), sans-serif !important;
   }
   
   /* Profile styles on mobile */
-  .profile-info .display-name {
-    font-size: 1.3rem;
-    margin-bottom: 0.2rem;
+  .user-profile {
+    padding: 15px;
   }
   
-  .profile-info .username {
-    font-size: 0.9rem;
-    margin-bottom: 0.2rem;
+  .user-profile-name {
+    font-size: 18px;
+  }
+  
+  /* More mobile adjustments */
+  .profile-image {
+    margin-right: 0;
+    margin-bottom: 15px;
+  }
+  
+  .username-container {
+    justify-content: center;
+  }
+  
+  .nft-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
   
   .nft-count {
-    font-size: 0.9rem;
-  }
-  
-  /* Override any potential italic or cursive styles */
-  .nft-section-header h3 {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-    font-style: normal !important;
-    font-weight: 600 !important;
-  }
-  
-  /* Make sure NFT grid is 2 columns on mobile */
-  .nft-section .nft-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-  }
-  
-  .wallet-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-  
-  .etherscan-link {
-    align-self: flex-start;
-    margin-top: 4px;
-  }
-  
-  .search-form {
-    max-width: 100%;
-    flex-direction: column;
-  }
-  
-  .search-input {
-    padding: 14px 20px;
-    font-size: 16px;
-    border-radius: 8px;
-    margin-bottom: 8px;
-    width: 100%;
-  }
-  
-  .search-button {
-    width: 100%;
-    border-radius: 8px;
-  }
-  
-  /* NFT Filter mobile styling */
-  .nft-filter-container {
-    margin: 10px 0 15px;
-  }
-  
-  .nft-filter-input {
-    font-size: 14px;
-    padding: 12px 36px 12px 14px;
-  }
-  
-  .nft-count-estimate {
-    font-size: 0.75rem;
-    margin-left: 0.3rem;
+    margin-top: 5px;
   }
 }
 

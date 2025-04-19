@@ -5,7 +5,7 @@
 /* Grid container */
 .nft-grid-container {
   width: 100%;
-  max-width: 100%;
+  max-width: 95vw;
   margin: 0 auto;
 }
 
@@ -22,24 +22,46 @@
 /* NFT Grid styles */
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-gap: 16px;
+  padding: 1rem 0;
   width: 100%;
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
+/* Media queries for responsive grid layout */
+@media (max-width: 480px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 16px;
+    grid-template-columns: repeat(2, 1fr);
+    grid-gap: 12px;
+  }
+  
+  .nft-card-container {
+    margin: 0;
   }
 }
 
-@media (max-width: 480px) {
+@media (min-width: 481px) and (max-width: 768px) {
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
+    grid-template-columns: repeat(3, 1fr);
+    grid-gap: 14px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  .nft-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 1025px) and (max-width: 1440px) {
+  .nft-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 1441px) {
+  .nft-grid {
+    grid-template-columns: repeat(6, 1fr);
   }
 }
 
