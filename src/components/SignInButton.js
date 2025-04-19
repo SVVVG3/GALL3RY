@@ -1,14 +1,17 @@
-import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, useRef } from 'react';
 // Import the hook directly to avoid initialization issues
 import { useAuth } from '../contexts/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { sdk } from '@farcaster/frame-sdk';
+import { useRouter } from 'next/router';
+import { cn } from '../utils/cn';
+import { Avatar } from '@/components/ui/avatar';
 
 // We won't dynamically import the Farcaster components to avoid initialization issues
 import { SignInButton as FarcasterSignInButton, useProfile } from '@farcaster/auth-kit';
 
 // Import Mini App utilities
-import { isMiniAppEnvironment, handleMiniAppAuthentication } from '../utils/miniAppUtils';
+import { isMiniAppEnvironment, handleMiniAppAuthentication, useIsMiniApp } from '../utils/miniAppUtils';
 
 // Check for browser environment
 const isBrowser = typeof window !== 'undefined' && 
@@ -59,312 +62,137 @@ const generateNonce = () => {
  * With error handling and safe localStorage access
  * Supports both web and Mini App authentication methods
  */
-const SignInButton = ({ onSuccess, redirectPath }) => {
-  const { isAuthenticated, logout, profile, login } = useAuth();
-  // Direct access to Farcaster auth kit for sign-in events
-  const farcasterProfile = useProfile();
-  
-  const [isInMiniApp, setIsInMiniApp] = useState(false);
-  const [isInWarpcastMobile, setIsInWarpcastMobile] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [redirected, setRedirected] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const navigate = useNavigate();
-  
-  // Check if running in Mini App environment
-  useEffect(() => {
-    setIsInMiniApp(isMiniAppEnvironment());
-    setIsInWarpcastMobile(isWarpcastMobile());
-    
-    // If we're in Warpcast mobile, prioritize context-based auth immediately
-    if (isWarpcastMobile() && !isAuthenticated) {
-      console.log("SignInButton: Detected Warpcast mobile, attempting immediate context auth");
-      (async () => {
-        try {
-          setIsLoading(true);
-          const context = await sdk.getContext();
-          
-          if (context && context.user && context.user.fid) {
-            const userData = {
-              fid: context.user.fid,
-              username: context.user.username || `user${context.user.fid}`,
-              displayName: context.user.displayName || `User ${context.user.fid}`,
-              pfp: context.user.pfpUrl || null,
-              token: 'context-auth' // Special marker to indicate auth from context
-            };
-            
-            console.log("SignInButton: Auto-login from Warpcast context:", userData);
-            await login(userData);
-          }
-        } catch (error) {
-          console.warn("SignInButton: Error in initial context check:", error);
-        } finally {
-          setIsLoading(false);
-        }
-      })();
-    }
-  }, [isAuthenticated, login]);
-  
-  // Auto-redirect to profile page after sign-in
-  useEffect(() => {
-    if (isAuthenticated && profile && profile.username && !redirected) {
-      console.log('User authenticated, profile available:', profile);
-      setRedirected(true);
-      
-      // If in a Mini App, we might want to skip redirection or handle it differently
-      if (!isInMiniApp) {
-        navigate(`/user/${profile.username}`);
-      }
-    }
-    
-    // Reset redirected state if user logs out
-    if (!isAuthenticated) {
-      setRedirected(false);
-    }
-  }, [isAuthenticated, profile, navigate, redirected, isInMiniApp]);
-  
-  // Handle sign out with extra error protection
-  const handleSignOut = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Check browser environment before trying to sign out
-      if (!isBrowser) {
-        throw new Error("Cannot sign out in non-browser environment");
-      }
-      
-      await logout();
-      
-      // Call success callback if provided
-      if (onSuccess && typeof onSuccess === 'function') {
-        onSuccess();
-      }
-    } catch (error) {
-      console.error('Error signing out:', error);
-      setError(error);
-    } finally {
-      setIsLoading(false);
-      setDropdownOpen(false);
-      // Reset redirect flag
-      setRedirected(false);
-    }
-  };
+function SignInButton({ className, fullWidth, loading, size = "md", children, ...props }) {
+  const { user, isAuthenticated, signIn, signOut } = useAuth();
+  const buttonRef = useRef(null);
+  const router = useRouter();
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const isMiniApp = useIsMiniApp();
 
-  // Handle Mini App Sign In - using direct SDK access
-  const handleMiniAppSignIn = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      
-      // Generate a secure nonce
-      const nonce = generateNonce();
-      
-      // Use the SDK directly to avoid any issues
-      if (sdk.actions && typeof sdk.actions.signIn === 'function') {
-        console.log('Using Farcaster Frame SDK for sign-in');
-        
-        // First, try to get context - might already have user info on mobile
-        let userData = null;
-        
-        try {
-          const context = await sdk.getContext();
-          console.log('Mini App context:', context);
-          
-          // If we have user info in the context, use that directly
-          if (context && context.user && context.user.fid) {
-            userData = {
-              fid: context.user.fid,
-              username: context.user.username || `user${context.user.fid}`,
-              displayName: context.user.displayName || `User ${context.user.fid}`,
-              pfp: context.user.pfpUrl || null,
-              token: 'context-auth' // Mark this as context-based auth
-            };
-            
-            console.log('User already authenticated in Warpcast, using context data:', userData);
-            await login(userData);
-            
-            if (onSuccess && typeof onSuccess === 'function') {
-              onSuccess(userData);
-            }
-            
-            return;
-          }
-        } catch (contextError) {
-          console.warn('Error getting Mini App context:', contextError);
-        }
-        
-        // If we couldn't get user data from context, try the sign-in method
-        console.log('No user data in context, attempting sign-in with nonce:', nonce);
-        const authResult = await sdk.actions.signIn({ nonce });
-        console.log('Mini App direct auth result:', authResult);
-        
-        // Process the authentication result
-        if (authResult) {
-          // Try to extract FID from the message
-          let fid = null;
-          
-          // Check for FID in data first
-          if (authResult.data?.fid) {
-            fid = authResult.data.fid;
-          }
-          // Fall back to parsing from message
-          else if (authResult.message) {
-            const fidMatch = authResult.message.match(/(?:fid|FID):\s*(\d+)/i);
-            fid = fidMatch ? parseInt(fidMatch[1], 10) : null;
-          }
-          
-          if (fid) {
-            console.log('Extracted FID from auth result:', fid);
-            // Create user info with FID
-            userData = {
-              fid,
-              username: authResult.data?.username || `user${fid}`,
-              displayName: authResult.data?.displayName || `User ${fid}`,
-              token: authResult.signature,
-              message: authResult.message
-            };
-            
-            // Login with this user info
-            await login(userData);
-            
-            // Call success callback if provided
-            if (onSuccess && typeof onSuccess === 'function') {
-              onSuccess(userData);
-            }
-            
-            return;
-          }
-        }
-        
-        throw new Error('Could not extract user info from authentication result');
-      } else {
-        throw new Error('Sign-in function not available in this environment');
+  // Listen for miniAppAuthenticated event
+  useEffect(() => {
+    const handleMiniAppAuth = (event) => {
+      console.log("Mini App authentication detected", event.detail);
+      // Force refresh component when Mini App auth happens
+      if (event.detail && event.detail.userInfo) {
+        setIsSigningIn(false);
       }
-    } catch (error) {
-      console.error('Error signing in via Mini App:', error);
-      setError(error);
-    } finally {
-      setIsLoading(false);
-      
-      // Make sure splash screen is dismissed regardless of auth result
+    };
+    
+    window.addEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    
+    // Check if we have user info in localStorage from Mini App
+    const storedUserInfo = localStorage.getItem('miniAppUserInfo');
+    if (storedUserInfo && !isAuthenticated && !user) {
       try {
-        if (sdk.actions && typeof sdk.actions.ready === 'function') {
-          await sdk.actions.ready();
+        const parsedUserInfo = JSON.parse(storedUserInfo);
+        if (parsedUserInfo && parsedUserInfo.fid) {
+          if (window.updateAuthState) {
+            window.updateAuthState({
+              user: parsedUserInfo,
+              isAuthenticated: true
+            });
+          }
         }
       } catch (e) {
-        console.warn('Error dismissing splash screen after sign-in attempt:', e);
+        console.error("Error parsing stored Mini App user info", e);
       }
+    }
+    
+    return () => {
+      window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    };
+  }, [isAuthenticated, user]);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    
+    try {
+      if (isMiniApp) {
+        await handleMiniAppAuthentication();
+      } else {
+        await signIn();
+      }
+    } catch (error) {
+      console.error("Sign in error:", error);
+    } finally {
+      setIsSigningIn(false);
     }
   };
 
-  // Close dropdown when clicking outside
+  // Create a global function to update auth state (used by miniAppUtils)
   useEffect(() => {
-    if (dropdownOpen) {
-      const handleClickOutside = (event) => {
-        if (!event.target.closest('.user-profile-dropdown')) {
-          setDropdownOpen(false);
-        }
-      };
-      
-      document.addEventListener('click', handleClickOutside);
-      return () => document.removeEventListener('click', handleClickOutside);
-    }
-  }, [dropdownOpen]);
-  
-  // If there's an error
-  if (error) {
+    window.updateAuthState = ({ user, isAuthenticated }) => {
+      // This will be called from miniAppUtils.js when auth happens
+      if (signIn && typeof signIn.update === 'function') {
+        signIn.update({ user, isAuthenticated });
+      }
+    };
+    
+    return () => {
+      window.updateAuthState = undefined;
+    };
+  }, [signIn]);
+
+  if (isAuthenticated && user) {
     return (
-      <button 
-        className="btn btn-error"
-        onClick={() => setError(null)}
-        title={error.message}
-      >
-        Error
-      </button>
-    );
-  }
-  
-  // If loading
-  if (isLoading) {
-    return (
-      <button 
-        className="btn btn-primary"
-        disabled
-      >
-        <span className="loading-indicator">Loading...</span>
-      </button>
-    );
-  }
-  
-  // If authenticated, show user profile with dropdown
-  if (isAuthenticated && profile) {
-    return (
-      <div className="user-profile-dropdown">
-        <div 
-          className="user-profile-button"
-          onClick={() => setDropdownOpen(!dropdownOpen)}
+      <div className="flex items-center">
+        <button
+          onClick={() => router.push(`/${user.username}`)}
+          className={cn(
+            "flex items-center gap-2 rounded-md text-sm font-medium",
+            className
+          )}
+          {...props}
         >
-          <img 
-            src={profile.avatarUrl || profile.pfp || 'https://warpcast.com/~/icon-512.png'} 
-            alt={profile.username}
-            className="profile-avatar" 
-            style={{width: '32px', height: '32px', borderRadius: '50%', marginRight: '8px'}}
-          />
-          <span className="profile-username">@{profile.username}</span>
-        </div>
-        
-        {dropdownOpen && (
-          <div className="dropdown-menu">
-            <Link 
-              to={`/user/${profile.username}`} 
-              className="dropdown-item"
-              onClick={() => setDropdownOpen(false)}
-            >
-              My Gallery
-            </Link>
-            <button 
-              className="dropdown-item sign-out"
-              onClick={handleSignOut}
-            >
-              Sign Out
-            </button>
+          <div className="flex items-center gap-2">
+            <Avatar
+              src={user.pfp?.url || ""}
+              alt={user.displayName || user.username}
+              size="sm"
+            />
+            <div className="flex-col items-start hidden sm:flex">
+              <span className="text-sm font-medium">
+                {user.displayName || user.username}
+              </span>
+            </div>
           </div>
-        )}
+        </button>
       </div>
     );
   }
-  
-  // If in Mini App environment, use the Mini App SignInButton
-  if (isInMiniApp) {
-    // Special case for Warpcast Mobile - show a more specific button
-    if (isInWarpcastMobile) {
-      return (
-        <button 
-          className="btn btn-primary sign-in-button"
-          onClick={handleMiniAppSignIn}
-          disabled={isLoading}
-        >
-          {isLoading ? 'Signing In...' : 'Sign In with Warpcast'}
-        </button>
-      );
-    }
-    
-    return (
-      <button 
-        className="btn btn-primary sign-in-button"
-        onClick={handleMiniAppSignIn}
-        disabled={isLoading}
-      >
-        {isLoading ? 'Signing In...' : 'Sign In with Farcaster'}
-      </button>
-    );
-  }
-  
-  // For web, use the Farcaster Auth Kit button
-  return <FarcasterSignInButton />;
-};
+
+  return (
+    <button
+      ref={buttonRef}
+      onClick={handleSignIn}
+      disabled={isSigningIn || loading}
+      className={cn(
+        "flex items-center justify-center gap-2 rounded-md auth-kit-style",
+        "bg-[#9272F2] text-white px-4 py-2 font-medium hover:bg-[#7C5CD6] transition-all",
+        "border border-[#9272F2] text-sm",
+        {
+          "w-full": fullWidth,
+          "opacity-50 cursor-not-allowed": isSigningIn || loading,
+        },
+        className
+      )}
+      {...props}
+    >
+      <img
+        src="/assets/farcaster-logo.svg"
+        className="h-4 w-auto"
+        alt="Farcaster"
+      />
+      {isSigningIn || loading ? (
+        "Signing In..."
+      ) : (
+        isMiniApp ? "Sign in" : "Sign in"
+      )}
+      {children}
+    </button>
+  );
+}
 
 // Fallback button shown when the real one fails
 const FallbackSignInButton = () => (

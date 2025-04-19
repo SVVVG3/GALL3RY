@@ -142,6 +142,36 @@ function App() {
           try {
             console.log('Running in Mini App environment, initializing...');
             
+            // Initialize the global miniApp object for SDK access
+            if (typeof window !== 'undefined' && !window.miniApp) {
+              window.miniApp = {
+                getUserInfo: async () => {
+                  console.log('Getting user info from Mini App SDK');
+                  try {
+                    // Try to get context from the SDK
+                    const context = await sdk.getContext();
+                    console.log('Got context from SDK:', context);
+                    
+                    if (context && context.user) {
+                      return {
+                        fid: context.user.fid,
+                        username: context.user.username || `user${context.user.fid}`,
+                        displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
+                        pfp: {
+                          url: context.user.pfpUrl || null
+                        }
+                      };
+                    }
+                    // Fallback to empty user info
+                    return null;
+                  } catch (error) {
+                    console.error('Error getting Mini App user info:', error);
+                    return null;
+                  }
+                }
+              };
+            }
+            
             // STEP 1: Try to get context FIRST - before anything else
             let context = null;
             try {

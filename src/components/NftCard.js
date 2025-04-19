@@ -360,7 +360,8 @@ const NFTCard = ({ nft }) => {
   // Enhanced check for user authentication across all environments
   // Check if user is authenticated with Farcaster OR through Mini App auth
   const userFid = profile?.fid || authProfile?.fid;
-  const showFriendsButton = isAuthenticated && userFid && contractAddress;
+  const isAuthValid = isAuthenticated && !!authProfile;
+  const showFriendsButton = isAuthValid && (userFid || (authProfile && authProfile.fid)) && contractAddress;
 
   console.log('NFTCard auth state:', { 
     isAuthenticated, 

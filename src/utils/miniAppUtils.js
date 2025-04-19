@@ -1,4 +1,5 @@
 import { sdk } from '@farcaster/frame-sdk';
+import React from 'react';
 
 // Add detailed debugging at the top of the file
 const DEBUG_MINI_APP = true;
@@ -71,6 +72,20 @@ export const isMiniAppEnvironment = () => {
     console.warn('Error checking Mini App environment:', e);
     return false;
   }
+};
+
+/**
+ * React hook to check if we're in a Mini App environment
+ * @returns {boolean} True if in a Mini App, false otherwise
+ */
+export const useIsMiniApp = () => {
+  const [isMiniApp, setIsMiniApp] = React.useState(false);
+  
+  React.useEffect(() => {
+    setIsMiniApp(isMiniAppEnvironment());
+  }, []);
+  
+  return isMiniApp;
 };
 
 /**
@@ -156,100 +171,45 @@ export const setupMiniAppEventListeners = () => {
  * @param {string} nonce - A secure nonce for authentication (if using SIWF)
  * @returns {Promise<Object|null>} Auth result or null if not in Mini App environment
  */
-export const handleMiniAppAuthentication = async (nonce) => {
-  if (!isMiniAppEnvironment()) {
-    logDebug('Not in Mini App environment, cannot authenticate');
-    return null;
-  }
-
+export const handleMiniAppAuthentication = async () => {
   try {
-    // Define a flag to track if we're in Warpcast mobile environment
-    // This is more accurate checking both UA and specific WebView markers
-    const isMobileWarpcast = typeof window !== 'undefined' && 
-                           (window.navigator.userAgent.includes('Warpcast') ||
-                            typeof window.__WARPCAST__ !== 'undefined' ||
-                            (typeof window.webkit !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(window.navigator.userAgent)));
-    
-    logDebug(`Authentication environment check: isMobileWarpcast=${isMobileWarpcast}`);
-    
-    // First, try to get context to see if user is already authenticated
-    // This is especially relevant for mobile Warpcast users
-    if (typeof sdk.getContext === 'function') {
-      try {
-        const context = await sdk.getContext();
-        logDebug('Got Mini App context:', context);
-        
-        if (context && context.user && context.user.fid) {
-          logDebug('Found authenticated user in context!', context.user);
-          // User is already authenticated in Warpcast, we can use this data
-          return {
-            success: true,
-            data: {
-              fid: context.user.fid,
-              username: context.user.username,
-              displayName: context.user.displayName,
-              pfp: { url: context.user.pfpUrl }
-            },
-            signature: 'context-auth', // Marker to show this came from context
-            message: `fid: ${context.user.fid}`,
-            source: 'context'
-          };
-        }
-      } catch (contextError) {
-        logDebug('Error getting context:', contextError);
-        // Continue to try explicit sign-in
-      }
-    }
-    
-    // Check if the SDK has the actions.signIn method
-    if (sdk.actions && typeof sdk.actions.signIn === 'function') {
-      // For Mini App environment, we can use the SDK's signIn method
-      logDebug(`Calling sdk.actions.signIn with nonce (isMobileWarpcast=${isMobileWarpcast})`);
-      
-      // If we're on mobile Warpcast, use a longer timeout since silent auth should work
-      const timeoutDuration = isMobileWarpcast ? 10000 : 5000;
-      
-      // Create a timeout to prevent hanging if signIn never resolves
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Authentication timed out')), timeoutDuration);
-      });
-      
-      // Race the actual sign-in against the timeout
-      const authResult = await Promise.race([
-        sdk.actions.signIn({ nonce }),
-        timeoutPromise
-      ]);
-      
-      logDebug('Auth result received:', authResult);
-      
-      // Ensure splash screen is dismissed after auth regardless of success/failure
-      try {
-        if (sdk.actions && typeof sdk.actions.ready === 'function') {
-          await sdk.actions.ready();
-          logDebug('Splash screen dismissed after auth');
-        }
-      } catch (e) {
-        logDebug('Error dismissing splash screen after auth:', e);
-      }
-      
-      return authResult;
-    } else {
-      logDebug('signIn method not available in this SDK version');
+    console.log('Handling Mini App Authentication');
+    if (!window.miniApp) {
+      console.error('Mini App SDK not initialized');
       return null;
     }
-  } catch (e) {
-    logDebug('Error authenticating in Mini App:', e);
-    
-    // Ensure splash screen is dismissed even if auth fails
-    try {
-      if (sdk.actions && typeof sdk.actions.ready === 'function') {
-        await sdk.actions.ready();
-        logDebug('Splash screen dismissed after auth error');
+
+    const userInfo = await window.miniApp.getUserInfo();
+    console.log('Mini App User Info:', userInfo);
+
+    if (userInfo && userInfo.fid) {
+      // Store auth info in localStorage for persistence
+      localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
+      
+      // Make sure this gets updated in the app state
+      if (window.updateAuthState) {
+        window.updateAuthState({
+          user: {
+            fid: userInfo.fid,
+            username: userInfo.username,
+            displayName: userInfo.displayName,
+            pfp: userInfo.pfp
+          },
+          isAuthenticated: true
+        });
       }
-    } catch (e2) {
-      logDebug('Error dismissing splash screen after auth error:', e2);
+      
+      // Dispatch a custom event to notify components about authentication
+      const authEvent = new CustomEvent('miniAppAuthenticated', { 
+        detail: { userInfo }
+      });
+      window.dispatchEvent(authEvent);
+      
+      return userInfo;
     }
-    
+    return null;
+  } catch (error) {
+    console.error('Error in Mini App Authentication:', error);
     return null;
   }
 };
