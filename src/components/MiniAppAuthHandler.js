@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
 import { handleMiniAppAuthentication } from '../utils/miniAppUtils';
-import { useAuth } from '../hooks/useAuth';
+import { useAuth } from '../contexts/AuthContext';
 
 /**
  * Component that handles automatic authentication in Mini App environments.
