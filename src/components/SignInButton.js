@@ -91,10 +91,12 @@ const ButtonContainer = styled.button`
  * With error handling and safe localStorage access
  * Supports both web and Mini App authentication methods
  */
-const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showLabel = true, miniAppMode = 'auto' }) => {
+const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showLabel = true, miniAppMode = 'auto', fullWidth, children, ...props }) => {
   const [authError, setAuthError] = useState(null);
   const { isAuthenticated, user, loading } = useAuth();
   const { profile } = useProfile();
+  const navigate = useNavigate();
+  const buttonRef = useRef(null);
   
   // Additional state for the mini app environment
   const [isMiniApp, setIsMiniApp] = useState(false);
@@ -176,15 +178,25 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     
     window.updateAuthState = ({ user, isAuthenticated }) => {
       // This will be called from miniAppUtils.js when auth happens
-      if (signIn && typeof signIn.update === 'function') {
-        signIn.update({ user, isAuthenticated });
-      }
+      // We no longer need to use signIn.update, as we're dispatching an event now
+      console.log('SignInButton: updateAuthState called with', { user, isAuthenticated });
+      
+      // Dispatch an event that our context will pick up
+      const event = new CustomEvent('miniAppAuthenticated', {
+        detail: {
+          fid: user.fid,
+          username: user.username,
+          displayName: user.displayName || user.username,
+          pfp: user.pfp
+        }
+      });
+      window.dispatchEvent(event);
     };
     
     return () => {
       window.updateAuthState = undefined;
     };
-  }, [signIn, isMiniApp]);
+  }, [isMiniApp]);
 
   // Create an inline SVG for the Farcaster logo to ensure it always renders
   const FarcasterLogoSvg = () => (
