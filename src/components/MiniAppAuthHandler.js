@@ -3,6 +3,33 @@ import { sdk } from '@farcaster/frame-sdk';
 import { useAuth } from '../contexts/AuthContext';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 
+// Safely access SDK property with explicit type conversion - prevents Symbol.toPrimitive errors
+const safeGetProperty = (obj, path, defaultVal = null) => {
+  if (!obj) return defaultVal;
+  
+  try {
+    const keys = path.split('.');
+    let result = obj;
+    
+    for (const key of keys) {
+      if (result === undefined || result === null) return defaultVal;
+      
+      // Using hasOwnProperty to check if the property exists
+      // This avoids triggering Symbol.toPrimitive
+      if (!Object.prototype.hasOwnProperty.call(result, key)) {
+        return defaultVal;
+      }
+      
+      result = result[key];
+    }
+    
+    return result;
+  } catch (e) {
+    console.error(`Error accessing property ${path}:`, e.message);
+    return defaultVal;
+  }
+};
+
 // Generate a secure nonce for authentication
 const generateNonce = () => {
   const array = new Uint8Array(16);
@@ -67,48 +94,51 @@ const MiniAppAuthHandler = () => {
         // SAFE: Only log booleans about existence, not the actual objects
         console.log('MiniAppAuthHandler: SDK context check:', {
           hasContext: !!sdk.context,
-          hasUser: sdk.context && !!sdk.context.user,
-          hasFid: sdk.context && sdk.context.user && !!sdk.context.user.fid
+          hasUser: safeGetProperty(sdk, 'context.user', false) ? true : false,
+          hasFid: safeGetProperty(sdk, 'context.user.fid', false) ? true : false
         });
         
         // First try direct context access (most reliable and fastest)
-        if (sdk.context && sdk.context.user && sdk.context.user.fid) {
-          // SAFE: Only log what properties exist, not their values
-          console.log('MiniAppAuthHandler: Found user properties:', {
-            hasFid: !!sdk.context.user.fid,
-            hasUsername: !!sdk.context.user.username,
-            hasDisplayName: !!sdk.context.user.displayName,
-            hasPfp: !!sdk.context.user.pfpUrl
-          });
-          
-          // SAFE: Create a clean object with only primitive values
-          const userData = {
-            fid: Number(sdk.context.user.fid || 0),
-            username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
-            displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
-                        (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
-            pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
-          };
-          
-          // SAFE: Log only the keys, not the values
-          console.log('MiniAppAuthHandler: Created user data object with keys:', Object.keys(userData));
-          
-          // Store in localStorage for persistence
+        const hasFid = safeGetProperty(sdk, 'context.user.fid', false);
+        if (hasFid) {
           try {
-            localStorage.setItem('farcaster_user', JSON.stringify(userData));
-            localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
-          } catch (storageError) {
-            console.error('Error storing user data:', storageError.message || 'Unknown error');
+            // SAFE: Only log what properties exist, not their values
+            console.log('MiniAppAuthHandler: Found user properties:', {
+              hasFid: !!safeGetProperty(sdk, 'context.user.fid', false),
+              hasUsername: !!safeGetProperty(sdk, 'context.user.username', false),
+              hasDisplayName: !!safeGetProperty(sdk, 'context.user.displayName', false),
+              hasPfp: !!safeGetProperty(sdk, 'context.user.pfpUrl', false)
+            });
+            
+            // SAFE: Create a clean object with only primitive values
+            const fid = safeGetProperty(sdk, 'context.user.fid', 0);
+            const username = safeGetProperty(sdk, 'context.user.username', `user${fid}`);
+            const displayName = safeGetProperty(sdk, 'context.user.displayName', username || `User ${fid}`);
+            const pfpUrl = safeGetProperty(sdk, 'context.user.pfpUrl', null);
+            
+            // Create a clean data object with NO references to the original SDK objects
+            const userData = {
+              fid: Number(fid),
+              username: String(username || `user${fid}`),
+              displayName: String(displayName || username || `User ${fid}`),
+              pfp: { url: pfpUrl ? String(pfpUrl) : null }
+            };
+            
+            // SAFE: Log only the keys, not the values
+            console.log('MiniAppAuthHandler: Created user data object with keys:', Object.keys(userData));
+            
+            // For the sake of avoiding storage errors - don't use localStorage
+            // in Mini App iframe for now. Just use the data directly.
+            console.log('MiniAppAuthHandler: Auto-login with FID:', userData.fid);
+            await login(userData);
+            
+            setAuthAttempted(true);
+            setIsAuthenticating(false);
+            setAuthenticating?.(false);
+            return;
+          } catch (error) {
+            console.error('MiniAppAuthHandler: Error processing user data:', error.message || 'Unknown error');
           }
-          
-          // Login with user data
-          console.log('MiniAppAuthHandler: Auto-login with FID:', userData.fid);
-          await login(userData);
-          
-          setAuthAttempted(true);
-          setIsAuthenticating(false);
-          setAuthenticating?.(false);
-          return;
         }
         
         // STEP 3: Try getContext() method if direct context access failed

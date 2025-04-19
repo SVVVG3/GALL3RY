@@ -8,18 +8,32 @@ import './styles/errors.css'; // Import our new error styles
 import '@farcaster/auth-kit/styles.css';
 import { AuthKitProvider } from '@farcaster/auth-kit';
 
-// Import the SDK directly and initialize IMMEDIATELY at the top level
+// Import the SDK directly but initialize only in browser
 import { sdk } from '@farcaster/frame-sdk';
 
-// Use the EXACT initialization pattern from the documentation
-// This needs to be as simple as possible
+// IMPORTANT: Add a check for browser environment first
 if (typeof window !== 'undefined') {
-  try {
-    // Simple initialization with no extra code
-    sdk.init();
-    console.log("SDK initialized");
-  } catch (e) {
-    console.error("SDK init error:", e.message);
+  // Initialize only when document is ready
+  const initSDK = () => {
+    try {
+      // Simple initialization with no extras
+      if (typeof sdk.init === 'function') {
+        sdk.init();
+        console.log("SDK initialized with sdk.init()");
+      } else {
+        console.warn("SDK init method not available");
+      }
+    } catch (e) {
+      console.error("SDK init error:", e.message || String(e));
+    }
+  };
+
+  // Initialize immediately if document is ready
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initSDK();
+  } else {
+    // Otherwise wait for DOMContentLoaded
+    window.addEventListener('DOMContentLoaded', initSDK);
   }
 }
 
