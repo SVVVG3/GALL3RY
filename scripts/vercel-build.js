@@ -1,8 +1,59 @@
 // Custom build script for Vercel
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 
 console.log('🔧 Running custom Vercel build script...');
+
+// Function to check if a package is installed and install it if missing
+function ensurePackageInstalled(packageName) {
+  try {
+    // Try to require the package to see if it's available
+    require.resolve(packageName);
+    console.log(`✅ Package ${packageName} is already installed`);
+  } catch (error) {
+    // If it's not installed, install it
+    console.log(`⚠️ Package ${packageName} is missing, installing...`);
+    try {
+      execSync(`npm install ${packageName}`, { stdio: 'inherit' });
+      console.log(`✅ Successfully installed ${packageName}`);
+    } catch (installError) {
+      console.error(`❌ Failed to install ${packageName}:`, installError.message);
+      process.exit(1); // Exit with error
+    }
+  }
+}
+
+// Ensure critical packages are installed
+console.log('🔍 Verifying essential packages...');
+ensurePackageInstalled('@farcaster/frame-sdk@0.0.35');
+
+// Function to update OG image URL in index.html
+function updateOgImageUrls() {
+  try {
+    const indexPath = path.join(__dirname, '../public/index.html');
+    console.log('📝 Updating OG image URLs in index.html...');
+
+    if (!fs.existsSync(indexPath)) {
+      console.warn('⚠️ index.html not found, skipping OG image URL updates');
+      return;
+    }
+
+    let content = fs.readFileSync(indexPath, 'utf8');
+    
+    // Replace all relative OG image references (%PUBLIC_URL%/og-image.png) with absolute URLs for production
+    const absoluteOgImageUrl = 'https://gall3ry.vercel.app/og-image.png';
+    content = content.replace(/%PUBLIC_URL%\/og-image.png/g, absoluteOgImageUrl);
+    
+    fs.writeFileSync(indexPath, content);
+    console.log('✅ OG image URLs updated successfully');
+  } catch (error) {
+    console.error('❌ Error updating OG image URLs:', error.message);
+  }
+}
+
+// Update OG image URLs for production
+updateOgImageUrls();
 
 // Function to load environment variables from .env file
 function loadEnvFile(filename) {

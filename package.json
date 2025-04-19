@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@farcaster/auth-kit": "^0.6.0",
+    "@farcaster/frame-sdk": "^0.0.35",
     "alchemy-sdk": "^3.5.6",
     "axios": "^1.8.4",
     "buffer": "^6.0.3",
@@ -35,7 +36,9 @@
     "start": "react-app-rewired start",
     "dev": "bash ./scripts/start-server.sh",
     "frontend": "react-app-rewired start",
-    "build": "react-app-rewired build",
+    "build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
+    "generate-og": "node scripts/generate-og-image.js",
+    "prebuild": "npm run generate-og",
     "vercel-build": "node scripts/vercel-build.js && CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
@@ -58,5 +61,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "canvas": "^3.1.0",
+    "puppeteer": "^24.6.1"
   }
 }

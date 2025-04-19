@@ -13,7 +13,7 @@ import { sdk } from '@farcaster/frame-sdk';
 export const isMiniAppEnvironment = () => {
   // Check if we're in a frame/mobile webview using the SDK
   try {
-    return sdk.isFrame();
+    return typeof sdk.isFrame === 'function' ? sdk.isFrame() : false;
   } catch (e) {
     console.warn('Error checking Mini App environment:', e);
     return false;
@@ -32,15 +32,19 @@ export const initializeMiniApp = async () => {
 
   try {
     // Initialize the SDK and handle app ready state
-    await sdk.ready();
-    
-    console.log('Mini App initialized successfully');
-    
-    // Get client context if available
-    const context = await sdk.getContext();
-    console.log('Mini App context:', context);
-    
-    return context;
+    if (typeof sdk.ready === 'function') {
+      await sdk.ready();
+      console.log('Mini App initialized successfully');
+      
+      // Get client context if available
+      if (typeof sdk.getContext === 'function') {
+        const context = await sdk.getContext();
+        console.log('Mini App context:', context);
+        return context;
+      }
+    } else {
+      console.log('sdk.ready function not available in this version');
+    }
   } catch (e) {
     console.error('Error initializing Mini App:', e);
   }
@@ -52,6 +56,12 @@ export const initializeMiniApp = async () => {
  */
 export const setupMiniAppEventListeners = () => {
   if (!isMiniAppEnvironment()) {
+    return;
+  }
+
+  // Make sure the SDK has an 'on' method before trying to use it
+  if (typeof sdk.on !== 'function') {
+    console.warn('Event listening not supported in this SDK version');
     return;
   }
 
@@ -79,10 +89,15 @@ export const handleMiniAppAuthentication = async (nonce) => {
   }
 
   try {
-    // For Mini App environment, we can use the SDK's signIn method
-    // This will return a signature and message that can be verified on the server
-    const authResult = await sdk.actions.signIn({ nonce });
-    return authResult;
+    // Check if the SDK has the actions.signIn method
+    if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+      // For Mini App environment, we can use the SDK's signIn method
+      const authResult = await sdk.actions.signIn({ nonce });
+      return authResult;
+    } else {
+      console.warn('signIn method not available in this SDK version');
+      return null;
+    }
   } catch (e) {
     console.error('Error authenticating in Mini App:', e);
     return null;
@@ -102,10 +117,18 @@ export const viewFarcasterProfile = async (fid) => {
   }
 
   try {
-    // In Mini App, use the SDK to view the profile
-    await sdk.actions.viewProfile({ fid });
+    // Check if the SDK has the actions.viewProfile method
+    if (sdk.actions && typeof sdk.actions.viewProfile === 'function') {
+      // In Mini App, use the SDK to view the profile
+      await sdk.actions.viewProfile({ fid });
+    } else {
+      console.warn('viewProfile method not available in this SDK version');
+      window.location.href = `/profile/${fid}`;
+    }
   } catch (e) {
     console.error('Error viewing profile in Mini App:', e);
+    // Fallback to regular navigation
+    window.location.href = `/profile/${fid}`;
   }
 };
 
@@ -124,8 +147,14 @@ export const composeCast = async ({ text, embeds }) => {
   }
 
   try {
-    const result = await sdk.actions.composeCast({ text, embeds });
-    return result;
+    // Check if the SDK has the actions.composeCast method
+    if (sdk.actions && typeof sdk.actions.composeCast === 'function') {
+      const result = await sdk.actions.composeCast({ text, embeds });
+      return result;
+    } else {
+      console.warn('composeCast method not available in this SDK version');
+      return null;
+    }
   } catch (e) {
     console.error('Error composing cast in Mini App:', e);
     return null;
