@@ -99,19 +99,6 @@ function App() {
         const isInMiniApp = isMiniAppEnvironment();
         setIsMiniApp(isInMiniApp);
         
-        if (isInMiniApp) {
-          // Initialize Mini App SDK and get context
-          const context = await initializeMiniApp();
-          setMiniAppContext(context);
-          
-          // Set up event listeners for Mini App interactions
-          setupMiniAppEventListeners();
-          
-          console.log('Running in Mini App environment with context:', context);
-        } else {
-          console.log('Running in standard web environment');
-        }
-        
         // Set theme-color meta tag to white to match body
         try {
           const metaThemeColor = document.querySelector('meta[name="theme-color"]');
@@ -127,8 +114,26 @@ function App() {
           console.error('Failed to set theme-color:', error);
         }
         
-        // Complete loading
+        // Set app as loaded first
         setLoading(false);
+        
+        // After the UI is ready to display, initialize the Mini App
+        // This ensures we only dismiss the splash screen when our content is ready
+        if (isInMiniApp) {
+          // Initialize Mini App SDK and get context
+          const context = await initializeMiniApp({
+            // Set to true if your app has gestures that might conflict with the container app
+            disableNativeGestures: false
+          });
+          setMiniAppContext(context);
+          
+          // Set up event listeners for Mini App interactions
+          setupMiniAppEventListeners();
+          
+          console.log('Running in Mini App environment with context:', context);
+        } else {
+          console.log('Running in standard web environment');
+        }
       } catch (error) {
         console.error('Error during app initialization:', error);
         setAppError(error);

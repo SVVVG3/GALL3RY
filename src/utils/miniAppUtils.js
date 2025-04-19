@@ -23,17 +23,21 @@ export const isMiniAppEnvironment = () => {
 /**
  * Initialize the Mini App SDK if we're in a Mini App environment
  * Call this early in the app initialization
+ * @param {Object} options - Options for initialization
+ * @param {boolean} options.disableNativeGestures - Whether to disable native gestures
  * @returns {Promise<void>}
  */
-export const initializeMiniApp = async () => {
+export const initializeMiniApp = async (options = {}) => {
   if (!isMiniAppEnvironment()) {
     return;
   }
 
   try {
-    // Initialize the SDK and handle app ready state
-    if (typeof sdk.ready === 'function') {
-      await sdk.ready();
+    // Initialize the SDK and tell Farcaster our interface is ready to display
+    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+      await sdk.actions.ready({
+        disableNativeGestures: options.disableNativeGestures || false
+      });
       console.log('Mini App initialized successfully');
       
       // Get client context if available
@@ -43,7 +47,7 @@ export const initializeMiniApp = async () => {
         return context;
       }
     } else {
-      console.log('sdk.ready function not available in this version');
+      console.log('sdk.actions.ready function not available in this version');
     }
   } catch (e) {
     console.error('Error initializing Mini App:', e);
