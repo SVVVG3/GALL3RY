@@ -1,5 +1,8 @@
-import React, { useState, useEffect, Suspense, useRef } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import React, { useState, useEffect, Suspense, useRef, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 import './App.css';
 import './styles/app.css';
 import './styles/folder.css';
@@ -13,18 +16,21 @@ import { sdk } from '@farcaster/frame-sdk';
 
 // IMPORTANT: Add a check for browser environment first
 if (typeof window !== 'undefined') {
+  // Make SDK globally accessible
+  window.farcasterSdk = sdk;
+  
   // Initialize only when document is ready
   const initSDK = () => {
     try {
-      // Simple initialization with no extras
-      if (typeof sdk.init === 'function') {
-        sdk.init();
-        console.log("SDK initialized with sdk.init()");
-      } else {
-        console.warn("SDK init method not available");
-      }
+      console.log("Initializing Farcaster SDK...");
+      // Simple initialization
+      sdk.init();
+      console.log("✅ SDK initialized successfully");
+      
+      // Also expose to window.sdk for compatibility
+      window.sdk = sdk;
     } catch (e) {
-      console.error("SDK init error:", e.message || String(e));
+      console.error("❌ SDK init error:", e.message || String(e));
     }
   };
 
@@ -38,7 +44,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Import Mini App utilities
-import { initializeMiniApp, setupMiniAppEventListeners, isMiniAppEnvironment } from './utils/miniAppUtils';
+import { initializeMiniApp, setupMiniAppEventListeners, isMiniAppEnvironment, isValidAndNonEmptyUserObject } from './utils/miniAppUtils';
 
 // Import all components directly to avoid lazy loading issues
 import { AuthProvider } from './contexts/AuthContext';
@@ -54,6 +60,7 @@ import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
 import MiniAppAuthHandler from './components/MiniAppAuthHandler';
+import { NetworkStatus } from './components/NetworkStatus';
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -144,47 +151,75 @@ if (typeof window !== 'undefined') {
   dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
 }
 
-// Simple function to get user context
-const getWarpcastContext = async () => {
+// Helper function to safely get user info from SDK context
+const getUserInfoFromContext = async () => {
   try {
-    if (sdk && typeof sdk.getContext === 'function') {
-      const context = await sdk.getContext();
-      console.log('Early context check:', context);
-      return context;
+    // First check if SDK is available and initialized
+    if (!sdk) {
+      console.log('SDK not available for context check');
+      return null;
     }
-  } catch (e) {
-    console.warn('Error getting early context:', e);
-  }
-  return null;
-};
-
-// Helper function to get user info from SDK context
-const getUserInfoFromContext = () => {
-  if (!sdk || !sdk.context || !sdk.context.user) {
+    
+    console.log('Checking for user info in SDK context');
+    
+    // Try to get context using getContext method
+    if (typeof sdk.getContext === 'function') {
+      try {
+        const context = await sdk.getContext();
+        console.log('Context retrieved:', context ? 'yes' : 'no');
+        
+        if (context && context.user) {
+          // Create a clean user data object with primitive values
+          const userData = {
+            fid: context.user.fid ? Number(context.user.fid) : null,
+            username: context.user.username ? String(context.user.username) : null,
+            displayName: context.user.displayName ? String(context.user.displayName) : 
+                        (context.user.username ? String(context.user.username) : null),
+            pfp: {
+              url: context.user.pfpUrl ? String(context.user.pfpUrl) : null
+            }
+          };
+          
+          // Only return if we have at least fid and username
+          if (userData.fid && userData.username) {
+            console.log('Found valid user in context:', {
+              fid: userData.fid,
+              username: userData.username
+            });
+            return userData;
+          }
+        }
+      } catch (error) {
+        console.error('Error getting context:', error);
+      }
+    }
+    
+    // Fallback to direct context access if method failed
+    if (sdk.context && sdk.context.user) {
+      const userData = {
+        fid: sdk.context.user.fid ? Number(sdk.context.user.fid) : null,
+        username: sdk.context.user.username ? String(sdk.context.user.username) : null,
+        displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                    (sdk.context.user.username ? String(sdk.context.user.username) : null),
+        pfp: {
+          url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null
+        }
+      };
+      
+      // Only return if we have at least fid and username
+      if (userData.fid && userData.username) {
+        console.log('Found valid user in sdk.context:', {
+          fid: userData.fid,
+          username: userData.username
+        });
+        return userData;
+      }
+    }
+    
+    console.log('No valid user info found in SDK context');
     return null;
-  }
-  
-  try {
-    // SAFE: Create a clean object with ONLY primitive values
-    // NEVER return or log the original SDK objects directly
-    const userData = {
-      fid: sdk.context.user.fid ? Number(sdk.context.user.fid) : null,
-      username: sdk.context.user.username ? String(sdk.context.user.username) : null,
-      displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : null,
-      pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
-    };
-    
-    // Add fallbacks for missing values
-    if (userData.fid && !userData.username) {
-      userData.username = `user${userData.fid}`;
-    }
-    if (userData.fid && !userData.displayName) {
-      userData.displayName = userData.username || `User ${userData.fid}`;
-    }
-    
-    return userData;
   } catch (error) {
-    console.error("Error extracting user info from context:", error.message || "Unknown error");
+    console.error('Error in getUserInfoFromContext:', error);
     return null;
   }
 };
@@ -196,6 +231,7 @@ function App() {
   const [miniAppContext, setMiniAppContext] = useState(null);
   const [isMiniApp, setIsMiniApp] = useState(false);
   const authContextRef = useRef(null);
+  const location = useLocation();
   
   // Initialize the app on mount
   useEffect(() => {
@@ -244,7 +280,7 @@ function App() {
                 }
                 
                 // Extract user data safely using our helper function
-                const userData = getUserInfoFromContext();
+                const userData = await getUserInfoFromContext();
                 
                 if (userData && userData.fid) {
                   console.log('🔑 Found valid user data with username:', userData.username || 'unknown');
@@ -342,6 +378,22 @@ function App() {
       // Make auth context available globally for components that need it
       window.authContextRef = authContextRef;
     }
+  }, []);
+  
+  // Listen for authentication events
+  useEffect(() => {
+    const handleMiniAppAuth = (event) => {
+      console.log('App received miniAppAuthenticated event with data:', event.detail);
+      if (event.detail && event.detail.fid) {
+        setMiniAppContext(event.detail);
+      }
+    };
+    
+    window.addEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    
+    return () => {
+      window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    };
   }, []);
   
   // Handle any critical app errors

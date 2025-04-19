@@ -194,7 +194,12 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
   // Auto-authenticate in mini app environment if desired
   useEffect(() => {
     const autoAuth = async () => {
-      if (isMiniApp && (miniAppMode === 'auto' || miniAppMode === true) && !isAuthenticated && !miniAppAuthInProgress) {
+      // Add additional check for SDK initialization
+      if (isMiniApp && 
+          (miniAppMode === 'auto' || miniAppMode === true) && 
+          !isAuthenticated && 
+          !miniAppAuthInProgress && 
+          sdk) {  // Check that SDK is available
         try {
           setMiniAppAuthInProgress(true);
           console.log('Auto-initiating mini app authentication');
@@ -208,7 +213,12 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       }
     };
     
-    autoAuth();
+    // Add a small delay to ensure SDK is initialized
+    const timeoutId = setTimeout(() => {
+      autoAuth();
+    }, 500);
+    
+    return () => clearTimeout(timeoutId);
   }, [isMiniApp, miniAppMode, isAuthenticated, miniAppAuthInProgress, login]);
 
   // Create a global function to update auth state (used by miniAppUtils)
@@ -283,8 +293,8 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     console.log("Direct Mini App Sign In called");
     
     try {
-      // Check if SDK is defined
-      if (!window.sdk) {
+      // Check if SDK is defined - use the imported sdk instead of window.sdk
+      if (!sdk) {
         console.error("SDK is not defined");
         return false;
       }
@@ -301,8 +311,8 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         // Safely get context (avoid Symbol.toPrimitive issues)
         const getContextSafely = () => {
           try {
-            if (typeof window.sdk.getContext === 'function') {
-              return window.sdk.getContext();
+            if (typeof sdk.getContext === 'function') {
+              return sdk.getContext();
             }
             return null;
           } catch (e) {
@@ -346,7 +356,8 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         // If no user info from context, try sign-in
         if (!userInfo) {
           console.log("No user info from context, trying signIn");
-          const result = await window.sdk.signIn({ nonce });
+          // Use the imported sdk instead of window.sdk
+          const result = await sdk.signIn({ nonce });
           console.log("Sign in result:", result);
           
           if (result && typeof result === 'object') {
