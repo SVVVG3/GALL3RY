@@ -11,7 +11,7 @@
   display: flex !important;
   justify-content: center !important;
   align-items: center !important;
-  z-index: 2147483647 !important; /* Maximum possible z-index */
+  z-index: 1000 !important; /* Reduced z-index to be more reasonable */
   backdrop-filter: blur(4px) !important;
   pointer-events: all !important;
   will-change: opacity !important;
@@ -29,7 +29,7 @@
   display: flex !important;
   flex-direction: column !important;
   position: relative !important;
-  z-index: 2147483647 !important; /* Maximum possible z-index */
+  z-index: 1001 !important; /* Just above the overlay */
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3) !important;
   will-change: transform !important;
   transform: translateY(0) !important;

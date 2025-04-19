@@ -24,7 +24,6 @@
 
 .farcaster-user-search {
   width: 100%;
-  max-width: 800px;
   margin: 0 auto;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
@@ -33,7 +32,6 @@
 /* Search form */
 .search-form {
   width: 100%;
-  max-width: 600px;
   margin: 0 auto 2rem;
   display: flex;
   justify-content: center;
@@ -54,7 +52,6 @@
 .search-input-wrapper {
   display: flex;
   width: 100%;
-  max-width: 600px;
 }
 
 .search-input {
@@ -111,7 +108,6 @@
 /* User profile section with expanded width */
 .user-profile {
   width: 100%;
-  max-width: 95%;
   margin: 0 auto;
   background-color: var(--component-bg);
   border-radius: 12px;
@@ -140,7 +136,6 @@
   align-items: center;
   text-align: center;
   width: 100%;
-  max-width: 500px;
   margin: 0 auto;
 }
 
@@ -290,14 +285,10 @@
 
 /* NFT container with adjusted width */
 .nft-container {
+  margin-top: 2rem;
   width: 100%;
-  max-width: 100%;
-  padding: 0;
+  padding: 0 1rem;
   box-sizing: border-box;
-  overflow-x: hidden;
-  margin-top: 0;
-  background-color: white;
-  border-radius: 0 0 12px 12px;
 }
 
 /* Style the NFT header with reduced top padding */
@@ -1845,4 +1836,47 @@
 .nft-section {
   clear: both;
   width: 100%;
+}
+
+/* Fix for skinny column */
+.farcaster-search-container .nft-grid {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+  grid-gap: 20px !important;
+}
+
+/* Adjust container width for proper display */
+.nft-section {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.nft-section .nft-grid-container {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Mobile media query */
+@media (max-width: 480px) {
+  .nft-container {
+    padding: 0 10px;
+  }
+  
+  .farcaster-search-container .nft-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    grid-gap: 12px !important;
+  }
+  
+  .nft-display {
+    padding: 0;
+  }
+}
+
+/* Tablet media query */
+@media (min-width: 481px) and (max-width: 768px) {
+  .farcaster-search-container .nft-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+    grid-gap: 14px !important;
+  }
 } 
