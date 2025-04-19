@@ -90,7 +90,6 @@ export const useIsMiniApp = () => {
 
 /**
  * Initialize the Mini App SDK if we're in a Mini App environment
- * This is now a simple wrapper that just calls ready() - main logic is in App.js
  * @returns {Promise<void>}
  */
 export const initializeMiniApp = async () => {
@@ -103,39 +102,27 @@ export const initializeMiniApp = async () => {
   }
 
   try {
-    // Just call ready() - this should dismiss the splash screen
-    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+    // According to docs, we should call ready() to dismiss the splash screen
+    if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+      logDebug('Calling sdk.actions.ready() to dismiss splash screen');
       await sdk.actions.ready();
-      logDebug('Mini App ready() called successfully');
+      logDebug('Splash screen dismissed');
+      
+      // Also log the user context if available
+      if (sdk.context && sdk.context.user) {
+        logDebug('User context available:', sdk.context.user);
+      } else {
+        logDebug('No user context available yet');
+      }
+      
+      return sdk.context;
     } else {
       logDebug('sdk.actions.ready is not available, cannot dismiss splash screen');
     }
     
-    // Try to get context
-    let context = null;
-    if (typeof sdk.getContext === 'function') {
-      try {
-        context = await sdk.getContext();
-        logDebug('Mini App context received:', context);
-      } catch (error) {
-        logDebug('Error getting context:', error);
-      }
-    }
-    
-    return context;
+    return null;
   } catch (e) {
     logDebug('Error in initializeMiniApp:', e);
-    
-    // Always try to call ready() one more time to ensure splash screen is dismissed
-    try {
-      if (sdk.actions && typeof sdk.actions.ready === 'function') {
-        await sdk.actions.ready();
-        logDebug('Secondary ready() call succeeded');
-      }
-    } catch (e2) {
-      logDebug('Secondary ready() call also failed:', e2);
-    }
-    
     return { error: e.message };
   }
 };
@@ -174,80 +161,88 @@ export const handleMiniAppAuthentication = async () => {
   try {
     console.log('Mini App Authentication: Starting authentication process');
     
-    // First check if the Mini App SDK is initialized
-    if (!window.miniApp) {
-      console.error('Mini App Authentication: SDK not initialized');
-      return { success: false, error: 'SDK not initialized' };
+    // Check if we have the SDK available
+    if (typeof sdk === 'undefined' || !sdk) {
+      console.error('Mini App Authentication: Frame SDK not initialized');
+      return { success: false, error: 'Frame SDK not initialized' };
     }
 
-    // Get cached user info from localStorage if available
-    const cachedUserInfo = localStorage.getItem('farcaster_user');
-    let userInfo = null;
-
-    if (cachedUserInfo) {
-      try {
-        userInfo = JSON.parse(cachedUserInfo);
-        console.log('Mini App Authentication: Found cached user info', userInfo);
-      } catch (e) {
-        console.warn('Mini App Authentication: Error parsing cached user info', e);
-      }
-    }
-
-    // If we don't have cached user info or it's incomplete, fetch it from the SDK
-    if (!userInfo || !userInfo.username) {
-      console.log('Mini App Authentication: Fetching user info from SDK');
-      try {
-        // Get user info from the mini app SDK
-        userInfo = await window.miniApp.getUserInfo();
-        console.log('Mini App Authentication: SDK returned user info', userInfo);
+    // Generate a secure nonce for authentication
+    const generateNonce = () => {
+      const array = new Uint8Array(16);
+      window.crypto.getRandomValues(array);
+      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    };
+    
+    const nonce = generateNonce();
+    console.log('Mini App Authentication: Generated nonce for authentication');
+    
+    try {
+      // Use the SDK's signIn method to authenticate the user
+      const signInResult = await sdk.actions.signIn({ nonce });
+      console.log('Mini App Authentication: Sign in successful', signInResult);
+      
+      // Get user context from the SDK
+      const userContext = sdk.context?.user;
+      console.log('Mini App Authentication: User context from SDK', userContext);
+      
+      if (userContext && userContext.fid) {
+        // Create a user object from the context
+        const userInfo = {
+          fid: userContext.fid,
+          username: userContext.username || `user${userContext.fid}`,
+          displayName: userContext.displayName || userContext.username || `User ${userContext.fid}`,
+          pfp: { url: userContext.pfpUrl || null }
+        };
         
         // Store the user info in localStorage for persistence
         localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-      } catch (error) {
-        console.error('Mini App Authentication: Error getting user info from SDK', error);
-      }
-    }
-
-    // If we have user info with FID, consider it a successful authentication
-    if (userInfo && userInfo.fid) {
-      console.log('Mini App Authentication: Successfully authenticated user with FID', userInfo.fid);
-      
-      // Get any auth context that might exist from React
-      const authContext = window._authContext || null;
-      
-      // Directly set the mini app profile in the auth context if available
-      if (authContext && authContext.current && typeof authContext.current.login === 'function') {
-        console.log('Mini App Authentication: Updating auth context with user info');
-        await authContext.current.login({
-          fid: userInfo.fid,
-          username: userInfo.username
-        });
-      } else {
-        console.log('Mini App Authentication: Auth context not available, dispatching event');
-        // Dispatch an event for components to listen for
-        const event = new CustomEvent('miniAppAuthenticated', {
-          detail: {
+        console.log('Mini App Authentication: Stored user info in localStorage', userInfo);
+        
+        // Get any auth context that might exist from React
+        const authContext = window._authContext || null;
+        
+        // Update the auth context if available
+        if (authContext && authContext.current && typeof authContext.current.login === 'function') {
+          console.log('Mini App Authentication: Updating auth context with user info');
+          await authContext.current.login({
             fid: userInfo.fid,
             username: userInfo.username,
-            displayName: userInfo.displayName || userInfo.username,
-            pfp: userInfo.pfp
-          }
-        });
-        window.dispatchEvent(event);
+            displayName: userInfo.displayName,
+            signInResult
+          });
+        } else {
+          console.log('Mini App Authentication: Auth context not available, dispatching event');
+          // Dispatch an event for components to listen for
+          const event = new CustomEvent('miniAppAuthenticated', {
+            detail: {
+              fid: userInfo.fid,
+              username: userInfo.username,
+              displayName: userInfo.displayName || userInfo.username,
+              pfp: userInfo.pfp,
+              signInResult
+            }
+          });
+          window.dispatchEvent(event);
+        }
+        
+        return { 
+          success: true, 
+          user: userInfo,
+          signInResult
+        };
+      } else {
+        console.error('Mini App Authentication: No valid user context after sign in');
+        return { success: false, error: 'No valid user context after sign in' };
+      }
+    } catch (error) {
+      if (error.name === 'RejectedByUser') {
+        console.log('Mini App Authentication: User rejected sign in request');
+        return { success: false, error: 'User rejected sign in', rejected: true };
       }
       
-      return { 
-        success: true, 
-        user: {
-          fid: userInfo.fid,
-          username: userInfo.username,
-          displayName: userInfo.displayName || userInfo.username,
-          pfp: userInfo.pfp
-        }
-      };
-    } else {
-      console.error('Mini App Authentication: Failed to get valid user info');
-      return { success: false, error: 'Failed to get valid user info' };
+      console.error('Mini App Authentication: Error during sign in', error);
+      return { success: false, error: error.message || 'Error during sign in' };
     }
   } catch (error) {
     console.error('Mini App Authentication: Unexpected error during authentication', error);
