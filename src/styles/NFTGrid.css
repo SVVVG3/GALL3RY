@@ -9,7 +9,6 @@
 /* Primary Grid Container */
 .nft-grid-container {
   width: 100%;
-  max-width: 95vw;
   margin: 0 auto;
   padding: 0;
   overflow: hidden;
@@ -63,7 +62,7 @@
   }
   
   .nft-grid-container {
-    max-width: 90vw !important;
+    width: 100% !important;
   }
 }
 

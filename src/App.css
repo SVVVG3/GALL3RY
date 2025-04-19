@@ -70,7 +70,6 @@ body {
 
 .container {
   width: 100%;
-  max-width: 95vw;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -173,45 +172,14 @@ body {
   color: var(--color-primary);
 }
 
-/* NFT Grid Styling - Container only */
+/* Container for NFT grid - only width settings */
 .nft-grid-container {
-  width: 100%;
-  padding: 0;
-  overflow: hidden;
-  max-width: 95vw; /* Keep for container width */
+  max-width: 1400px;
   margin: 0 auto;
+  /* All grid layout styles have been moved to NFTGrid.css */
 }
 
-/* Remove grid definitions - let NFTGrid.css handle these */
-/* Comments remain to show what was here */
-/* .nft-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 24px;
-  padding: 16px 0;
-  width: 100%;
-} */
-
-/* Media query container adjustments only */
-@media (min-width: 1400px) {
-  /* .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  } */
-  
-  .nft-grid-container,
-  .farcaster-search-container {
-    max-width: 95vw;
-  }
-}
-
-@media (max-width: 640px) {
-  /* .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
-    padding: 12px 0;
-  } */
-}
-
+/* NFT Items - Only card styling, no grid/layout properties */
 .nft-grid-item {
   display: flex;
   flex-direction: column;
@@ -233,14 +201,6 @@ body {
 @media (max-width: 640px) {
   .nft-grid-item {
     min-height: 200px;
-  }
-  
-  .nft-title {
-    font-size: 0.9rem;
-  }
-  
-  .nft-collection {
-    font-size: 0.8rem;
   }
 }
 
@@ -490,29 +450,6 @@ body {
 .custody-address {
   background-color: #ebf5ff;
   border-left: 4px solid #3b82f6;
-}
-
-/* NFT Grid */
-.nft-grid-container {
-  width: 100%;
-  padding: 0;
-  overflow: hidden;
-}
-
-.nft-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 24px;
-  padding: 16px 0;
-  width: 100%;
-}
-
-@media (max-width: 640px) {
-  .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 16px;
-    padding: 12px 0;
-  }
 }
 
 /* Load more container for NFT pagination */
