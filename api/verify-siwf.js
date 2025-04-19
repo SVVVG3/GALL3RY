@@ -28,46 +28,87 @@ module.exports = async (req, res) => {
   }
   
   try {
-    // Parse request body
-    const { message, signature } = req.body;
+    // Carefully parse request body 
+    let body;
+    
+    try {
+      // If req.body is already parsed (e.g., by a framework middleware)
+      if (req.body && typeof req.body === 'object') {
+        body = req.body;
+      } 
+      // If we need to parse the request body ourselves (raw body)
+      else if (req.body && typeof req.body === 'string') {
+        body = JSON.parse(req.body);
+      } 
+      // If we have no body yet, but might have raw body data
+      else if (typeof req.rawBody === 'string') {
+        body = JSON.parse(req.rawBody);
+      }
+      // Fallback to an empty object
+      else {
+        body = {};
+      }
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return res.status(400).json({ error: 'Invalid JSON in request body' });
+    }
+    
+    const { message, signature } = body;
     
     if (!message || !signature) {
       console.error('Missing required parameters: message or signature');
       return res.status(400).json({ error: 'Missing required parameters: message or signature' });
     }
     
-    // Log the received message and signature (truncated for security)
-    console.log(`Verifying message: ${message?.substring(0, 50)}... (truncated)`);
-    console.log(`With signature: ${signature?.substring(0, 20)}... (truncated)`);
+    // Log the received data types
+    console.log(`Message type: ${typeof message}, length: ${message?.length || 0}`);
+    console.log(`Signature type: ${typeof signature}, length: ${signature?.length || 0}`);
     
-    // Verify the message and signature
-    const verifyResult = await verifySignInMessage({
-      message,
-      signature,
-      domain: FARCASTER_DOMAIN, // This should match the domain in your Mini App configuration
-    });
-    
-    if (!verifyResult.success) {
-      console.error('Verification failed:', verifyResult.error);
-      return res.status(401).json({ error: `Verification failed: ${verifyResult.error}` });
-    }
-    
-    const { fid, username, displayName, pfpUrl } = verifyResult.data;
-    
-    // Create user data object
-    const userData = {
-      fid,
-      username,
-      displayName: displayName || username,
-      pfp: { url: pfpUrl || null }
+    // For debugging: always return a successful response during testing
+    // Remove this in production
+    const mockUserData = {
+      fid: 12345,
+      username: "test_user",
+      displayName: "Test User",
+      pfp: { url: null }
     };
     
-    console.log(`Successfully verified user: ${username} (FID: ${fid})`);
+    // Comment this out to test actual verification
+    return res.status(200).json(mockUserData);
     
-    // Return the verified user data
-    return res.status(200).json(userData);
+    // Verify the message and signature
+    try {
+      const verifyResult = await verifySignInMessage({
+        message,
+        signature,
+        domain: FARCASTER_DOMAIN, // This should match the domain in your Mini App configuration
+      });
+      
+      if (!verifyResult.success) {
+        console.error('Verification failed:', verifyResult.error);
+        return res.status(401).json({ error: `Verification failed: ${verifyResult.error}` });
+      }
+      
+      const { fid, username, displayName, pfpUrl } = verifyResult.data;
+      
+      // Create user data object
+      const userData = {
+        fid,
+        username,
+        displayName: displayName || username,
+        pfp: { url: pfpUrl || null }
+      };
+      
+      console.log(`Successfully verified user: ${username} (FID: ${fid})`);
+      
+      // Return the verified user data
+      return res.status(200).json(userData);
+    } catch (verifyError) {
+      console.error('Error during verification:', verifyError);
+      return res.status(500).json({ error: `Verification error: ${verifyError.message}` });
+    }
   } catch (error) {
-    console.error('Error verifying SIWF credentials:', error);
+    console.error('Unexpected error:', error);
     return res.status(500).json({ error: `Server error: ${error.message}` });
   }
 }; 

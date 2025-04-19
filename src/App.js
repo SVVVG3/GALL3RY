@@ -11,27 +11,16 @@ import { AuthKitProvider } from '@farcaster/auth-kit';
 // Import the SDK directly and initialize IMMEDIATELY at the top level
 import { sdk } from '@farcaster/frame-sdk';
 
-// Initialize the SDK as early as possible - before ANY other code
-try {
-  // Following the official docs, initialize immediately
-  sdk.init();
-  console.log("SDK initialized successfully");
-  
-  // SAFE: Only log primitive boolean values
-  console.log("SDK state after init:", {
-    initialized: true,
-    hasContext: sdk && !!sdk.context,
-    hasUser: sdk && sdk.context && sdk.context.user ? true : false
-  });
-  
-  // Immediately try to dismiss splash screen as recommended in docs
-  if (sdk.actions && typeof sdk.actions.ready === 'function') {
-    sdk.actions.ready().catch(e => {
-      console.warn("Early splash screen dismissal failed:", e.message || "Unknown error");
-    });
+// Use the EXACT initialization pattern from the documentation
+// This needs to be as simple as possible
+if (typeof window !== 'undefined') {
+  try {
+    // Simple initialization with no extra code
+    sdk.init();
+    console.log("SDK initialized");
+  } catch (e) {
+    console.error("SDK init error:", e.message);
   }
-} catch (error) {
-  console.error("Failed to initialize SDK:", error.message || "Unknown error");
 }
 
 // Import Mini App utilities
