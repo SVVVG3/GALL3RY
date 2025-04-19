@@ -63,15 +63,18 @@ const generateNonce = () => {
  * With error handling and safe localStorage access
  * Supports both web and Mini App authentication methods
  */
-function SignInButton({ className, fullWidth, loading, size = "md", children, ...props }) {
+const SignInButton = ({ className, fullWidth, loading, size = "md", children, ...props }) => {
   const { user, isAuthenticated, signIn, signOut } = useAuth();
-  const buttonRef = useRef(null);
+  const farcasterProfile = useProfile();
   const navigate = useNavigate();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const isMiniApp = useIsMiniApp();
+  const buttonRef = useRef(null);
 
   // Listen for miniAppAuthenticated event
   useEffect(() => {
+    if (!isMiniApp) return; // Only apply in Mini App environment
+    
     const handleMiniAppAuth = (event) => {
       console.log("Mini App authentication detected", event.detail);
       // Force refresh component when Mini App auth happens
@@ -103,26 +106,12 @@ function SignInButton({ className, fullWidth, loading, size = "md", children, ..
     return () => {
       window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
     };
-  }, [isAuthenticated, user]);
-
-  const handleSignIn = async () => {
-    setIsSigningIn(true);
-    
-    try {
-      if (isMiniApp) {
-        await handleMiniAppAuthentication();
-      } else {
-        await signIn();
-      }
-    } catch (error) {
-      console.error("Sign in error:", error);
-    } finally {
-      setIsSigningIn(false);
-    }
-  };
+  }, [isAuthenticated, user, isMiniApp]);
 
   // Create a global function to update auth state (used by miniAppUtils)
   useEffect(() => {
+    if (!isMiniApp) return; // Only needed in Mini App environment
+    
     window.updateAuthState = ({ user, isAuthenticated }) => {
       // This will be called from miniAppUtils.js when auth happens
       if (signIn && typeof signIn.update === 'function') {
@@ -133,8 +122,37 @@ function SignInButton({ className, fullWidth, loading, size = "md", children, ..
     return () => {
       window.updateAuthState = undefined;
     };
-  }, [signIn]);
+  }, [signIn, isMiniApp]);
 
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    
+    try {
+      if (isMiniApp) {
+        await handleMiniAppAuthentication();
+      } else {
+        // Use the normal sign-in method for web environment
+        // This invokes the FarcasterSignInButton's functionality
+        if (buttonRef.current) {
+          // Find and click the auth-kit button
+          const authKitButton = buttonRef.current.querySelector('.fc-authkit-signin-button');
+          if (authKitButton) {
+            authKitButton.click();
+          } else {
+            console.error("Could not find Farcaster auth-kit button");
+            // Fallback to direct signIn if available
+            if (signIn) await signIn();
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Sign in error:", error);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  // If authenticated, show the user profile
   if (isAuthenticated && user) {
     return (
       <div className="flex items-center">
@@ -163,37 +181,43 @@ function SignInButton({ className, fullWidth, loading, size = "md", children, ..
     );
   }
 
+  // In Mini App environment, use our custom button
+  if (isMiniApp) {
+    return (
+      <button
+        onClick={handleSignIn}
+        disabled={isSigningIn || loading}
+        className={cn(
+          "flex items-center justify-center gap-2 rounded-md auth-kit-style",
+          "bg-[#9272F2] text-white px-4 py-2 font-medium hover:bg-[#7C5CD6] transition-all",
+          "border border-[#9272F2] text-sm",
+          {
+            "w-full": fullWidth,
+            "opacity-50 cursor-not-allowed": isSigningIn || loading,
+          },
+          className
+        )}
+        {...props}
+      >
+        <img
+          src="/assets/farcaster-logo.svg"
+          className="h-4 w-auto"
+          alt="Farcaster"
+        />
+        {isSigningIn || loading ? "Signing In..." : "Sign in"}
+        {children}
+      </button>
+    );
+  }
+
+  // For web environment, use the standard Farcaster Auth Kit button
   return (
-    <button
-      ref={buttonRef}
-      onClick={handleSignIn}
-      disabled={isSigningIn || loading}
-      className={cn(
-        "flex items-center justify-center gap-2 rounded-md auth-kit-style",
-        "bg-[#9272F2] text-white px-4 py-2 font-medium hover:bg-[#7C5CD6] transition-all",
-        "border border-[#9272F2] text-sm",
-        {
-          "w-full": fullWidth,
-          "opacity-50 cursor-not-allowed": isSigningIn || loading,
-        },
-        className
-      )}
-      {...props}
-    >
-      <img
-        src="/assets/farcaster-logo.svg"
-        className="h-4 w-auto"
-        alt="Farcaster"
-      />
-      {isSigningIn || loading ? (
-        "Signing In..."
-      ) : (
-        isMiniApp ? "Sign in" : "Sign in"
-      )}
-      {children}
-    </button>
+    <div ref={buttonRef} className={className}>
+      <FarcasterSignInButton />
+      {isSigningIn && <span>Signing in...</span>}
+    </div>
   );
-}
+};
 
 // Fallback button shown when the real one fails
 const FallbackSignInButton = () => (
