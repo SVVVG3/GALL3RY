@@ -1,5 +1,8 @@
 {
   "name": "gall3ry-api",
   "private": true,
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@farcaster/auth-kit": "^0.6.0"
+  }
 } 

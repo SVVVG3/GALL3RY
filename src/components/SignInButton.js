@@ -219,7 +219,6 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         return { success: false, error: "SDK not available" };
       }
       
-      // IMPORTANT: Never log or stringify the SDK object directly
       console.log("SDK status:", {
         defined: !!sdk,
         initialized: !!sdk.initialized,
@@ -229,54 +228,71 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
 
       // Generate nonce for authentication - required by the SDK
       const nonce = generateNonce();
-      console.log("Generated nonce for authentication");
+      console.log("Generated nonce for authentication:", nonce);
       
       try {
         // Use the SDK's signIn action exactly as documented
         console.log("Calling sdk.actions.signIn() with nonce");
         
-        // This should trigger the Farcaster authentication flow
+        // This returns a SignInResult object with message and signature
         const signInResult = await sdk.actions.signIn({ nonce });
         
-        console.log("Sign-in completed successfully");
+        console.log("Sign-in completed, got credential");
         
-        // After sign-in, get user from context
-        let userData = null;
-        
-        // First check if context is available directly
-        if (sdk.context && sdk.context.user && sdk.context.user.fid) {
-          // Create clean object with primitive values only
-          userData = {
-            fid: Number(sdk.context.user.fid || 0),
-            username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
-            displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
-                        (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
-            pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
-          };
-          console.log("Got user data from context after sign-in");
+        if (!signInResult || typeof signInResult !== 'object') {
+          console.error("Invalid sign-in result - empty or wrong type");
+          setAuthError("Authentication failed: Invalid response");
+          return { success: false, error: "Invalid sign-in result" };
         }
-        // Try getContext() as a fallback
-        else if (typeof sdk.getContext === 'function') {
-          try {
-            const context = await sdk.getContext();
-            if (context && context.user && context.user.fid) {
-              userData = {
-                fid: Number(context.user.fid || 0),
-                username: context.user.username ? String(context.user.username) : `user${context.user.fid}`,
-                displayName: context.user.displayName ? String(context.user.displayName) : 
-                            (context.user.username ? String(context.user.username) : `User ${context.user.fid}`),
-                pfp: { url: context.user.pfpUrl ? String(context.user.pfpUrl) : null }
-              };
-              console.log("Got user data from getContext() after sign-in");
-            }
-          } catch (error) {
-            console.error("Error getting context:", error.message || "Unknown error");
+
+        // Check if we have the expected message and signature
+        const hasMessage = typeof signInResult.message === 'string' && signInResult.message.length > 0;
+        const hasSignature = typeof signInResult.signature === 'string' && signInResult.signature.length > 0;
+        
+        console.log("Credential details:", { 
+          hasMessage: hasMessage, 
+          hasSignature: hasSignature,
+          messageType: typeof signInResult.message,
+          messageLength: hasMessage ? signInResult.message.length : 0
+        });
+        
+        if (!hasMessage || !hasSignature) {
+          console.error("Invalid sign-in result - missing message or signature");
+          setAuthError("Authentication failed: Invalid credentials");
+          return { success: false, error: "Invalid sign-in credentials" };
+        }
+
+        // Send to server for verification
+        try {
+          console.log("Sending credentials to server for verification");
+          const response = await fetch('/api/verify-siwf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              message: signInResult.message,
+              signature: signInResult.signature
+            })
+          });
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Verification failed: ${errorText}`);
           }
-        }
-        
-        // If we have user data, update auth state
-        if (userData && userData.fid) {
-          // Store user info
+          
+          // Get the verified user data from server
+          const userData = await response.json();
+          console.log("Received verified user data from server:", { 
+            hasFid: !!userData.fid,
+            hasUsername: !!userData.username
+          });
+          
+          if (!userData || !userData.fid) {
+            throw new Error('Invalid user data from server');
+          }
+          
+          // Store user info in localStorage
           localStorage.setItem('farcaster_user', JSON.stringify(userData));
           localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
           
@@ -285,22 +301,18 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
             await login(userData);
           }
           
-          // Dispatch event with clean data
+          // Dispatch event
           const event = new CustomEvent('miniAppAuthenticated', {
-            detail: {
-              fid: userData.fid,
-              username: userData.username,
-              displayName: userData.displayName,
-              pfp: userData.pfp
-            }
+            detail: userData
           });
           window.dispatchEvent(event);
           
+          // Call success callback if provided
           if (typeof onSuccess === 'function') {
             onSuccess(userData);
           }
           
-          // Make sure to dismiss the splash screen
+          // Dismiss splash screen
           if (sdk.actions && typeof sdk.actions.ready === 'function') {
             try {
               await sdk.actions.ready();
@@ -311,26 +323,62 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           }
           
           return { success: true, user: userData };
+        } catch (verificationError) {
+          console.error("Server verification error:", verificationError.message || "Unknown error");
+          
+          // FALLBACK: If server verification fails, try to extract user from context
+          // This is just a fallback and shouldn't be relied on in production
+          console.log("Attempting fallback to context user data");
+          
+          if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+            const fallbackUserData = {
+              fid: Number(sdk.context.user.fid || 0),
+              username: sdk.context.user.username ? String(sdk.context.user.username) : `user${sdk.context.user.fid}`,
+              displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
+                      (sdk.context.user.username ? String(sdk.context.user.username) : `User ${sdk.context.user.fid}`),
+              pfp: { url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null }
+            };
+            
+            console.log("Using fallback user data");
+            
+            // Store in localStorage
+            localStorage.setItem('farcaster_user', JSON.stringify(fallbackUserData));
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(fallbackUserData));
+            
+            // Update auth context
+            if (typeof login === 'function') {
+              await login(fallbackUserData);
+            }
+            
+            // Dispatch event
+            const event = new CustomEvent('miniAppAuthenticated', {
+              detail: fallbackUserData
+            });
+            window.dispatchEvent(event);
+            
+            if (typeof onSuccess === 'function') {
+              onSuccess(fallbackUserData);
+            }
+            
+            return { success: true, user: fallbackUserData };
+          }
+          
+          setAuthError(`Verification failed: ${verificationError.message || "Unknown error"}`);
+          return { success: false, error: verificationError.message || "Verification failed" };
         }
+      } catch (signInError) {
+        console.error("Sign-in error:", signInError.message || "Unknown error");
         
-        console.error("Couldn't get user info after sign-in");
-        setAuthError("Couldn't get user info");
-        return { success: false, error: "No user info after sign-in" };
-      } catch (error) {
-        console.error("Sign-in error:", error.message || "Unknown error");
-        
-        if (error.name === 'RejectedByUser') {
+        if (signInError.name === 'RejectedByUser') {
           console.log("User rejected sign-in");
           setAuthError("Sign-in was cancelled");
           return { success: false, error: "User rejected sign-in", rejected: true };
         }
         
-        // Avoid stringifying the entire error object
-        setAuthError(`Authentication failed: ${error.message || "Unknown error"}`);
-        return { success: false, error: error.message || "Unknown error" };
+        setAuthError(`Authentication failed: ${signInError.message || "Unknown error"}`);
+        return { success: false, error: signInError.message || "Unknown error" };
       }
     } catch (error) {
-      // Avoid logging the entire error object
       console.error("Overall error in directMiniAppSignIn:", error.message || "Unknown error");
       setAuthError(`Authentication error: ${error.message || "Unknown error"}`);
       return { success: false, error: error.message || "Unknown error" };
