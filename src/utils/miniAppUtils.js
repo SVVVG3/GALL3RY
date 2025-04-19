@@ -14,17 +14,40 @@ function logDebug(...args) {
  * @returns {boolean} True if running in a Mini App, false otherwise
  */
 export const isMiniAppEnvironment = () => {
-  // Simple check to determine if we're in a Mini App environment
+  // Enhanced check to determine if we're in a Mini App environment
   try {
-    const isFrame = typeof sdk !== 'undefined' && typeof sdk.isFrame === 'function' && sdk.isFrame();
+    // Check for SDK existence first
+    const sdkExists = typeof sdk !== 'undefined';
+    
+    // Method 1: Check if the sdk.isFrame() method is available and returns true
+    const isFrame = sdkExists && typeof sdk.isFrame === 'function' && sdk.isFrame();
+    
+    // Method 2: Check if running in an iframe
     const inIframe = typeof window !== 'undefined' && window.self !== window.top;
+    
+    // Method 3: Check for Farcaster/Warpcast in the User Agent
     const hasFarcasterInUA = typeof window !== 'undefined' && 
                            (window.navigator.userAgent.includes('Farcaster') || 
                             window.navigator.userAgent.includes('Warpcast'));
     
-    logDebug(`Mini App environment check: isFrame=${isFrame}, inIframe=${inIframe}, hasFarcasterInUA=${hasFarcasterInUA}`);
+    // Method 4: Check for mobile-specific markers in the user agent
+    const isMobileUA = typeof window !== 'undefined' && 
+                      (/Android|iPhone|iPad|iPod|Mobile/i.test(window.navigator.userAgent));
     
-    return isFrame || inIframe || hasFarcasterInUA;
+    // Method 5: Try to access context (for newer SDK versions)
+    let hasContext = false;
+    if (sdkExists && typeof sdk.getContext === 'function') {
+      try {
+        // Just check if this function exists, don't actually call it yet
+        hasContext = true;
+      } catch (e) {}
+    }
+    
+    const isInMiniApp = isFrame || inIframe || hasFarcasterInUA || (isMobileUA && hasContext);
+    
+    logDebug(`Mini App environment check: isFrame=${isFrame}, inIframe=${inIframe}, hasFarcasterInUA=${hasFarcasterInUA}, isMobileUA=${isMobileUA}, hasContext=${hasContext}, FINAL=${isInMiniApp}`);
+    
+    return isInMiniApp;
   } catch (e) {
     console.warn('Error checking Mini App environment:', e);
     return false;
@@ -121,6 +144,34 @@ export const handleMiniAppAuthentication = async (nonce) => {
   }
 
   try {
+    // First, try to get context to see if user is already authenticated
+    // This is especially relevant for mobile Warpcast users
+    if (typeof sdk.getContext === 'function') {
+      try {
+        const context = await sdk.getContext();
+        logDebug('Got Mini App context:', context);
+        
+        if (context && context.user && context.user.fid) {
+          // User is already authenticated in Warpcast, we can use this data
+          return {
+            success: true,
+            data: {
+              fid: context.user.fid,
+              username: context.user.username,
+              displayName: context.user.displayName,
+              pfp: { url: context.user.pfpUrl }
+            },
+            signature: 'context-auth', // Marker to show this came from context
+            message: `fid: ${context.user.fid}`,
+            source: 'context'
+          };
+        }
+      } catch (contextError) {
+        logDebug('Error getting context:', contextError);
+        // Continue to try explicit sign-in
+      }
+    }
+    
     // Check if the SDK has the actions.signIn method
     if (sdk.actions && typeof sdk.actions.signIn === 'function') {
       // For Mini App environment, we can use the SDK's signIn method

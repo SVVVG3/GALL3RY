@@ -125,6 +125,39 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       // Use the SDK directly to avoid any issues
       if (sdk.actions && typeof sdk.actions.signIn === 'function') {
         console.log('Using Farcaster Frame SDK for sign-in');
+        
+        // First, try to get context - might already have user info on mobile
+        let userData = null;
+        
+        try {
+          const context = await sdk.getContext();
+          console.log('Mini App context:', context);
+          
+          // If we have user info in the context, use that directly
+          if (context && context.user && context.user.fid) {
+            userData = {
+              fid: context.user.fid,
+              username: context.user.username || `user${context.user.fid}`,
+              displayName: context.user.displayName || `User ${context.user.fid}`,
+              pfp: context.user.pfpUrl || null,
+              token: 'context-auth' // Mark this as context-based auth
+            };
+            
+            console.log('User already authenticated in Warpcast, using context data:', userData);
+            await login(userData);
+            
+            if (onSuccess && typeof onSuccess === 'function') {
+              onSuccess(userData);
+            }
+            
+            return;
+          }
+        } catch (contextError) {
+          console.warn('Error getting Mini App context:', contextError);
+        }
+        
+        // If we couldn't get user data from context, try the sign-in method
+        console.log('No user data in context, attempting sign-in with nonce:', nonce);
         const authResult = await sdk.actions.signIn({ nonce });
         console.log('Mini App direct auth result:', authResult);
         
@@ -146,7 +179,7 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
           if (fid) {
             console.log('Extracted FID from auth result:', fid);
             // Create user info with FID
-            const userInfo = {
+            userData = {
               fid,
               username: authResult.data?.username || `user${fid}`,
               displayName: authResult.data?.displayName || `User ${fid}`,
@@ -155,11 +188,11 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
             };
             
             // Login with this user info
-            await login(userInfo);
+            await login(userData);
             
             // Call success callback if provided
             if (onSuccess && typeof onSuccess === 'function') {
-              onSuccess(userInfo);
+              onSuccess(userData);
             }
             
             return;
@@ -175,6 +208,15 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
       setError(error);
     } finally {
       setIsLoading(false);
+      
+      // Make sure splash screen is dismissed regardless of auth result
+      try {
+        if (sdk.actions && typeof sdk.actions.ready === 'function') {
+          await sdk.actions.ready();
+        }
+      } catch (e) {
+        console.warn('Error dismissing splash screen after sign-in attempt:', e);
+      }
     }
   };
 
@@ -255,16 +297,15 @@ const SignInButton = ({ onSuccess, redirectPath }) => {
     );
   }
   
-  // Not authenticated - show sign in button
-  // Use different button for Mini App vs Web
+  // If in Mini App environment, use the Mini App SignInButton
   if (isInMiniApp) {
     return (
-      <button
+      <button 
+        className="btn btn-primary sign-in-button mini-app-signin"
         onClick={handleMiniAppSignIn}
-        className="btn btn-primary signin-button"
         disabled={isLoading}
       >
-        Sign In with Farcaster
+        {isLoading ? 'Signing In...' : 'Sign In with Warpcast'}
       </button>
     );
   }
