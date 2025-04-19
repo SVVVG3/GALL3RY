@@ -2,6 +2,7 @@ import React, { useState, useEffect, Suspense, useRef, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { ToastContainer } from 'react-toastify';
+import { ErrorBoundary } from 'react-error-boundary';
 
 // Add a try-catch for styles import to prevent build failures
 try {
@@ -26,44 +27,37 @@ if (typeof window !== 'undefined') {
   // Make SDK globally accessible
   window.farcasterSdk = sdk;
   
-  // Initialize only when document is ready
-  const initSDK = () => {
-    try {
-      console.log("Initializing Farcaster SDK...");
-      
-      // Safely initialize SDK based on its actual structure
-      if (sdk) {
-        // Check if SDK has init method directly
-        if (typeof sdk.init === 'function') {
-          sdk.init();
-          console.log("✅ SDK initialized with sdk.init()");
-        } 
-        // Check if SDK is already initialized property
-        else if (typeof sdk.initialized !== 'undefined') {
-          console.log("✅ SDK already initialized");
-        }
-        // Log error if no init method found
-        else {
-          console.warn("⚠️ SDK init method not found, using as-is");
-        }
-        
-        // Expose SDK globally for components that might use window.sdk
-        window.sdk = sdk;
-        console.log("✅ SDK exposed globally");
+  // Initialize SDK immediately
+  try {
+    console.log("Initializing Farcaster SDK...");
+    
+    // Check if SDK is available and has init method
+    if (sdk) {
+      if (typeof sdk.init === 'function') {
+        sdk.init();
+        console.log("✅ SDK initialized with sdk.init()");
+      } else if (typeof sdk.initialized !== 'undefined') {
+        console.log("✅ SDK already initialized");
       } else {
-        console.warn("⚠️ SDK not available");
+        console.warn("⚠️ SDK init method not found, using as-is");
       }
-    } catch (e) {
-      console.error("❌ SDK init error:", e.message || String(e));
+      
+      // Expose SDK globally for components
+      window.sdk = sdk;
+      
+      // Log SDK status for debugging
+      console.log("SDK Status:", {
+        isDefined: !!sdk,
+        hasActionsProperty: sdk && !!sdk.actions,
+        hasSignInMethod: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
+        hasGetContextMethod: sdk && typeof sdk.getContext === 'function',
+        hasContext: sdk && !!sdk.context
+      });
+    } else {
+      console.warn("⚠️ SDK not available");
     }
-  };
-
-  // Initialize immediately if document is ready
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    initSDK();
-  } else {
-    // Otherwise wait for DOMContentLoaded
-    window.addEventListener('DOMContentLoaded', initSDK);
+  } catch (e) {
+    console.error("❌ SDK init error:", e.message || String(e));
   }
 }
 
@@ -103,7 +97,7 @@ const ErrorDisplay = ({ error, onRetry }) => (
 );
 
 // Error boundary component
-class ErrorBoundary extends React.Component {
+class CustomErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -154,9 +148,9 @@ const dismissSplashScreen = async () => {
       return false;
     }
     
-    // Try different methods to dismiss splash screen
+    // Try different methods to dismiss splash screen based on SDK version
     
-    // Method 1: Try sdk.actions.ready()
+    // Method 1: Try sdk.actions.ready() - standard method per documentation
     if (sdk.actions && typeof sdk.actions.ready === 'function') {
       try {
         await sdk.actions.ready();
@@ -167,7 +161,7 @@ const dismissSplashScreen = async () => {
       }
     }
     
-    // Method 2: Try sdk.ready()
+    // Method 2: Try sdk.ready() - older SDK versions
     if (typeof sdk.ready === 'function') {
       try {
         await sdk.ready();
@@ -175,6 +169,17 @@ const dismissSplashScreen = async () => {
         return true;
       } catch (e) {
         console.warn('⚠️ sdk.ready() failed:', e);
+      }
+    }
+    
+    // Method 3: Try sdk.setFrameReady() - alternate method in some implementations
+    if (typeof sdk.setFrameReady === 'function') {
+      try {
+        await sdk.setFrameReady();
+        console.log('✅ Called sdk.setFrameReady() successfully');
+        return true;
+      } catch (e) {
+        console.warn('⚠️ sdk.setFrameReady() failed:', e);
       }
     }
     
@@ -189,7 +194,10 @@ const dismissSplashScreen = async () => {
 
 // Try to dismiss splash screen as early as possible - before React even renders
 if (typeof window !== 'undefined') {
-  dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+  // Small delay to ensure SDK is initialized first
+  setTimeout(() => {
+    dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+  }, 100);
 }
 
 // Helper function to safely get user info from SDK context
@@ -209,7 +217,7 @@ const getUserInfoFromContext = async () => {
         const context = await sdk.getContext();
         console.log('Context retrieved:', context ? 'yes' : 'no');
         
-        if (context && context.user) {
+        if (context && context.user && context.user.fid) {
           // Create a clean user data object with primitive values
           const userData = {
             fid: context.user.fid ? Number(context.user.fid) : null,
@@ -221,22 +229,31 @@ const getUserInfoFromContext = async () => {
             }
           };
           
-          // Only return if we have at least fid and username
-          if (userData.fid && userData.username) {
-            console.log('Found valid user in context:', {
-              fid: userData.fid,
-              username: userData.username
-            });
-            return userData;
+          // Store in localStorage for persistence
+          try {
+            localStorage.setItem('farcaster_user', JSON.stringify(userData));
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+            console.log('User info stored in localStorage');
+          } catch (e) {
+            console.warn('Failed to store user info in localStorage:', e);
           }
+          
+          // Dispatch event for other components
+          const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+          window.dispatchEvent(authEvent);
+          
+          return userData;
         }
-      } catch (error) {
-        console.error('Error getting context:', error);
+      } catch (e) {
+        console.warn('Error getting context:', e);
       }
     }
     
-    // Fallback to direct context access if method failed
-    if (sdk.context && sdk.context.user) {
+    // Fallback to sdk.context property
+    if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+      console.log('User info found in sdk.context property');
+      
+      // Create user data from context property
       const userData = {
         fid: sdk.context.user.fid ? Number(sdk.context.user.fid) : null,
         username: sdk.context.user.username ? String(sdk.context.user.username) : null,
@@ -247,20 +264,26 @@ const getUserInfoFromContext = async () => {
         }
       };
       
-      // Only return if we have at least fid and username
-      if (userData.fid && userData.username) {
-        console.log('Found valid user in sdk.context:', {
-          fid: userData.fid,
-          username: userData.username
-        });
-        return userData;
+      // Store in localStorage
+      try {
+        localStorage.setItem('farcaster_user', JSON.stringify(userData));
+        localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+        console.log('User info stored in localStorage');
+      } catch (e) {
+        console.warn('Failed to store user info in localStorage:', e);
       }
+      
+      // Dispatch event
+      const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+      window.dispatchEvent(authEvent);
+      
+      return userData;
     }
     
-    console.log('No valid user info found in SDK context');
+    console.log('No user info found in SDK context');
     return null;
-  } catch (error) {
-    console.error('Error in getUserInfoFromContext:', error);
+  } catch (e) {
+    console.error('Error getting user info from context:', e);
     return null;
   }
 };
@@ -361,7 +384,7 @@ function AppContent() {
             // STEP 2: Dismiss splash screen regardless of auth status
             let splashDismissed = false;
             try {
-              console.log('🔄 Calling ready() to dismiss splash screen');
+              console.log('Calling ready() to dismiss splash screen');
               await dismissSplashScreen();
               splashDismissed = true;
             } catch (readyError) {
@@ -484,7 +507,7 @@ function AppContent() {
       }}>
         <AuthProvider ref={authContextRef}>
           <WalletProvider>
-            {/* Include the MiniAppAuthHandler to handle automatic authentication in Mini App */}
+            {/* Conditionally render MiniAppAuthHandler when in a Mini App environment */}
             {isMiniApp && <MiniAppAuthHandler />}
             
             <div className={appClassName} style={appStyles}>
