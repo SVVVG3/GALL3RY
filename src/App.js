@@ -153,10 +153,34 @@ function App() {
             // Initialize Mini App SDK and get context right away regardless of auth status
             // Tell Farcaster we're getting ready to display content
             console.log('⚠️ Calling initializeMiniApp to hide splash screen');
+            
+            // Force the splash screen to be dismissed after 5 seconds as an emergency fallback
+            const splashTimeout = setTimeout(() => {
+              console.log('🚨 Emergency splash screen timeout - forcing display of app');
+              setLoading(false); // Force loading to complete
+              
+              // Try to hide the splash element directly if it exists (aggressive approach)
+              try {
+                const splashElements = document.querySelectorAll('[data-splash], .splash-screen, #splash');
+                if (splashElements.length > 0) {
+                  console.log('🔍 Found potential splash elements:', splashElements.length);
+                  splashElements.forEach(el => {
+                    el.style.display = 'none';
+                    console.log('🔲 Hiding splash element:', el);
+                  });
+                }
+              } catch (e) {
+                console.warn('Error hiding splash elements:', e);
+              }
+            }, 5000);
+            
             const context = await initializeMiniApp({
               disableNativeGestures: false
             });
             console.log('✅ Splash screen dismissal requested');
+            
+            // Clear the timeout if we successfully initialize
+            clearTimeout(splashTimeout);
             
             // Try one more time to call ready directly just to be safe
             try {
