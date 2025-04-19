@@ -18,6 +18,17 @@ A web application for creating, organizing, and sharing NFT collections with Far
 - **Authentication**: Farcaster Auth Kit
 - **NFT Data**: Zapper API
 
+## Farcaster Mini App Integration
+
+GALL3RY is fully integrated as a Farcaster Mini App, allowing users to:
+
+- **Sign in with Farcaster**: Authenticate using their Farcaster identity
+- **View NFT Collections**: Explore NFT collections within the Warpcast mobile app
+- **Search Users**: Find and view other users' collections without leaving Warpcast
+- **Share Discoveries**: Easily share interesting NFTs to their Farcaster feed
+
+The integration uses the `@farcaster/frame-sdk` to handle authentication, user context, and app lifecycle events.
+
 ## Component Inventory
 
 This project follows standardized naming conventions for components. Here are the key components:
