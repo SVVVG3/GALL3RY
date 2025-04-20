@@ -1,56 +1,94 @@
-import React, { useState } from 'react';
-import FarcasterUserSearch from '../components/FarcasterUserSearch';
-import '../styles/HomePage.css';
-import { NFTProvider } from '../contexts/NFTContext';
-import SimpleMiniAppSignIn from '../components/SimpleMiniAppSignIn';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useProfile } from '../contexts/ProfileContext';
+import FarcasterUserSearch from '../components/FarcasterUserSearch';
+import { NFTProvider } from '../contexts/NFTContext';
+import NFTGalleryContainer from '../components/NFTGalleryContainer';
+import SimpleMiniAppSignIn from '../components/SimpleMiniAppSignIn';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
+import { sdk } from '@farcaster/frame-sdk';
 
 /**
  * Simple HomePage Component with minimal dependencies
  */
 const HomePage = () => {
-  const [nftsDisplayed, setNftsDisplayed] = useState(false);
-  const { isAuthenticated, user, login } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { profile } = useProfile();
   const [isMiniApp, setIsMiniApp] = useState(false);
+  const [authError, setAuthError] = useState(null);
+  const [authStatus, setAuthStatus] = useState('idle'); // 'idle', 'loading', 'success', 'error'
 
-  // Check if we're in a mini app environment on mount
-  React.useEffect(() => {
+  useEffect(() => {
     setIsMiniApp(isMiniAppEnvironment());
+    
+    // Check SDK status and log for debugging
+    if (typeof window !== 'undefined') {
+      console.log('HomePage - SDK Status:', {
+        sdkDefined: !!sdk,
+        hasActions: sdk && !!sdk.actions,
+        hasContext: sdk && !!sdk.context,
+        hasGetContextMethod: sdk && typeof sdk.getContext === 'function'
+      });
+    }
   }, []);
 
-  // Callback to track when NFTs are being displayed
-  const handleNFTsDisplayChange = (isDisplaying) => {
-    setNftsDisplayed(isDisplaying);
+  const handleSignInSuccess = (userData) => {
+    console.log('SignIn Success:', userData);
+    setAuthStatus('success');
+    setAuthError(null);
   };
 
-  // Handle successful sign-in
-  const handleSignInSuccess = (userData) => {
-    console.log("Simple sign-in successful with user:", userData);
-    if (login && userData) {
-      login(userData);
-    }
+  const handleSignInError = (error) => {
+    console.error('SignIn Error:', error);
+    setAuthStatus('error');
+    setAuthError(error.message || 'Authentication failed');
+    
+    // Reset error after 5 seconds
+    setTimeout(() => {
+      setAuthError(null);
+      setAuthStatus('idle');
+    }, 5000);
   };
 
   return (
-    <div className="home-container home-container-compact">
-      <div className={`search-section ${nftsDisplayed ? 'nfts-displayed' : ''}`}>
-        {isMiniApp && (
-          <div className="mini-app-test-section" style={{ textAlign: 'center', marginBottom: '20px' }}>
-            <h3>Test Sign In</h3>
-            <SimpleMiniAppSignIn onSuccess={handleSignInSuccess} />
+    <div className="home-page">
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold mb-6 text-center text-purple-600">
+          Farcaster NFT Gallery
+        </h1>
+        
+        {isMiniApp && !isAuthenticated && (
+          <div className="mini-app-signin-container mb-6 p-4 bg-purple-50 rounded-lg">
+            <h2 className="text-lg font-semibold mb-2 text-purple-800">Welcome to the Mini App</h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Sign in with your Farcaster account to view and share your NFTs
+            </p>
             
-            {isAuthenticated && user && (
-              <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f0f0f0', borderRadius: '8px' }}>
-                <p><strong>Signed in as:</strong> {user.username || `User ${user.fid}`}</p>
-                <p><strong>FID:</strong> {user.fid}</p>
+            <SimpleMiniAppSignIn 
+              onSuccess={handleSignInSuccess} 
+              onError={handleSignInError}
+            />
+            
+            {authStatus === 'error' && authError && (
+              <div className="error-message mt-3 p-2 bg-red-100 text-red-700 rounded">
+                {authError}
               </div>
             )}
           </div>
         )}
         
+        {isAuthenticated && user && (
+          <div className="user-info mb-6 p-4 bg-purple-50 rounded-lg">
+            <h2 className="text-lg font-semibold mb-2">Welcome, {user.displayName || user.username}</h2>
+            <p className="text-sm text-gray-600">
+              FID: {user.fid} | Username: @{user.username}
+            </p>
+          </div>
+        )}
+        
         <NFTProvider>
-          <FarcasterUserSearch onNFTsDisplayChange={handleNFTsDisplayChange} />
+          <FarcasterUserSearch />
+          <NFTGalleryContainer />
         </NFTProvider>
       </div>
     </div>

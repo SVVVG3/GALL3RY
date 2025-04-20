@@ -195,9 +195,20 @@ export const handleMiniAppAuthentication = async () => {
   try {
     // Generate a secure nonce for authentication
     const generateNonce = () => {
-      const array = new Uint8Array(16);
-      window.crypto.getRandomValues(array);
-      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+      try {
+        // First attempt to use crypto API (most secure)
+        if (window.crypto && window.crypto.getRandomValues) {
+          const array = new Uint8Array(16);
+          window.crypto.getRandomValues(array);
+          return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        }
+      } catch (e) {
+        console.warn('Crypto API failed, using fallback nonce generation:', e);
+      }
+      
+      // Fallback to Math.random if crypto API is not available
+      return Math.random().toString(36).substring(2, 15) + 
+             Math.random().toString(36).substring(2, 15);
     };
     
     const nonce = generateNonce();
