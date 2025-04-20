@@ -59,20 +59,49 @@ const mobileStyles = `
  * @returns {string} A random string to use as nonce
  */
 const generateNonce = () => {
+  console.log('Generating nonce for authentication');
   try {
     // First attempt to use crypto API (most secure)
-    if (window.crypto && window.crypto.getRandomValues) {
-      const array = new Uint8Array(16);
-      window.crypto.getRandomValues(array);
-      return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.getRandomValues) {
+      try {
+        const array = new Uint8Array(16);
+        window.crypto.getRandomValues(array);
+        const nonce = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+        console.log('Generated nonce using window.crypto');
+        return nonce;
+      } catch (cryptoError) {
+        console.warn('Crypto API failed:', cryptoError);
+        // Fall through to next method
+      }
+    }
+    
+    // Try node crypto if available (for SSR environments)
+    if (typeof require === 'function') {
+      try {
+        const crypto = require('crypto');
+        if (crypto && typeof crypto.randomBytes === 'function') {
+          const buffer = crypto.randomBytes(16);
+          const nonce = Array.from(new Uint8Array(buffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+          console.log('Generated nonce using node crypto');
+          return nonce;
+        }
+      } catch (nodeError) {
+        console.warn('Node crypto failed:', nodeError);
+        // Fall through to fallback method
+      }
     }
   } catch (e) {
-    console.warn('Crypto API failed, using fallback nonce generation:', e);
+    console.warn('Error in primary nonce generation methods:', e);
   }
   
-  // Fallback to Math.random if crypto API is not available
-  return Math.random().toString(36).substring(2, 15) + 
-         Math.random().toString(36).substring(2, 15);
+  // Ultimate fallback using Math.random (less secure but always available)
+  console.log('Using Math.random fallback for nonce generation');
+  const timestamp = Date.now().toString(36);
+  const random1 = Math.random().toString(36).substring(2, 15);
+  const random2 = Math.random().toString(36).substring(2, 15);
+  return `${timestamp}-${random1}-${random2}`;
 };
 
 /**
@@ -300,7 +329,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
   );
 
   /**
-   * Direct Mini App Sign In Function - Uses SDK directly to authenticate
+   * Direct authentication for Mini App environments
    */
   const directMiniAppSignIn = async (login) => {
     console.log("Direct Mini App Sign In called");
@@ -321,146 +350,94 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         }
       }
       
-      // Generate nonce
-      const generateSimpleNonce = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-      const nonce = generateSimpleNonce();
+      // Use the existing generateNonce function from the outer scope
+      const nonce = generateNonce();
       console.log("Generated nonce:", nonce);
       
-      // First check if we already have user info in the SDK context
-      let userData = null;
-      
-      // Try using getContext() method first (recommended in documentation)
-      if (typeof sdk.getContext === 'function') {
-        try {
-          const context = await sdk.getContext();
-          console.log("SDK context retrieved:", context ? "yes" : "no");
-          
-          if (context && context.user && context.user.fid) {
-            console.log("User info available in SDK context");
-            userData = {
-              fid: context.user.fid,
-              username: context.user.username,
-              displayName: context.user.displayName || context.user.username,
-              pfp: { url: context.user.pfpUrl || null }
-            };
-          }
-        } catch (contextError) {
-          console.warn("Error accessing SDK getContext:", contextError);
-        }
+      // Check if signIn action is available
+      if (!sdk.actions || typeof sdk.actions.signIn !== 'function') {
+        console.error("SDK signIn action is not available");
+        return false;
       }
       
-      // Fallback to checking sdk.context property
-      if (!userData && sdk.context && sdk.context.user && sdk.context.user.fid) {
-        console.log("User info available in sdk.context");
-        userData = {
-          fid: sdk.context.user.fid,
-          username: sdk.context.user.username,
-          displayName: sdk.context.user.displayName || sdk.context.user.username,
-          pfp: { url: sdk.context.user.pfpUrl || null }
-        };
-      }
-      
-      // If we don't have user info in context, proceed with sign-in
-      if (!userData) {
-        console.log("No user info in context, proceeding with sign-in");
+      // Use SDK signIn action as shown in documentation
+      console.log("Calling sdk.actions.signIn with nonce:", nonce);
+      try {
+        const signInResult = await sdk.actions.signIn({ nonce });
+        console.log("Sign in result received:", signInResult);
         
-        // Check if signIn action is available
-        if (!sdk.actions || typeof sdk.actions.signIn !== 'function') {
-          console.error("SDK signIn action is not available");
+        if (!signInResult || !signInResult.message || !signInResult.signature) {
+          console.error("Invalid sign-in result received");
           return false;
         }
         
-        // Use SDK signIn action as shown in documentation
-        console.log("Calling sdk.actions.signIn with nonce:", nonce);
+        // Send the sign-in result to the server for verification
         try {
-          const result = await sdk.actions.signIn({ nonce });
-          console.log("Sign in result received");
+          console.log("Sending sign-in result to server for verification");
+          const response = await fetch('/api/verify-siwf', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              message: signInResult.message,
+              signature: signInResult.signature,
+              nonce
+            }),
+          });
           
-          // Try to get user info from context after sign-in
-          if (typeof sdk.getContext === 'function') {
-            try {
-              const newContext = await sdk.getContext();
-              if (newContext && newContext.user && newContext.user.fid) {
-                userData = {
-                  fid: newContext.user.fid,
-                  username: newContext.user.username,
-                  displayName: newContext.user.displayName || newContext.user.username,
-                  pfp: { url: newContext.user.pfpUrl || null }
-                };
-                console.log("Retrieved user data from context after sign-in");
-              }
-            } catch (e) {
-              console.warn("Error getting context after sign-in:", e);
-            }
-          }
-          
-          // If still no user data, check sdk.context again
-          if (!userData && sdk.context && sdk.context.user && sdk.context.user.fid) {
-            userData = {
-              fid: sdk.context.user.fid,
-              username: sdk.context.user.username,
-              displayName: sdk.context.user.displayName || sdk.context.user.username,
-              pfp: { url: sdk.context.user.pfpUrl || null }
-            };
-            console.log("Retrieved user data from sdk.context after sign-in");
-          }
-          
-          // If we still don't have user data, try to extract it from the message
-          if (!userData && result && result.message) {
-            try {
-              // The message includes a string with user data in the format: "fid:123..."
-              const fidMatch = result.message.match(/fid:(\d+)/);
-              if (fidMatch && fidMatch[1]) {
-                const fid = fidMatch[1];
-                console.log("Extracted FID from message:", fid);
-                userData = {
-                  fid: fid,
-                  username: `user${fid}`,
-                  displayName: `User ${fid}`,
-                  pfp: { url: null }
-                };
-                console.log("Created basic user data from message FID");
-              }
-            } catch (parseError) {
-              console.warn("Error parsing message for user data:", parseError);
-            }
-          }
-        } catch (signInError) {
-          // Handle rejection by user
-          if (signInError.message && signInError.message.includes('rejected')) {
-            console.log("User rejected sign-in request");
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Verification failed: ${response.status} ${errorText}`);
             return false;
           }
           
-          console.error("Error during sign-in:", signInError);
+          const verificationResult = await response.json();
+          console.log("Server verification response:", verificationResult);
+          
+          if (!verificationResult || !verificationResult.userData || !verificationResult.token) {
+            console.error("Invalid verification result from server");
+            return false;
+          }
+          
+          const { userData, token } = verificationResult;
+          
+          // Store the authentication token in sessionStorage (not localStorage)
+          // This ensures if the user closes the tab or logs out of Farcaster, they're logged out of the app too
+          sessionStorage.setItem('miniAppAuthToken', token);
+          sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+          
+          // Store in localStorage for backwards compatibility with other parts of the app
+          // This should eventually be removed in favor of sessionStorage only
+          try {
+            localStorage.setItem('farcaster_user', JSON.stringify(userData));
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+          } catch (e) {
+            console.warn("Failed to save to localStorage (for backwards compatibility):", e);
+          }
+          
+          // Update auth context
+          if (typeof login === 'function') {
+            login(userData);
+          }
+          
+          // Dispatch event
+          const event = new CustomEvent('miniAppAuthenticated', { detail: userData });
+          window.dispatchEvent(event);
+          
+          return true;
+        } catch (verificationError) {
+          console.error("Server verification failed:", verificationError);
           return false;
         }
-      }
-      
-      // If we have user data, store it and update state
-      if (userData && userData.fid) {
-        console.log("Successfully retrieved user data:", userData.username);
-        
-        // Store in localStorage
-        try {
-          localStorage.setItem('farcaster_user', JSON.stringify(userData));
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
-        } catch (e) {
-          console.error("Failed to save to localStorage:", e);
+      } catch (signInError) {
+        // Handle rejection by user
+        if (signInError.message && signInError.message.includes('rejected')) {
+          console.log("User rejected sign-in request");
+          return false;
         }
         
-        // Update auth context
-        if (typeof login === 'function') {
-          login(userData);
-        }
-        
-        // Dispatch event
-        const event = new CustomEvent('miniAppAuthenticated', { detail: userData });
-        window.dispatchEvent(event);
-        
-        return true;
-      } else {
-        console.error("Failed to get user data through any method");
+        console.error("Error during sign-in:", signInError);
         return false;
       }
     } catch (error) {
