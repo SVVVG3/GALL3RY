@@ -38,10 +38,8 @@
     "start": "react-app-rewired start",
     "dev": "bash ./scripts/start-server.sh",
     "frontend": "react-app-rewired start",
-    "build": "CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
-    "generate-og": "node scripts/generate-og-image.js",
-    "prebuild": "npm run generate-og",
-    "vercel-build": "node scripts/vercel-build.js && CI=false DISABLE_ESLINT_PLUGIN=true react-app-rewired build",
+    "build": "node ./scripts/clean-build.js",
+    "vercel-build": "node ./scripts/clean-build.js",
     "test": "react-app-rewired test",
     "eject": "react-scripts eject",
     "server": "bash ./scripts/start-server.sh"

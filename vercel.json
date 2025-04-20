@@ -1,14 +1,12 @@
 {
   "version": 2,
-  "buildCommand": "node vercel-build.js",
-  "outputDirectory": "build",
-  "framework": null,
+  "framework": "create-react-app",
   "builds": [
     {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "installCommand": "npm install --no-save puppeteer"
+        "buildCommand": "CI=false PUBLIC_URL='' npm run build"
       }
     },
     {
@@ -20,91 +18,39 @@
       }
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/all-in-one.js"
+      "src": "/api/(.*)",
+      "dest": "/api/all-in-one.js"
     },
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/api/(.*)",
-      "headers": [
-        { "key": "Access-Control-Allow-Credentials", "value": "true" },
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
-      ]
+      "src": "/static/(.*)",
+      "headers": { "cache-control": "s-maxage=31536000, immutable" },
+      "dest": "/static/$1"
     },
     {
-      "source": "/(.*)",
-      "headers": [
-        { 
-          "key": "Content-Security-Policy", 
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' http://localhost:* https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://public.zapper.xyz https://protocol.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net https://mainnet.optimism.io; media-src 'self' blob: data: https:; frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://*.farcaster.org;"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        }
-      ]
+      "src": "/favicon.ico",
+      "dest": "/favicon.ico"
     },
     {
-      "source": "/.well-known/farcaster/(.*)",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        }
-      ]
+      "src": "/logo192.png",
+      "dest": "/logo192.png"
     },
     {
-      "source": "/farcaster.json",
-      "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/json"
-        },
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "*"
-        }
-      ]
+      "src": "/logo512.png",
+      "dest": "/logo512.png"
     },
     {
-      "source": "/(.*).png",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
+      "src": "/manifest.json",
+      "dest": "/manifest.json"
     },
     {
-      "source": "/(.*).jpg",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
+      "src": "/runtime-config.json",
+      "dest": "/runtime-config.json"
     },
     {
-      "source": "/(.*).ico",
-      "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=86400"
-        }
-      ]
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ],
   "env": {
@@ -116,7 +62,6 @@
     "REACT_APP_NEYNAR_API_KEY": "NEYNAR_API_DOCS",
     "REACT_APP_API_URL": "https://gall3ry.vercel.app/api",
     "FARCASTER_DOMAIN": "gall3ry.vercel.app",
-    "PUBLIC_URL": "",
-    "DEBUG": "true"
+    "PUBLIC_URL": ""
   }
 }
