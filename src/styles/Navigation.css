@@ -6,6 +6,24 @@
   padding: 0.5rem 0;
 }
 
+/* Mini App navigation adjustments */
+.mini-app-navigation {
+  padding: 0.25rem 0;
+}
+
+.mini-app-navigation .app-title {
+  font-size: 1.6rem;
+}
+
+.mini-app-navigation .user-info {
+  font-size: 0.9rem;
+}
+
+.mini-app-navigation .user-avatar {
+  width: 28px;
+  height: 28px;
+}
+
 .nav-logo {
   display: flex;
   align-items: center;

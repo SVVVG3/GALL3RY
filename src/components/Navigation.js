@@ -18,7 +18,7 @@ const Navigation = () => {
   }, []);
   
   return (
-    <nav className="navigation">
+    <nav className={`navigation ${isInMiniApp ? 'mini-app-navigation' : ''}`}>
       <div className="nav-logo">
         <a href="/" className="logo-link">
           <h1 className="app-title">GALL3RY</h1>
