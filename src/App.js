@@ -221,8 +221,14 @@ function AppContent() {
       {/* Add Privy Farcaster Auth for Mini App environments */}
       {isInMiniApp && <PrivyFarcasterAuth />}
       
-      {/* Only show header in web environment */}
-      {!isInMiniApp && (
+      {/* Show appropriate header based on environment */}
+      {isInMiniApp ? (
+        <header className="mini-app-header">
+          <div className="mini-app-header-container">
+            <h1 className="mini-app-title">GALL3RY</h1>
+          </div>
+        </header>
+      ) : (
         <header className="app-header">
           <div className="app-header-container">
             <Navigation />
