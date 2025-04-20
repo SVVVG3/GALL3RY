@@ -62,6 +62,57 @@ const sendDiagnosticLog = async (event, data = {}) => {
   }
 };
 
+// Add a new function to handle splash screen dismissal
+// This needs to be as simple as possible
+const dismissSplashScreen = async () => {
+  log('Attempting to dismiss splash screen');
+  sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ATTEMPT');
+  
+  try {
+    if (!sdk) {
+      console.warn('⚠️ SDK not available for dismissing splash screen');
+      sendDiagnosticLog('SDK_NOT_AVAILABLE_FOR_SPLASH');
+      return false;
+    }
+    
+    // Try using hideSplashScreen method (current API)
+    if (typeof sdk.hideSplashScreen === 'function') {
+      log('Calling sdk.hideSplashScreen()');
+      await sdk.hideSplashScreen();
+      log('✅ Splash screen dismissed with hideSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_HIDE');
+      return true;
+    }
+    
+    // Fallback to older SDK versions that might use dismissSplashScreen
+    if (typeof sdk.dismissSplashScreen === 'function') {
+      log('Calling sdk.dismissSplashScreen()');
+      await sdk.dismissSplashScreen();
+      log('✅ Splash screen dismissed with dismissSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_DISMISS');
+      return true;
+    }
+    
+    // Another fallback for possible API changes
+    if (sdk.actions && typeof sdk.actions.hideSplashScreen === 'function') {
+      log('Calling sdk.actions.hideSplashScreen()');
+      await sdk.actions.hideSplashScreen();
+      log('✅ Splash screen dismissed with actions.hideSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_ACTIONS_HIDE');
+      return true;
+    }
+    
+    // Last fallback if we can't find the method
+    console.warn('⚠️ No splash screen dismissal method found on SDK');
+    sendDiagnosticLog('NO_SPLASH_SCREEN_METHOD_FOUND');
+    return false;
+  } catch (e) {
+    console.error('❌ Error dismissing splash screen:', e.message || String(e));
+    sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ERROR', { error: e.message });
+    return false;
+  }
+};
+
 // IMPORTANT: Add a check for browser environment first
 if (typeof window !== 'undefined') {
   // Make SDK globally accessible
@@ -211,6 +262,14 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// Try to dismiss splash screen as early as possible - before React even renders
+if (typeof window !== 'undefined') {
+  // Small delay to ensure SDK is initialized first
+  setTimeout(() => {
+    dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+  }, 100);
+}
+
 // Import Mini App utilities
 import { initializeMiniApp, setupMiniAppEventListeners, isMiniAppEnvironment, isValidAndNonEmptyUserObject } from './utils/miniAppUtils';
 
@@ -288,65 +347,6 @@ class CustomErrorBoundary extends React.Component {
 
     return this.props.children;
   }
-}
-
-// Add a new function to handle splash screen dismissal
-// This needs to be as simple as possible
-const dismissSplashScreen = async () => {
-  log('Attempting to dismiss splash screen');
-  sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ATTEMPT');
-  
-  try {
-    if (!sdk) {
-      console.warn('⚠️ SDK not available for dismissing splash screen');
-      sendDiagnosticLog('SDK_NOT_AVAILABLE_FOR_SPLASH');
-      return false;
-    }
-    
-    // Try using hideSplashScreen method (current API)
-    if (typeof sdk.hideSplashScreen === 'function') {
-      log('Calling sdk.hideSplashScreen()');
-      await sdk.hideSplashScreen();
-      log('✅ Splash screen dismissed with hideSplashScreen');
-      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_HIDE');
-      return true;
-    }
-    
-    // Fallback to older SDK versions that might use dismissSplashScreen
-    if (typeof sdk.dismissSplashScreen === 'function') {
-      log('Calling sdk.dismissSplashScreen()');
-      await sdk.dismissSplashScreen();
-      log('✅ Splash screen dismissed with dismissSplashScreen');
-      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_DISMISS');
-      return true;
-    }
-    
-    // Another fallback for possible API changes
-    if (sdk.actions && typeof sdk.actions.hideSplashScreen === 'function') {
-      log('Calling sdk.actions.hideSplashScreen()');
-      await sdk.actions.hideSplashScreen();
-      log('✅ Splash screen dismissed with actions.hideSplashScreen');
-      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_ACTIONS_HIDE');
-      return true;
-    }
-    
-    // Last fallback if we can't find the method
-    console.warn('⚠️ No splash screen dismissal method found on SDK');
-    sendDiagnosticLog('NO_SPLASH_SCREEN_METHOD_FOUND');
-    return false;
-  } catch (e) {
-    console.error('❌ Error dismissing splash screen:', e.message || String(e));
-    sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ERROR', { error: e.message });
-    return false;
-  }
-};
-
-// Try to dismiss splash screen as early as possible - before React even renders
-if (typeof window !== 'undefined') {
-  // Small delay to ensure SDK is initialized first
-  setTimeout(() => {
-    dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
-  }, 100);
 }
 
 // Helper function to safely get user info from SDK context

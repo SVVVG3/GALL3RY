@@ -110,6 +110,8 @@ module.exports = async function handler(req, res) {
       result = await handleFarcasterRequest(req, res);
     } else if (path.startsWith('v2/')) {
       result = await handleV2Request(req, res);
+    } else if (path.startsWith('diagnostic')) {
+      result = await handleDiagnosticRequest(req, res);
     } else if (path === 'all-in-one' && !action) {
       // Handle the case where someone hits /api/all-in-one without an action
       return res.status(400).json({ 
@@ -1227,6 +1229,51 @@ async function handleV2Request(req, res) {
     console.error(`Error in V2 API handler: ${error.message}`);
     return res.status(500).json({
       error: "Server Error",
+      message: error.message
+    });
+  }
+}
+
+// -----------------------------------------------------------------------
+// HANDLER: DIAGNOSTIC API
+// -----------------------------------------------------------------------
+async function handleDiagnosticRequest(req, res) {
+  try {
+    // Simple implementation that just acknowledges the diagnostic data
+    // This is a simplified version of api/diagnostic.js
+    if (req.method === 'POST') {
+      console.log('Received diagnostic data:', JSON.stringify(req.body).substring(0, 200) + '...');
+      
+      // Just return success - in production this would save the data
+      return res.status(200).json({
+        success: true,
+        message: 'Diagnostic data received',
+        timestamp: new Date().toISOString()
+      });
+    } 
+    
+    if (req.method === 'GET') {
+      // Simple check for authorization
+      const apiKey = req.headers['x-api-key'];
+      const configuredKey = process.env.DIAGNOSTIC_API_KEY;
+      
+      if (!configuredKey || apiKey !== configuredKey) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      
+      // Return empty diagnostic data
+      return res.status(200).json({
+        success: true,
+        message: 'No diagnostic data available',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    return res.status(405).json({ error: 'Method not allowed' });
+  } catch (error) {
+    console.error('Error in diagnostic handler:', error);
+    return res.status(500).json({
+      error: 'Internal server error in diagnostic handler',
       message: error.message
     });
   }
