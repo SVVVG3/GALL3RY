@@ -52,10 +52,6 @@ const HomePage = () => {
   return (
     <div className="home-page">
       <div className="container mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold mb-6 text-center text-purple-600">
-          Farcaster NFT Gallery
-        </h1>
-        
         {isMiniApp && !isAuthenticated && (
           <div className="mini-app-signin-container mb-6 p-4 bg-purple-50 rounded-lg">
             <h2 className="text-lg font-semibold mb-2 text-purple-800">Welcome to the Mini App</h2>
