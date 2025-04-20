@@ -1,8 +1,24 @@
 // Verify Sign In With Farcaster (SIWF) credentials
 const { verifySignInMessage } = require('@farcaster/auth-kit/server');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 // Environment variables (ideally these would be in your .env file)
 const FARCASTER_DOMAIN = process.env.FARCASTER_DOMAIN || 'gall3ry.vercel.app';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+const TOKEN_EXPIRY = '24h'; // Token expires in 24 hours
+
+// Function to generate JWT token for authenticated users
+const generateToken = (userData) => {
+  return jwt.sign(
+    { 
+      fid: userData.fid,
+      username: userData.username
+    }, 
+    JWT_SECRET, 
+    { expiresIn: TOKEN_EXPIRY }
+  );
+};
 
 module.exports = async (req, res) => {
   console.log('SIWF verification request received');
@@ -53,7 +69,7 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Invalid JSON in request body' });
     }
     
-    const { message, signature } = body;
+    const { message, signature, nonce } = body;
     
     if (!message || !signature) {
       console.error('Missing required parameters: message or signature');
@@ -63,6 +79,7 @@ module.exports = async (req, res) => {
     // Log the received data types
     console.log(`Message type: ${typeof message}, length: ${message?.length || 0}`);
     console.log(`Signature type: ${typeof signature}, length: ${signature?.length || 0}`);
+    console.log(`Nonce: ${nonce}`);
     
     // For debugging in Vercel - log the complete objects
     console.log('Message content:', message);
@@ -115,8 +132,14 @@ module.exports = async (req, res) => {
       
       console.log(`Successfully verified user: ${userData.username} (FID: ${userData.fid})`);
       
-      // Return the verified user data
-      return res.status(200).json(userData);
+      // Generate a JWT token for the user
+      const token = generateToken(userData);
+      
+      // Return the verified user data and token
+      return res.status(200).json({ 
+        userData,
+        token 
+      });
     } catch (verifyError) {
       console.error('Error during verification:', verifyError);
       return res.status(500).json({ error: `Verification error: ${verifyError.message}` });

@@ -111,6 +111,45 @@ const safeGetContext = async () => {
   }
 };
 
+// Function to verify sign-in with server
+const verifySignInWithServer = async (signInResult, nonce) => {
+  try {
+    console.log("Sending sign-in result to server for verification", { 
+      message: signInResult.message,
+      signature: signInResult.signature,
+      nonce
+    });
+    
+    // Adjust the URL based on your API endpoint
+    const response = await fetch('/api/verify-siwf', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: signInResult.message,
+        signature: signInResult.signature,
+        nonce
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Verification failed: ${response.status} ${errorText}`);
+    }
+    
+    const data = await response.json();
+    console.log("Server verification response:", data);
+    
+    // Return the user data from server - server should extract FID and user data
+    // from the verified message and return it along with an auth token
+    return data;
+  } catch (error) {
+    console.error("Server verification failed:", error);
+    throw error;
+  }
+};
+
 // Simplified Mini App Sign In button 
 const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
   const [status, setStatus] = useState('idle');
@@ -118,29 +157,39 @@ const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
   
   // On mount, check if user is already authenticated
   useEffect(() => {
-    // Check if user data exists in localStorage
+    // Get auth token from sessionStorage (intentionally not localStorage)
     try {
-      const storedUserData = localStorage.getItem('miniAppUserInfo');
-      if (storedUserData) {
-        const userData = JSON.parse(storedUserData);
-        if (userData && userData.fid) {
-          console.log("Found stored user data, verifying with SDK...");
-          
-          // Verify with SDK context
-          safeGetContext().then(context => {
-            if (context && context.user && context.user.fid) {
-              console.log("SDK context confirms user is authenticated");
-              setStatus('success');
-              if (onSuccess) onSuccess(userData);
+      const authToken = sessionStorage.getItem('miniAppAuthToken');
+      if (authToken) {
+        console.log("Found auth token, checking if still valid...");
+        
+        // Verify token with server or check if we have context that matches
+        safeGetContext().then(context => {
+          if (context && context.user && context.user.fid) {
+            console.log("SDK context confirms user is authenticated");
+            // Get the user data from session storage
+            const miniAppUserInfo = sessionStorage.getItem('miniAppUserInfo');
+            if (miniAppUserInfo) {
+              try {
+                const userData = JSON.parse(miniAppUserInfo);
+                setStatus('success');
+                if (onSuccess) onSuccess(userData);
+              } catch (e) {
+                console.warn("Error parsing stored user data:", e);
+              }
             }
-          }).catch(e => {
-            console.warn("Error verifying stored user data:", e);
-            // We don't set error here, just log the issue
-          });
-        }
+          } else {
+            // No context found, clear session storage
+            console.log("No user context found, clearing stored auth");
+            sessionStorage.removeItem('miniAppAuthToken');
+            sessionStorage.removeItem('miniAppUserInfo');
+          }
+        }).catch(e => {
+          console.warn("Error verifying stored auth data:", e);
+        });
       }
     } catch (e) {
-      console.warn("Error checking stored user data:", e);
+      console.warn("Error checking stored auth data:", e);
     }
   }, [onSuccess]);
   
@@ -176,122 +225,68 @@ const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
         return;
       }
       
-      // First, check if user is already in context
-      let userData = null;
+      // Generate a nonce for authentication
+      const nonce = generateSimpleNonce();
+      console.log("SimpleMiniAppSignIn: Generated nonce:", nonce);
       
-      // Use safe context getter
-      console.log("SimpleMiniAppSignIn: Checking for user context");
-      const context = await safeGetContext();
-      
-      if (context && context.user && context.user.fid) {
-        console.log("SimpleMiniAppSignIn: User found in context");
-        // Safely extract user data with primitive values only
-        userData = safeExtractUserData(context.user);
-        console.log("SimpleMiniAppSignIn: Retrieved user from context:", userData?.username);
-      }
-      
-      // If we still don't have user data, try the sign-in flow
-      if (!userData) {
-        console.log("SimpleMiniAppSignIn: No user data found in context, proceeding with sign-in");
-        // Generate a nonce for authentication
-        const nonce = generateSimpleNonce();
-        console.log("SimpleMiniAppSignIn: Generated nonce:", nonce);
-        
-        // Set timeout to prevent hanging UI
-        const signInTimeout = setTimeout(() => {
-          if (status === 'signing-in') {
-            console.warn("SimpleMiniAppSignIn: Sign-in operation timed out");
-            setError("Sign-in operation timed out");
-            setStatus('error');
-            if (onError) onError(new Error("Sign-in operation timed out"));
-          }
-        }, 15000); // 15 second timeout
-        
-        try {
-          // Call signIn with the nonce as described in Farcaster docs
-          console.log("SimpleMiniAppSignIn: Calling sdk.actions.signIn with nonce");
-          const result = await sdk.actions.signIn({ nonce });
-          
-          // Clear timeout since operation completed
-          clearTimeout(signInTimeout);
-          
-          console.log("SimpleMiniAppSignIn: Sign-in call completed");
-          
-          // After sign-in, try to get context again
-          const newContext = await safeGetContext();
-          
-          if (newContext && newContext.user && newContext.user.fid) {
-            // Safely extract user data with primitive values only
-            userData = safeExtractUserData(newContext.user);
-            console.log("SimpleMiniAppSignIn: Retrieved user after sign-in:", userData?.username);
-          }
-          
-          // Try to extract from result if still no user data
-          if (!userData && result) {
-            console.log("SimpleMiniAppSignIn: Attempting to extract user data from result");
-            try {
-              if (result.user) {
-                userData = safeExtractUserData(result.user);
-                console.log("SimpleMiniAppSignIn: Extracted user data from result.user");
-              } else if (result.message && typeof result.message === 'string') {
-                // Try to extract FID from message if available
-                const fidMatch = result.message.match(/fid:(\d+)/);
-                if (fidMatch && fidMatch[1]) {
-                  const fid = Number(fidMatch[1]);
-                  userData = {
-                    fid: fid,
-                    username: `user_${fid}`,
-                    displayName: `User ${fid}`,
-                    pfp: { url: null }
-                  };
-                  console.log("SimpleMiniAppSignIn: Created basic user data from message FID");
-                }
-              }
-            } catch (parseError) {
-              console.warn("SimpleMiniAppSignIn: Error parsing result:", parseError.message);
-            }
-          }
-        } catch (signInError) {
-          // Clear timeout since operation completed with error
-          clearTimeout(signInTimeout);
-          
-          console.error("SimpleMiniAppSignIn: Sign in error:", signInError.message || String(signInError));
-          setError(signInError.message || String(signInError));
+      // Set timeout to prevent hanging UI
+      const signInTimeout = setTimeout(() => {
+        if (status === 'signing-in') {
+          console.warn("SimpleMiniAppSignIn: Sign-in operation timed out");
+          setError("Sign-in operation timed out");
           setStatus('error');
-          if (onError) onError(signInError);
-          return;
+          if (onError) onError(new Error("Sign-in operation timed out"));
         }
-      }
+      }, 15000); // 15 second timeout
       
-      // If we have user data, store it and notify
-      if (userData && userData.fid) {
-        console.log("SimpleMiniAppSignIn: Successfully retrieved user data:", JSON.stringify(userData));
+      try {
+        // Call signIn with the nonce as described in Farcaster docs
+        console.log("SimpleMiniAppSignIn: Calling sdk.actions.signIn with nonce");
+        const signInResult = await sdk.actions.signIn({ nonce });
         
-        // Store in localStorage for persistence
-        try {
-          localStorage.setItem('farcaster_user', JSON.stringify(userData));
-          localStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
-        } catch (storageError) {
-          console.error('SimpleMiniAppSignIn: Failed to store user data:', storageError.message);
+        // Clear timeout since operation completed
+        clearTimeout(signInTimeout);
+        
+        console.log("SimpleMiniAppSignIn: Sign-in call completed", signInResult);
+        
+        if (!signInResult || !signInResult.message || !signInResult.signature) {
+          throw new Error("Invalid sign-in result returned from SDK");
         }
+        
+        // Send the sign-in result to the server for verification
+        const verificationResult = await verifySignInWithServer(signInResult, nonce);
+        
+        if (!verificationResult || !verificationResult.userData || !verificationResult.token) {
+          throw new Error("Invalid verification result from server");
+        }
+        
+        // Store the authentication token in sessionStorage (not localStorage)
+        // This ensures if the user closes the tab or logs out of Farcaster, they're logged out of the app too
+        sessionStorage.setItem('miniAppAuthToken', verificationResult.token);
+        sessionStorage.setItem('miniAppUserInfo', JSON.stringify(verificationResult.userData));
         
         // Dispatch event for other components
         try {
-          const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+          const authEvent = new CustomEvent('miniAppAuthenticated', { 
+            detail: verificationResult.userData
+          });
           window.dispatchEvent(authEvent);
         } catch (eventError) {
           console.error('SimpleMiniAppSignIn: Failed to dispatch event:', eventError.message);
         }
         
         setStatus('success');
-        if (onSuccess) onSuccess(userData);
-      } else {
-        // No user data found after all attempts
-        const noUserError = new Error('Could not retrieve user information after sign-in');
-        console.error("SimpleMiniAppSignIn: No user data after all attempts");
-        setError(noUserError.message);
+        if (onSuccess) onSuccess(verificationResult.userData);
+        
+      } catch (signInError) {
+        // Clear timeout since operation completed with error
+        clearTimeout(signInTimeout);
+        
+        console.error("SimpleMiniAppSignIn: Sign in error:", signInError.message || String(signInError));
+        setError(signInError.message || String(signInError));
         setStatus('error');
-        if (onError) onError(noUserError);
+        if (onError) onError(signInError);
+        return;
       }
     } catch (err) {
       console.error("SimpleMiniAppSignIn: Unexpected error:", err.message || String(err));
