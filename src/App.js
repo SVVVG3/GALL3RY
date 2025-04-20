@@ -75,7 +75,16 @@ const dismissSplashScreen = async () => {
       return false;
     }
     
-    // Try using hideSplashScreen method (current API)
+    // Try using sdk.actions.ready() method (current API according to docs)
+    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+      log('Calling sdk.actions.ready()');
+      await sdk.actions.ready();
+      log('✅ Splash screen dismissed with actions.ready');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_READY');
+      return true;
+    }
+    
+    // Try using hideSplashScreen method (older API)
     if (typeof sdk.hideSplashScreen === 'function') {
       log('Calling sdk.hideSplashScreen()');
       await sdk.hideSplashScreen();
@@ -266,7 +275,12 @@ if (typeof window !== 'undefined') {
 if (typeof window !== 'undefined') {
   // Small delay to ensure SDK is initialized first
   setTimeout(() => {
-    dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+    if (window.sdk && window.sdk.actions && typeof window.sdk.actions.ready === 'function') {
+      console.log('Early initialization: Directly calling sdk.actions.ready()');
+      window.sdk.actions.ready().catch(e => console.error('Error in early direct ready dismissal:', e));
+    } else {
+      dismissSplashScreen().catch(e => console.error('Error in early splash screen dismissal:', e));
+    }
   }, 100);
 }
 
@@ -535,8 +549,17 @@ function AppContent() {
             let splashDismissed = false;
             try {
               console.log('Calling ready() to dismiss splash screen');
-              await dismissSplashScreen();
-              splashDismissed = true;
+              // Try to use sdk.actions.ready() directly first (recommended method)
+              if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+                console.log('Directly calling sdk.actions.ready()');
+                await sdk.actions.ready();
+                splashDismissed = true;
+                console.log('✅ Splash screen dismissed with sdk.actions.ready()');
+              } else {
+                // Fall back to our helper function that tries various methods
+                await dismissSplashScreen();
+                splashDismissed = true;
+              }
             } catch (readyError) {
               console.warn('Could not dismiss splash screen:', readyError);
             }
@@ -566,7 +589,12 @@ function AppContent() {
         setTimeout(() => {
           if (isInMiniApp) {
             console.log('🚨 Emergency splash screen timeout - forcing dismissal');
-            dismissSplashScreen().catch(e => console.error('Emergency splash screen dismissal failed:', e));
+            if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+              console.log('Emergency: Directly calling sdk.actions.ready()');
+              sdk.actions.ready().catch(e => console.error('Emergency direct ready() dismissal failed:', e));
+            } else {
+              dismissSplashScreen().catch(e => console.error('Emergency splash screen dismissal failed:', e));
+            }
           }
           setLoading(false);
         }, 3000);
@@ -580,7 +608,11 @@ function AppContent() {
         
         // Even in error state, try to dismiss splash screen
         if (isMiniAppEnvironment()) {
-          dismissSplashScreen().catch(e => {});
+          if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
+            sdk.actions.ready().catch(e => {});
+          } else {
+            dismissSplashScreen().catch(e => {});
+          }
         }
       }
     };
