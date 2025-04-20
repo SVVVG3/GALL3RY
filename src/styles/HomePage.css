@@ -1,5 +1,5 @@
 /* HomePage.css - Optimized layout styles */
-.home-container-compact {
+.home-page {
   min-height: calc(100vh - 160px);
   display: flex;
   flex-direction: column;
@@ -31,9 +31,33 @@
 
 .search-title {
   text-align: center;
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-bottom: 2rem;
   color: var(--color-gray-800);
+  font-weight: 500;
+}
+
+.search-container {
+  width: 100%;
+}
+
+/* Hide diagnostic button by default */
+.diagnostic-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background-color: var(--color-gray-200);
+  color: var(--color-gray-700);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  border: none;
+  cursor: pointer;
+}
+
+.diagnostic-button:hover {
+  opacity: 1;
 }
 
 @media (min-width: 769px) {
@@ -44,7 +68,7 @@
 
 /* Mobile optimizations */
 @media (max-width: 768px) {
-  .home-container-compact {
+  .home-page {
     min-height: calc(100vh - 140px);
     justify-content: flex-start;
     padding-bottom: 10px;
@@ -63,7 +87,7 @@
   }
   
   .search-title {
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     padding: 0 10px;
     margin-bottom: 1.5rem;
   }

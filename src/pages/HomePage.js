@@ -226,7 +226,6 @@ const DiagnosticViewer = ({ onClose }) => {
  */
 const HomePage = () => {
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const { isAuthenticated, profile } = useAuth();
   const { loadProfileNFTs } = useProfile();
   const [sdkAvailable, setSdkAvailable] = useState(false);
   const [isMiniApp, setIsMiniApp] = useState(false);
@@ -244,73 +243,15 @@ const HomePage = () => {
     checkEnvironment();
   }, []);
   
-  useEffect(() => {
-    if (authenticated && user?.farcaster?.fid) {
-      console.log('Privy user authenticated with FID:', user.farcaster.fid);
-    }
-  }, [authenticated, user]);
-  
-  const renderUserData = () => {
-    if (!authenticated || !user?.farcaster) {
-      return <p>Not signed in with Farcaster</p>;
-    }
-    
-    const { farcaster } = user;
-    
-    return (
-      <div className="user-info">
-        {farcaster.pfp && (
-          <img 
-            src={farcaster.pfp} 
-            alt={`${farcaster.displayName || farcaster.username}'s profile`}
-            className="user-avatar"
-          />
-        )}
-        <div className="user-details">
-          <h3>{farcaster.displayName || farcaster.username}</h3>
-          <p>@{farcaster.username}</p>
-          <p className="user-fid">FID: {farcaster.fid}</p>
-        </div>
-      </div>
-    );
-  };
-  
   return (
     <div className="home-page">
-      <h1>Welcome to GALL3RY</h1>
-      <p>Your decentralized NFT collection manager</p>
-      
-      <div className="app-container">
-        {isMiniApp && (
-          <div className="auth-container">
-            <h2>Mini App Authentication</h2>
-            {/* Privy authentication is handled automatically at the app level */}
-            {renderUserData()}
-          </div>
-        )}
+      <div className="search-section">
+        <h1 className="search-title">Enter a Farcaster username to explore their NFT collection</h1>
         
-        {!isMiniApp && (
-          <div className="auth-container">
-            <h2>Web Authentication</h2>
-            <PrivyFarcasterButton 
-              buttonText="Sign in with Farcaster"
-            />
-            {renderUserData()}
-          </div>
-        )}
-        
-        <div className="nft-section">
-          <h2>Your NFT Collection</h2>
-          {authenticated && user?.farcaster ? (
-            <NFTProvider>
-              <FarcasterUserSearch 
-                defaultFid={user.farcaster.fid} 
-                defaultUsername={user.farcaster.username} 
-              />
-            </NFTProvider>
-          ) : (
-            <p>Sign in to view your NFT collection</p>
-          )}
+        <div className="search-container">
+          <NFTProvider>
+            <FarcasterUserSearch />
+          </NFTProvider>
         </div>
       </div>
       

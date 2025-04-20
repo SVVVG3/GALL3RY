@@ -25,6 +25,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { NFTProvider } from './contexts/NFTContext';
 import PrivyFarcasterAuth from './components/PrivyFarcasterAuth';
+import Navigation from './components/Navigation';
 
 // Import page components
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -223,13 +224,9 @@ function AppContent() {
       {/* Only show header in web environment */}
       {!isInMiniApp && (
         <header className="app-header">
-          <div className="logo">
-            <Link to="/">GALL3RY</Link>
+          <div className="app-header-container">
+            <Navigation />
           </div>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/explore">Explore</Link>
-          </nav>
         </header>
       )}
       
@@ -249,7 +246,9 @@ function AppContent() {
       {/* Only show footer in web environment */}
       {!isInMiniApp && (
         <footer className="app-footer">
-          <p>&copy; {new Date().getFullYear()} GALL3RY</p>
+          <div className="app-footer-container">
+            <p>&copy; {new Date().getFullYear()} GALL3RY</p>
+          </div>
         </footer>
       )}
     </>
