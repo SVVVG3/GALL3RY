@@ -30,8 +30,9 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #e5e7eb;
   text-align: center;
+  background-color: #fff;
 }
 
 .modal-header h3 {
@@ -40,6 +41,7 @@
   font-weight: 600;
   flex: 1;
   text-align: center;
+  color: #111827;
 }
 
 .modal-close-button {
@@ -47,7 +49,7 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: #666;
+  color: #6b7280;
   padding: 4px;
   margin: -4px;
   border-radius: 50%;
@@ -58,14 +60,19 @@
 
 .modal-close-button:hover {
   background-color: rgba(0, 0, 0, 0.05);
-  color: #000;
+  color: #111827;
 }
 
 .modal-content {
-  padding: 20px;
+  padding: 0;
   overflow-y: auto;
-  max-height: calc(90vh - 120px);
-  text-align: center;
+  max-height: calc(90vh - 64px);
+  background-color: #fff;
+}
+
+.modal-friends-content {
+  padding: 16px;
+  background-color: #fff;
 }
 
 .modal-loading, 
@@ -79,13 +86,14 @@
   text-align: center;
   padding: 30px 20px;
   min-height: 200px;
+  background-color: #fff;
 }
 
 .modal-loading .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid #ddd;
-  border-top-color: #0066ff;
+  border: 3px solid #e5e7eb;
+  border-top-color: #3b82f6;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -98,7 +106,7 @@
 .modal-close-btn {
   margin-top: 16px;
   padding: 8px 16px;
-  background-color: #0066ff;
+  background-color: #3b82f6;
   color: white;
   border: none;
   border-radius: 6px;
@@ -109,15 +117,16 @@
 .friends-list {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 12px;
   max-width: 400px;
   margin: 0 auto;
 }
 
 .mock-data-disclaimer {
-  padding: 8px 12px;
-  background-color: rgba(255, 190, 0, 0.1);
-  border-radius: 6px;
+  padding: 12px;
+  background-color: #fffbeb;
+  border: 1px solid #fef3c7;
+  border-radius: 8px;
   margin-bottom: 16px;
   text-align: center;
   max-width: 400px;
@@ -128,7 +137,7 @@
 .mock-data-disclaimer p {
   margin: 0;
   font-size: 14px;
-  color: #b78103;
+  color: #92400e;
 }
 
 .friend-item {
@@ -136,13 +145,14 @@
   align-items: center;
   padding: 12px;
   border-radius: 8px;
-  background-color: rgba(0, 0, 0, 0.02);
+  background-color: #f9fafb;
   transition: background-color 0.2s;
   text-align: left;
+  border: 1px solid #f3f4f6;
 }
 
 .friend-item:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: #f3f4f6;
 }
 
 .friend-avatar {
@@ -166,8 +176,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #e2e8f0;
-  color: #64748b;
+  background-color: #e5e7eb;
+  color: #4b5563;
   font-weight: bold;
   font-size: 20px;
 }
@@ -180,29 +190,48 @@
   margin: 0 0 4px 0;
   font-size: 16px;
   font-weight: 600;
+  color: #111827;
 }
 
 .friend-info p {
   margin: 0;
   font-size: 14px;
-  color: #666;
+  color: #6b7280;
 }
 
 @media (max-width: 600px) {
   .modal-container {
     max-width: 100%;
-    height: 100%;
-    max-height: 100%;
-    border-radius: 0;
+    height: auto;
+    max-height: 80vh;
+    border-radius: 12px;
+    margin: 0 8px;
   }
   
   .modal-content {
-    max-height: calc(100vh - 80px);
+    max-height: calc(80vh - 64px);
   }
   
   .friends-list,
   .mock-data-disclaimer {
     max-width: 100%;
+  }
+  
+  .friend-item {
+    margin-bottom: 8px;
+  }
+  
+  .modal-header h3 {
+    font-size: 16px;
+  }
+  
+  .modal-close-button {
+    top: 12px;
+    right: 12px;
+  }
+  
+  .modal-friends-content {
+    padding: 12px;
   }
 }
 

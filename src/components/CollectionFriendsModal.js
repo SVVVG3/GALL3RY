@@ -74,21 +74,21 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     return [
       {
         id: '1',
-        name: 'Daniel Savage',
-        username: 'dsavage',
-        avatar: 'https://avatars.githubusercontent.com/u/12345678',
+        name: 'dwr.eth',
+        username: 'dwr',
+        avatar: 'https://pbs.twimg.com/profile_images/1617678299480051713/gYsHfb5j_400x400.jpg',
       },
       {
         id: '2',
-        name: 'Alex Johnson',
-        username: 'ajohnson',
-        avatar: null,
+        name: 'Varun Srinivasan',
+        username: 'v',
+        avatar: 'https://pbs.twimg.com/profile_images/1631445005312847873/89BCz1TG_400x400.jpg',
       },
       {
         id: '3',
-        name: 'Maria Garcia',
-        username: 'mgarcia',
-        avatar: 'https://avatars.githubusercontent.com/u/87654321',
+        name: 'Ted Livingston',
+        username: 'ted',
+        avatar: 'https://pbs.twimg.com/profile_images/1720555225536462848/qh2fJVy0_400x400.jpg',
       },
     ];
   };
@@ -153,7 +153,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
     
     return (
-      <>
+      <div className="modal-friends-content">
         {usingMockData && (
           <div className="mock-data-disclaimer">
             <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
@@ -178,7 +178,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             </div>
           ))}
         </div>
-      </>
+      </div>
     );
   };
 
