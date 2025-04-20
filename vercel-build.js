@@ -95,6 +95,36 @@ if (fs.existsSync(indexHtmlPath)) {
   } else {
     console.log('✅ No unresolved %PUBLIC_URL% references found.');
   }
+  
+  // Also ensure favicon.ico is properly referenced
+  if (indexHtml.includes('href="%PUBLIC_URL%/favicon.ico"')) {
+    console.log('⚠️ Fixing favicon reference...');
+    indexHtml = indexHtml.replace('href="%PUBLIC_URL%/favicon.ico"', 'href="/favicon.ico"');
+    fs.writeFileSync(indexHtmlPath, indexHtml);
+    console.log('✅ Fixed favicon reference in index.html');
+  }
+  
+  // Fix manifest.json reference
+  if (indexHtml.includes('href="%PUBLIC_URL%/manifest.json"')) {
+    console.log('⚠️ Fixing manifest.json reference...');
+    indexHtml = indexHtml.replace('href="%PUBLIC_URL%/manifest.json"', 'href="/manifest.json"');
+    fs.writeFileSync(indexHtmlPath, indexHtml);
+    console.log('✅ Fixed manifest.json reference in index.html');
+  }
+}
+
+// Check if the favicon exists in build directory
+const faviconPath = path.join(buildDir, 'favicon.ico');
+if (!fs.existsSync(faviconPath)) {
+  console.log('⚠️ favicon.ico is missing from build directory');
+  const publicFaviconPath = path.join(__dirname, 'public', 'favicon.ico');
+  if (fs.existsSync(publicFaviconPath)) {
+    console.log('🔧 Copying favicon.ico from public to build directory...');
+    fs.copyFileSync(publicFaviconPath, faviconPath);
+    console.log('✅ Copied favicon.ico to build directory');
+  } else {
+    console.log('⚠️ favicon.ico not found in public directory either');
+  }
 }
 
 // Create the api directory if it doesn't exist
@@ -135,5 +165,16 @@ if (!fs.existsSync('./api/index.js')) {
   fs.writeFileSync('./api/index.js', apiContent.trim());
   console.log('✅ Created API entry point.');
 }
+
+// Create runtime config in a reliable way
+console.log('📝 Creating runtime-config.json for deployment');
+const runtimeConfig = {
+  apiUrl: process.env.REACT_APP_API_URL || 'https://gall3ry.vercel.app/api',
+  buildTime: new Date().toISOString()
+};
+
+const runtimeConfigPath = path.join(buildDir, 'runtime-config.json');
+fs.writeFileSync(runtimeConfigPath, JSON.stringify(runtimeConfig, null, 2));
+console.log('✅ Created runtime-config.json');
 
 console.log('🎉 Vercel build process complete!'); 
