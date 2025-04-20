@@ -225,8 +225,6 @@ const DiagnosticViewer = ({ onClose }) => {
  * Simple HomePage Component with minimal dependencies
  */
 const HomePage = () => {
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-  const { loadProfileNFTs } = useProfile();
   const [sdkAvailable, setSdkAvailable] = useState(false);
   const [isMiniApp, setIsMiniApp] = useState(false);
   
@@ -246,29 +244,12 @@ const HomePage = () => {
   return (
     <div className="home-page">
       <div className="search-section">
-        <h1 className="search-title">Enter a Farcaster username to explore their NFT collection</h1>
-        
         <div className="search-container">
           <NFTProvider>
             <FarcasterUserSearch />
           </NFTProvider>
         </div>
       </div>
-      
-      {DEBUG_MODE && (
-        <>
-          <button 
-            onClick={() => setShowDiagnostics(true)}
-            className="diagnostic-button"
-          >
-            Show Diagnostics
-          </button>
-          
-          {showDiagnostics && (
-            <DiagnosticViewer onClose={() => setShowDiagnostics(false)} />
-          )}
-        </>
-      )}
     </div>
   );
 };
