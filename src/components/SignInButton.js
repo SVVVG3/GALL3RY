@@ -336,6 +336,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
     
     if (!sdk) {
       console.error("SDK is not defined");
+      setAuthError("SDK not initialized. Please reload the app.");
       return false;
     }
     
@@ -347,6 +348,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           sdk.init();
         } catch (initError) {
           console.warn("SDK initialization error:", initError);
+          setAuthError("SDK initialization failed: " + initError.message);
         }
       }
       
@@ -357,6 +359,7 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
       // Check if signIn action is available
       if (!sdk.actions || typeof sdk.actions.signIn !== 'function') {
         console.error("SDK signIn action is not available");
+        setAuthError("SDK signIn action not available. Please try in a supported Farcaster client.");
         return false;
       }
       
@@ -367,7 +370,8 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
         console.log("Sign in result received:", signInResult);
         
         if (!signInResult || !signInResult.message || !signInResult.signature) {
-          console.error("Invalid sign-in result received");
+          console.error("Invalid sign-in result received:", signInResult);
+          setAuthError("Invalid sign-in result received from SDK");
           return false;
         }
         
@@ -386,17 +390,31 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
             }),
           });
           
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Verification failed: ${response.status} ${errorText}`);
+          // Get response text first for debugging
+          const responseText = await response.text();
+          console.log(`Verification response status: ${response.status}, body:`, responseText);
+          
+          // Try to parse as JSON if possible
+          let verificationResult;
+          try {
+            verificationResult = JSON.parse(responseText);
+          } catch (parseError) {
+            console.error("Error parsing verification response:", parseError);
+            setAuthError(`Server returned invalid JSON: ${responseText.substring(0, 100)}`);
             return false;
           }
           
-          const verificationResult = await response.json();
+          if (!response.ok) {
+            console.error(`Verification failed: ${response.status}`, verificationResult);
+            setAuthError(`Verification failed: ${verificationResult.error || response.status}`);
+            return false;
+          }
+          
           console.log("Server verification response:", verificationResult);
           
           if (!verificationResult || !verificationResult.userData || !verificationResult.token) {
-            console.error("Invalid verification result from server");
+            console.error("Invalid verification result from server", verificationResult);
+            setAuthError("Server returned incomplete authentication data");
             return false;
           }
           
@@ -428,20 +446,24 @@ const SignInButton = ({ onSuccess, onError, label, className, buttonStyle, showL
           return true;
         } catch (verificationError) {
           console.error("Server verification failed:", verificationError);
+          setAuthError(`Server verification error: ${verificationError.message}`);
           return false;
         }
       } catch (signInError) {
         // Handle rejection by user
         if (signInError.message && signInError.message.includes('rejected')) {
           console.log("User rejected sign-in request");
+          setAuthError("Sign-in request was rejected");
           return false;
         }
         
         console.error("Error during sign-in:", signInError);
+        setAuthError(`Sign-in error: ${signInError.message}`);
         return false;
       }
     } catch (error) {
       console.error("Unexpected error in directMiniAppSignIn:", error);
+      setAuthError(`Unexpected error: ${error.message}`);
       return false;
     }
   };

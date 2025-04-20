@@ -5,8 +5,12 @@ const crypto = require('crypto');
 
 // Environment variables (ideally these would be in your .env file)
 const FARCASTER_DOMAIN = process.env.FARCASTER_DOMAIN || 'gall3ry.vercel.app';
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+// Set a fixed JWT_SECRET via environment variables in production
+const JWT_SECRET = process.env.JWT_SECRET || 'gall3ry_secret_key_for_development_only';
 const TOKEN_EXPIRY = '24h'; // Token expires in 24 hours
+
+// Log important configuration for debugging
+console.log(`SIWF Config - Domain: ${FARCASTER_DOMAIN}, JWT Secret Set: ${!!JWT_SECRET}`);
 
 // Function to generate JWT token for authenticated users
 const generateToken = (userData) => {
@@ -44,6 +48,18 @@ module.exports = async (req, res) => {
   }
   
   try {
+    // Extract host from request for automatic domain detection
+    const host = req.headers.host || FARCASTER_DOMAIN;
+    const requestDomain = host.includes(':') ? host.split(':')[0] : host;
+    console.log(`Request domain: ${requestDomain}, Configured domain: ${FARCASTER_DOMAIN}`);
+    
+    // The domain to use for verification (prefer request domain if in development)
+    const verificationDomain = process.env.NODE_ENV === 'development' 
+      ? requestDomain 
+      : FARCASTER_DOMAIN;
+    
+    console.log(`Using domain for verification: ${verificationDomain}`);
+    
     // Carefully parse request body 
     let body;
     
@@ -88,10 +104,11 @@ module.exports = async (req, res) => {
     // Verify the message and signature
     try {
       // Add debug mode to get more details
+      console.log(`Verifying message with domain: ${verificationDomain}`);
       const verifyResult = await verifySignInMessage({
         message,
         signature,
-        domain: FARCASTER_DOMAIN, // This should match the domain in your Mini App configuration
+        domain: verificationDomain, // Use detected domain
         debug: true
       });
       
@@ -99,7 +116,10 @@ module.exports = async (req, res) => {
       
       if (!verifyResult.success) {
         console.error('Verification failed:', verifyResult.error);
-        return res.status(401).json({ error: `Verification failed: ${verifyResult.error}` });
+        return res.status(401).json({ 
+          error: `Verification failed: ${verifyResult.error}`,
+          details: verifyResult
+        });
       }
       
       // According to the docs, the structure is different based on the version
@@ -142,10 +162,16 @@ module.exports = async (req, res) => {
       });
     } catch (verifyError) {
       console.error('Error during verification:', verifyError);
-      return res.status(500).json({ error: `Verification error: ${verifyError.message}` });
+      return res.status(500).json({ 
+        error: `Verification error: ${verifyError.message}`,
+        stack: process.env.NODE_ENV === 'development' ? verifyError.stack : undefined
+      });
     }
   } catch (error) {
     console.error('Unexpected error:', error);
-    return res.status(500).json({ error: `Server error: ${error.message}` });
+    return res.status(500).json({ 
+      error: `Server error: ${error.message}`,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }; 

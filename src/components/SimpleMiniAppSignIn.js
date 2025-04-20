@@ -133,12 +133,24 @@ const verifySignInWithServer = async (signInResult, nonce) => {
       }),
     });
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Verification failed: ${response.status} ${errorText}`);
+    // Get response text first for debugging
+    const responseText = await response.text();
+    console.log(`Verification response status: ${response.status}, body:`, responseText);
+    
+    // Try to parse as JSON if possible
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error("Error parsing verification response:", parseError);
+      throw new Error(`Server returned invalid JSON: ${responseText.substring(0, 100)}`);
     }
     
-    const data = await response.json();
+    if (!response.ok) {
+      console.error(`Verification failed: ${response.status}`, data);
+      throw new Error(`Verification failed: ${data.error || response.status}`);
+    }
+    
     console.log("Server verification response:", data);
     
     // Return the user data from server - server should extract FID and user data
@@ -212,6 +224,10 @@ const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
       
       console.log("SimpleMiniAppSignIn: SDK object exists:", !!sdk);
       
+      // Check current hostname for domain debugging
+      const currentHostname = window.location.hostname;
+      console.log("Current hostname for verification:", currentHostname);
+      
       // Verify that the required SDK methods exist
       const hasSignIn = sdk.actions && typeof sdk.actions.signIn === 'function';
       console.log("SimpleMiniAppSignIn: SDK has signIn method:", hasSignIn);
@@ -250,37 +266,62 @@ const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
         console.log("SimpleMiniAppSignIn: Sign-in call completed", signInResult);
         
         if (!signInResult || !signInResult.message || !signInResult.signature) {
-          throw new Error("Invalid sign-in result returned from SDK");
+          const invalidResultError = new Error("Invalid sign-in result returned from SDK");
+          console.error("SimpleMiniAppSignIn: Invalid result:", signInResult);
+          setError(invalidResultError.message);
+          setStatus('error');
+          if (onError) onError(invalidResultError);
+          return;
         }
         
         // Send the sign-in result to the server for verification
-        const verificationResult = await verifySignInWithServer(signInResult, nonce);
-        
-        if (!verificationResult || !verificationResult.userData || !verificationResult.token) {
-          throw new Error("Invalid verification result from server");
-        }
-        
-        // Store the authentication token in sessionStorage (not localStorage)
-        // This ensures if the user closes the tab or logs out of Farcaster, they're logged out of the app too
-        sessionStorage.setItem('miniAppAuthToken', verificationResult.token);
-        sessionStorage.setItem('miniAppUserInfo', JSON.stringify(verificationResult.userData));
-        
-        // Dispatch event for other components
         try {
-          const authEvent = new CustomEvent('miniAppAuthenticated', { 
-            detail: verificationResult.userData
-          });
-          window.dispatchEvent(authEvent);
-        } catch (eventError) {
-          console.error('SimpleMiniAppSignIn: Failed to dispatch event:', eventError.message);
+          const verificationResult = await verifySignInWithServer(signInResult, nonce);
+          
+          if (!verificationResult || !verificationResult.userData || !verificationResult.token) {
+            const invalidVerificationError = new Error("Invalid verification result from server");
+            console.error("SimpleMiniAppSignIn: Invalid verification result:", verificationResult);
+            setError(invalidVerificationError.message);
+            setStatus('error');
+            if (onError) onError(invalidVerificationError);
+            return;
+          }
+          
+          // Store the authentication token in sessionStorage (not localStorage)
+          // This ensures if the user closes the tab or logs out of Farcaster, they're logged out of the app too
+          sessionStorage.setItem('miniAppAuthToken', verificationResult.token);
+          sessionStorage.setItem('miniAppUserInfo', JSON.stringify(verificationResult.userData));
+          
+          // Dispatch event for other components
+          try {
+            const authEvent = new CustomEvent('miniAppAuthenticated', { 
+              detail: verificationResult.userData
+            });
+            window.dispatchEvent(authEvent);
+          } catch (eventError) {
+            console.error('SimpleMiniAppSignIn: Failed to dispatch event:', eventError.message);
+          }
+          
+          setStatus('success');
+          if (onSuccess) onSuccess(verificationResult.userData);
+        } catch (verificationError) {
+          console.error("SimpleMiniAppSignIn: Verification error:", verificationError);
+          setError(verificationError.message || "Server verification failed");
+          setStatus('error');
+          if (onError) onError(verificationError);
         }
-        
-        setStatus('success');
-        if (onSuccess) onSuccess(verificationResult.userData);
-        
       } catch (signInError) {
         // Clear timeout since operation completed with error
         clearTimeout(signInTimeout);
+        
+        // Special handling for user rejection
+        if (signInError.message && signInError.message.includes('rejected')) {
+          console.log("SimpleMiniAppSignIn: User rejected sign-in request");
+          setError("Sign-in request was rejected");
+          setStatus('error');
+          if (onError) onError(signInError);
+          return;
+        }
         
         console.error("SimpleMiniAppSignIn: Sign in error:", signInError.message || String(signInError));
         setError(signInError.message || String(signInError));
@@ -319,13 +360,35 @@ const SimpleMiniAppSignIn = ({ onSuccess, onError }) => {
       </button>
       
       {status === 'error' && error && (
-        <div style={{ color: '#e53e3e', marginTop: '10px', fontSize: '14px' }}>
-          {error}
+        <div style={{ 
+          color: '#e53e3e', 
+          marginTop: '10px', 
+          fontSize: '14px',
+          padding: '10px',
+          backgroundColor: '#FED7D7',
+          borderRadius: '6px',
+          border: '1px solid #FC8181',
+          fontWeight: '500',
+          textAlign: 'left'
+        }}>
+          <strong>Error:</strong> {error}
+          <div style={{ marginTop: '5px', fontSize: '12px', color: '#666' }}>
+            Please try reloading the app or using a different Farcaster client.
+          </div>
         </div>
       )}
       
       {status === 'success' && (
-        <div style={{ color: '#38a169', marginTop: '10px', fontSize: '14px' }}>
+        <div style={{ 
+          color: '#38a169', 
+          marginTop: '10px', 
+          fontSize: '14px',
+          padding: '10px',
+          backgroundColor: '#C6F6D5',
+          borderRadius: '6px',
+          border: '1px solid #9AE6B4',
+          fontWeight: '500'
+        }}>
           Sign in successful!
         </div>
       )}
