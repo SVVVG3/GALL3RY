@@ -1,16 +1,33 @@
-import { sdk } from '@farcaster/frame-sdk';
 import React from 'react';
 
 // Add detailed debugging at the top of the file
 const DEBUG_MINI_APP = true;
 
+// Safely reference the SDK to handle cases where extensions might cause issues
+let safeSDK;
+try {
+  const { sdk } = require('@farcaster/frame-sdk');
+  safeSDK = sdk;
+} catch (e) {
+  console.warn('Error importing Farcaster SDK, creating fallback:', e);
+  // Create a fallback SDK with empty methods
+  safeSDK = {
+    actions: { 
+      ready: async () => console.log('Fallback SDK: ready called'),
+      signIn: async () => console.log('Fallback SDK: signIn called')
+    },
+    getContext: async () => null,
+    context: {}
+  };
+}
+
 // Add an immediate debug check of the SDK to see if it's loading
 console.log('miniAppUtils.js loaded, SDK status:', {
-  sdkDefined: typeof sdk !== 'undefined',
-  sdkActions: sdk && typeof sdk.actions !== 'undefined',
-  sdkContext: sdk && typeof sdk.context !== 'undefined',
-  actionsSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
-  actionsReady: sdk && sdk.actions && typeof sdk.actions.ready === 'function'
+  sdkDefined: typeof safeSDK !== 'undefined',
+  sdkActions: safeSDK && typeof safeSDK.actions !== 'undefined',
+  sdkContext: safeSDK && typeof safeSDK.context !== 'undefined',
+  actionsSignIn: safeSDK && safeSDK.actions && typeof safeSDK.actions.signIn === 'function',
+  actionsReady: safeSDK && safeSDK.actions && typeof safeSDK.actions.ready === 'function'
 });
 
 function logDebug(...args) {
@@ -27,10 +44,10 @@ export const isMiniAppEnvironment = () => {
   // Enhanced check to determine if we're in a Mini App environment
   try {
     // Check for SDK existence first
-    const sdkExists = typeof sdk !== 'undefined';
+    const sdkExists = typeof safeSDK !== 'undefined';
     
     // Method 1: Check if the sdk.isFrame() method is available and returns true
-    const isFrame = sdkExists && typeof sdk.isFrame === 'function' && sdk.isFrame();
+    const isFrame = sdkExists && typeof safeSDK.isFrame === 'function' && safeSDK.isFrame();
     
     // Method 2: Check if running in an iframe
     const inIframe = typeof window !== 'undefined' && window.self !== window.top;
@@ -53,7 +70,7 @@ export const isMiniAppEnvironment = () => {
     
     // Method 6: Try to access context (for newer SDK versions)
     let hasContext = false;
-    if (sdkExists && typeof sdk.getContext === 'function') {
+    if (sdkExists && typeof safeSDK.getContext === 'function') {
       try {
         // Just check if this function exists, don't actually call it yet
         hasContext = true;
@@ -105,31 +122,31 @@ export const dismissSplashScreen = async () => {
   logDebug('Attempting to dismiss splash screen');
   
   try {
-    if (!sdk) {
+    if (!safeSDK) {
       console.warn('SDK is not available for dismissing splash screen');
       return false;
     }
     
     // Try using sdk.actions.ready() method (current API according to docs)
-    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+    if (safeSDK.actions && typeof safeSDK.actions.ready === 'function') {
       logDebug('Calling sdk.actions.ready()');
-      await sdk.actions.ready();
+      await safeSDK.actions.ready();
       logDebug('Splash screen dismissed with actions.ready');
       return true;
     }
     
     // Try using hideSplashScreen method (older API)
-    if (typeof sdk.hideSplashScreen === 'function') {
+    if (typeof safeSDK.hideSplashScreen === 'function') {
       logDebug('Calling sdk.hideSplashScreen()');
-      await sdk.hideSplashScreen();
+      await safeSDK.hideSplashScreen();
       logDebug('Splash screen dismissed with hideSplashScreen');
       return true;
     }
     
     // Fallback to older SDK versions that might use dismissSplashScreen
-    if (typeof sdk.dismissSplashScreen === 'function') {
+    if (typeof safeSDK.dismissSplashScreen === 'function') {
       logDebug('Calling sdk.dismissSplashScreen()');
-      await sdk.dismissSplashScreen();
+      await safeSDK.dismissSplashScreen();
       logDebug('Splash screen dismissed with dismissSplashScreen');
       return true;
     }
@@ -148,14 +165,14 @@ export const dismissSplashScreen = async () => {
  * @returns {Promise<void>}
  */
 export const viewFarcasterProfile = async (fid) => {
-  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.viewProfile !== 'function') {
+  if (!isMiniAppEnvironment() || !safeSDK.actions || typeof safeSDK.actions.viewProfile !== 'function') {
     // In web app, navigate to the profile page
     window.location.href = `/profile/${fid}`;
     return;
   }
 
   try {
-    await sdk.actions.viewProfile({ fid });
+    await safeSDK.actions.viewProfile({ fid });
   } catch (e) {
     console.error('Error viewing profile in Mini App:', e);
     window.location.href = `/profile/${fid}`;
@@ -170,13 +187,13 @@ export const viewFarcasterProfile = async (fid) => {
  * @returns {Promise<Object|null>} Cast result or null if not in Mini App environment
  */
 export const composeCast = async ({ text, embeds }) => {
-  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.composeCast !== 'function') {
+  if (!isMiniAppEnvironment() || !safeSDK.actions || typeof safeSDK.actions.composeCast !== 'function') {
     console.log('Compose cast is only available in Mini App environment');
     return null;
   }
 
   try {
-    return await sdk.actions.composeCast({ text, embeds });
+    return await safeSDK.actions.composeCast({ text, embeds });
   } catch (e) {
     console.error('Error composing cast in Mini App:', e);
     return null;
@@ -188,13 +205,13 @@ export const composeCast = async ({ text, embeds }) => {
  * @returns {Promise<boolean>} True if the app was added, false otherwise
  */
 export const promptAddFrame = async () => {
-  if (!isMiniAppEnvironment() || !sdk.actions || typeof sdk.actions.addFrame !== 'function') {
+  if (!isMiniAppEnvironment() || !safeSDK.actions || typeof safeSDK.actions.addFrame !== 'function') {
     console.log('Add frame is only available in Mini App environment');
     return false;
   }
 
   try {
-    await sdk.actions.addFrame();
+    await safeSDK.actions.addFrame();
     logDebug('User added frame successfully');
     return true;
   } catch (e) {

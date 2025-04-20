@@ -22,6 +22,19 @@ if (typeof window !== 'undefined') {
   });
   
   window.addEventListener('unhandledrejection', function(event) {
+    // Check if this is a Chrome extension communication error
+    const isExtensionError = 
+      event.reason?.message?.includes('chrome.runtime.sendMessage()') || 
+      event.reason?.toString().includes('chrome.runtime.sendMessage()');
+    
+    // Log the error but only show UI for non-extension errors
+    if (isExtensionError) {
+      console.warn('Chrome extension communication error (safely ignored):', event.reason);
+      // Prevent default handling of the event to avoid UI errors
+      event.preventDefault();
+      return;
+    }
+    
     console.error('UNHANDLED PROMISE REJECTION:', event.reason);
     
     // Display error on screen for debugging
