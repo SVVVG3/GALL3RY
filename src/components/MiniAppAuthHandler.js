@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
-import { handleMiniAppAuthentication } from '../utils/miniAppUtils';
+import { handleMiniAppAuthentication, safeExtractUserData } from '../utils/miniAppUtils';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -42,14 +42,7 @@ const MiniAppAuthHandler = () => {
               
               if (context && context.user && context.user.fid) {
                 // Ensure we're using primitive values only
-                userInfo = {
-                  fid: typeof context.user.fid === 'function' ? null : Number(context.user.fid || 0),
-                  username: typeof context.user.username === 'function' ? null : String(context.user.username || ''),
-                  displayName: typeof context.user.displayName === 'function' ? null : 
-                              String(context.user.displayName || context.user.username || ''),
-                  pfp: typeof context.user.pfpUrl === 'function' ? null : 
-                       String(context.user.pfpUrl || '')
-                };
+                userInfo = safeExtractUserData(context.user);
                 
                 console.log('MiniAppAuthHandler: Found user in context:', {
                   fid: userInfo.fid,

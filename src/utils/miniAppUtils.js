@@ -253,13 +253,7 @@ export const handleMiniAppAuthentication = async () => {
           console.log('Context received:', context ? 'YES' : 'NO');
           
           if (context && context.user && context.user.fid) {
-            userInfo = {
-              fid: typeof context.user.fid === 'function' ? null : Number(context.user.fid || 0),
-              username: typeof context.user.username === 'function' ? null : String(context.user.username || ''),
-              displayName: typeof context.user.displayName === 'function' ? null : 
-                          String(context.user.displayName || context.user.username || ''),
-              pfp: typeof context.user.pfpUrl === 'function' ? null : String(context.user.pfpUrl || '')
-            };
+            userInfo = safeExtractUserData(context.user);
             console.log('Retrieved user info from getContext:', userInfo.username);
           }
         } catch (contextError) {
@@ -270,14 +264,7 @@ export const handleMiniAppAuthentication = async () => {
       // If getContext didn't work, try context property directly
       if (!userInfo && sdk.context && sdk.context.user && sdk.context.user.fid) {
         console.log('Checking sdk.context property');
-        const user = sdk.context.user;
-        userInfo = {
-          fid: typeof user.fid === 'function' ? null : Number(user.fid || 0),
-          username: typeof user.username === 'function' ? null : String(user.username || ''),
-          displayName: typeof user.displayName === 'function' ? null : 
-                      String(user.displayName || user.username || ''),
-          pfp: typeof user.pfpUrl === 'function' ? null : String(user.pfpUrl || '')
-        };
+        userInfo = safeExtractUserData(sdk.context.user);
         console.log('Retrieved user info from sdk.context:', userInfo.username);
       }
       
@@ -337,12 +324,7 @@ export const handleMiniAppAuthentication = async () => {
             try {
               // Check if result has direct user info
               if (signInResult.user) {
-                userInfo = {
-                  fid: signInResult.user.fid,
-                  username: signInResult.user.username || `user${signInResult.user.fid}`,
-                  displayName: signInResult.user.displayName || signInResult.user.username || `User ${signInResult.user.fid}`,
-                  pfp: { url: signInResult.user.pfpUrl || null }
-                };
+                userInfo = safeExtractUserData(signInResult.user);
                 console.log('Extracted user info from result.user');
               } 
               // Try to parse from message if available
@@ -464,4 +446,66 @@ export const promptAddFrame = async () => {
     }
     return false;
   }
-}; 
+};
+
+// Helper function to safely get a primitive value from potentially proxy objects
+const safeGetPrimitive = (value, defaultValue = null) => {
+  try {
+    // Case 1: value is undefined or null
+    if (value === undefined || value === null) {
+      return defaultValue;
+    }
+    
+    // Case 2: value is a function (proxy objects often appear as functions)
+    if (typeof value === 'function') {
+      return defaultValue;
+    }
+    
+    // Case 3: value is an object but we need a string/number/etc
+    // Instead of accessing properties (which might trigger proxy traps)
+    // convert directly to the needed primitive
+    if (typeof value === 'object') {
+      // Try using String() which avoids calling methods on the object
+      return String(value) !== '[object Object]' ? String(value) : defaultValue;
+    }
+    
+    // Case 4: value is already a primitive, return as is
+    return value;
+  } catch (e) {
+    console.warn('Error getting primitive value:', e);
+    return defaultValue;
+  }
+};
+
+// Enhanced function to safely extract user data with special handling for pfpUrl
+const safeExtractUserData = (user) => {
+  if (!user) return null;
+  
+  try {
+    const userData = {
+      fid: safeGetPrimitive(user.fid, 0),
+      username: safeGetPrimitive(user.username, ''),
+      displayName: safeGetPrimitive(user.displayName, safeGetPrimitive(user.username, '')),
+      pfp: safeGetPrimitive(user.pfpUrl, '')
+    };
+    
+    // Convert to expected types
+    userData.fid = Number(userData.fid);
+    userData.username = String(userData.username || '');
+    userData.displayName = String(userData.displayName || userData.username || '');
+    userData.pfp = String(userData.pfp || '');
+    
+    return userData;
+  } catch (e) {
+    console.error('Error safely extracting user data:', e);
+    return {
+      fid: 0,
+      username: '',
+      displayName: '',
+      pfp: ''
+    };
+  }
+};
+
+// Export utility functions for use in other components
+export { safeGetPrimitive, safeExtractUserData }; 

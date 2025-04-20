@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
+import { safeExtractUserData, safeGetPrimitive } from '../utils/miniAppUtils';
 
 // Debug mode - synced with HomePage
 const DEBUG_MODE = true;
@@ -9,25 +10,6 @@ const generateSimpleNonce = () => {
   const random = Math.random().toString(36).substring(2, 15) + 
                 Math.random().toString(36).substring(2, 15);
   return random;
-};
-
-// Helper to safely extract user data without passing proxy objects or functions
-const safeExtractUserData = (userObj) => {
-  if (!userObj) return null;
-  
-  try {
-    // Create a clean object with only primitive values
-    return {
-      fid: typeof userObj.fid === 'function' ? null : Number(userObj.fid || 0),
-      username: typeof userObj.username === 'function' ? null : String(userObj.username || ''),
-      displayName: typeof userObj.displayName === 'function' ? null : String(userObj.displayName || userObj.username || ''),
-      pfp: typeof userObj.pfpUrl === 'function' ? null : 
-           (userObj.pfpUrl ? String(userObj.pfpUrl) : null)
-    };
-  } catch (e) {
-    console.error('Error extracting user data:', e);
-    return null;
-  }
 };
 
 // Helper function to safely get context from SDK
@@ -48,8 +30,8 @@ const safeGetContext = async () => {
           return {
             user: safeExtractUserData(rawContext.user),
             client: rawContext.client ? {
-              clientFid: typeof rawContext.client.clientFid === 'function' ? null : Number(rawContext.client.clientFid || 0),
-              added: typeof rawContext.client.added === 'function' ? false : Boolean(rawContext.client.added)
+              clientFid: safeGetPrimitive(rawContext.client.clientFid, 0),
+              added: safeGetPrimitive(rawContext.client.added, false)
             } : null,
             location: rawContext.location || null
           };
@@ -65,8 +47,8 @@ const safeGetContext = async () => {
       return {
         user: safeExtractUserData(sdk.context.user),
         client: sdk.context.client ? {
-          clientFid: typeof sdk.context.client.clientFid === 'function' ? null : Number(sdk.context.client.clientFid || 0),
-          added: typeof sdk.context.client.added === 'function' ? false : Boolean(sdk.context.client.added)
+          clientFid: safeGetPrimitive(sdk.context.client.clientFid, 0),
+          added: safeGetPrimitive(sdk.context.client.added, false)
         } : null,
         location: sdk.context.location || null
       };
