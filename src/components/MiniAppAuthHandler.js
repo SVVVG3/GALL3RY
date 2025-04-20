@@ -41,14 +41,14 @@ const MiniAppAuthHandler = () => {
               console.log('MiniAppAuthHandler: Context retrieved:', context ? 'yes' : 'no');
               
               if (context && context.user && context.user.fid) {
+                // Ensure we're using primitive values only
                 userInfo = {
-                  fid: context.user.fid ? Number(context.user.fid) : null,
-                  username: context.user.username ? String(context.user.username) : null,
-                  displayName: context.user.displayName ? String(context.user.displayName) : 
-                              (context.user.username ? String(context.user.username) : null),
-                  pfp: {
-                    url: context.user.pfpUrl ? String(context.user.pfpUrl) : null
-                  }
+                  fid: typeof context.user.fid === 'function' ? null : Number(context.user.fid || 0),
+                  username: typeof context.user.username === 'function' ? null : String(context.user.username || ''),
+                  displayName: typeof context.user.displayName === 'function' ? null : 
+                              String(context.user.displayName || context.user.username || ''),
+                  pfp: typeof context.user.pfpUrl === 'function' ? null : 
+                       String(context.user.pfpUrl || '')
                 };
                 
                 console.log('MiniAppAuthHandler: Found user in context:', {

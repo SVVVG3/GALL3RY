@@ -191,10 +191,21 @@ if (typeof window !== 'undefined') {
                 
                 sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
                 
-                // Dispatch event for components
-                const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
-                window.dispatchEvent(authEvent);
-                log('Authentication event dispatched with user data');
+                // Dispatch event for components to react to authentication
+                try {
+                  const eventData = {
+                    fid: typeof userData.fid === 'function' ? null : userData.fid,
+                    username: typeof userData.username === 'function' ? null : String(userData.username || ''),
+                    displayName: typeof userData.displayName === 'function' ? null : String(userData.displayName || ''),
+                    pfp: typeof userData.pfp === 'function' ? null : userData.pfp
+                  };
+                  const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                    detail: eventData
+                  });
+                  window.dispatchEvent(authEvent);
+                } catch (eventError) {
+                  console.error('Failed to dispatch auth event:', eventError.message || 'Unknown error');
+                }
               } catch (storageError) {
                 console.warn('Failed to store user info:', storageError);
                 sendDiagnosticLog('STORAGE_ERROR', { error: storageError.message });
@@ -218,9 +229,21 @@ if (typeof window !== 'undefined') {
                 
                 sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
                 
-                // Dispatch event
-                const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
-                window.dispatchEvent(authEvent);
+                // Dispatch event for components to react to authentication
+                try {
+                  const eventData = {
+                    fid: typeof userData.fid === 'function' ? null : userData.fid,
+                    username: typeof userData.username === 'function' ? null : String(userData.username || ''),
+                    displayName: typeof userData.displayName === 'function' ? null : String(userData.displayName || ''),
+                    pfp: typeof userData.pfp === 'function' ? null : userData.pfp
+                  };
+                  const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                    detail: eventData
+                  });
+                  window.dispatchEvent(authEvent);
+                } catch (eventError) {
+                  console.error('Failed to dispatch auth event:', eventError.message || 'Unknown error');
+                }
               }
             }
           } else if (sdk.context && sdk.context.user && sdk.context.user.fid) {
@@ -237,9 +260,21 @@ if (typeof window !== 'undefined') {
             
             sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
             
-            // Dispatch event
-            const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
-            window.dispatchEvent(authEvent);
+            // Dispatch event for components to react to authentication
+            try {
+              const eventData = {
+                fid: typeof userData.fid === 'function' ? null : userData.fid,
+                username: typeof userData.username === 'function' ? null : String(userData.username || ''),
+                displayName: typeof userData.displayName === 'function' ? null : String(userData.displayName || ''),
+                pfp: typeof userData.pfp === 'function' ? null : userData.pfp
+              };
+              const authEvent = new CustomEvent('miniAppAuthenticated', { 
+                detail: eventData
+              });
+              window.dispatchEvent(authEvent);
+            } catch (eventError) {
+              console.error('Failed to dispatch auth event:', eventError.message || 'Unknown error');
+            }
           }
         } catch (e) {
           console.warn('Error checking for user info in SDK context:', e);
@@ -383,14 +418,15 @@ const getUserInfoFromContext = async () => {
         if (context && context.user && context.user.fid) {
           // Create a clean user data object with primitive values
           const userData = {
-            fid: context.user.fid ? Number(context.user.fid) : null,
-            username: context.user.username ? String(context.user.username) : null,
-            displayName: context.user.displayName ? String(context.user.displayName) : 
-                        (context.user.username ? String(context.user.username) : null),
-            pfp: {
-              url: context.user.pfpUrl ? String(context.user.pfpUrl) : null
-            }
+            fid: typeof context.user.fid === 'function' ? null : Number(context.user.fid),
+            username: typeof context.user.username === 'function' ? null : String(context.user.username || ''),
+            displayName: typeof context.user.displayName === 'function' ? null : 
+                        String(context.user.displayName || context.user.username || ''),
+            pfp: typeof context.user.pfpUrl === 'function' ? null : 
+                 (context.user.pfpUrl ? String(context.user.pfpUrl) : null)
           };
+          
+          console.log('Extracted user data:', JSON.stringify(userData));
           
           // Store in localStorage for persistence
           try {
@@ -401,8 +437,15 @@ const getUserInfoFromContext = async () => {
             console.warn('Failed to store user info in localStorage:', e);
           }
           
-          // Dispatch event for other components
-          const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+          // Dispatch event for other components - ensure all values are primitives
+          const eventData = {
+            fid: userData.fid,
+            username: userData.username,
+            displayName: userData.displayName,
+            pfp: userData.pfp
+          };
+          
+          const authEvent = new CustomEvent('miniAppAuthenticated', { detail: eventData });
           window.dispatchEvent(authEvent);
           
           return userData;
@@ -416,16 +459,17 @@ const getUserInfoFromContext = async () => {
     if (sdk.context && sdk.context.user && sdk.context.user.fid) {
       console.log('User info found in sdk.context property');
       
-      // Create user data from context property
+      // Create user data from context property with strict primitive conversion
       const userData = {
-        fid: sdk.context.user.fid ? Number(sdk.context.user.fid) : null,
-        username: sdk.context.user.username ? String(sdk.context.user.username) : null,
-        displayName: sdk.context.user.displayName ? String(sdk.context.user.displayName) : 
-                    (sdk.context.user.username ? String(sdk.context.user.username) : null),
-        pfp: {
-          url: sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null
-        }
+        fid: typeof sdk.context.user.fid === 'function' ? null : Number(sdk.context.user.fid || 0),
+        username: typeof sdk.context.user.username === 'function' ? null : String(sdk.context.user.username || ''),
+        displayName: typeof sdk.context.user.displayName === 'function' ? null : 
+                   String(sdk.context.user.displayName || sdk.context.user.username || ''),
+        pfp: typeof sdk.context.user.pfpUrl === 'function' ? null : 
+             (sdk.context.user.pfpUrl ? String(sdk.context.user.pfpUrl) : null)
       };
+      
+      console.log('Extracted user data from context property:', JSON.stringify(userData));
       
       // Store in localStorage
       try {
@@ -436,8 +480,15 @@ const getUserInfoFromContext = async () => {
         console.warn('Failed to store user info in localStorage:', e);
       }
       
-      // Dispatch event
-      const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+      // Dispatch event with primitive values only
+      const eventData = {
+        fid: userData.fid,
+        username: userData.username, 
+        displayName: userData.displayName,
+        pfp: userData.pfp
+      };
+      
+      const authEvent = new CustomEvent('miniAppAuthenticated', { detail: eventData });
       window.dispatchEvent(authEvent);
       
       return userData;
@@ -523,13 +574,14 @@ function AppContent() {
                   
                   // Dispatch event for components to react to authentication
                   try {
+                    const eventData = {
+                      fid: typeof userData.fid === 'function' ? null : userData.fid,
+                      username: typeof userData.username === 'function' ? null : String(userData.username || ''),
+                      displayName: typeof userData.displayName === 'function' ? null : String(userData.displayName || ''),
+                      pfp: typeof userData.pfp === 'function' ? null : userData.pfp
+                    };
                     const authEvent = new CustomEvent('miniAppAuthenticated', { 
-                      detail: {
-                        fid: userData.fid,
-                        username: userData.username,
-                        displayName: userData.displayName,
-                        pfp: userData.pfp
-                      }
+                      detail: eventData
                     });
                     window.dispatchEvent(authEvent);
                   } catch (eventError) {

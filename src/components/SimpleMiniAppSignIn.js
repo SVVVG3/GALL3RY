@@ -11,118 +11,70 @@ const generateSimpleNonce = () => {
   return random;
 };
 
-// Helper function to safely extract user data from various sources
-const safeExtractUserData = (data) => {
-  if (!data) return null;
-  
-  // Log what we received for debugging
-  if (DEBUG_MODE) {
-    console.log('Extracting user data from:', typeof data, data);
-  }
+// Helper to safely extract user data without passing proxy objects or functions
+const safeExtractUserData = (userObj) => {
+  if (!userObj) return null;
   
   try {
-    // If it's already a user object with expected properties
-    if (data.fid) {
-      return {
-        fid: data.fid,
-        username: data.username || `user-${data.fid}`,
-        displayName: data.displayName || data.username || `User ${data.fid}`,
-        pfp: data.pfp || null
-      };
-    }
-    
-    // If it's the context.user format
-    if (data.user && data.user.fid) {
-      return {
-        fid: data.user.fid,
-        username: data.user.username || `user-${data.user.fid}`,
-        displayName: data.user.displayName || data.user.username || `User ${data.user.fid}`,
-        pfp: data.user.pfp || null
-      };
-    }
-    
-    // If it's just raw data that might contain user info
-    let possibleFid = null;
-    
-    // Check for common patterns in various formats
-    if (typeof data === 'object') {
-      // Look for fid in common paths
-      possibleFid = data.fid || 
-                   (data.user && data.user.fid) || 
-                   (data.data && data.data.fid) || 
-                   (data.result && data.result.fid) ||
-                   (data.response && data.response.fid);
-                   
-      if (possibleFid) {
-        // Determine which path had the fid
-        const userDataSource = data.fid ? data :
-                             data.user ? data.user :
-                             data.data ? data.data :
-                             data.result ? data.result :
-                             data.response ? data.response : null;
-        
-        if (userDataSource) {
-          return {
-            fid: userDataSource.fid,
-            username: userDataSource.username || `user-${userDataSource.fid}`,
-            displayName: userDataSource.displayName || userDataSource.username || `User ${userDataSource.fid}`,
-            pfp: userDataSource.pfp || null
-          };
-        }
-      }
-    }
-    
-    // If we still haven't found a user, check if this is a string that might contain
-    // user info encoded in JSON
-    if (typeof data === 'string') {
-      try {
-        const parsed = JSON.parse(data);
-        return safeExtractUserData(parsed); // recursively try to extract from the parsed data
-      } catch {
-        // Not JSON, ignore
-      }
-    }
-    
-    return null;
+    // Create a clean object with only primitive values
+    return {
+      fid: typeof userObj.fid === 'function' ? null : Number(userObj.fid || 0),
+      username: typeof userObj.username === 'function' ? null : String(userObj.username || ''),
+      displayName: typeof userObj.displayName === 'function' ? null : String(userObj.displayName || userObj.username || ''),
+      pfp: typeof userObj.pfpUrl === 'function' ? null : 
+           (userObj.pfpUrl ? String(userObj.pfpUrl) : null)
+    };
   } catch (e) {
     console.error('Error extracting user data:', e);
     return null;
   }
 };
 
-// Helper to safely get context from SDK
+// Helper function to safely get context from SDK
 const safeGetContext = async () => {
   try {
-    // Check if SDK is defined
     if (!sdk) {
-      console.log('SDK is not defined');
+      console.log('SDK not available for context check');
       return null;
     }
     
-    // First try the getContext method if available
+    // Try to get context via getContext method
     if (typeof sdk.getContext === 'function') {
       try {
-        console.log('Calling sdk.getContext()');
-        const context = await sdk.getContext();
-        console.log('Context received:', context);
-        return context;
+        const rawContext = await sdk.getContext();
+        
+        // If we have a context, convert any potential proxy values to primitives
+        if (rawContext && rawContext.user) {
+          return {
+            user: safeExtractUserData(rawContext.user),
+            client: rawContext.client ? {
+              clientFid: typeof rawContext.client.clientFid === 'function' ? null : Number(rawContext.client.clientFid || 0),
+              added: typeof rawContext.client.added === 'function' ? false : Boolean(rawContext.client.added)
+            } : null,
+            location: rawContext.location || null
+          };
+        }
+        return null;
       } catch (e) {
-        console.error('Error calling sdk.getContext():', e);
+        console.warn('Error getting context via getContext():', e.message);
       }
-    } else {
-      console.log('sdk.getContext is not a function');
     }
     
-    // Then try the context property
-    if (sdk.context) {
-      console.log('Using sdk.context property:', sdk.context);
-      return sdk.context;
+    // Fallback to context property
+    if (sdk.context && sdk.context.user) {
+      return {
+        user: safeExtractUserData(sdk.context.user),
+        client: sdk.context.client ? {
+          clientFid: typeof sdk.context.client.clientFid === 'function' ? null : Number(sdk.context.client.clientFid || 0),
+          added: typeof sdk.context.client.added === 'function' ? false : Boolean(sdk.context.client.added)
+        } : null,
+        location: sdk.context.location || null
+      };
     }
     
-    console.log('No context found in SDK');
     return null;
   } catch (e) {
-    console.error("Error in safeGetContext:", e);
+    console.error('Error in safeGetContext:', e);
     return null;
   }
 };

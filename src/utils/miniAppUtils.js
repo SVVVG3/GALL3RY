@@ -182,10 +182,11 @@ export const handleMiniAppAuthentication = async () => {
   }
   
   // Ensure SDK is initialized
-  if (!sdk.initialized && typeof sdk.init === 'function') {
+  if (typeof sdk.init === 'function' && !sdk.initialized) {
     try {
+      console.log('Initializing SDK');
       sdk.init();
-      console.log('SDK initialized');
+      console.log('SDK initialized successfully');
     } catch (initError) {
       console.error('Error initializing SDK:', initError);
       return { success: false, error: 'SDK initialization failed' };
@@ -195,145 +196,199 @@ export const handleMiniAppAuthentication = async () => {
   try {
     // Generate a secure nonce for authentication
     const generateNonce = () => {
+      console.log('Generating nonce for auth');
       try {
         // First attempt to use crypto API (most secure)
         if (window.crypto && window.crypto.getRandomValues) {
           const array = new Uint8Array(16);
           window.crypto.getRandomValues(array);
-          return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+          const nonce = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+          console.log('Generated nonce using window.crypto');
+          return nonce;
         }
       } catch (e) {
-        console.warn('Crypto API failed, using fallback nonce generation:', e);
+        console.warn('Crypto API failed:', e);
       }
       
       // Fallback to Math.random if crypto API is not available
-      return Math.random().toString(36).substring(2, 15) + 
-             Math.random().toString(36).substring(2, 15);
+      console.log('Using Math.random fallback for nonce');
+      const timestamp = Date.now().toString(36);
+      const random1 = Math.random().toString(36).substring(2, 15);
+      const random2 = Math.random().toString(36).substring(2, 15);
+      return `${timestamp}-${random1}-${random2}`;
     };
     
     const nonce = generateNonce();
-    console.log('Generated nonce for authentication');
+    console.log('Generated nonce for authentication:', nonce);
     
     // First check for existing user info in localStorage
     let userInfo = null;
     try {
       const storedInfo = localStorage.getItem('farcaster_user');
       if (storedInfo) {
-        const parsedInfo = JSON.parse(storedInfo);
-        if (parsedInfo && parsedInfo.fid) {
-          userInfo = parsedInfo;
-          console.log('Retrieved existing user info from localStorage');
+        try {
+          const parsedInfo = JSON.parse(storedInfo);
+          if (parsedInfo && parsedInfo.fid) {
+            userInfo = parsedInfo;
+            console.log('Retrieved existing user info from localStorage:', userInfo.username);
+          }
+        } catch (parseError) {
+          console.warn('Error parsing stored user info:', parseError);
+          localStorage.removeItem('farcaster_user');
         }
       }
     } catch (storageError) {
-      console.log('Error retrieving from localStorage:', storageError);
+      console.warn('Error accessing localStorage:', storageError);
     }
     
-    // If no stored user info, try to get from context
+    // If no stored user info, try to get from SDK context
     if (!userInfo) {
-      // Check if the getContext method is available
+      console.log('No valid user info in localStorage, checking SDK context');
+      
+      // First try getContext() method (recommended approach)
       if (typeof sdk.getContext === 'function') {
         try {
-          console.log('Getting user info from sdk.getContext()');
+          console.log('Calling sdk.getContext()');
           const context = await sdk.getContext();
-          console.log('Context result:', context);
+          console.log('Context received:', context ? 'YES' : 'NO');
           
           if (context && context.user && context.user.fid) {
             userInfo = {
-              fid: context.user.fid,
-              username: context.user.username || `user${context.user.fid}`,
-              displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
-              pfp: { url: context.user.pfpUrl || null }
+              fid: typeof context.user.fid === 'function' ? null : Number(context.user.fid || 0),
+              username: typeof context.user.username === 'function' ? null : String(context.user.username || ''),
+              displayName: typeof context.user.displayName === 'function' ? null : 
+                          String(context.user.displayName || context.user.username || ''),
+              pfp: typeof context.user.pfpUrl === 'function' ? null : String(context.user.pfpUrl || '')
             };
-            console.log('Got user info from getContext:', userInfo);
+            console.log('Retrieved user info from getContext:', userInfo.username);
           }
         } catch (contextError) {
-          console.log('Error getting context:', contextError);
+          console.warn('Error getting context:', contextError);
         }
       }
       
       // If getContext didn't work, try context property directly
       if (!userInfo && sdk.context && sdk.context.user && sdk.context.user.fid) {
+        console.log('Checking sdk.context property');
         const user = sdk.context.user;
         userInfo = {
-          fid: user.fid,
-          username: user.username || `user${user.fid}`,
-          displayName: user.displayName || user.username || `User ${user.fid}`,
-          pfp: { url: user.pfpUrl || null }
+          fid: typeof user.fid === 'function' ? null : Number(user.fid || 0),
+          username: typeof user.username === 'function' ? null : String(user.username || ''),
+          displayName: typeof user.displayName === 'function' ? null : 
+                      String(user.displayName || user.username || ''),
+          pfp: typeof user.pfpUrl === 'function' ? null : String(user.pfpUrl || '')
         };
-        console.log('Got user info from context property:', userInfo);
+        console.log('Retrieved user info from sdk.context:', userInfo.username);
       }
       
       // If still no user info, try sign-in
       if (!userInfo && sdk.actions && typeof sdk.actions.signIn === 'function') {
+        console.log('No user info found in context, attempting sign-in');
+        
         try {
-          console.log('No user info found, attempting to sign in');
+          // Create a promise with timeout to avoid hanging
+          console.log('Calling sdk.actions.signIn with nonce:', nonce);
           
-          // Create a timeout to avoid hanging
           const signInPromise = sdk.actions.signIn({ nonce });
           const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Sign-in timeout')), 5000);
+            setTimeout(() => reject(new Error('Sign-in timeout after 10 seconds')), 10000);
           });
           
-          // Race the promises
+          // Race the promises to handle timeout
           const signInResult = await Promise.race([signInPromise, timeoutPromise]);
-          console.log('Sign-in result type:', typeof signInResult);
+          console.log('Sign-in completed, result:', signInResult ? 'SUCCESS' : 'EMPTY');
           
-          // Try to get context again after sign-in
+          // First try to get context again after sign-in
           if (typeof sdk.getContext === 'function') {
-            const newContext = await sdk.getContext();
-            if (newContext && newContext.user && newContext.user.fid) {
-              userInfo = {
-                fid: newContext.user.fid,
-                username: newContext.user.username || `user${newContext.user.fid}`,
-                displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
-                pfp: { url: newContext.user.pfpUrl || null }
-              };
-              console.log('Got user info after sign-in:', userInfo);
+            try {
+              console.log('Getting updated context after sign-in');
+              const newContext = await sdk.getContext();
+              
+              if (newContext && newContext.user && newContext.user.fid) {
+                userInfo = {
+                  fid: newContext.user.fid,
+                  username: newContext.user.username || `user${newContext.user.fid}`,
+                  displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
+                  pfp: { url: newContext.user.pfpUrl || null }
+                };
+                console.log('Retrieved user info after sign-in:', userInfo.username);
+              }
+            } catch (contextError) {
+              console.warn('Error getting context after sign-in:', contextError);
+            }
+          }
+          
+          // If still no user info, check sdk.context again
+          if (!userInfo && sdk.context && sdk.context.user && sdk.context.user.fid) {
+            const user = sdk.context.user;
+            userInfo = {
+              fid: user.fid,
+              username: user.username || `user${user.fid}`,
+              displayName: user.displayName || user.username || `User ${user.fid}`,
+              pfp: { url: user.pfpUrl || null }
+            };
+            console.log('Retrieved user info from sdk.context after sign-in:', userInfo.username);
+          }
+          
+          // Last resort: try to extract from sign-in result
+          if (!userInfo && signInResult) {
+            console.log('Full sign-in result:', JSON.stringify(signInResult));
+            
+            try {
+              // Check if result has direct user info
+              if (signInResult.user) {
+                userInfo = {
+                  fid: signInResult.user.fid,
+                  username: signInResult.user.username || `user${signInResult.user.fid}`,
+                  displayName: signInResult.user.displayName || signInResult.user.username || `User ${signInResult.user.fid}`,
+                  pfp: { url: signInResult.user.pfpUrl || null }
+                };
+                console.log('Extracted user info from result.user');
+              } 
+              // Try to parse from message if available
+              else if (signInResult.message) {
+                const fidMatch = signInResult.message.match(/fid:(\d+)/);
+                if (fidMatch && fidMatch[1]) {
+                  const fid = fidMatch[1];
+                  console.log('Extracted FID from message:', fid);
+                  userInfo = {
+                    fid: fid,
+                    username: `user${fid}`,
+                    displayName: `User ${fid}`,
+                    pfp: { url: null }
+                  };
+                }
+              }
+            } catch (parseError) {
+              console.warn('Error parsing sign-in result:', parseError);
             }
           }
         } catch (signInError) {
-          console.log('Sign-in error or timeout:', signInError);
-          return { success: false, error: 'Sign-in failed or was rejected' };
+          console.error('Error during sign-in:', signInError);
+          return { success: false, error: signInError.message || 'Sign-in failed' };
         }
       }
     }
     
     // If we have user info, store it and update state
     if (userInfo && userInfo.fid) {
+      console.log('Successfully obtained user info, FID:', userInfo.fid, 'Username:', userInfo.username);
+      
       // Store in localStorage for persistence
       try {
         localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
         localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-        console.log('Stored user info in localStorage');
+        console.log('User info stored in localStorage');
       } catch (storageError) {
         console.error('Error storing in localStorage:', storageError);
       }
       
-      // Update auth state if function is available
-      if (window.authContextRef && window.authContextRef.current) {
-        console.log('Updating auth state with authContextRef');
-        window.authContextRef.current.setAuth({
-          isAuthenticated: true,
-          user: userInfo
-        });
-      }
-      
-      // Update auth state with updateAuthState if available
-      if (typeof window.updateAuthState === 'function') {
-        console.log('Calling updateAuthState function');
-        window.updateAuthState({
-          user: userInfo,
-          isAuthenticated: true
-        });
-      } else {
-        // Dispatch event for components to react to
-        console.log('Dispatching miniAppAuthenticated event');
-        const event = new CustomEvent('miniAppAuthenticated', {
-          detail: userInfo
-        });
-        window.dispatchEvent(event);
-      }
+      // Dispatch event for components to react to
+      console.log('Dispatching miniAppAuthenticated event');
+      const event = new CustomEvent('miniAppAuthenticated', {
+        detail: userInfo
+      });
+      window.dispatchEvent(event);
       
       return { success: true, user: userInfo };
     }
