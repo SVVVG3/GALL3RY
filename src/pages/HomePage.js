@@ -233,13 +233,21 @@ const HomePage = () => {
   
   useEffect(() => {
     const checkEnvironment = async () => {
-      const inMiniApp = await isMiniAppEnvironment();
+      const inMiniApp = isMiniAppEnvironment();
       setIsMiniApp(inMiniApp);
-      setSdkAvailable(typeof sdk !== 'undefined');
+      setSdkAvailable(typeof window !== 'undefined' && typeof window.sdk !== 'undefined');
+      
+      // Log environment details
+      console.log('HomePage environment:', {
+        isMiniApp: inMiniApp,
+        sdkAvailable: typeof window !== 'undefined' && typeof window.sdk !== 'undefined',
+        authenticated: authenticated,
+        user: user
+      });
     };
     
     checkEnvironment();
-  }, []);
+  }, [authenticated, user]);
   
   return (
     <div className="home-page">

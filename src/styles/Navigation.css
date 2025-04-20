@@ -8,7 +8,12 @@
 
 /* Mini App navigation adjustments */
 .mini-app-navigation {
-  padding: 0.25rem 0;
+  padding: 0.25rem 0.75rem;
+  display: flex;
+  flex-direction: row; /* Ensure horizontal layout */
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
 .mini-app-navigation .app-title {
@@ -17,11 +22,25 @@
 
 .mini-app-navigation .user-info {
   font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .mini-app-navigation .user-avatar {
   width: 28px;
   height: 28px;
+}
+
+/* Make sure logo is on left and auth is on right in mini app */
+.mini-app-navigation .nav-logo {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+}
+
+.mini-app-navigation .nav-auth {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 
 .nav-logo {
@@ -141,19 +160,19 @@
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
-  .navigation {
+  .navigation:not(.mini-app-navigation) {
     flex-direction: column;
     padding: 12px;
     gap: 12px;
   }
   
-  .nav-links {
+  .navigation:not(.mini-app-navigation) .nav-links {
     width: 100%;
     justify-content: center;
     gap: 16px;
   }
   
-  .nav-auth {
+  .navigation:not(.mini-app-navigation) .nav-auth {
     width: 100%;
     justify-content: center;
   }

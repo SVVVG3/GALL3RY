@@ -14,7 +14,10 @@ const Navigation = () => {
   
   // Check if we're in a Mini App environment
   useEffect(() => {
-    setIsInMiniApp(isMiniAppEnvironment());
+    // Use the function directly instead of as async
+    const inMiniApp = isMiniAppEnvironment();
+    console.log('Navigation detected mini app:', inMiniApp);
+    setIsInMiniApp(inMiniApp);
   }, []);
   
   return (

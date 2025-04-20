@@ -121,7 +121,7 @@ a:hover {
   align-items: center;
   width: 100%;
   margin: 0 auto;
-  padding: 0.9rem 20px;
+  padding: 0.5rem 20px;
   box-sizing: border-box;
   background-color: white;
 }
@@ -194,25 +194,34 @@ a:hover {
 }
 
 .app-footer {
-  padding: 1.5rem;
-  text-align: center;
-  font-size: 0.9rem;
+  width: 100%;
+  padding: 1.5rem 0;
+  background-color: var(--color-gray-50);
   color: var(--color-gray-600);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0;
-  white-space: nowrap;
+  margin-top: auto;
+  border-top: 1px solid var(--color-gray-100);
+  text-align: center;
 }
 
-.footer-link {
-  margin-left: 0;
+.app-footer-container {
+  width: 100%;
+  max-width: 95vw;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.app-footer p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.app-footer a {
   color: var(--color-primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
-.footer-link:hover {
+.app-footer a:hover {
   color: var(--color-primary-dark);
   text-decoration: underline;
 }
@@ -1319,4 +1328,71 @@ a:hover {
 
 .collection-friends-button:hover {
   background-color: #6c4da7;
+}
+
+/* Main content area styles */
+.app-main {
+  flex: 1;
+  padding: 20px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.mini-app-main {
+  padding: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  margin-top: 0;
+  height: calc(100vh - 60px); /* Adjust for header height */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Mini app header specific styles */
+.mini-app-navigation {
+  display: flex !important;
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  height: 60px;
+  padding: 0 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Force proper alignment for logo in mini apps */
+.mini-app-navigation .nav-logo {
+  flex: 0 1 auto;
+  justify-content: flex-start !important;
+  text-align: left !important;
+}
+
+/* Force proper alignment for auth in mini apps */
+.mini-app-navigation .nav-auth {
+  flex: 0 1 auto;
+  justify-content: flex-end !important;
+  text-align: right !important;
+}
+
+/* Header styles for mini apps */
+.mini-app-header {
+  background-color: white;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0;
+  margin: 0;
+  height: 60px;
+  position: relative;
+  z-index: 100;
+}
+
+.mini-app-header-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  height: 60px;
+  margin: 0;
+  padding: 0;
+  background-color: white;
 } 

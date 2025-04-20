@@ -202,12 +202,38 @@ function AppContent() {
   
   // Handle successful Privy authentication
   useEffect(() => {
-    if (authenticated && user?.farcaster?.fid && isInMiniApp) {
-      console.log(`User authenticated with Farcaster: FID ${user.farcaster.fid}`);
+    if (isInMiniApp) {
+      console.log(`Attempting to dismiss splash screen in mini app environment`);
       
-      // Dismiss splash screen in Mini App environment
+      // Try to dismiss splash screen regardless of auth state
+      const attemptDismissSplash = async () => {
+        try {
+          const result = await dismissSplashScreen();
+          console.log("Splash screen dismiss attempt result:", result);
+        } catch (err) {
+          console.error('Error dismissing splash screen:', err);
+        }
+      };
+      
+      // Try immediately
+      attemptDismissSplash();
+      
+      // Also try after a timeout to ensure it's attempted even if auth is slow
+      const timeoutId = setTimeout(() => {
+        console.log("Trying splash screen dismissal after timeout");
+        attemptDismissSplash();
+      }, 1000);
+      
+      return () => clearTimeout(timeoutId);
+    }
+  }, [isInMiniApp]);
+  
+  // Also try after authentication change
+  useEffect(() => {
+    if (authenticated && user?.farcaster?.fid && isInMiniApp) {
+      console.log(`User authenticated with Farcaster: FID ${user.farcaster.fid}, dismissing splash screen`);
       dismissSplashScreen().catch(err => {
-        console.error('Error dismissing splash screen:', err);
+        console.error('Error dismissing splash screen after auth:', err);
       });
     }
   }, [authenticated, user, isInMiniApp]);
@@ -221,9 +247,9 @@ function AppContent() {
       {/* Add Privy Farcaster Auth for Mini App environments */}
       {isInMiniApp && <PrivyFarcasterAuth />}
       
-      {/* Use the same header for both environments */}
-      <header className="app-header">
-        <div className="app-header-container">
+      {/* Use the same header for both environments but with mini app class when needed */}
+      <header className={`app-header ${isInMiniApp ? 'mini-app-header' : ''}`}>
+        <div className={`app-header-container ${isInMiniApp ? 'mini-app-header-container' : ''}`}>
           <Navigation />
         </div>
       </header>
