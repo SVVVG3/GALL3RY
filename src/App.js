@@ -22,42 +22,192 @@ import { AuthKitProvider } from '@farcaster/auth-kit';
 // Import the SDK directly but initialize only in browser
 import { sdk } from '@farcaster/frame-sdk';
 
+// Debug mode constant
+const DEBUG_MODE = true;
+const log = (message, data) => {
+  if (DEBUG_MODE) {
+    console.log(`🔍 [DEBUG] ${message}`, data || '');
+  }
+};
+
+// Send diagnostic log to server
+const sendDiagnosticLog = async (event, data = {}) => {
+  if (!DEBUG_MODE) return;
+  
+  try {
+    await fetch('/api/diagnostic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event,
+        type: data.error ? 'error' : 'info',
+        message: data.message || event,
+        error: data.error,
+        data: data.data || null,
+        clientInfo: {
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+          sdkStatus: {
+            defined: !!sdk,
+            hasActions: sdk && !!sdk.actions,
+            hasSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
+            hasGetContext: sdk && typeof sdk.getContext === 'function',
+            hasContext: sdk && !!sdk.context
+          }
+        }
+      })
+    });
+  } catch (e) {
+    console.warn('Error sending diagnostic log:', e);
+  }
+};
+
 // IMPORTANT: Add a check for browser environment first
 if (typeof window !== 'undefined') {
   // Make SDK globally accessible
   window.farcasterSdk = sdk;
   
+  log("Initializing Farcaster SDK...");
+  sendDiagnosticLog('SDK_INIT_START');
+  
   // Initialize SDK immediately
   try {
-    console.log("Initializing Farcaster SDK...");
-    
-    // Check if SDK is available and has init method
+    // Check if SDK is available
     if (sdk) {
-      if (typeof sdk.init === 'function') {
-        sdk.init();
-        console.log("✅ SDK initialized with sdk.init()");
-      } else if (typeof sdk.initialized !== 'undefined') {
-        console.log("✅ SDK already initialized");
-      } else {
-        console.warn("⚠️ SDK init method not found, using as-is");
-      }
-      
-      // Expose SDK globally for components
+      // First, mark that we've assigned the sdk to window
+      window.SDK_INSTALLED = true;
       window.sdk = sdk;
       
+      // Check if it needs initialization
+      if (typeof sdk.init === 'function' && !sdk.initialized) {
+        log("Calling sdk.init() to initialize the SDK");
+        sdk.init();
+        log("✅ SDK initialized successfully");
+        sendDiagnosticLog('SDK_INIT_SUCCESS');
+      } else if (typeof sdk.initialized !== 'undefined') {
+        log("✅ SDK already initialized");
+        sendDiagnosticLog('SDK_ALREADY_INITIALIZED');
+      } else {
+        log("⚠️ SDK init method not found, using as-is");
+        sendDiagnosticLog('SDK_NO_INIT_METHOD');
+      }
+      
       // Log SDK status for debugging
-      console.log("SDK Status:", {
+      const sdkStatus = {
         isDefined: !!sdk,
         hasActionsProperty: sdk && !!sdk.actions,
         hasSignInMethod: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
         hasGetContextMethod: sdk && typeof sdk.getContext === 'function',
-        hasContext: sdk && !!sdk.context
-      });
+        hasContext: sdk && !!sdk.context,
+        initialized: sdk.initialized
+      };
+      
+      log("SDK Status:", sdkStatus);
+      sendDiagnosticLog('SDK_STATUS', { data: sdkStatus });
+      
+      // Try to extract user info immediately if available
+      const checkForUserInfo = async () => {
+        try {
+          // First try to get context through the method
+          if (typeof sdk.getContext === 'function') {
+            log("Attempting to get user context via sdk.getContext()");
+            const context = await sdk.getContext();
+            
+            if (context && context.user && context.user.fid) {
+              log('Found authenticated user in SDK context with FID:', context.user.fid);
+              sendDiagnosticLog('USER_FOUND_IN_CONTEXT', { 
+                message: `User found in context with FID: ${context.user.fid}`,
+                data: { fid: context.user.fid, username: context.user.username }
+              });
+              
+              // Store user info in sessionStorage (preferred over localStorage for Mini Apps)
+              try {
+                const userData = {
+                  fid: context.user.fid,
+                  username: context.user.username || `user${context.user.fid}`,
+                  displayName: context.user.displayName || context.user.username || `User ${context.user.fid}`,
+                  pfp: context.user.pfpUrl || null
+                };
+                
+                sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+                
+                // Dispatch event for components
+                const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+                window.dispatchEvent(authEvent);
+                log('Authentication event dispatched with user data');
+              } catch (storageError) {
+                console.warn('Failed to store user info:', storageError);
+                sendDiagnosticLog('STORAGE_ERROR', { error: storageError.message });
+              }
+            } else {
+              log('No authenticated user found in SDK context');
+              sendDiagnosticLog('NO_USER_IN_CONTEXT');
+              
+              // Try the context property as fallback
+              if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+                log('Found user in sdk.context property');
+                sendDiagnosticLog('USER_FOUND_IN_CONTEXT_PROPERTY');
+                
+                // Process user data from context property
+                const userData = {
+                  fid: sdk.context.user.fid,
+                  username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+                  displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+                  pfp: sdk.context.user.pfpUrl || null
+                };
+                
+                sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+                
+                // Dispatch event
+                const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+                window.dispatchEvent(authEvent);
+              }
+            }
+          } else if (sdk.context && sdk.context.user && sdk.context.user.fid) {
+            // Fallback to context property if getContext method is not available
+            log('Method getContext not available, using context property');
+            sendDiagnosticLog('USING_CONTEXT_PROPERTY');
+            
+            const userData = {
+              fid: sdk.context.user.fid,
+              username: sdk.context.user.username || `user${sdk.context.user.fid}`,
+              displayName: sdk.context.user.displayName || sdk.context.user.username || `User ${sdk.context.user.fid}`,
+              pfp: sdk.context.user.pfpUrl || null
+            };
+            
+            sessionStorage.setItem('miniAppUserInfo', JSON.stringify(userData));
+            
+            // Dispatch event
+            const authEvent = new CustomEvent('miniAppAuthenticated', { detail: userData });
+            window.dispatchEvent(authEvent);
+          }
+        } catch (e) {
+          console.warn('Error checking for user info in SDK context:', e);
+          sendDiagnosticLog('CONTEXT_CHECK_ERROR', { error: e.message });
+        } finally {
+          // Always try to dismiss splash screen after context check
+          dismissSplashScreen();
+        }
+      };
+      
+      // Run the check after a short delay to ensure SDK is fully initialized
+      setTimeout(checkForUserInfo, 300);
+      
+      // Set a safety timeout to dismiss splash screen even if context check fails
+      setTimeout(dismissSplashScreen, 2000);
     } else {
-      console.warn("⚠️ SDK not available");
+      log("⚠️ SDK not available");
+      sendDiagnosticLog('SDK_NOT_AVAILABLE');
+      
+      // Still try to dismiss splash screen after a delay
+      setTimeout(dismissSplashScreen, 1000);
     }
   } catch (e) {
     console.error("❌ SDK init error:", e.message || String(e));
+    sendDiagnosticLog('SDK_INIT_ERROR', { error: e.message });
+    
+    // Emergency dismiss splash screen attempt
+    setTimeout(dismissSplashScreen, 1500);
   }
 }
 
@@ -78,6 +228,8 @@ import NFTGallery from './components/NFTGallery';
 import SimpleGalleryPage from './pages/SimpleGalleryPage';
 import AuthStatusIndicator from './components/AuthStatusIndicator';
 import MiniAppAuthHandler from './components/MiniAppAuthHandler';
+import DiagnosticPanel from './components/DiagnosticPanel';
+import { DiagnosticLogger } from './utils/diagnosticUtils';
 
 // Loading component for suspense fallback
 const LoadingScreen = () => (
@@ -141,53 +293,50 @@ class CustomErrorBoundary extends React.Component {
 // Add a new function to handle splash screen dismissal
 // This needs to be as simple as possible
 const dismissSplashScreen = async () => {
-  console.log('⚠️ Attempting to dismiss splash screen');
+  log('Attempting to dismiss splash screen');
+  sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ATTEMPT');
+  
   try {
     if (!sdk) {
       console.warn('⚠️ SDK not available for dismissing splash screen');
+      sendDiagnosticLog('SDK_NOT_AVAILABLE_FOR_SPLASH');
       return false;
     }
     
-    // Try different methods to dismiss splash screen based on SDK version
-    
-    // Method 1: Try sdk.actions.ready() - standard method per documentation
-    if (sdk.actions && typeof sdk.actions.ready === 'function') {
-      try {
-        await sdk.actions.ready();
-        console.log('✅ Called sdk.actions.ready() successfully');
-        return true;
-      } catch (e) {
-        console.warn('⚠️ sdk.actions.ready() failed:', e);
-      }
+    // Try using hideSplashScreen method (current API)
+    if (typeof sdk.hideSplashScreen === 'function') {
+      log('Calling sdk.hideSplashScreen()');
+      await sdk.hideSplashScreen();
+      log('✅ Splash screen dismissed with hideSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_HIDE');
+      return true;
     }
     
-    // Method 2: Try sdk.ready() - older SDK versions
-    if (typeof sdk.ready === 'function') {
-      try {
-        await sdk.ready();
-        console.log('✅ Called sdk.ready() successfully');
-        return true;
-      } catch (e) {
-        console.warn('⚠️ sdk.ready() failed:', e);
-      }
+    // Fallback to older SDK versions that might use dismissSplashScreen
+    if (typeof sdk.dismissSplashScreen === 'function') {
+      log('Calling sdk.dismissSplashScreen()');
+      await sdk.dismissSplashScreen();
+      log('✅ Splash screen dismissed with dismissSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_DISMISS');
+      return true;
     }
     
-    // Method 3: Try sdk.setFrameReady() - alternate method in some implementations
-    if (typeof sdk.setFrameReady === 'function') {
-      try {
-        await sdk.setFrameReady();
-        console.log('✅ Called sdk.setFrameReady() successfully');
-        return true;
-      } catch (e) {
-        console.warn('⚠️ sdk.setFrameReady() failed:', e);
-      }
+    // Another fallback for possible API changes
+    if (sdk.actions && typeof sdk.actions.hideSplashScreen === 'function') {
+      log('Calling sdk.actions.hideSplashScreen()');
+      await sdk.actions.hideSplashScreen();
+      log('✅ Splash screen dismissed with actions.hideSplashScreen');
+      sendDiagnosticLog('SPLASH_SCREEN_DISMISSED_WITH_ACTIONS_HIDE');
+      return true;
     }
     
-    // If we get here, none of the methods worked
-    console.warn('⚠️ No suitable ready() method found in SDK');
+    // Last fallback if we can't find the method
+    console.warn('⚠️ No splash screen dismissal method found on SDK');
+    sendDiagnosticLog('NO_SPLASH_SCREEN_METHOD_FOUND');
     return false;
   } catch (e) {
-    console.error('❌ Error trying to dismiss splash screen:', e);
+    console.error('❌ Error dismissing splash screen:', e.message || String(e));
+    sendDiagnosticLog('SPLASH_SCREEN_DISMISS_ERROR', { error: e.message });
     return false;
   }
 };
@@ -296,6 +445,7 @@ function AppContent() {
   const [isMiniApp, setIsMiniApp] = useState(false);
   const authContextRef = useRef(null);
   const location = useLocation();
+  const [showDiagnosticPanel, setShowDiagnosticPanel] = useState(false);
   
   // Initialize the app on mount
   useEffect(() => {
@@ -442,6 +592,20 @@ function AppContent() {
       // Make auth context available globally for components that need it
       window.authContextRef = authContextRef;
     }
+
+    // Log SDK initialization for diagnostics
+    if (typeof window !== 'undefined') {
+      DiagnosticLogger.info('Initializing App', { isBrowser: true });
+      
+      if (window.sdk) {
+        DiagnosticLogger.info('SDK found in window', { 
+          sdkVersion: window.sdk.version, 
+          hasMethods: !!window.sdk.getContext
+        });
+      } else {
+        DiagnosticLogger.warn('SDK not found in window');
+      }
+    }
   }, []);
   
   // Listen for authentication events
@@ -457,6 +621,55 @@ function AppContent() {
     
     return () => {
       window.removeEventListener('miniAppAuthenticated', handleMiniAppAuth);
+    };
+  }, []);
+  
+  // Add keyboard shortcut for diagnostic panel
+  useEffect(() => {
+    // Listen for Ctrl+Shift+D to toggle diagnostic panel
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'd') {
+        e.preventDefault();
+        setShowDiagnosticPanel(prev => !prev);
+        // Dispatch event for external listeners
+        window.dispatchEvent(new Event('toggle-diagnostic-panel'));
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    
+    // Add diagnostic opening on triple click on footer
+    let clickCount = 0;
+    let clickTimer;
+    
+    const handleFooterClick = () => {
+      clickCount++;
+      
+      if (clickCount === 1) {
+        clickTimer = setTimeout(() => {
+          clickCount = 0;
+        }, 800);
+      }
+      
+      if (clickCount === 3) {
+        clearTimeout(clickTimer);
+        clickCount = 0;
+        setShowDiagnosticPanel(prev => !prev);
+        window.dispatchEvent(new Event('toggle-diagnostic-panel'));
+      }
+    };
+    
+    const footer = document.querySelector('footer');
+    if (footer) {
+      footer.addEventListener('click', handleFooterClick);
+    }
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (footer) {
+        footer.removeEventListener('click', handleFooterClick);
+      }
+      clearTimeout(clickTimer);
     };
   }, []);
   
@@ -558,6 +771,9 @@ function AppContent() {
           </WalletProvider>
         </AuthProvider>
       </AuthKitProvider>
+      
+      {/* Add Diagnostic Panel */}
+      {showDiagnosticPanel && <DiagnosticPanel />}
     </ErrorBoundary>
   );
 }
