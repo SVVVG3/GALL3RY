@@ -162,8 +162,8 @@ export const setupMiniAppEventListeners = () => {
 };
 
 /**
- * Handle authentication within a Mini App context
- * Uses existing Farcaster auth or sign-in method depending on environment
+ * Handle authentication within a Mini App context using the recommended approach
+ * Avoids direct access to SDK proxy objects that can cause toJSON errors
  * @returns {Promise<Object|null>} Auth result or null if not in Mini App environment
  */
 export const handleMiniAppAuthentication = async () => {
@@ -181,202 +181,88 @@ export const handleMiniAppAuthentication = async () => {
     return { success: false, error: 'SDK not available' };
   }
   
-  // Ensure SDK is initialized
-  if (typeof sdk.init === 'function' && !sdk.initialized) {
-    try {
-      console.log('Initializing SDK');
-      sdk.init();
-      console.log('SDK initialized successfully');
-    } catch (initError) {
-      console.error('Error initializing SDK:', initError);
-      return { success: false, error: 'SDK initialization failed' };
-    }
-  }
+  // Generate a nonce for authentication
+  const generateNonce = () => {
+    return Math.random().toString(36).substring(2, 15) + 
+           Math.random().toString(36).substring(2, 15);
+  };
+  
+  const nonce = generateNonce();
+  console.log('Generated nonce for authentication:', nonce);
   
   try {
-    // Generate a secure nonce for authentication
-    const generateNonce = () => {
-      console.log('Generating nonce for auth');
+    // IMPORTANT: In Mini App environment, we should use the signIn action
+    // and handle the result WITHOUT trying to directly access object properties
+    if (sdk.actions && typeof sdk.actions.signIn === 'function') {
+      console.log('Using sdk.actions.signIn for authentication...');
+      
       try {
-        // First attempt to use crypto API (most secure)
-        if (window.crypto && window.crypto.getRandomValues) {
-          const array = new Uint8Array(16);
-          window.crypto.getRandomValues(array);
-          const nonce = Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
-          console.log('Generated nonce using window.crypto');
-          return nonce;
-        }
-      } catch (e) {
-        console.warn('Crypto API failed:', e);
-      }
-      
-      // Fallback to Math.random if crypto API is not available
-      console.log('Using Math.random fallback for nonce');
-      const timestamp = Date.now().toString(36);
-      const random1 = Math.random().toString(36).substring(2, 15);
-      const random2 = Math.random().toString(36).substring(2, 15);
-      return `${timestamp}-${random1}-${random2}`;
-    };
-    
-    const nonce = generateNonce();
-    console.log('Generated nonce for authentication:', nonce);
-    
-    // First check for existing user info in localStorage
-    let userInfo = null;
-    try {
-      const storedInfo = localStorage.getItem('farcaster_user');
-      if (storedInfo) {
-        try {
-          const parsedInfo = JSON.parse(storedInfo);
-          if (parsedInfo && parsedInfo.fid) {
-            userInfo = parsedInfo;
-            console.log('Retrieved existing user info from localStorage:', userInfo.username);
-          }
-        } catch (parseError) {
-          console.warn('Error parsing stored user info:', parseError);
-          localStorage.removeItem('farcaster_user');
-        }
-      }
-    } catch (storageError) {
-      console.warn('Error accessing localStorage:', storageError);
-    }
-    
-    // If no stored user info, try to get from SDK context
-    if (!userInfo) {
-      console.log('No valid user info in localStorage, checking SDK context');
-      
-      // First try getContext() method (recommended approach)
-      if (typeof sdk.getContext === 'function') {
-        try {
-          console.log('Calling sdk.getContext()');
-          const context = await sdk.getContext();
-          console.log('Context received:', context ? 'YES' : 'NO');
-          
-          if (context && context.user && context.user.fid) {
-            userInfo = safeExtractUserData(context.user);
-            console.log('Retrieved user info from getContext:', userInfo.username);
-          }
-        } catch (contextError) {
-          console.warn('Error getting context:', contextError);
-        }
-      }
-      
-      // If getContext didn't work, try context property directly
-      if (!userInfo && sdk.context && sdk.context.user && sdk.context.user.fid) {
-        console.log('Checking sdk.context property');
-        userInfo = safeExtractUserData(sdk.context.user);
-        console.log('Retrieved user info from sdk.context:', userInfo.username);
-      }
-      
-      // If still no user info, try sign-in
-      if (!userInfo && sdk.actions && typeof sdk.actions.signIn === 'function') {
-        console.log('No user info found in context, attempting sign-in');
+        // Set a reasonable timeout
+        const signInPromise = sdk.actions.signIn({ nonce });
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Sign-in timeout after 15 seconds')), 15000);
+        });
         
-        try {
-          // Create a promise with timeout to avoid hanging
-          console.log('Calling sdk.actions.signIn with nonce:', nonce);
+        // Race the promises to handle timeout
+        const signInResult = await Promise.race([signInPromise, timeoutPromise]);
+        console.log('Sign-in completed');
+        
+        // CORRECT APPROACH: Don't access signInResult properties directly
+        // Instead, just verify we have a result and store it
+        if (signInResult) {
+          console.log('Authentication successful');
           
-          const signInPromise = sdk.actions.signIn({ nonce });
-          const timeoutPromise = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Sign-in timeout after 10 seconds')), 10000);
-          });
-          
-          // Race the promises to handle timeout
-          const signInResult = await Promise.race([signInPromise, timeoutPromise]);
-          console.log('Sign-in completed, result:', signInResult ? 'SUCCESS' : 'EMPTY');
-          
-          // First try to get context again after sign-in
-          if (typeof sdk.getContext === 'function') {
-            try {
-              console.log('Getting updated context after sign-in');
-              const newContext = await sdk.getContext();
-              
-              if (newContext && newContext.user && newContext.user.fid) {
-                userInfo = {
-                  fid: newContext.user.fid,
-                  username: newContext.user.username || `user${newContext.user.fid}`,
-                  displayName: newContext.user.displayName || newContext.user.username || `User ${newContext.user.fid}`,
-                  pfp: { url: newContext.user.pfpUrl || null }
-                };
-                console.log('Retrieved user info after sign-in:', userInfo.username);
-              }
-            } catch (contextError) {
-              console.warn('Error getting context after sign-in:', contextError);
-            }
-          }
-          
-          // If still no user info, check sdk.context again
-          if (!userInfo && sdk.context && sdk.context.user && sdk.context.user.fid) {
-            const user = sdk.context.user;
-            userInfo = {
-              fid: user.fid,
-              username: user.username || `user${user.fid}`,
-              displayName: user.displayName || user.username || `User ${user.fid}`,
-              pfp: { url: user.pfpUrl || null }
-            };
-            console.log('Retrieved user info from sdk.context after sign-in:', userInfo.username);
-          }
-          
-          // Last resort: try to extract from sign-in result
-          if (!userInfo && signInResult) {
-            console.log('Full sign-in result:', JSON.stringify(signInResult));
+          // Instead of accessing complex objects, extract the minimal data we need
+          // Either from the app server verification or from local storage
+          try {
+            // For Mini Apps, we store a simple indication that the user is authenticated
+            localStorage.setItem('miniAppAuthenticated', 'true');
             
-            try {
-              // Check if result has direct user info
-              if (signInResult.user) {
-                userInfo = safeExtractUserData(signInResult.user);
-                console.log('Extracted user info from result.user');
-              } 
-              // Try to parse from message if available
-              else if (signInResult.message) {
-                const fidMatch = signInResult.message.match(/fid:(\d+)/);
-                if (fidMatch && fidMatch[1]) {
-                  const fid = fidMatch[1];
-                  console.log('Extracted FID from message:', fid);
-                  userInfo = {
-                    fid: fid,
-                    username: `user${fid}`,
-                    displayName: `User ${fid}`,
-                    pfp: { url: null }
-                  };
-                }
+            // Try to get FID from the signInResult.message if available
+            let fid = null;
+            if (signInResult.message) {
+              const fidMatch = signInResult.message.match(/fid:(\d+)/);
+              if (fidMatch && fidMatch[1]) {
+                fid = fidMatch[1];
               }
-            } catch (parseError) {
-              console.warn('Error parsing sign-in result:', parseError);
             }
+            
+            // Create a minimal user object with just what we need
+            const minimalUserInfo = {
+              authenticated: true,
+              fid: fid || 'unknown',
+              timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem('miniAppUserInfo', JSON.stringify(minimalUserInfo));
+            
+            // Dispatch a simple event without complex objects
+            const event = new CustomEvent('miniAppAuthenticated', {
+              detail: {
+                authenticated: true,
+                fid: minimalUserInfo.fid
+              }
+            });
+            window.dispatchEvent(event);
+            
+            return { success: true, user: minimalUserInfo };
+          } catch (storageError) {
+            console.error('Error storing authentication data:', storageError);
           }
-        } catch (signInError) {
-          console.error('Error during sign-in:', signInError);
-          return { success: false, error: signInError.message || 'Sign-in failed' };
+        } else {
+          console.log('Authentication failed - no result returned');
+          return { success: false, error: 'No authentication result' };
         }
+      } catch (signInError) {
+        console.error('Error during sign-in:', signInError);
+        return { success: false, error: signInError.message || 'Sign-in failed' };
       }
+    } else {
+      console.error('Sign-in action not available');
+      return { success: false, error: 'Sign-in action not available' };
     }
     
-    // If we have user info, store it and update state
-    if (userInfo && userInfo.fid) {
-      console.log('Successfully obtained user info, FID:', userInfo.fid, 'Username:', userInfo.username);
-      
-      // Store in localStorage for persistence
-      try {
-        localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-        localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-        console.log('User info stored in localStorage');
-      } catch (storageError) {
-        console.error('Error storing in localStorage:', storageError);
-      }
-      
-      // Dispatch event for components to react to
-      console.log('Dispatching miniAppAuthenticated event');
-      const event = new CustomEvent('miniAppAuthenticated', {
-        detail: userInfo
-      });
-      window.dispatchEvent(event);
-      
-      return { success: true, user: userInfo };
-    }
-    
-    console.log('Failed to get user info through any method');
-    return { success: false, error: 'Could not get user info' };
+    return { success: false, error: 'Authentication failed' };
   } catch (error) {
     console.error('Error during Mini App authentication:', error);
     return { success: false, error: error.message || 'Authentication failed' };

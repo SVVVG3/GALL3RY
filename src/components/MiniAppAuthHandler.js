@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { sdk } from '@farcaster/frame-sdk';
-import { handleMiniAppAuthentication, safeExtractUserData } from '../utils/miniAppUtils';
+import { handleMiniAppAuthentication, isMiniAppEnvironment } from '../utils/miniAppUtils';
 import { useAuth } from '../contexts/AuthContext';
 
 /**
@@ -16,80 +16,24 @@ const MiniAppAuthHandler = () => {
     const attemptAuth = async () => {
       if (!isAuthenticated && !hasAttemptedAuth) {
         console.log('MiniAppAuthHandler: Attempting automatic authentication');
+        
+        // First check if we're actually in a Mini App environment
+        if (!isMiniAppEnvironment()) {
+          console.log('MiniAppAuthHandler: Not in a Mini App environment');
+          setHasAttemptedAuth(true);
+          return;
+        }
+        
         try {
-          // Check if SDK is available
-          if (!sdk) {
-            console.log('MiniAppAuthHandler: SDK not available');
-            return;
-          }
-
-          // Generate a nonce for authentication
-          const generateNonce = () => {
-            return Math.random().toString(36).substring(2, 15) + 
-                   Math.random().toString(36).substring(2, 15);
-          };
-
-          const nonce = generateNonce();
-          console.log('MiniAppAuthHandler: Generated nonce for auth');
-
-          // Try to get user info from SDK context first
-          let userInfo = null;
+          // Use the simplified authentication approach
+          const authResult = await handleMiniAppAuthentication();
           
-          try {
-            if (typeof sdk.getContext === 'function') {
-              const context = await sdk.getContext();
-              console.log('MiniAppAuthHandler: Context retrieved:', context ? 'yes' : 'no');
-              
-              if (context && context.user && context.user.fid) {
-                // Ensure we're using primitive values only
-                userInfo = safeExtractUserData(context.user);
-                
-                console.log('MiniAppAuthHandler: Found user in context:', {
-                  fid: userInfo.fid,
-                  username: userInfo.username || 'unknown'
-                });
-              }
-            }
-          } catch (contextError) {
-            console.error('MiniAppAuthHandler: Error getting context:', contextError);
-          }
-
-          // If no user info from context, try sign in
-          if (!userInfo && sdk.actions && typeof sdk.actions.signIn === 'function') {
-            console.log('MiniAppAuthHandler: No user in context, attempting signIn');
-            try {
-              const result = await sdk.actions.signIn({ nonce });
-              console.log('MiniAppAuthHandler: Sign-in result:', result ? 'received' : 'null');
-              
-              if (result && result.message) {
-                // Use the general handler to process the result
-                await handleMiniAppAuthentication();
-              }
-            } catch (signInError) {
-              console.error('MiniAppAuthHandler: Sign-in error:', signInError);
-            }
-          } else if (userInfo) {
-            // We have user info from context, store it
-            try {
-              localStorage.setItem('farcaster_user', JSON.stringify(userInfo));
-              localStorage.setItem('miniAppUserInfo', JSON.stringify(userInfo));
-              
-              // Dispatch event for other components to react
-              const authEvent = new CustomEvent('miniAppAuthenticated', { 
-                detail: {
-                  fid: userInfo.fid,
-                  username: userInfo.username,
-                  displayName: userInfo.displayName,
-                  pfp: userInfo.pfp
-                }
-              });
-              window.dispatchEvent(authEvent);
-              
-              console.log('MiniAppAuthHandler: Successfully stored user data and dispatched event');
-            } catch (storageError) {
-              console.error('MiniAppAuthHandler: Error storing user data:', storageError);
-            }
-          }
+          console.log('MiniAppAuthHandler: Authentication result:', 
+            authResult.success ? 'SUCCESS' : 'FAILED', 
+            authResult.error || '');
+            
+          // No need to handle the result here - the auth handler
+          // dispatches events and stores data in localStorage
         } catch (error) {
           console.error('MiniAppAuthHandler: Authentication error:', error);
         } finally {
