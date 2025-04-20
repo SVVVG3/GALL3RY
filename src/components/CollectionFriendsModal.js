@@ -153,7 +153,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
     
     return (
-      <div className="modal-friends-content">
+      <>
         {usingMockData && (
           <div className="mock-data-disclaimer">
             <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
@@ -178,7 +178,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             </div>
           ))}
         </div>
-      </div>
+      </>
     );
   };
 
