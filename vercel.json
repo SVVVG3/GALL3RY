@@ -26,6 +26,10 @@
       "destination": "/api/all-in-one.js"
     },
     {
+      "source": "/(.*\\.(js|css|png|jpg|svg|ico|json))",
+      "destination": "/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
@@ -45,7 +49,7 @@
       "headers": [
         { 
           "key": "Content-Security-Policy", 
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' http://localhost:* https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://public.zapper.xyz https://protocol.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net https://mainnet.optimism.io; media-src 'self' blob: data: https:;"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data: https:; img-src 'self' data: blob: https: *; connect-src 'self' http://localhost:* https://*.alchemy.com https://*.alchemyapi.io https://*.zapper.xyz https://public.zapper.xyz https://protocol.zapper.xyz https://api.opensea.io https://*.farcaster.xyz wss://*.farcaster.xyz https://relay.farcaster.xyz https://api.neynar.com https://storage.niftykit.com https://cloudflare-ipfs.com https://arweave.net https://mainnet.optimism.io; media-src 'self' blob: data: https:; frame-ancestors 'self' https://*.warpcast.com https://*.farcaster.xyz https://*.farcaster.org;"
         },
         {
           "key": "X-Content-Type-Options",
@@ -96,6 +100,15 @@
           "value": "public, max-age=86400"
         }
       ]
+    },
+    {
+      "source": "/(.*).ico",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=86400"
+        }
+      ]
     }
   ],
   "env": {
@@ -107,6 +120,7 @@
     "REACT_APP_NEYNAR_API_KEY": "NEYNAR_API_DOCS",
     "REACT_APP_API_URL": "https://gall3ry.vercel.app/api",
     "FARCASTER_DOMAIN": "gall3ry.vercel.app",
+    "PUBLIC_URL": "",
     "DEBUG": "true"
   }
 }
