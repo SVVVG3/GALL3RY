@@ -98,174 +98,47 @@ export const useIsMiniApp = () => {
 };
 
 /**
- * Initialize the Mini App SDK if we're in a Mini App environment
- * @returns {Promise<void>}
+ * Dismiss the Mini App splash screen
+ * @returns {Promise<boolean>} True if successfully dismissed, false otherwise
  */
-export const initializeMiniApp = async () => {
-  const isInMiniApp = isMiniAppEnvironment();
-  logDebug(`initializeMiniApp called, isInMiniApp=${isInMiniApp}`);
+export const dismissSplashScreen = async () => {
+  logDebug('Attempting to dismiss splash screen');
   
-  if (!isInMiniApp) {
-    logDebug('Not in Mini App environment, skipping initialization');
-    return null;
-  }
-
   try {
-    // According to docs, we should call ready() to dismiss the splash screen
-    if (sdk && sdk.actions && typeof sdk.actions.ready === 'function') {
-      logDebug('Calling sdk.actions.ready() to dismiss splash screen');
+    if (!sdk) {
+      console.warn('SDK is not available for dismissing splash screen');
+      return false;
+    }
+    
+    // Try using sdk.actions.ready() method (current API according to docs)
+    if (sdk.actions && typeof sdk.actions.ready === 'function') {
+      logDebug('Calling sdk.actions.ready()');
       await sdk.actions.ready();
-      logDebug('Splash screen dismissed');
-      
-      // Also log the user context if available
-      if (sdk.context && sdk.context.user) {
-        logDebug('User context available:', sdk.context.user);
-      } else {
-        logDebug('No user context available yet');
-      }
-      
-      return sdk.context;
-    } else {
-      logDebug('sdk.actions.ready is not available, cannot dismiss splash screen');
+      logDebug('Splash screen dismissed with actions.ready');
+      return true;
     }
     
-    return null;
+    // Try using hideSplashScreen method (older API)
+    if (typeof sdk.hideSplashScreen === 'function') {
+      logDebug('Calling sdk.hideSplashScreen()');
+      await sdk.hideSplashScreen();
+      logDebug('Splash screen dismissed with hideSplashScreen');
+      return true;
+    }
+    
+    // Fallback to older SDK versions that might use dismissSplashScreen
+    if (typeof sdk.dismissSplashScreen === 'function') {
+      logDebug('Calling sdk.dismissSplashScreen()');
+      await sdk.dismissSplashScreen();
+      logDebug('Splash screen dismissed with dismissSplashScreen');
+      return true;
+    }
+    
+    console.warn('No splash screen dismissal method found on SDK');
+    return false;
   } catch (e) {
-    logDebug('Error in initializeMiniApp:', e);
-    return { error: e.message };
-  }
-};
-
-/**
- * Set up event listeners for Mini App events from the Farcaster client
- * @returns {void}
- */
-export const setupMiniAppEventListeners = () => {
-  if (!isMiniAppEnvironment()) {
-    return;
-  }
-
-  // Make sure the SDK has an 'on' method before trying to use it
-  if (typeof sdk.on !== 'function') {
-    console.warn('Event listening not supported in this SDK version');
-    return;
-  }
-
-  // Listen for events from the Farcaster client
-  sdk.on('frameAdded', () => {
-    console.log('App was added to user collection');
-  });
-  
-  sdk.on('frameRemoved', () => {
-    console.log('App was removed from user collection');
-  });
-};
-
-/**
- * Handle authentication within a Mini App context using the recommended approach
- * Avoids direct access to SDK proxy objects that can cause toJSON errors
- * @returns {Promise<Object|null>} Auth result or null if not in Mini App environment
- */
-export const handleMiniAppAuthentication = async () => {
-  console.log('⭐️ handleMiniAppAuthentication called');
-  
-  // Ensure we're in a Mini App environment
-  if (!isMiniAppEnvironment()) {
-    console.log('Not in Mini App environment');
-    return { success: false, error: 'Not in Mini App environment' };
-  }
-  
-  // Verify SDK is available
-  if (!sdk) {
-    console.error('SDK is not available');
-    return { success: false, error: 'SDK not available' };
-  }
-  
-  // Generate a nonce for authentication
-  const generateNonce = () => {
-    return Math.random().toString(36).substring(2, 15) + 
-           Math.random().toString(36).substring(2, 15);
-  };
-  
-  const nonce = generateNonce();
-  console.log('Generated nonce for authentication:', nonce);
-  
-  try {
-    // IMPORTANT: In Mini App environment, we should use the signIn action
-    // and handle the result WITHOUT trying to directly access object properties
-    if (sdk.actions && typeof sdk.actions.signIn === 'function') {
-      console.log('Using sdk.actions.signIn for authentication...');
-      
-      try {
-        // Set a reasonable timeout
-        const signInPromise = sdk.actions.signIn({ nonce });
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Sign-in timeout after 15 seconds')), 15000);
-        });
-        
-        // Race the promises to handle timeout
-        const signInResult = await Promise.race([signInPromise, timeoutPromise]);
-        console.log('Sign-in completed');
-        
-        // CORRECT APPROACH: Don't access signInResult properties directly
-        // Instead, just verify we have a result and store it
-        if (signInResult) {
-          console.log('Authentication successful');
-          
-          // Instead of accessing complex objects, extract the minimal data we need
-          // Either from the app server verification or from local storage
-          try {
-            // For Mini Apps, we store a simple indication that the user is authenticated
-            localStorage.setItem('miniAppAuthenticated', 'true');
-            
-            // Try to get FID from the signInResult.message if available
-            let fid = null;
-            if (signInResult.message) {
-              const fidMatch = signInResult.message.match(/fid:(\d+)/);
-              if (fidMatch && fidMatch[1]) {
-                fid = fidMatch[1];
-              }
-            }
-            
-            // Create a minimal user object with just what we need
-            const minimalUserInfo = {
-              authenticated: true,
-              fid: fid || 'unknown',
-              timestamp: new Date().toISOString()
-            };
-            
-            localStorage.setItem('miniAppUserInfo', JSON.stringify(minimalUserInfo));
-            
-            // Dispatch a simple event without complex objects
-            const event = new CustomEvent('miniAppAuthenticated', {
-              detail: {
-                authenticated: true,
-                fid: minimalUserInfo.fid
-              }
-            });
-            window.dispatchEvent(event);
-            
-            return { success: true, user: minimalUserInfo };
-          } catch (storageError) {
-            console.error('Error storing authentication data:', storageError);
-          }
-        } else {
-          console.log('Authentication failed - no result returned');
-          return { success: false, error: 'No authentication result' };
-        }
-      } catch (signInError) {
-        console.error('Error during sign-in:', signInError);
-        return { success: false, error: signInError.message || 'Sign-in failed' };
-      }
-    } else {
-      console.error('Sign-in action not available');
-      return { success: false, error: 'Sign-in action not available' };
-    }
-    
-    return { success: false, error: 'Authentication failed' };
-  } catch (error) {
-    console.error('Error during Mini App authentication:', error);
-    return { success: false, error: error.message || 'Authentication failed' };
+    console.error('Error dismissing splash screen:', e);
+    return false;
   }
 };
 

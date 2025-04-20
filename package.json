@@ -5,6 +5,7 @@
   "dependencies": {
     "@farcaster/auth-kit": "^0.6.0",
     "@farcaster/frame-sdk": "^0.0.35",
+    "@privy-io/react-auth": "^2.10.0",
     "alchemy-sdk": "^3.5.6",
     "axios": "^1.8.4",
     "buffer": "^6.0.3",

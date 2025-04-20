@@ -3,12 +3,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import FarcasterUserSearch from '../components/FarcasterUserSearch';
 import { NFTProvider } from '../contexts/NFTContext';
-import SimpleMiniAppSignIn from '../components/SimpleMiniAppSignIn';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 import { sdk } from '@farcaster/frame-sdk';
 import DiagnosticPanel from '../components/DiagnosticPanel';
+import { usePrivy } from '@privy-io/react-auth';
+import PrivyFarcasterButton from '../components/PrivyFarcasterButton';
 
-// Debug mode constant - sync with SimpleMiniAppSignIn
+// Debug mode constant
 const DEBUG_MODE = true;
 
 // Diagnostic Viewer Component
@@ -224,154 +225,109 @@ const DiagnosticViewer = ({ onClose }) => {
  * Simple HomePage Component with minimal dependencies
  */
 const HomePage = () => {
-  const { isAuthenticated, user } = useAuth();
-  const { profile } = useProfile();
-  const [isMiniApp, setIsMiniApp] = useState(false);
-  const [authError, setAuthError] = useState(null);
-  const [authStatus, setAuthStatus] = useState('idle'); // 'idle', 'loading', 'success', 'error'
   const [showDiagnostics, setShowDiagnostics] = useState(false);
-
+  const { isAuthenticated, profile } = useAuth();
+  const { loadProfileNFTs } = useProfile();
+  const [sdkAvailable, setSdkAvailable] = useState(false);
+  const [isMiniApp, setIsMiniApp] = useState(false);
+  
+  // Import Privy hooks instead of custom auth
+  const { user, authenticated, ready } = usePrivy();
+  
   useEffect(() => {
-    setIsMiniApp(isMiniAppEnvironment());
+    const checkEnvironment = async () => {
+      const inMiniApp = await isMiniAppEnvironment();
+      setIsMiniApp(inMiniApp);
+      setSdkAvailable(typeof sdk !== 'undefined');
+    };
     
-    // Check SDK status and log for debugging
-    if (typeof window !== 'undefined') {
-      console.log('HomePage - SDK Status:', {
-        sdkDefined: !!sdk,
-        hasActions: sdk && !!sdk.actions,
-        hasContext: sdk && !!sdk.context,
-        hasGetContextMethod: sdk && typeof sdk.getContext === 'function'
-      });
-      
-      // Send initial diagnostic log
-      if (DEBUG_MODE) {
-        try {
-          fetch('/api/diagnostic', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              event: 'APP_INITIALIZED',
-              type: 'info',
-              message: 'Homepage component initialized',
-              clientInfo: {
-                userAgent: navigator.userAgent,
-                hostname: window.location.hostname,
-                pathname: window.location.pathname,
-                isMiniApp: isMiniAppEnvironment(),
-                timestamp: new Date().toISOString()
-              },
-              sdkInfo: {
-                defined: !!sdk,
-                hasActions: sdk && !!sdk.actions,
-                hasSignIn: sdk && sdk.actions && typeof sdk.actions.signIn === 'function',
-                hasGetContext: sdk && typeof sdk.getContext === 'function',
-                hasContext: sdk && !!sdk.context
-              }
-            })
-          }).catch(e => console.warn('Failed to send diagnostic log:', e));
-        } catch (e) {
-          console.warn('Error sending diagnostic log:', e);
-        }
-      }
-    }
+    checkEnvironment();
   }, []);
-
-  const handleSignInSuccess = (userData) => {
-    console.log('SignIn Success:', userData);
-    setAuthStatus('success');
-    setAuthError(null);
-    
-    // Log successful sign-in
-    if (DEBUG_MODE) {
-      try {
-        fetch('/api/diagnostic', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'SIGN_IN_SUCCESS',
-            type: 'info',
-            message: `User signed in: ${userData.username}`,
-            data: {
-              fid: userData.fid,
-              username: userData.username
-            }
-          })
-        }).catch(e => console.warn('Failed to send diagnostic log:', e));
-      } catch (e) {
-        console.warn('Error sending diagnostic log:', e);
-      }
+  
+  useEffect(() => {
+    if (authenticated && user?.farcaster?.fid) {
+      console.log('Privy user authenticated with FID:', user.farcaster.fid);
     }
-  };
-
-  const handleSignInError = (error) => {
-    console.error('SignIn Error:', error);
-    setAuthStatus('error');
-    setAuthError(error.message || 'Authentication failed');
-    
-    // Log sign-in error
-    if (DEBUG_MODE) {
-      try {
-        fetch('/api/diagnostic', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event: 'SIGN_IN_ERROR',
-            type: 'error',
-            message: 'Authentication failed',
-            error: error.message || 'Unknown error'
-          })
-        }).catch(e => console.warn('Failed to send diagnostic log:', e));
-      } catch (e) {
-        console.warn('Error sending diagnostic log:', e);
-      }
+  }, [authenticated, user]);
+  
+  const renderUserData = () => {
+    if (!authenticated || !user?.farcaster) {
+      return <p>Not signed in with Farcaster</p>;
     }
     
-    // Reset error after 5 seconds
-    setTimeout(() => {
-      setAuthError(null);
-      setAuthStatus('idle');
-    }, 5000);
+    const { farcaster } = user;
+    
+    return (
+      <div className="user-info">
+        {farcaster.pfp && (
+          <img 
+            src={farcaster.pfp} 
+            alt={`${farcaster.displayName || farcaster.username}'s profile`}
+            className="user-avatar"
+          />
+        )}
+        <div className="user-details">
+          <h3>{farcaster.displayName || farcaster.username}</h3>
+          <p>@{farcaster.username}</p>
+          <p className="user-fid">FID: {farcaster.fid}</p>
+        </div>
+      </div>
+    );
   };
-
+  
   return (
     <div className="home-page">
-      <div className="container mx-auto px-4 py-8">
-        {isMiniApp && !isAuthenticated && (
-          <div className="mini-app-signin-container mb-6 p-4 bg-purple-50 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2 text-purple-800">Welcome to the Mini App</h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Sign in with your Farcaster account to view and share your NFTs
-            </p>
-            
-            <SimpleMiniAppSignIn 
-              onSuccess={handleSignInSuccess} 
-              onError={handleSignInError}
+      <h1>Welcome to GALL3RY</h1>
+      <p>Your decentralized NFT collection manager</p>
+      
+      <div className="app-container">
+        {isMiniApp && (
+          <div className="auth-container">
+            <h2>Mini App Authentication</h2>
+            {/* Privy authentication is handled automatically at the app level */}
+            {renderUserData()}
+          </div>
+        )}
+        
+        {!isMiniApp && (
+          <div className="auth-container">
+            <h2>Web Authentication</h2>
+            <PrivyFarcasterButton 
+              buttonText="Sign in with Farcaster"
             />
-            
-            {authStatus === 'error' && authError && (
-              <div className="error-message mt-3 p-2 bg-red-100 text-red-700 rounded">
-                {authError}
-              </div>
-            )}
+            {renderUserData()}
           </div>
         )}
         
-        {isAuthenticated && user && (
-          <div className="user-info mb-6 p-4 bg-purple-50 rounded-lg">
-            <h2 className="text-lg font-semibold mb-2">Welcome, {user.displayName || user.username}</h2>
-            <p className="text-sm text-gray-600">
-              FID: {user.fid} | Username: @{user.username}
-            </p>
-          </div>
-        )}
-        
-        <NFTProvider>
-          <FarcasterUserSearch />
-        </NFTProvider>
-        
-        {/* Always show the diagnostic panel in mini app environment */}
-        {isMiniApp && <DiagnosticPanel />}
+        <div className="nft-section">
+          <h2>Your NFT Collection</h2>
+          {authenticated && user?.farcaster ? (
+            <NFTProvider>
+              <FarcasterUserSearch 
+                defaultFid={user.farcaster.fid} 
+                defaultUsername={user.farcaster.username} 
+              />
+            </NFTProvider>
+          ) : (
+            <p>Sign in to view your NFT collection</p>
+          )}
+        </div>
       </div>
+      
+      {DEBUG_MODE && (
+        <>
+          <button 
+            onClick={() => setShowDiagnostics(true)}
+            className="diagnostic-button"
+          >
+            Show Diagnostics
+          </button>
+          
+          {showDiagnostics && (
+            <DiagnosticViewer onClose={() => setShowDiagnostics(false)} />
+          )}
+        </>
+      )}
     </div>
   );
 };
