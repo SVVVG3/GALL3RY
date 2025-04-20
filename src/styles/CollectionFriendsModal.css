@@ -14,7 +14,7 @@
 }
 
 .modal-container {
-  background-color: var(--background-color, #fff);
+  background-color: #fff;
   border-radius: 12px;
   width: 100%;
   max-width: 500px;
@@ -25,76 +25,21 @@
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
 }
 
-/* Dark mode styling */
-.modal-dark {
-  background-color: #1a222e;
-  color: #f3f4f6;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-}
-
-.modal-dark .modal-header {
-  border-bottom: 1px solid #2d3748;
-}
-
-.modal-dark .modal-header h3 {
-  color: #f3f4f6;
-}
-
-.modal-dark .modal-close-button {
-  color: #9ca3af;
-}
-
-.modal-dark .modal-close-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #f3f4f6;
-}
-
-.modal-dark .friend-item {
-  background-color: #2d3748;
-  border: none;
-}
-
-.modal-dark .friend-item:hover {
-  background-color: #374151;
-}
-
-.modal-dark .friend-info h4 {
-  color: #f3f4f6;
-}
-
-.modal-dark .friend-info p {
-  color: #9ca3af;
-}
-
-.modal-dark .default-avatar {
-  background-color: #4b5563;
-  color: #f3f4f6;
-}
-
-.modal-dark .modal-loading p,
-.modal-dark .modal-error p,
-.modal-dark .modal-auth-required p,
-.modal-dark .modal-no-friends p {
-  color: #e5e7eb;
-}
-
-.modal-dark .spinner {
-  border-color: #4b5563;
-  border-top-color: #60a5fa;
-}
-
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-bottom: 1px solid var(--border-color, #ddd);
+  border-bottom: 1px solid #ddd;
+  text-align: center;
 }
 
 .modal-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+  flex: 1;
+  text-align: center;
 }
 
 .modal-close-button {
@@ -102,21 +47,25 @@
   border: none;
   font-size: 24px;
   cursor: pointer;
-  color: var(--text-secondary, #666);
+  color: #666;
   padding: 4px;
   margin: -4px;
   border-radius: 50%;
+  position: absolute;
+  right: 16px;
+  top: 16px;
 }
 
 .modal-close-button:hover {
-  background-color: var(--hover-color, rgba(0, 0, 0, 0.05));
-  color: var(--text-primary, #000);
+  background-color: rgba(0, 0, 0, 0.05);
+  color: #000;
 }
 
 .modal-content {
   padding: 20px;
   overflow-y: auto;
   max-height: calc(90vh - 120px);
+  text-align: center;
 }
 
 .modal-loading, 
@@ -135,8 +84,8 @@
 .modal-loading .spinner {
   width: 40px;
   height: 40px;
-  border: 3px solid var(--border-color, #ddd);
-  border-top-color: var(--accent-color, #0066ff);
+  border: 3px solid #ddd;
+  border-top-color: #0066ff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
@@ -149,7 +98,7 @@
 .modal-close-btn {
   margin-top: 16px;
   padding: 8px 16px;
-  background-color: var(--accent-color, #0066ff);
+  background-color: #0066ff;
   color: white;
   border: none;
   border-radius: 6px;
@@ -161,24 +110,25 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
+  max-width: 400px;
+  margin: 0 auto;
 }
 
 .mock-data-disclaimer {
   padding: 8px 12px;
-  background-color: var(--warning-bg, rgba(255, 190, 0, 0.1));
+  background-color: rgba(255, 190, 0, 0.1);
   border-radius: 6px;
   margin-bottom: 16px;
   text-align: center;
-}
-
-.modal-dark .mock-data-disclaimer {
-  background-color: rgba(255, 190, 0, 0.15);
+  max-width: 400px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .mock-data-disclaimer p {
   margin: 0;
   font-size: 14px;
-  color: var(--warning-text, #b78103);
+  color: #b78103;
 }
 
 .friend-item {
@@ -186,12 +136,13 @@
   align-items: center;
   padding: 12px;
   border-radius: 8px;
-  background-color: var(--card-bg, rgba(0, 0, 0, 0.02));
+  background-color: rgba(0, 0, 0, 0.02);
   transition: background-color 0.2s;
+  text-align: left;
 }
 
 .friend-item:hover {
-  background-color: var(--card-hover-bg, rgba(0, 0, 0, 0.05));
+  background-color: rgba(0, 0, 0, 0.05);
 }
 
 .friend-avatar {
@@ -215,8 +166,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--avatar-bg, #e2e8f0);
-  color: var(--avatar-text, #64748b);
+  background-color: #e2e8f0;
+  color: #64748b;
   font-weight: bold;
   font-size: 20px;
 }
@@ -234,7 +185,7 @@
 .friend-info p {
   margin: 0;
   font-size: 14px;
-  color: var(--text-secondary, #666);
+  color: #666;
 }
 
 @media (max-width: 600px) {
@@ -248,10 +199,12 @@
   .modal-content {
     max-height: calc(100vh - 80px);
   }
+  
+  .friends-list,
+  .mock-data-disclaimer {
+    max-width: 100%;
+  }
 }
-
-/* Remove dark mode styles */
-/* We're removing the dark mode section that starts with @media (prefers-color-scheme: dark) */
 
 .unauthenticated-message {
   padding: 20px;

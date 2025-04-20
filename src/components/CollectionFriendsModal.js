@@ -187,7 +187,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container modal-dark" ref={modalRef} onClick={handleModalClick}>
+      <div className="modal-container" ref={modalRef} onClick={handleModalClick}>
         <div className="modal-header">
           <h3>Friends owning {collectionName}</h3>
           <button className="modal-close-button" onClick={onClose}>×</button>
