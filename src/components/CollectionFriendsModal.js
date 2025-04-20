@@ -16,6 +16,19 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   // Consider both authentication methods
   const isUserAuthenticated = isAuthenticated || privyAuthenticated;
   
+  // Debug authentication states
+  useEffect(() => {
+    if (isOpen) {
+      console.log('Modal Authentication Status:', { 
+        authContext: isAuthenticated, 
+        privyAuthenticated, 
+        isUserAuthenticated,
+        authUser: user,
+        privyUser 
+      });
+    }
+  }, [isOpen, isAuthenticated, privyAuthenticated, isUserAuthenticated, user, privyUser]);
+  
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -174,7 +187,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
 
   return createPortal(
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-container" ref={modalRef} onClick={handleModalClick}>
+      <div className="modal-container modal-dark" ref={modalRef} onClick={handleModalClick}>
         <div className="modal-header">
           <h3>Friends owning {collectionName}</h3>
           <button className="modal-close-button" onClick={onClose}>×</button>
