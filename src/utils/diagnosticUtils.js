@@ -28,39 +28,13 @@ class Logger {
     this.listeners = [];
     this.MAX_LOGS = 1000;
     
-    // Intercept console methods
+    // Store original console methods for reference, but don't override them
     this.originalConsole = {
       log: console.log,
       info: console.info,
       warn: console.warn,
       error: console.error,
       debug: console.debug
-    };
-    
-    // Override console methods to capture logs
-    console.log = (...args) => {
-      this.originalConsole.log(...args);
-      this.addLog('log', ...args);
-    };
-    
-    console.info = (...args) => {
-      this.originalConsole.info(...args);
-      this.addLog('info', ...args);
-    };
-    
-    console.warn = (...args) => {
-      this.originalConsole.warn(...args);
-      this.addLog('warn', ...args);
-    };
-    
-    console.error = (...args) => {
-      this.originalConsole.error(...args);
-      this.addLog('error', ...args);
-    };
-    
-    console.debug = (...args) => {
-      this.originalConsole.debug(...args);
-      this.addLog('debug', ...args);
     };
     
     // Listen for our custom event
@@ -293,9 +267,6 @@ export const createDiagnosticTracker = (componentName) => {
     }
   };
 };
-
-// Initialize logger on import
-DiagnosticLogger.init();
 
 // Export component to toggle diagnostic panel
 export const toggleDiagnosticPanel = () => {
