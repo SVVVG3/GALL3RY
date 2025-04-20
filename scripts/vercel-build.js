@@ -27,6 +27,7 @@ function ensurePackageInstalled(packageName) {
 // Ensure critical packages are installed
 console.log('🔍 Verifying essential packages...');
 ensurePackageInstalled('@farcaster/frame-sdk@0.0.35');
+ensurePackageInstalled('@privy-io/react-auth');
 ensurePackageInstalled('react-toastify');
 ensurePackageInstalled('framer-motion');
 
@@ -90,7 +91,8 @@ const requiredKeys = [
   'ZAPPER_API_KEY',
   'ALCHEMY_API_KEY',
   'REACT_APP_ZAPPER_API_KEY',
-  'REACT_APP_ALCHEMY_API_KEY'
+  'REACT_APP_ALCHEMY_API_KEY',
+  'REACT_APP_PRIVY_APP_ID'
 ];
 
 let missingKeys = false;
