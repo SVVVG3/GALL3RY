@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '../contexts/ProfileContext';
 import FarcasterUserSearch from '../components/FarcasterUserSearch';
 import { NFTProvider } from '../contexts/NFTContext';
-import NFTGalleryContainer from '../components/NFTGalleryContainer';
+import NFTGallery from '../components/NFTGallery';
 import SimpleMiniAppSignIn from '../components/SimpleMiniAppSignIn';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
 import { sdk } from '@farcaster/frame-sdk';
@@ -88,7 +88,7 @@ const HomePage = () => {
         
         <NFTProvider>
           <FarcasterUserSearch />
-          <NFTGalleryContainer />
+          <NFTGallery />
         </NFTProvider>
       </div>
     </div>
