@@ -315,8 +315,8 @@ const VercelNFTCard = ({ nft }) => {
     };
   }, [showFriendsModal]);
   
-  // Check if user is authenticated with Farcaster
-  const showFriendsButton = isAuthenticated && profile?.fid && contractAddress;
+  // Check if we have a contract address to show friends button
+  const showFriendsButton = contractAddress ? true : false;
   
   // Handle modal click - stop propagation
   const handleModalClick = (e) => {

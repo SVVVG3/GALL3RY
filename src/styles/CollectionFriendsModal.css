@@ -265,4 +265,39 @@
 }
 
 /* Remove dark mode styles */
-/* We're removing the dark mode section that starts with @media (prefers-color-scheme: dark) */ 
+/* We're removing the dark mode section that starts with @media (prefers-color-scheme: dark) */
+
+.unauthenticated-message {
+  padding: 20px;
+  text-align: center;
+  background-color: #f9f6ff;
+  border-radius: 8px;
+  margin: 15px 0;
+}
+
+.unauthenticated-message p {
+  margin-bottom: 15px;
+  color: #4b5563;
+  font-size: 16px;
+}
+
+.auth-prompt {
+  display: flex;
+  justify-content: center;
+  margin-top: 15px;
+}
+
+.auth-prompt .sign-in-button {
+  background-color: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 8px 20px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.auth-prompt .sign-in-button:hover {
+  background-color: #7c3aed;
+} 

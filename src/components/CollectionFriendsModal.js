@@ -76,7 +76,15 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
   
   // Fetch collection friends from multiple API endpoints with retries
   useEffect(() => {
-    if (!isOpen || !contractAddress || !profile?.fid) return;
+    if (!isOpen || !contractAddress) return;
+
+    // If user isn't authenticated, don't try to fetch data
+    if (!isAuthenticated || !profile?.fid) {
+      setIsLoading(false);
+      setUsingMockData(true);
+      setFriends(generateMockFriends());
+      return;
+    }
 
     const fetchCollectionFriends = async () => {
       setIsLoading(true);
@@ -127,7 +135,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
     };
 
     fetchCollectionFriends();
-  }, [isOpen, contractAddress, profile?.fid]);
+  }, [isOpen, contractAddress, profile?.fid, isAuthenticated]);
   
   // Generate mock friends data for fallback
   const generateMockFriends = useCallback(() => {
@@ -174,65 +182,123 @@ const CollectionFriendsModal = ({ isOpen, onClose, contractAddress, collectionNa
         </div>
         
         <div className="collection-friends-content">
-          {usingMockData && (
-            <div className="mock-data-notice">
-              <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
-            </div>
-          )}
-          
           <div className="collection-info">
             <p>
               {totalFriends > 0 
                 ? `${totalFriends} friends own NFTs from this collection` 
-                : 'No friends found with NFTs from this collection'}
+                : 'Discover which friends own this collection'}
             </p>
           </div>
-          
-          {isLoading ? (
-            <div className="loading-container">
-              <div className="loading-spinner"></div>
-              <p>Loading friends...</p>
-            </div>
-          ) : error && !usingMockData ? (
-            <div className="error-message">
-              <p>Error loading collection friends: {error.message}</p>
-              <button onClick={() => window.location.reload()}>Retry</button>
-            </div>
-          ) : friends.length === 0 ? (
-            <div className="no-results">
-              <p>No friends found with NFTs from this collection.</p>
-            </div>
-          ) : (
-            <div className="friends-list">
-              {friends.map(friend => (
-                <a 
-                  key={friend.id || friend.fid} 
-                  href={`https://warpcast.com/${friend.username}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="friend-card"
-                >
-                  <div className="friend-avatar">
-                    {friend.pfp ? (
-                      <img src={friend.pfp} alt={friend.displayName} />
-                    ) : (
-                      <div className="avatar-placeholder">
-                        {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
-                      </div>
-                    )}
-                  </div>
-                  <div className="friend-info">
-                    <div className="friend-name">{friend.displayName || friend.username}</div>
-                    <div className="friend-username">@{friend.username}</div>
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
+          {renderContent()}
         </div>
       </div>
     </div>,
     document.body // Mount directly to body element
+  );
+};
+
+// Function to render appropriate content based on authentication state
+const renderContent = () => {
+  if (!isAuthenticated) {
+    return (
+      <div className="unauthenticated-message">
+        <p>Sign in with Farcaster to see which of your friends own NFTs from this collection.</p>
+        <div className="auth-prompt">
+          <button className="sign-in-button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="loading-container">
+        <div className="loading-spinner"></div>
+        <p>Loading friends...</p>
+      </div>
+    );
+  }
+
+  if (error && !usingMockData) {
+    return (
+      <div className="error-message">
+        <p>Error loading collection friends: {error.message}</p>
+        <button onClick={() => window.location.reload()}>Retry</button>
+      </div>
+    );
+  }
+
+  if (usingMockData) {
+    return (
+      <>
+        <div className="mock-data-notice">
+          <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
+        </div>
+        <div className="friends-list">
+          {friends.map(friend => (
+            <a 
+              key={friend.id || friend.fid} 
+              href={`https://warpcast.com/${friend.username}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="friend-card"
+            >
+              <div className="friend-avatar">
+                {friend.pfp ? (
+                  <img src={friend.pfp} alt={friend.displayName} />
+                ) : (
+                  <div className="avatar-placeholder">
+                    {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
+                  </div>
+                )}
+              </div>
+              <div className="friend-info">
+                <div className="friend-name">{friend.displayName || friend.username}</div>
+                <div className="friend-username">@{friend.username}</div>
+              </div>
+            </a>
+          ))}
+        </div>
+      </>
+    );
+  }
+
+  if (friends.length === 0) {
+    return (
+      <div className="no-results">
+        <p>No friends found with NFTs from this collection.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="friends-list">
+      {friends.map(friend => (
+        <a 
+          key={friend.id || friend.fid} 
+          href={`https://warpcast.com/${friend.username}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="friend-card"
+        >
+          <div className="friend-avatar">
+            {friend.pfp ? (
+              <img src={friend.pfp} alt={friend.displayName} />
+            ) : (
+              <div className="avatar-placeholder">
+                {friend.displayName?.charAt(0) || friend.username?.charAt(0) || '?'}
+              </div>
+            )}
+          </div>
+          <div className="friend-info">
+            <div className="friend-name">{friend.displayName || friend.username}</div>
+            <div className="friend-username">@{friend.username}</div>
+          </div>
+        </a>
+      ))}
+    </div>
   );
 };
 
