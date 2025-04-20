@@ -1,3 +1,67 @@
+// Global error handlers to debug blank screen issues
+if (typeof window !== 'undefined') {
+  console.log('Initializing global error handlers');
+  
+  window.addEventListener('error', function(event) {
+    console.error('GLOBAL ERROR:', event.error);
+    
+    // Display error on screen for debugging
+    const errorDiv = document.createElement('div');
+    errorDiv.style.position = 'fixed';
+    errorDiv.style.top = '0';
+    errorDiv.style.left = '0';
+    errorDiv.style.padding = '20px';
+    errorDiv.style.backgroundColor = 'red';
+    errorDiv.style.color = 'white';
+    errorDiv.style.zIndex = '9999';
+    errorDiv.style.maxWidth = '80%';
+    errorDiv.style.maxHeight = '80%';
+    errorDiv.style.overflow = 'auto';
+    errorDiv.innerHTML = `<strong>Error:</strong> ${event.error?.message || 'Unknown error'}<br/><pre>${event.error?.stack || 'No stack trace'}</pre>`;
+    document.body.appendChild(errorDiv);
+  });
+  
+  window.addEventListener('unhandledrejection', function(event) {
+    console.error('UNHANDLED PROMISE REJECTION:', event.reason);
+    
+    // Display error on screen for debugging
+    const errorDiv = document.createElement('div');
+    errorDiv.style.position = 'fixed';
+    errorDiv.style.top = '0';
+    errorDiv.style.right = '0';
+    errorDiv.style.padding = '20px';
+    errorDiv.style.backgroundColor = 'orange';
+    errorDiv.style.color = 'white';
+    errorDiv.style.zIndex = '9999';
+    errorDiv.style.maxWidth = '80%';
+    errorDiv.style.maxHeight = '80%';
+    errorDiv.style.overflow = 'auto';
+    errorDiv.innerHTML = `<strong>Promise Error:</strong> ${event.reason?.message || String(event.reason)}<br/><pre>${event.reason?.stack || 'No stack trace'}</pre>`;
+    document.body.appendChild(errorDiv);
+  });
+  
+  // Add crypto polyfill if needed
+  if (!window.crypto) {
+    console.warn('Crypto API not found, adding polyfill');
+    window.crypto = { 
+      getRandomValues: function(buffer) {
+        for (let i = 0; i < buffer.length; i++) {
+          buffer[i] = Math.floor(Math.random() * 256);
+        }
+        return buffer;
+      }
+    };
+  }
+  
+  console.log('Browser environment:', {
+    userAgent: navigator.userAgent,
+    windowWidth: window.innerWidth,
+    windowHeight: window.innerHeight,
+    hasCrypto: !!window.crypto,
+    hasGetRandomValues: !!(window.crypto && window.crypto.getRandomValues)
+  });
+}
+
 // Import polyfill first
 import './polyfills';
 

@@ -6,7 +6,8 @@
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "buildCommand": "CI=false PUBLIC_URL='' npm run build"
+        "buildCommand": "npm run vercel-build",
+        "outputDirectory": "build"
       }
     },
     {
