@@ -9,6 +9,7 @@ import safeStorage from '../utils/storage';
 import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
 import farcasterService from '../services/farcasterService';
+import SuggestionPortal from './SuggestionPortal';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -40,6 +41,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchInputRef = useRef(null);
   const suggestionsRef = useRef(null);
+  
+  // Add new state for input position
+  const [inputRect, setInputRect] = useState(null);
   
   // Notify parent component when NFTs are displayed
   useEffect(() => {
@@ -647,6 +651,107 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     }
   };
 
+  // Update the input rect whenever input is focused or window is resized
+  useEffect(() => {
+    const updateInputRect = () => {
+      if (searchInputRef.current) {
+        const rect = searchInputRef.current.getBoundingClientRect();
+        setInputRect(rect);
+        console.log('Input rect updated:', rect);
+      }
+    };
+    
+    // Update initially
+    updateInputRect();
+    
+    // Update on resize
+    window.addEventListener('resize', updateInputRect);
+    
+    // Update on focus
+    if (searchInputRef.current) {
+      searchInputRef.current.addEventListener('focus', updateInputRect);
+    }
+    
+    return () => {
+      window.removeEventListener('resize', updateInputRect);
+      if (searchInputRef.current) {
+        searchInputRef.current.removeEventListener('focus', updateInputRect);
+      }
+    };
+  }, []);
+
+  // Define the dropdown content separately
+  const renderSuggestionDropdown = () => (
+    <div 
+      className="username-suggestions"
+      style={{
+        backgroundColor: "#fff",
+        border: "3px solid #8b5cf6", 
+        borderRadius: "8px",
+        maxHeight: "300px",
+        overflowY: "auto",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+      }}
+    >
+      <div style={{ padding: "10px", backgroundColor: "#8b5cf6", color: "white", fontWeight: "bold" }}>
+        {suggestions.length} suggestions found
+      </div>
+      {suggestions.map((user) => (
+        <div 
+          key={user.fid}
+          className="username-suggestion-item"
+          onClick={() => handleSelectSuggestion(user.username)}
+          style={{
+            padding: "12px 15px",
+            display: "flex",
+            alignItems: "center",
+            borderBottom: "1px solid #e5e7eb",
+            cursor: "pointer",
+            backgroundColor: "#ffffff",
+            transition: "background-color 0.2s"
+          }}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
+          onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
+        >
+          {user.imageUrl && (
+            <img 
+              src={user.imageUrl} 
+              alt=""
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                marginRight: "12px",
+                border: "2px solid #e5e7eb"
+              }}
+            />
+          )}
+          <div className="suggestion-user-info">
+            <span 
+              style={{
+                fontWeight: "600",
+                fontSize: "16px",
+                color: "#111827",
+                display: "block"
+              }}
+            >
+              {user.displayName || user.username}
+            </span>
+            <span 
+              style={{
+                fontSize: "14px",
+                color: "#6b7280",
+                display: "block"
+              }}
+            >
+              @{user.username}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div className="farcaster-search-container">
       <div className="search-header">
@@ -668,7 +773,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 padding: "12px 16px",
                 fontSize: "16px",
                 border: "1px solid #d1d5db",
-                borderRadius: showSuggestions && suggestions.length > 0 ? "8px 8px 0 0" : "8px 0 0 8px",
+                borderRadius: "8px 0 0 8px",
                 outline: "none"
               }}
               aria-label="Farcaster username"
@@ -678,83 +783,32 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* Username suggestions dropdown with forced visibility */}
+            {/* Render an absolutely positioned dropdown for debugging */}
             {suggestions.length > 0 && (
-              <div 
-                ref={suggestionsRef}
-                className="username-suggestions"
+              <div
                 style={{
-                  position: "absolute", 
-                  top: "100%",
+                  position: 'absolute',
+                  top: '100%',
                   left: 0,
-                  width: "100%",
-                  backgroundColor: "#fff",
-                  border: "3px solid #8b5cf6", 
-                  borderTop: "none",
-                  borderRadius: "0 0 8px 8px",
-                  maxHeight: "300px",
-                  overflowY: "auto",
+                  padding: '4px',
+                  background: 'red',
+                  color: 'white',
                   zIndex: 9999,
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
-                  display: "block !important",
-                  visibility: "visible !important",
-                  opacity: 1
+                  fontSize: '10px'
                 }}
               >
-                <div style={{ padding: "8px", backgroundColor: "#f0f0ff", borderBottom: "1px solid #e5e7eb" }}>
-                  <strong>{suggestions.length} suggestions found</strong>
-                </div>
-                {suggestions.map((user) => (
-                  <div 
-                    key={user.fid}
-                    className="username-suggestion-item"
-                    onClick={() => handleSelectSuggestion(user.username)}
-                    style={{
-                      padding: "10px 15px",
-                      display: "flex",
-                      alignItems: "center",
-                      borderBottom: "1px solid #eee",
-                      cursor: "pointer",
-                      backgroundColor: "#ffffff"
-                    }}
-                  >
-                    {user.imageUrl && (
-                      <img 
-                        src={user.imageUrl} 
-                        alt=""
-                        style={{
-                          width: "32px",
-                          height: "32px",
-                          borderRadius: "50%",
-                          marginRight: "10px"
-                        }}
-                      />
-                    )}
-                    <div className="suggestion-user-info">
-                      <span 
-                        className="suggestion-display-name"
-                        style={{
-                          fontWeight: "600",
-                          fontSize: "14px"
-                        }}
-                      >
-                        {user.displayName || user.username}
-                      </span>
-                      <span 
-                        className="suggestion-username"
-                        style={{
-                          fontSize: "12px",
-                          color: "#666"
-                        }}
-                      >
-                        @{user.username}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                {suggestions.length} matches found
               </div>
             )}
+            
+            {/* Render the dropdown in a portal */}
+            {suggestions.length > 0 && inputRect && (
+              <SuggestionPortal inputRect={inputRect}>
+                {renderSuggestionDropdown()}
+              </SuggestionPortal>
+            )}
           </div>
+          
           <button 
             type="submit"
             className="search-button"
