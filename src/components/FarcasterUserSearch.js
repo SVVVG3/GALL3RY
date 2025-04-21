@@ -87,24 +87,17 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         console.log('Suggestion API response:', users);
         console.log('Response type:', typeof users, 'Is array:', Array.isArray(users), 'Length:', users?.length);
         
+        // Set suggestions first
         setSuggestions(users);
-        const shouldShow = users.length > 0;
-        console.log('Setting showSuggestions to:', shouldShow);
-        setShowSuggestions(shouldShow);
         
-        // Debug DOM state after state update
-        setTimeout(() => {
-          console.log('After state update - showSuggestions:', showSuggestions);
-          console.log('Dropdown element exists:', !!suggestionsRef.current);
-          if (suggestionsRef.current) {
-            console.log('Dropdown styles:', {
-              position: window.getComputedStyle(suggestionsRef.current).position,
-              zIndex: window.getComputedStyle(suggestionsRef.current).zIndex,
-              display: window.getComputedStyle(suggestionsRef.current).display,
-              visibility: window.getComputedStyle(suggestionsRef.current).visibility
-            });
-          }
-        }, 100);
+        // Force-render the suggestions immediately if we have results
+        if (users && users.length > 0) {
+          console.log('FORCE SHOWING SUGGESTIONS: TRUE - with', users.length, 'suggestions');
+          setShowSuggestions(true);
+        } else {
+          console.log('No suggestions found, hiding dropdown');
+          setShowSuggestions(false);
+        }
       } catch (error) {
         console.error('Error fetching suggestions:', error);
         setSuggestions([]);
@@ -114,6 +107,16 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     
     fetchSuggestions();
   }, [formSearchQuery]);
+
+  // Force-render a log message whenever showSuggestions changes
+  useEffect(() => {
+    console.log('🔴 showSuggestions state changed to:', showSuggestions);
+    console.log('🔵 Current suggestions count:', suggestions.length);
+    
+    if (showSuggestions && suggestions.length > 0) {
+      console.log('Should be showing dropdown now with', suggestions.length, 'items');
+    }
+  }, [showSuggestions, suggestions]);
 
   // Handle suggestion selection
   const handleSelectSuggestion = (username) => {
@@ -675,8 +678,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* Username suggestions dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
+            {/* Username suggestions dropdown with forced visibility */}
+            {suggestions.length > 0 && (
               <div 
                 ref={suggestionsRef}
                 className="username-suggestions"
@@ -686,15 +689,21 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                   left: 0,
                   width: "100%",
                   backgroundColor: "#fff",
-                  border: "2px solid #8b5cf6", 
+                  border: "3px solid #8b5cf6", 
                   borderTop: "none",
                   borderRadius: "0 0 8px 8px",
                   maxHeight: "300px",
                   overflowY: "auto",
-                  zIndex: 1000,
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.2)"
+                  zIndex: 9999,
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.2)",
+                  display: "block !important",
+                  visibility: "visible !important",
+                  opacity: 1
                 }}
               >
+                <div style={{ padding: "8px", backgroundColor: "#f0f0ff", borderBottom: "1px solid #e5e7eb" }}>
+                  <strong>{suggestions.length} suggestions found</strong>
+                </div>
                 {suggestions.map((user) => (
                   <div 
                     key={user.fid}
@@ -705,7 +714,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                       display: "flex",
                       alignItems: "center",
                       borderBottom: "1px solid #eee",
-                      cursor: "pointer"
+                      cursor: "pointer",
+                      backgroundColor: "#ffffff"
                     }}
                   >
                     {user.imageUrl && (
