@@ -50,6 +50,11 @@
       "dest": "/runtime-config.json"
     },
     {
+      "src": "/.well-known/farcaster.json",
+      "dest": "/.well-known/farcaster.json",
+      "headers": { "content-type": "application/json" }
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.html"
     }
