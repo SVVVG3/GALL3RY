@@ -247,14 +247,28 @@ export const isAppAdded = async () => {
   }
 
   try {
-    // Log the full context for debugging
-    logDebug('SDK Context check - Full context:', safeSDK.context);
+    // Safely log context properties without stringifying the entire object
+    if (safeSDK.context) {
+      logDebug('SDK Context check - Context exists');
+      // Only log primitive properties safely
+      const safeProps = {
+        hasClient: typeof safeSDK.context.client !== 'undefined',
+        hasUser: typeof safeSDK.context.user !== 'undefined',
+        hasLocation: typeof safeSDK.context.location !== 'undefined'
+      };
+      logDebug('Available context properties:', safeProps);
+    } else {
+      logDebug('SDK Context check - Context not available');
+    }
     
     // First try using context directly (newer SDK versions)
     if (safeSDK.context && typeof safeSDK.context.client !== 'undefined') {
-      const isAdded = !!safeSDK.context.client.added;
+      // Safely access the added property without stringifying the whole client object
+      const isAdded = Boolean(safeSDK.context.client.added);
       logDebug(`Checking app added status from sdk.context.client.added: ${isAdded}`);
-      logDebug(`Client context details: ${JSON.stringify(safeSDK.context.client, null, 2)}`);
+      
+      // Log only the added property, not the entire client object
+      logDebug(`Client added status: ${isAdded}`);
       return isAdded;
     } else {
       logDebug('Context or client property not available on SDK context');
@@ -265,18 +279,18 @@ export const isAppAdded = async () => {
       logDebug('Fetching context using sdk.getContext()');
       try {
         const context = await safeSDK.getContext();
-        logDebug('getContext result:', context);
+        logDebug('getContext result exists:', Boolean(context));
         
         if (context && typeof context.client !== 'undefined') {
-          const isAdded = !!context.client.added;
+          // Safely access the added property
+          const isAdded = Boolean(context.client.added);
           logDebug(`Checking app added status from context.client.added: ${isAdded}`);
-          logDebug(`Client context details: ${JSON.stringify(context.client, null, 2)}`);
           return isAdded;
         } else {
           logDebug('Client property not available in getContext result');
         }
       } catch (err) {
-        logDebug('Error calling getContext:', err);
+        logDebug('Error calling getContext:', err.message || String(err));
       }
     } else {
       logDebug('getContext method not available on SDK');
@@ -285,7 +299,7 @@ export const isAppAdded = async () => {
     logDebug('Could not determine if app is added, assuming not added');
     return false;
   } catch (e) {
-    console.error('Error checking if app is added:', e);
+    console.error('Error checking if app is added:', e.message || String(e));
     return false;
   }
 };

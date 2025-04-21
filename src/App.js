@@ -303,46 +303,69 @@ function AppContent() {
       setTimeout(async () => {
         try {
           console.log("Checking if app is already added...");
-          // Check if app is already added using our helper function
-          const appAlreadyAdded = await isAppAdded();
+          
+          // Set prompted flag early to prevent multiple attempts if this crashes
+          hasPromptedAddApp.current = true;
+          
+          // Check if app is already added using our helper function - with error handling
+          let appAlreadyAdded = false;
+          try {
+            appAlreadyAdded = await isAppAdded();
+          } catch (checkError) {
+            console.error("Error checking if app is added:", checkError);
+            // Continue anyway since we want to show the prompt
+          }
           
           if (!appAlreadyAdded) {
             console.log("App not added, showing prompt to add app");
             
-            // Direct approach using SDK
-            console.log("Using direct SDK approach for addFrame");
-            try {
-              // Try the SDK actions.addFrame directly
-              if (sdk && sdk.actions && typeof sdk.actions.addFrame === 'function') {
-                console.log("Calling sdk.actions.addFrame() directly");
-                await sdk.actions.addFrame();
-                console.log("sdk.actions.addFrame() call completed");
-              } else {
-                // Fallback to our helper function
-                console.log("Direct SDK call not available, using promptAddFrame helper");
-                await promptAddFrame();
+            // Function to safely call the SDK
+            const safeSDKCall = async () => {
+              // Simple wrapper that prevents errors from propagating
+              try {
+                if (sdk) {
+                  // Check if actions exists
+                  if (sdk.actions) {
+                    // Check if addFrame exists and is a function
+                    if (typeof sdk.actions.addFrame === 'function') {
+                      console.log("Calling sdk.actions.addFrame()");
+                      await sdk.actions.addFrame();
+                      console.log("addFrame call completed");
+                      return true;
+                    } else {
+                      console.log("sdk.actions.addFrame is not a function");
+                    }
+                  } else {
+                    console.log("sdk.actions is undefined");
+                  }
+                } else {
+                  console.log("sdk is undefined");
+                }
+              } catch (error) {
+                console.error("Error in safe SDK call:", error.message || String(error));
               }
-            } catch (err) {
-              console.error("Error during direct SDK addFrame call:", err);
-              
-              // If direct SDK call fails, try our helper as a fallback
+              return false;
+            };
+            
+            // Try direct SDK call first
+            const directSuccess = await safeSDKCall();
+            
+            // If direct call fails, try the helper
+            if (!directSuccess) {
               try {
                 console.log("Falling back to promptAddFrame helper");
                 await promptAddFrame();
-              } catch (innerErr) {
-                console.error("Fallback promptAddFrame also failed:", innerErr);
+              } catch (helperError) {
+                console.error("Helper also failed:", helperError.message || String(helperError));
               }
             }
           } else {
             console.log("App is already added, no need to show prompt");
           }
         } catch (error) {
-          console.error("Error in add app prompt flow:", error);
-        } finally {
-          // Mark as prompted regardless of outcome to avoid multiple prompts
-          hasPromptedAddApp.current = true;
+          console.error("Critical error in add app flow:", error.message || String(error));
         }
-      }, 2000); // Increased delay to ensure UI is stable
+      }, 2500); // Increased delay for stability
     };
     
     // Wait for app initialization before prompting
