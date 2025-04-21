@@ -125,7 +125,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Handle suggestion selection
   const handleSelectSuggestion = (username) => {
     setFormSearchQuery(username);
-    setShowSuggestions(false);
+    // Clear suggestions immediately when a selection is made
+    setSuggestions([]);
     // Trigger search with the selected username
     handleSearch({ preventDefault: () => {} }, username);
   };
@@ -680,6 +681,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     };
   }, []);
 
+  // Add an effect that clears suggestions on search
+  useEffect(() => {
+    // When user is searching, clear any existing suggestions
+    if (isSearching) {
+      setSuggestions([]);
+    }
+  }, [isSearching]);
+
   // Define the dropdown content separately
   const renderSuggestionDropdown = () => (
     <div 
@@ -693,9 +702,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
       }}
     >
-      <div style={{ padding: "10px", backgroundColor: "#8b5cf6", color: "white", fontWeight: "bold" }}>
-        {suggestions.length} suggestions found
-      </div>
       {suggestions.map((user) => (
         <div 
           key={user.fid}
@@ -783,25 +789,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* Render an absolutely positioned dropdown for debugging */}
-            {suggestions.length > 0 && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  padding: '4px',
-                  background: 'red',
-                  color: 'white',
-                  zIndex: 9999,
-                  fontSize: '10px'
-                }}
-              >
-                {suggestions.length} matches found
-              </div>
-            )}
-            
-            {/* Render the dropdown in a portal */}
+            {/* 
+              Render suggestions dropdown in a portal
+              - This ensures it's not affected by parent container styles or z-index
+              - It will be cleared when a user selects an option or starts searching
+            */}
             {suggestions.length > 0 && inputRect && (
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
