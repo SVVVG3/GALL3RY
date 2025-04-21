@@ -355,8 +355,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const handleSearch = useCallback(async (e, selectedUsername) => {
     if (e) e.preventDefault();
     
-    const cleanQuery = selectedUsername || formSearchQuery.trim();
-    if (!cleanQuery) return;
+    if (!formSearchQuery && !selectedUsername) {
+      setSearchError('Please enter a username');
+      return;
+    }
     
     setIsSearching(true);
     setSearchError(null);
@@ -365,36 +367,93 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     setUserNfts([]);
     setShowSuggestions(false); // Hide suggestions when search starts
     
+    // Message to users with .eth usernames
+    const originalQuery = selectedUsername || formSearchQuery.trim();
+    const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
+    const isWarpcastLink = originalQuery.includes('warpcast.com/');
+    
     try {
-      // Get the Farcaster user profile
-      const profile = await farcasterService.getProfile({ username: cleanQuery });
+      // Extract username from Warpcast URLs
+      let cleanQuery = originalQuery;
       
-      if (!profile) {
-        setSearchError(`User "${cleanQuery}" not found on Farcaster`);
-        setIsSearching(false);
-        return;
+      if (isWarpcastLink) {
+        // Extract username from warpcast.com/username format
+        const matches = originalQuery.match(/warpcast\.com\/([^\/\?#]+)/i);
+        if (matches && matches[1]) {
+          cleanQuery = matches[1].trim();
+          console.log(`Extracted username '${cleanQuery}' from Warpcast URL`);
+        }
       }
       
-      console.log(`Found Farcaster profile for ${cleanQuery}:`, profile);
-      setUserProfile(profile);
+      console.log(`Searching for Farcaster user: ${cleanQuery}`);
       
-      // Get all wallet addresses for this FID
-      const addresses = profile.connectedAddresses || [];
+      // Try to find the Farcaster profile using Zapper API
+      let profile;
+      try {
+        profile = await getFarcasterProfile(cleanQuery);
+      } catch (profileError) {
+        console.error('Profile search error:', profileError);
+        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+      }
+      
+      if (!profile) {
+        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+      }
+      
+      console.log('Farcaster profile found:', profile);
+      
+      // Get wallet addresses
+      let addresses = [];
+      
+      // Add custody address if it exists
       if (profile.custodyAddress) {
         addresses.push(profile.custodyAddress);
       }
+      
+      // Add connected addresses if they exist
+      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+        addresses = [...addresses, ...profile.connectedAddresses];
+      }
+      
+      // Filter out duplicates and invalid addresses
+      addresses = [...new Set(addresses)].filter(addr => 
+        addr && typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
+      );
+      
+      if (addresses.length === 0) {
+        console.warn(`No valid addresses found for user ${cleanQuery}`);
+        throw new Error(`Found profile for ${cleanQuery} but no wallet addresses are connected.`);
+      }
+      
+      setUserProfile(profile);
       setWalletAddresses(addresses);
       
+      // Save recently searched profile to storage if available
+      try {
+        const recentSearches = JSON.parse(safeStorage.getItem('recentSearches') || '[]');
+        const updatedSearches = [profile.username, ...recentSearches.filter(name => name !== profile.username)].slice(0, 5);
+        safeStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
+      } catch (storageError) {
+        console.warn('Could not save recent search:', storageError);
+      }
+      
+      // Fetch NFTs if we have wallet addresses
       if (addresses.length > 0) {
+        console.log(`Fetching NFTs for addresses:`, addresses);
+        
         try {
-          // Fetch NFTs for all connected wallets
+          // Use the NFTContext to fetch NFTs - this eliminates duplicate fetching
           const result = await fetchAllNFTsForWallets(addresses, {
             excludeSpam: true,
             fetchAll: true
           });
           
-          if (result.error) {
-            console.error('Error fetching NFTs:', result.error);
+          // Process result
+          if (!result) {
+            setUserNfts([]);
+            setSearchError('Could not fetch NFTs: Received empty response from server');
+          } else if (result.error) {
+            setUserNfts(result.nfts || []);
             setSearchError(`Could not fetch all NFTs: ${result.error}`);
           } else if (!result.nfts) {
             setUserNfts([]);
