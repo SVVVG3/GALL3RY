@@ -8,8 +8,6 @@ import '../styles/FarcasterProfile.css';
 import safeStorage from '../utils/storage';
 import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
-import { fetchFarcasterUser, fetchAddressesForFid } from '../services/farcasterService';
-import { fetchNftsForAddresses } from '../services/alchemyService';
 import farcasterService from '../services/farcasterService';
 
 /**
@@ -381,7 +379,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       setUserProfile(profile);
       
       // Get all wallet addresses for this FID
-      const addresses = await fetchAddressesForFid(profile.fid);
+      const addresses = profile.connectedAddresses || [];
+      if (profile.custodyAddress) {
+        addresses.push(profile.custodyAddress);
+      }
       setWalletAddresses(addresses);
       
       if (addresses.length > 0) {
@@ -423,7 +424,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [formSearchQuery, fetchAllNFTsForWallets, fetchAddressesForFid]);
+  }, [formSearchQuery, fetchAllNFTsForWallets]);
 
   /**
    * Effect for initial search if username is provided
