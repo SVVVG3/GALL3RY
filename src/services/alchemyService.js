@@ -444,8 +444,8 @@ const alchemyService = {
         timestamp: new Date().toISOString()
       });
 
-      // Initialize endpoints if needed
-      await this.initializeEndpoints();
+      // Initialize endpoints if needed - call the global function instead of using this
+      await initializeEndpoints();
       
       console.log(`After initialization, using ALCHEMY_ENDPOINT: ${ALCHEMY_ENDPOINT}`);
 
