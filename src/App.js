@@ -26,6 +26,7 @@ import { WalletProvider } from './contexts/WalletContext';
 import { NFTProvider } from './contexts/NFTContext';
 import PrivyFarcasterAuth from './components/PrivyFarcasterAuth';
 import Navigation from './components/Navigation';
+import AddAppPrompt from './components/AddAppPrompt';
 
 // Import page components
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -392,6 +393,9 @@ function AppContent() {
     <>
       {/* Add Privy Farcaster Auth for Mini App environments */}
       {isInMiniApp && <PrivyFarcasterAuth />}
+      
+      {/* Add our new direct AddAppPrompt component - ONLY in Mini App environment */}
+      {isInMiniApp && <AddAppPrompt />}
       
       {/* Use the same header for both environments but with mini app class when needed */}
       <header className={`app-header ${isInMiniApp ? 'mini-app-header' : ''}`}>
