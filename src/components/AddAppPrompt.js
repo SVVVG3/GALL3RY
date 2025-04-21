@@ -90,20 +90,13 @@ const AddAppPrompt = () => {
     }
   };
 
+  // Render nothing visible to the user, but keep the component mounted to handle the logic
   return (
-    <div style={{ padding: '20px' }}>
-      <div>{promptState}</div>
+    <div style={{ display: 'none' }}>
+      <div data-testid="prompt-state">{promptState}</div>
       <button 
         onClick={manualPrompt}
-        style={{
-          padding: '10px',
-          background: '#6d28d9',
-          color: 'white',
-          border: 'none',
-          borderRadius: '5px',
-          cursor: 'pointer',
-          display: 'none'  // Hidden by default
-        }}
+        id="manual-add-app-trigger"
       >
         Add App (Manual Trigger)
       </button>
