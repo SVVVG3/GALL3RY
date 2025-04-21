@@ -429,21 +429,46 @@ const alchemyService = {
   async getOwnersForContract(contractAddress, network = 'eth') {
     try {
       if (!contractAddress) {
+        console.error('Contract address is missing or empty');
         throw new Error('Contract address is required');
       }
 
       console.log(`Fetching owners for contract ${contractAddress} on ${network}`);
+      console.log('DEBUG - getOwnersForContract call details:', {
+        contractAddress,
+        contractAddressType: typeof contractAddress,
+        contractAddressLength: contractAddress?.length,
+        network,
+        alchemyEndpoint: ALCHEMY_ENDPOINT,
+        serverUrl: SERVER_URL,
+        timestamp: new Date().toISOString()
+      });
 
       // Initialize endpoints if needed
       await this.initializeEndpoints();
+      
+      console.log(`After initialization, using ALCHEMY_ENDPOINT: ${ALCHEMY_ENDPOINT}`);
 
+      // Build the API request params
+      const params = {
+        endpoint: 'getOwnersForContract',
+        contractAddress,
+        network
+      };
+      
+      console.log('Making Alchemy API request with params:', params);
+
+      // Make the API request
       const response = await axios.get(ALCHEMY_ENDPOINT, {
-        params: {
-          endpoint: 'getOwnersForContract',
-          contractAddress,
-          network
-        },
+        params,
         timeout: 15000 // 15 seconds
+      });
+
+      console.log('Alchemy API response received:', {
+        status: response.status,
+        hasData: !!response.data,
+        hasOwners: Array.isArray(response.data?.owners),
+        ownersCount: response.data?.owners?.length || 0
       });
 
       const owners = response.data?.owners || [];
@@ -457,8 +482,21 @@ const alchemyService = {
       console.error('Error details:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
-        data: error.response?.data || error.message
+        data: error.response?.data || error.message,
+        stack: error.stack?.substring(0, 200)
       });
+      
+      // Check for specific error types to provide better diagnostics
+      if (error.code === 'ECONNREFUSED') {
+        console.error('Connection refused. API server might be down or unreachable.');
+      } else if (error.code === 'ETIMEDOUT') {
+        console.error('Request timed out. API server might be overloaded or unreachable.');
+      } else if (error.response?.status === 404) {
+        console.error('API endpoint not found. Check the API URL configuration.');
+      } else if (error.response?.status === 401 || error.response?.status === 403) {
+        console.error('Authentication error. Check API key.');
+      }
+      
       return [];
     }
   },
