@@ -35,11 +35,13 @@
     },
     {
       "src": "/logo192.png",
-      "dest": "/logo192.png"
+      "dest": "/logo192.png",
+      "headers": { "content-type": "image/png", "cache-control": "public, max-age=86400" }
     },
     {
       "src": "/logo512.png",
-      "dest": "/logo512.png"
+      "dest": "/logo512.png",
+      "headers": { "content-type": "image/png", "cache-control": "public, max-age=86400" }
     },
     {
       "src": "/og-image.png",
