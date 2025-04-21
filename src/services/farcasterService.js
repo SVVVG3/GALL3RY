@@ -254,33 +254,61 @@ const farcasterService = {
         throw new Error('FID is required');
       }
       
+      console.log(`Fetching addresses for Farcaster FID: ${fid}`);
+      
       // Try to get the profile first
       const profile = await farcasterService.getProfile({ fid });
       
       if (!profile) {
-        throw new Error(`No profile found for FID: ${fid}`);
+        console.warn(`No profile found for FID: ${fid}, returning empty address array`);
+        return []; // Return empty array instead of throwing to prevent UI breaks
       }
+      
+      console.log(`Found profile for FID ${fid}:`, { 
+        username: profile.username, 
+        hasCustodyAddress: !!profile.custodyAddress,
+        hasConnectedAddresses: Array.isArray(profile.connectedAddresses) && profile.connectedAddresses.length > 0,
+        connectedAddressCount: profile.connectedAddresses?.length || 0
+      });
       
       // Combine custody address and connected addresses, ensuring no duplicates
       const allAddresses = new Set();
       
       // Add custody address if available
       if (profile.custodyAddress) {
-        allAddresses.add(profile.custodyAddress.toLowerCase());
+        const lowerAddress = profile.custodyAddress.toLowerCase();
+        allAddresses.add(lowerAddress);
+        console.log(`Added custody address: ${lowerAddress}`);
       }
       
       // Add all connected addresses
       if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
         profile.connectedAddresses.forEach(addr => {
-          if (addr) allAddresses.add(addr.toLowerCase());
+          if (addr) {
+            const lowerAddr = addr.toLowerCase();
+            allAddresses.add(lowerAddr);
+            console.log(`Added connected address: ${lowerAddr}`);
+          }
         });
       }
       
-      console.log(`Found ${allAddresses.size} unique addresses for Farcaster FID: ${fid}`);
+      const addressArray = Array.from(allAddresses);
+      console.log(`Found ${addressArray.length} unique addresses for Farcaster FID: ${fid}`);
       
-      return Array.from(allAddresses);
+      if (addressArray.length === 0) {
+        console.warn(`No addresses found for FID ${fid} even though profile exists`);
+      }
+      
+      return addressArray;
     } catch (error) {
       console.error(`Error fetching addresses for FID ${fid}:`, error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack?.substring(0, 200)
+      });
+      
+      // Return empty array instead of throwing to prevent UI breaks
+      // This is a change from the previous implementation that threw the error
       return [];
     }
   },

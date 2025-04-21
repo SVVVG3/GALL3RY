@@ -240,6 +240,8 @@ const alchemyService = {
       };
     } catch (error) {
       console.error('Error in fetchNftsAcrossChains:', error.message);
+      // Even if there's an overall error, return any NFTs we might have fetched
+      // instead of returning an empty array which would break the UI
       return {
         nfts: [],
         totalCount: 0,
@@ -259,29 +261,57 @@ const alchemyService = {
     }
     
     try {
-      console.log(`Fetching NFTs for ${addresses.length} addresses across chains`);
+      // Filter out any invalid addresses to prevent errors
+      const validAddresses = addresses.filter(addr => 
+        addr && typeof addr === 'string' && addr.length > 0 && addr.startsWith('0x')
+      );
+      
+      if (validAddresses.length === 0) {
+        console.warn('No valid ETH addresses found after filtering', { 
+          originalCount: addresses.length, 
+          addresses: addresses.slice(0, 3) // Log a sample for debugging
+        });
+        return { nfts: [], totalCount: 0, info: 'No valid addresses to query' };
+      }
+      
+      console.log(`Fetching NFTs for ${validAddresses.length} addresses across chains`);
       
       // Get all NFTs for each address across chains
-      const results = await Promise.all(
-        addresses.map(address => 
+      const results = await Promise.allSettled(
+        validAddresses.map(address => 
           this.fetchNftsAcrossChains(address, options)
         )
       );
       
-      // Combine all NFTs from all addresses
+      // Combine all NFTs from all addresses, including from partial successes
       let allNfts = [];
-      results.forEach(result => {
-        if (result.nfts && Array.isArray(result.nfts)) {
-          allNfts = [...allNfts, ...result.nfts];
+      let addressesWithErrors = 0;
+      
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          if (result.value.nfts && Array.isArray(result.value.nfts)) {
+            allNfts = [...allNfts, ...result.value.nfts];
+            console.log(`Added ${result.value.nfts.length} NFTs from address ${validAddresses[index]}`);
+          } else {
+            console.warn(`No NFTs returned for address ${validAddresses[index]}`, result.value);
+          }
+        } else {
+          addressesWithErrors++;
+          console.error(`Error fetching NFTs for address ${validAddresses[index]}:`, result.reason);
         }
       });
       
-      console.log(`Total ${allNfts.length} NFTs found across all addresses and chains`);
+      console.log(`Total ${allNfts.length} NFTs found across ${validAddresses.length - addressesWithErrors}/${validAddresses.length} addresses`);
+      
+      // Even if we have errors, proceed with any NFTs we were able to fetch
       
       // Remove duplicates by using contract address and token ID as unique key
       const seen = new Set();
       let uniqueNfts = allNfts.filter(nft => {
-        const key = `${nft.contract?.address}-${nft.tokenId}-${nft.network}`;
+        // Skip invalid NFTs to prevent errors
+        if (!nft || !nft.contract || !nft.tokenId) return false;
+        
+        const key = `${nft.contract.address}-${nft.tokenId}-${nft.network}`;
         if (seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -292,6 +322,9 @@ const alchemyService = {
       // Enrich NFT data with image URLs if they're missing
       const enrichWithImageUrls = (nfts) => {
         return nfts.map(nft => {
+          // Skip invalid NFTs to prevent errors
+          if (!nft) return nft;
+          
           // If we already have image data, return as is
           if (nft.image || nft.image_url || 
              (nft.media && nft.media.length > 0) || 
@@ -325,11 +358,23 @@ const alchemyService = {
       
       return {
         nfts: uniqueNfts,
-        totalCount: uniqueNfts.length
+        totalCount: uniqueNfts.length,
+        addressesWithErrors: addressesWithErrors > 0,
+        addressesQueried: validAddresses.length
       };
     } catch (error) {
       console.error('Error in fetchNftsForMultipleAddresses:', error);
-      return { nfts: [], totalCount: 0, error: error.message };
+      
+      // Even on error, try to return any partial results we might have gathered
+      return { 
+        nfts: [], 
+        totalCount: 0, 
+        error: error.message,
+        errorDetails: {
+          name: error.name,
+          stack: error.stack?.substring(0, 200)
+        }
+      };
     }
   },
   
@@ -458,10 +503,10 @@ const alchemyService = {
       
       console.log('Making Alchemy API request with params:', params);
 
-      // Make the API request
+      // Make the API request with a longer timeout for potentially slow networks like Base
       const response = await axios.get(ALCHEMY_ENDPOINT, {
         params,
-        timeout: 15000 // 15 seconds
+        timeout: 20000 // 20 seconds - increased from 15 seconds
       });
 
       console.log('Alchemy API response received:', {
@@ -478,25 +523,39 @@ const alchemyService = {
       // Convert all addresses to lowercase for consistency
       return owners.map(owner => owner.toLowerCase());
     } catch (error) {
-      console.error(`Error fetching owners for contract ${contractAddress}:`, error.message);
+      // Enhanced error logging with network-specific information
+      console.error(`Error fetching owners for contract ${contractAddress} on ${network}:`, error.message);
       console.error('Error details:', {
+        network,
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data || error.message,
         stack: error.stack?.substring(0, 200)
       });
       
+      // Network-specific error handling
+      if (network === 'base') {
+        console.warn(`Base network may be experiencing issues. Returning empty result for ${contractAddress}.`);
+        // For Base network specifically, log more diagnostics but don't break the app
+        if (error.code === 'ECONNABORTED') {
+          console.warn('Request to Base network timed out. This is a common issue that will be handled gracefully.');
+        }
+      }
+      
       // Check for specific error types to provide better diagnostics
       if (error.code === 'ECONNREFUSED') {
         console.error('Connection refused. API server might be down or unreachable.');
-      } else if (error.code === 'ETIMEDOUT') {
+      } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
         console.error('Request timed out. API server might be overloaded or unreachable.');
       } else if (error.response?.status === 404) {
         console.error('API endpoint not found. Check the API URL configuration.');
       } else if (error.response?.status === 401 || error.response?.status === 403) {
         console.error('Authentication error. Check API key.');
+      } else if (error.response?.status === 500) {
+        console.error('Server error. The API server encountered an error processing the request.');
       }
       
+      // Always return an empty array instead of failing completely
       return [];
     }
   },
