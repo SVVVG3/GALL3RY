@@ -74,15 +74,37 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     const fetchSuggestions = async () => {
       // Only show suggestions if user has typed at least 2 characters
       if (formSearchQuery.trim().length < 2) {
+        console.log('Not enough characters to show suggestions (need at least 2)');
         setSuggestions([]);
         setShowSuggestions(false);
         return;
       }
       
+      console.log('Fetching suggestions for:', formSearchQuery.trim());
       try {
+        console.log('Calling farcasterService.searchUsers with:', formSearchQuery.trim());
         const users = await farcasterService.searchUsers(formSearchQuery.trim(), 5);
+        console.log('Suggestion API response:', users);
+        console.log('Response type:', typeof users, 'Is array:', Array.isArray(users), 'Length:', users?.length);
+        
         setSuggestions(users);
-        setShowSuggestions(users.length > 0);
+        const shouldShow = users.length > 0;
+        console.log('Setting showSuggestions to:', shouldShow);
+        setShowSuggestions(shouldShow);
+        
+        // Debug DOM state after state update
+        setTimeout(() => {
+          console.log('After state update - showSuggestions:', showSuggestions);
+          console.log('Dropdown element exists:', !!suggestionsRef.current);
+          if (suggestionsRef.current) {
+            console.log('Dropdown styles:', {
+              position: window.getComputedStyle(suggestionsRef.current).position,
+              zIndex: window.getComputedStyle(suggestionsRef.current).zIndex,
+              display: window.getComputedStyle(suggestionsRef.current).display,
+              visibility: window.getComputedStyle(suggestionsRef.current).visibility
+            });
+          }
+        }, 100);
       } catch (error) {
         console.error('Error fetching suggestions:', error);
         setSuggestions([]);
@@ -630,7 +652,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       <form onSubmit={handleSearch} className="search-form">
         <div className="search-input-wrapper">
-          <div className="username-input-container">
+          <div className="username-input-container" style={{ position: "relative", flex: "1" }}>
             <input
               type="text"
               ref={searchInputRef}
@@ -638,6 +660,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               onChange={(e) => setFormSearchQuery(e.target.value)}
               placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
               className="search-input"
+              style={{
+                width: "100%",
+                padding: "12px 16px",
+                fontSize: "16px",
+                border: "1px solid #d1d5db",
+                borderRadius: showSuggestions && suggestions.length > 0 ? "8px 8px 0 0" : "8px 0 0 8px",
+                outline: "none"
+              }}
               aria-label="Farcaster username"
               disabled={isSearching}
               autoCapitalize="none"
@@ -650,22 +680,65 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               <div 
                 ref={suggestionsRef}
                 className="username-suggestions"
+                style={{
+                  position: "absolute", 
+                  top: "100%",
+                  left: 0,
+                  width: "100%",
+                  backgroundColor: "#fff",
+                  border: "2px solid #8b5cf6", 
+                  borderTop: "none",
+                  borderRadius: "0 0 8px 8px",
+                  maxHeight: "300px",
+                  overflowY: "auto",
+                  zIndex: 1000,
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.2)"
+                }}
               >
                 {suggestions.map((user) => (
                   <div 
                     key={user.fid}
                     className="username-suggestion-item"
                     onClick={() => handleSelectSuggestion(user.username)}
+                    style={{
+                      padding: "10px 15px",
+                      display: "flex",
+                      alignItems: "center",
+                      borderBottom: "1px solid #eee",
+                      cursor: "pointer"
+                    }}
                   >
                     {user.imageUrl && (
                       <img 
                         src={user.imageUrl} 
                         alt=""
+                        style={{
+                          width: "32px",
+                          height: "32px",
+                          borderRadius: "50%",
+                          marginRight: "10px"
+                        }}
                       />
                     )}
                     <div className="suggestion-user-info">
-                      <span className="suggestion-display-name">{user.displayName || user.username}</span>
-                      <span className="suggestion-username">@{user.username}</span>
+                      <span 
+                        className="suggestion-display-name"
+                        style={{
+                          fontWeight: "600",
+                          fontSize: "14px"
+                        }}
+                      >
+                        {user.displayName || user.username}
+                      </span>
+                      <span 
+                        className="suggestion-username"
+                        style={{
+                          fontSize: "12px",
+                          color: "#666"
+                        }}
+                      >
+                        @{user.username}
+                      </span>
                     </div>
                   </div>
                 ))}

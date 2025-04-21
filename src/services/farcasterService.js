@@ -29,6 +29,8 @@ const farcasterService = {
         return cachedResult.data;
       }
       
+      console.log(`Making API request to ${API_URL}/neynar for user search with query: "${query}"`);
+      
       // Use our proxy endpoint instead of calling Neynar directly
       const response = await axios.get(`${API_URL}/neynar`, {
         params: {
@@ -37,6 +39,14 @@ const farcasterService = {
           limit
         }
       });
+      
+      console.log('Raw API response:', response.data);
+      
+      // Validate the response structure
+      if (!response.data || !response.data.users) {
+        console.warn('Invalid API response structure:', response.data);
+        return [];
+      }
       
       // Format the response to match the structure expected by the app
       const users = response.data.users?.map(user => ({
@@ -51,6 +61,8 @@ const farcasterService = {
         connectedAddresses: []
       })) || [];
       
+      console.log(`Processed ${users.length} user suggestions from API response`);
+      
       // Cache the result
       profileCache.set(cacheKey, {
         timestamp: Date.now(),
@@ -60,6 +72,12 @@ const farcasterService = {
       return users;
     } catch (error) {
       console.error('Error searching Farcaster users:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
       return [];
     }
   },
@@ -183,6 +201,48 @@ const farcasterService = {
     } catch (error) {
       console.error('Error fetching Farcaster profile:', error);
       return null;
+    }
+  },
+  
+  /**
+   * Fetch wallet addresses associated with a Farcaster FID
+   * @param {number} fid - Farcaster FID 
+   * @returns {Promise<string[]>} - Array of wallet addresses
+   */
+  fetchAddressesForFid: async (fid) => {
+    try {
+      if (!fid) {
+        throw new Error('FID is required');
+      }
+      
+      // Try to get the profile first
+      const profile = await farcasterService.getProfile({ fid });
+      
+      if (!profile) {
+        throw new Error(`No profile found for FID: ${fid}`);
+      }
+      
+      // Combine custody address and connected addresses, ensuring no duplicates
+      const allAddresses = new Set();
+      
+      // Add custody address if available
+      if (profile.custodyAddress) {
+        allAddresses.add(profile.custodyAddress.toLowerCase());
+      }
+      
+      // Add all connected addresses
+      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+        profile.connectedAddresses.forEach(addr => {
+          if (addr) allAddresses.add(addr.toLowerCase());
+        });
+      }
+      
+      console.log(`Found ${allAddresses.size} unique addresses for Farcaster FID: ${fid}`);
+      
+      return Array.from(allAddresses);
+    } catch (error) {
+      console.error(`Error fetching addresses for FID ${fid}:`, error);
+      return [];
     }
   },
   
