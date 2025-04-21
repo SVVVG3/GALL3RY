@@ -10,6 +10,7 @@ const SuggestionPortal = ({ children, inputRect }) => {
   
   // Create a portal container if it doesn't exist
   useEffect(() => {
+    // Create the portal element if it doesn't exist
     if (!portalRef.current) {
       const div = document.createElement('div');
       div.id = 'suggestion-portal';
@@ -20,11 +21,45 @@ const SuggestionPortal = ({ children, inputRect }) => {
       portalRef.current = div;
     }
     
+    // Cleanup function to remove the portal when component unmounts
     return () => {
       if (portalRef.current) {
-        document.body.removeChild(portalRef.current);
+        // Make sure to cleanup any existing portal content
+        ReactDOM.unmountComponentAtNode(portalRef.current);
+        
+        // Remove the DOM element
+        if (document.body.contains(portalRef.current)) {
+          document.body.removeChild(portalRef.current);
+        }
         portalRef.current = null;
       }
+      
+      // Also clean up any other suggestion portals that might exist (safety check)
+      const existingPortals = document.querySelectorAll('#suggestion-portal');
+      existingPortals.forEach(portal => {
+        if (document.body.contains(portal)) {
+          document.body.removeChild(portal);
+        }
+      });
+    };
+  }, []);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // If portal exists and click is outside portal, unmount it
+      if (portalRef.current && !portalRef.current.contains(event.target)) {
+        // Only if the click isn't on an element with searchInput class
+        const isSearchInput = event.target.classList.contains('search-input');
+        if (!isSearchInput) {
+          ReactDOM.unmountComponentAtNode(portalRef.current);
+        }
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
   

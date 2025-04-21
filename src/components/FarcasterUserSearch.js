@@ -10,6 +10,7 @@ import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
 import farcasterService from '../services/farcasterService';
 import SuggestionPortal from './SuggestionPortal';
+import ReactDOM from 'react-dom';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -122,11 +123,39 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     }
   }, [showSuggestions, suggestions]);
 
-  // Handle suggestion selection
+  // Ensure suggestions are cleared when component unmounts
+  useEffect(() => {
+    return () => {
+      setSuggestions([]);
+      // Clean up any suggestion portals that might still exist
+      const existingPortals = document.querySelectorAll('#suggestion-portal');
+      existingPortals.forEach(portal => {
+        if (document.body.contains(portal)) {
+          document.body.removeChild(portal);
+        }
+      });
+    };
+  }, []);
+  
+  // Handle suggestion selection with explicit cleanup
   const handleSelectSuggestion = (username) => {
+    console.log('Selection made, clearing suggestions');
     setFormSearchQuery(username);
-    // Clear suggestions immediately when a selection is made
+    
+    // Force cleaning the suggestions array
     setSuggestions([]);
+    
+    // Also manually clean up any suggestion portals 
+    const portalElements = document.querySelectorAll('#suggestion-portal');
+    portalElements.forEach(el => {
+      // Unmount any React components inside
+      ReactDOM.unmountComponentAtNode(el);
+      // Remove the element from DOM
+      if (document.body.contains(el)) {
+        document.body.removeChild(el);
+      }
+    });
+    
     // Trigger search with the selected username
     handleSearch({ preventDefault: () => {} }, username);
   };
@@ -688,6 +717,32 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       setSuggestions([]);
     }
   }, [isSearching]);
+
+  // Add event listener to dismiss suggestions when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Don't dismiss if clicking on the search input or its children
+      if (searchInputRef.current && searchInputRef.current.contains(event.target)) {
+        return;
+      }
+      
+      // Don't dismiss if clicking within the suggestions dropdown
+      const suggestionPortal = document.getElementById('suggestion-portal');
+      if (suggestionPortal && suggestionPortal.contains(event.target)) {
+        return;
+      }
+      
+      // Otherwise, dismiss suggestions
+      if (suggestions.length > 0) {
+        setSuggestions([]);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [suggestions.length]);
 
   // Define the dropdown content separately
   const renderSuggestionDropdown = () => (
