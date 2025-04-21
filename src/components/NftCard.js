@@ -533,7 +533,7 @@ const NFTCard = ({ nft }) => {
         <CollectionFriendsModal
           isOpen={showFriendsModal}
           onClose={handleCloseFriendsModal}
-          contractAddress={modalContractAddress || contractAddress}
+          collectionAddress={modalContractAddress || contractAddress}
           collectionName={collection}
         />
       )}
