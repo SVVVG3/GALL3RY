@@ -109,6 +109,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           isAuthenticated: isUserAuthenticated,
           hasCollectionAddress: !!collectionAddress,
           collectionAddress,
+          collectionAddressType: typeof collectionAddress,
+          validAddress: typeof collectionAddress === 'string' && collectionAddress.length > 0 && collectionAddress.startsWith('0x'),
           fid: privyUser?.farcaster?.fid,
           preCheckPassed: isUserAuthenticated && !!collectionAddress
         });

@@ -27,6 +27,7 @@ const NFTCard = ({ nft }) => {
   const [attemptCount, setAttemptCount] = useState(0);
   const [urlsAttempted, setUrlsAttempted] = useState([]);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [modalContractAddress, setModalContractAddress] = useState(null);
   const mountedRef = useRef(true);
 
   // Extract NFT details
@@ -350,7 +351,65 @@ const NFTCard = ({ nft }) => {
   const handleShowFriends = (e) => {
     e.preventDefault(); // Prevent link navigation
     e.stopPropagation(); // Prevent event bubbling
-    setShowFriendsModal(true);
+    
+    // Add debug logging to see the NFT data structure
+    console.log('DEBUG NFT DATA BEFORE OPENING MODAL:', {
+      nft,
+      collectionName: collection,
+      contractAddress,
+      hasContractAddress: !!contractAddress,
+      contractPaths: {
+        'nft?.contract?.address': nft?.contract?.address,
+        'nft?.contractAddress': nft?.contractAddress,
+        'nft?.contract_address': nft?.contract_address,
+        'nft?.id?.split': nft?.id ? nft.id.split(':') : null,
+        'raw id': nft?.id
+      }
+    });
+    
+    if (!contractAddress) {
+      console.error('Cannot open collection friends modal - missing contract address', nft);
+      
+      // Try to extract a contract address from the NFT raw data
+      let extractedAddress;
+      
+      // Try common properties where contract address might be found
+      if (nft?.contract?.address) {
+        extractedAddress = nft.contract.address;
+      } else if (nft?.contractAddress) {
+        extractedAddress = nft.contractAddress;
+      } else if (nft?.token?.contractAddress) {
+        extractedAddress = nft.token.contractAddress;
+      } else if (nft?.tokenMetadata?.contractAddress) {
+        extractedAddress = nft.tokenMetadata.contractAddress;
+      } else if (nft?.contract_address) {
+        extractedAddress = nft.contract_address;
+      } else if (nft?.id && typeof nft.id === 'string' && nft.id.includes(':')) {
+        // Try to extract from ID format like "eth:0x1234:789"
+        const parts = nft.id.split(':');
+        if (parts.length >= 3) {
+          extractedAddress = parts[2];
+        }
+      } else if (nft?.metadata?.contract?.address) {
+        extractedAddress = nft.metadata.contract.address;
+      }
+      
+      if (extractedAddress) {
+        console.log(`Found alternative contract address: ${extractedAddress}`);
+        // Store the found address
+        setModalContractAddress(extractedAddress);
+        // Continue with the extracted address
+        setShowFriendsModal(true);
+      } else {
+        console.error('No contract address found. Cannot open friends modal.');
+        // You could show an error message to the user here
+        return;
+      }
+    } else {
+      // Store the known contract address
+      setModalContractAddress(contractAddress);
+      setShowFriendsModal(true);
+    }
   };
   
   const handleCloseFriendsModal = () => {
@@ -474,7 +533,7 @@ const NFTCard = ({ nft }) => {
         <CollectionFriendsModal
           isOpen={showFriendsModal}
           onClose={handleCloseFriendsModal}
-          contractAddress={contractAddress}
+          contractAddress={modalContractAddress || contractAddress}
           collectionName={collection}
         />
       )}
