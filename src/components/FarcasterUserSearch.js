@@ -49,6 +49,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Add a ref to track if suggestions should be shown
   const shouldShowSuggestionsRef = useRef(true);
   
+  // Define updateInputRect function at component level so it's available everywhere
+  const updateInputRect = useCallback(() => {
+    if (searchInputRef.current) {
+      const rect = searchInputRef.current.getBoundingClientRect();
+      setInputRect(rect);
+      console.log('Input rect updated:', rect);
+    }
+  }, []);
+  
   // Notify parent component when NFTs are displayed
   useEffect(() => {
     if (onNFTsDisplayChange && typeof onNFTsDisplayChange === 'function') {
@@ -774,14 +783,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Update the input rect whenever input is focused or window is resized
   useEffect(() => {
-    const updateInputRect = () => {
-      if (searchInputRef.current) {
-        const rect = searchInputRef.current.getBoundingClientRect();
-        setInputRect(rect);
-        console.log('Input rect updated:', rect);
-      }
-    };
-    
     // Update initially
     updateInputRect();
     
@@ -799,7 +800,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         searchInputRef.current.removeEventListener('focus', updateInputRect);
       }
     };
-  }, []);
+  }, [updateInputRect]);
 
   // Add an effect that clears suggestions on search
   useEffect(() => {
