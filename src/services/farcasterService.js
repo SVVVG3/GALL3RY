@@ -394,4 +394,7 @@ const farcasterService = {
   }
 };
 
-export default farcasterService; 
+export default farcasterService;
+
+// Export individual functions for direct import
+export const { fetchAddressesForFid, getUserFollowing, getProfile, searchUsers, clearCache } = farcasterService; 
