@@ -286,6 +286,107 @@ const farcasterService = {
   },
   
   /**
+   * Get users that a Farcaster user follows
+   * @param {number} fid - Farcaster FID of the user
+   * @param {number} [limit=25] - Maximum number of results to return
+   * @param {string} [cursor] - Pagination cursor for fetching next page
+   * @returns {Promise<{users: Array, next: {cursor: string|null}}>} - Array of following users and pagination info
+   */
+  getUserFollowing: async (fid, limit = 25, cursor = null) => {
+    try {
+      if (!fid) {
+        throw new Error('FID is required');
+      }
+      
+      // Check cache first
+      const cacheKey = `following:${fid}:${limit}:${cursor || 'initial'}`;
+      const cachedResult = profileCache.get(cacheKey);
+      
+      if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_EXPIRATION_TIME) {
+        console.log('Using cached following list');
+        return cachedResult.data;
+      }
+      
+      // Build params for the request
+      const params = {
+        endpoint: 'following',
+        fid,
+        limit,
+      };
+      
+      // Add cursor if provided
+      if (cursor) {
+        params.cursor = cursor;
+      }
+      
+      console.log(`Fetching following list for FID: ${fid}`);
+      
+      // Make request to Neynar through our proxy
+      const response = await axios.get(`${API_URL}/neynar`, { params });
+      
+      // Format the response consistently
+      let following = {
+        users: [],
+        next: { cursor: null }
+      };
+      
+      // Parse response based on format returned from API
+      if (response.data?.users) {
+        following.users = response.data.users.map(user => ({
+          fid: user.user.fid,
+          username: user.user.username,
+          displayName: user.user.display_name || user.user.username,
+          imageUrl: user.user.pfp_url,
+          bio: user.user.profile?.bio?.text,
+          addresses: [
+            user.user.custody_address,
+            ...(user.user.verified_addresses?.eth_addresses || [])
+          ].filter(Boolean).map(addr => addr.toLowerCase())
+        }));
+        
+        // Get pagination cursor if available
+        following.next.cursor = response.data.next?.cursor || null;
+      } else if (response.data?.result?.users) {
+        // Handle v2 API format
+        following.users = response.data.result.users.map(user => ({
+          fid: user.user.fid,
+          username: user.user.username,
+          displayName: user.user.display_name || user.user.username,
+          imageUrl: user.user.pfp_url,
+          bio: user.user.profile?.bio?.text,
+          addresses: [
+            user.user.custody_address,
+            ...(user.user.verified_addresses?.eth_addresses || [])
+          ].filter(Boolean).map(addr => addr.toLowerCase())
+        }));
+        
+        // Get pagination cursor if available
+        following.next.cursor = response.data.result.next?.cursor || null;
+      }
+      
+      console.log(`Found ${following.users.length} following users for FID: ${fid}`);
+      
+      // Cache the result
+      profileCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: following
+      });
+      
+      return following;
+    } catch (error) {
+      console.error(`Error fetching following list for FID ${fid}:`, error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+      
+      return { users: [], next: { cursor: null } };
+    }
+  },
+  
+  /**
    * Clear the profile cache
    */
   clearCache: () => {

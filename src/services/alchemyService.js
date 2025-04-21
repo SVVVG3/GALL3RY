@@ -418,6 +418,50 @@ const alchemyService = {
       throw error;
     }
   },
+  
+  /**
+   * Get wallet addresses that own NFTs from a specified contract
+   * 
+   * @param {string} contractAddress - The NFT contract address
+   * @param {string} [network='eth'] - Blockchain network (eth, polygon, etc.)
+   * @returns {Promise<string[]>} Array of wallet addresses
+   */
+  async getOwnersForContract(contractAddress, network = 'eth') {
+    try {
+      if (!contractAddress) {
+        throw new Error('Contract address is required');
+      }
+
+      console.log(`Fetching owners for contract ${contractAddress} on ${network}`);
+
+      // Initialize endpoints if needed
+      await this.initializeEndpoints();
+
+      const response = await axios.get(ALCHEMY_ENDPOINT, {
+        params: {
+          endpoint: 'getOwnersForContract',
+          contractAddress,
+          network
+        },
+        timeout: 15000 // 15 seconds
+      });
+
+      const owners = response.data?.owners || [];
+
+      console.log(`Found ${owners.length} owners for contract ${contractAddress}`);
+      
+      // Convert all addresses to lowercase for consistency
+      return owners.map(owner => owner.toLowerCase());
+    } catch (error) {
+      console.error(`Error fetching owners for contract ${contractAddress}:`, error.message);
+      console.error('Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data || error.message
+      });
+      return [];
+    }
+  },
 };
 
 /**

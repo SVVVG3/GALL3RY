@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePrivy } from '@privy-io/react-auth';
+import farcasterService from '../services/farcasterService';
+import alchemyService from '../services/alchemyService';
 import '../styles/CollectionFriendsModal.css';
 
 /**
@@ -16,6 +18,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   // Consider both authentication methods
   const isUserAuthenticated = isAuthenticated || privyAuthenticated;
   
+  const [friends, setFriends] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [usingMockData, setUsingMockData] = useState(false);
+  const [totalFriends, setTotalFriends] = useState(0);
+
   // Debug authentication states
   useEffect(() => {
     if (isOpen) {
@@ -28,12 +36,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
       });
     }
   }, [isOpen, isAuthenticated, privyAuthenticated, isUserAuthenticated, user, privyUser]);
-  
-  const [friends, setFriends] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [usingMockData, setUsingMockData] = useState(false);
-  const [totalFriends, setTotalFriends] = useState(0);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -44,17 +46,82 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     
     const fetchFriends = async () => {
       try {
-        // In a real app, fetch friends data from your API
-        // For now we'll simulate a delay and use mock data
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
         // Check if authenticated through either method
-        if (isUserAuthenticated) {
-          // This would be replaced with real API call
-          const mockFriends = getMockFriends();
-          setFriends(mockFriends);
-          setUsingMockData(true); // Always using mock data for now
+        if (isUserAuthenticated && collectionAddress) {
+          // Try to get fid from the user if authenticated with Privy
+          const fid = privyUser?.farcaster?.fid;
+          
+          if (!fid) {
+            console.warn('No Farcaster FID found in user data, falling back to mock data');
+            const mockFriends = getMockFriends();
+            setFriends(mockFriends);
+            setUsingMockData(true);
+            setLoading(false);
+            return;
+          }
+          
+          console.log(`Fetching friends who own collection ${collectionAddress} for FID: ${fid}`);
+          
+          // 1. Get following users from Farcaster
+          const following = await farcasterService.getUserFollowing(fid, 100);
+          console.log(`Found ${following.users.length} following users`);
+          
+          if (following.users.length === 0) {
+            console.warn('No following users found, falling back to mock data');
+            const mockFriends = getMockFriends();
+            setFriends(mockFriends);
+            setUsingMockData(true);
+            setLoading(false);
+            return;
+          }
+          
+          // 2. Get all owners of the collection
+          const owners = await alchemyService.getOwnersForContract(collectionAddress);
+          console.log(`Found ${owners.length} collection owners`);
+          
+          if (owners.length === 0) {
+            console.warn('No collection owners found, falling back to mock data');
+            const mockFriends = getMockFriends();
+            setFriends(mockFriends);
+            setUsingMockData(true);
+            setLoading(false);
+            return;
+          }
+          
+          // 3. Create a set of owner addresses (lowercase) for faster lookup
+          const ownerAddresses = new Set(owners.map(addr => addr.toLowerCase()));
+          
+          // 4. Filter following users who own the collection
+          const friendsWithCollection = following.users.filter(followingUser => {
+            // Check if any of the user's addresses are in the owners list
+            return followingUser.addresses && followingUser.addresses.some(address => 
+              ownerAddresses.has(address.toLowerCase())
+            );
+          });
+          
+          console.log(`Found ${friendsWithCollection.length} friends who own the collection`);
+          
+          // 5. Format for display
+          const formattedFriends = friendsWithCollection.map(friend => ({
+            id: friend.fid.toString(),
+            name: friend.displayName || friend.username,
+            username: friend.username,
+            avatar: friend.imageUrl,
+            addresses: friend.addresses
+          }));
+          
+          if (formattedFriends.length > 0) {
+            setFriends(formattedFriends);
+            setTotalFriends(formattedFriends.length);
+            setUsingMockData(false);
+          } else {
+            // No friends found, but we tried with real data
+            setFriends([]);
+            setTotalFriends(0);
+            setUsingMockData(false);
+          }
         } else {
+          // Not authenticated or no collection address
           setFriends([]);
           setUsingMockData(false);
         }
@@ -63,12 +130,17 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
       } catch (err) {
         console.error('Error fetching friends:', err);
         setError('Failed to load friends. Please try again later.');
+        
+        // Fall back to mock data in case of error
+        const mockFriends = getMockFriends();
+        setFriends(mockFriends);
+        setUsingMockData(true);
         setLoading(false);
       }
     };
     
     fetchFriends();
-  }, [isOpen, isUserAuthenticated]);
+  }, [isOpen, isUserAuthenticated, collectionAddress, privyUser]);
   
   const getMockFriends = () => {
     return [
