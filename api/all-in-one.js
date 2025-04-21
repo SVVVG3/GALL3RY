@@ -112,6 +112,8 @@ module.exports = async function handler(req, res) {
       result = await handleV2Request(req, res);
     } else if (path.startsWith('diagnostic')) {
       result = await handleDiagnosticRequest(req, res);
+    } else if (path.startsWith('neynar')) {
+      result = await handleNeynarRequest(req, res);
     } else if (path === 'all-in-one' && !action) {
       // Handle the case where someone hits /api/all-in-one without an action
       return res.status(400).json({ 
@@ -1275,6 +1277,82 @@ async function handleDiagnosticRequest(req, res) {
     return res.status(500).json({
       error: 'Internal server error in diagnostic handler',
       message: error.message
+    });
+  }
+}
+
+// -----------------------------------------------------------------------
+// HANDLER: NEYNAR API
+// -----------------------------------------------------------------------
+async function handleNeynarRequest(req, res) {
+  const NEYNAR_API_URL = 'https://api.neynar.com/v2/farcaster';
+  
+  try {
+    // Get Neynar API key from environment variables
+    const apiKey = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || '';
+    
+    if (!apiKey) {
+      console.warn('⚠️ No NEYNAR_API_KEY found in environment variables!');
+      return res.status(500).json({
+        error: 'API Configuration Error',
+        message: 'Neynar API key is missing. Please check server configuration.'
+      });
+    }
+    
+    // Extract the endpoint from the path
+    const endpoint = req.query.endpoint || '';
+    if (!endpoint) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Endpoint parameter is required'
+      });
+    }
+    
+    // Create API URL
+    const apiUrl = `${NEYNAR_API_URL}/${endpoint}`;
+    
+    // Debug request
+    console.log(`Neynar REQUEST - ${apiUrl} with params:`, req.query);
+    
+    // Set up headers
+    const headers = {
+      'Accept': 'application/json',
+      'api_key': apiKey
+    };
+    
+    // Prepare query parameters (excluding 'endpoint')
+    const params = {};
+    Object.entries(req.query).forEach(([key, value]) => {
+      if (key !== 'endpoint') {
+        params[key] = value;
+      }
+    });
+    
+    // Try to use cached response if available
+    const cacheKey = CACHE.getKey('neynar', { endpoint, params });
+    const cachedData = CACHE.get('requests', cacheKey);
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+    
+    // Make request to Neynar API
+    const response = await axios.get(apiUrl, {
+      headers,
+      params
+    });
+    
+    // Cache successful responses
+    CACHE.set('requests', cacheKey, response.data, 60000); // 1 minute cache
+    
+    return res.status(200).json(response.data);
+  } catch (error) {
+    console.error('Neynar API Error:', error.message);
+    
+    // Return structured error response
+    return res.status(error.response?.status || 500).json({
+      error: 'Neynar API error',
+      message: error.message,
+      details: error.response?.data
     });
   }
 }

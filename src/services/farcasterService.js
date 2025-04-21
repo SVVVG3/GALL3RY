@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 // Constants
-const NEYNAR_API_URL = 'https://api.neynar.com/v2/farcaster';
-const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY;
+const API_URL = process.env.REACT_APP_API_URL || '/api';
 const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes
 
 // In-memory cache for profiles
@@ -30,13 +29,10 @@ const farcasterService = {
         return cachedResult.data;
       }
       
-      // Make request to Neynar API
-      const response = await axios.get(`${NEYNAR_API_URL}/user/search`, {
-        headers: {
-          'accept': 'application/json',
-          'api_key': NEYNAR_API_KEY
-        },
+      // Use our proxy endpoint instead of calling Neynar directly
+      const response = await axios.get(`${API_URL}/neynar`, {
         params: {
+          endpoint: 'user/search',
           q: query,
           limit
         }
@@ -91,24 +87,23 @@ const farcasterService = {
         return cachedProfile.data;
       }
       
-      // Determine the API endpoint based on input type
+      // Determine the API parameters based on input type
       let endpoint, params;
       
       if (username) {
-        endpoint = `${NEYNAR_API_URL}/user/search`;
+        endpoint = 'user/search';
         params = { q: username, limit: 1 };
       } else {
-        endpoint = `${NEYNAR_API_URL}/user`;
+        endpoint = 'user';
         params = { fid };
       }
       
-      // Make request to Neynar API
-      const response = await axios.get(endpoint, {
-        headers: {
-          'accept': 'application/json',
-          'api_key': NEYNAR_API_KEY
-        },
-        params
+      // Make request through our proxy
+      const response = await axios.get(`${API_URL}/neynar`, {
+        params: {
+          endpoint,
+          ...params
+        }
       });
       
       // Extract the user data from the response
@@ -136,12 +131,11 @@ const farcasterService = {
       let connectedAddresses = [];
       try {
         if (userData.fid) {
-          const addressesResponse = await axios.get(`${NEYNAR_API_URL}/user/verified-addresses`, {
-            headers: {
-              'accept': 'application/json',
-              'api_key': NEYNAR_API_KEY
-            },
-            params: { fid: userData.fid }
+          const addressesResponse = await axios.get(`${API_URL}/neynar`, {
+            params: {
+              endpoint: 'user/verified-addresses',
+              fid: userData.fid
+            }
           });
           
           connectedAddresses = addressesResponse.data.verified_addresses?.map(a => a.addr.toLowerCase()) || [];
