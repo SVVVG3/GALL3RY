@@ -42,14 +42,53 @@ const farcasterService = {
       
       console.log('Raw API response:', response.data);
       
-      // Validate the response structure
-      if (!response.data || !response.data.users) {
-        console.warn('Invalid API response structure:', response.data);
+      // Handle different response formats
+      let usersData = [];
+      
+      // Check if response is in format { users: [...] }
+      if (response.data && response.data.users) {
+        usersData = response.data.users;
+        console.log('Found users in direct users array format');
+      } 
+      // Check if response is in format { result: { users: [...] } }
+      else if (response.data && response.data.result && response.data.result.users) {
+        usersData = response.data.result.users;
+        console.log('Found users in result.users format');
+      }
+      // Check if array is wrapped in some other property
+      else {
+        // Try to find an array in the response that might contain users
+        for (const key in response.data) {
+          if (Array.isArray(response.data[key])) {
+            if (response.data[key].length > 0 && response.data[key][0].fid) {
+              usersData = response.data[key];
+              console.log(`Found user array in response.data.${key}`);
+              break;
+            }
+          } else if (typeof response.data[key] === 'object' && response.data[key] !== null) {
+            // Check second level properties for arrays
+            for (const subKey in response.data[key]) {
+              if (Array.isArray(response.data[key][subKey])) {
+                if (response.data[key][subKey].length > 0 && response.data[key][subKey][0].fid) {
+                  usersData = response.data[key][subKey];
+                  console.log(`Found user array in response.data.${key}.${subKey}`);
+                  break;
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      if (usersData.length === 0) {
+        console.warn('No users found in API response:', response.data);
         return [];
       }
       
+      console.log('Found users data:', usersData);
+      
       // Format the response to match the structure expected by the app
-      const users = response.data.users?.map(user => ({
+      const users = usersData.map(user => ({
         fid: user.fid,
         username: user.username,
         displayName: user.display_name,
