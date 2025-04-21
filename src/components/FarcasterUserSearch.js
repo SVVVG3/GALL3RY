@@ -46,6 +46,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Add new state for input position
   const [inputRect, setInputRect] = useState(null);
   
+  // Add a ref to track if suggestions should be shown
+  const shouldShowSuggestionsRef = useRef(true);
+  
   // Notify parent component when NFTs are displayed
   useEffect(() => {
     if (onNFTsDisplayChange && typeof onNFTsDisplayChange === 'function') {
@@ -137,26 +140,56 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     };
   }, []);
   
-  // Handle suggestion selection with explicit cleanup
+  // Handle suggestion selection with immediate forceful cleanup
   const handleSelectSuggestion = (username) => {
-    console.log('Selection made, clearing suggestions');
+    console.log('Selection made, forcefully clearing suggestions');
+    
+    // Set the ref to false to prevent showing suggestions
+    shouldShowSuggestionsRef.current = false;
+    
+    // Set the form query
     setFormSearchQuery(username);
     
-    // Force cleaning the suggestions array
+    // Clear suggestions array
     setSuggestions([]);
     
-    // Also manually clean up any suggestion portals 
-    const portalElements = document.querySelectorAll('#suggestion-portal');
-    portalElements.forEach(el => {
-      // Unmount any React components inside
-      ReactDOM.unmountComponentAtNode(el);
-      // Remove the element from DOM
-      if (document.body.contains(el)) {
-        document.body.removeChild(el);
-      }
-    });
+    // Force immediate portal removal
+    const forceCleanup = () => {
+      // Find all portal elements
+      const portalElements = document.querySelectorAll('#suggestion-portal');
+      console.log(`Found ${portalElements.length} portals to remove`);
+      
+      // Remove each portal
+      portalElements.forEach(el => {
+        try {
+          // Try to unmount React components first
+          ReactDOM.unmountComponentAtNode(el);
+        } catch (err) {
+          console.error('Error unmounting portal', err);
+        }
+        
+        // Remove from DOM directly
+        try {
+          if (document.body.contains(el)) {
+            document.body.removeChild(el);
+            console.log('Portal removed from DOM');
+          }
+        } catch (err) {
+          console.error('Error removing portal from DOM', err);
+        }
+      });
+      
+      // After a short delay, allow suggestions to be shown again
+      setTimeout(() => {
+        shouldShowSuggestionsRef.current = true;
+      }, 500);
+    };
     
-    // Trigger search with the selected username
+    // Run cleanup immediately AND after a small delay for safety
+    forceCleanup();
+    setTimeout(forceCleanup, 50);
+    
+    // Trigger search
     handleSearch({ preventDefault: () => {} }, username);
   };
   
@@ -846,10 +879,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             
             {/* 
               Render suggestions dropdown in a portal
-              - This ensures it's not affected by parent container styles or z-index
-              - It will be cleared when a user selects an option or starts searching
+              - Check shouldShowSuggestionsRef to decide whether to render
             */}
-            {suggestions.length > 0 && inputRect && (
+            {suggestions.length > 0 && inputRect && shouldShowSuggestionsRef.current && (
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
               </SuggestionPortal>
