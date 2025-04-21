@@ -271,7 +271,7 @@ function AppContent() {
       {!isInMiniApp && (
         <footer className="app-footer">
           <div className="app-footer-container">
-            <p>vibe coded with 💜 by<a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
+            <p>vibe coded with 💜 by <a href="https://warpcast.com/svvvg3.eth" target="_blank" rel="noopener noreferrer">@svvvg3.eth</a></p>
           </div>
         </footer>
       )}
