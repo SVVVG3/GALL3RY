@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
 import NFTGrid from './NFTGrid';
@@ -10,6 +10,7 @@ import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
 import { fetchFarcasterUser, fetchAddressesForFid } from '../services/farcasterService';
 import { fetchNftsForAddresses } from '../services/alchemyService';
+import farcasterService from '../services/farcasterService';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -36,6 +37,12 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   
+  // Username suggestions dropdown state
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchInputRef = useRef(null);
+  const suggestionsRef = useRef(null);
+  
   // Notify parent component when NFTs are displayed
   useEffect(() => {
     if (onNFTsDisplayChange && typeof onNFTsDisplayChange === 'function') {
@@ -44,6 +51,57 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       onNFTsDisplayChange(hasNFTsToDisplay);
     }
   }, [userProfile, userNfts, onNFTsDisplayChange]);
+  
+  // Handle clicks outside the suggestions dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        suggestionsRef.current && 
+        !suggestionsRef.current.contains(event.target) &&
+        searchInputRef.current && 
+        !searchInputRef.current.contains(event.target)
+      ) {
+        setShowSuggestions(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  // Fetch username suggestions as the user types
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      // Only show suggestions if user has typed at least 2 characters
+      if (formSearchQuery.trim().length < 2) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+      
+      try {
+        const users = await farcasterService.searchUsers(formSearchQuery.trim(), 5);
+        setSuggestions(users);
+        setShowSuggestions(users.length > 0);
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    };
+    
+    fetchSuggestions();
+  }, [formSearchQuery]);
+
+  // Handle suggestion selection
+  const handleSelectSuggestion = (username) => {
+    setFormSearchQuery(username);
+    setShowSuggestions(false);
+    // Trigger search with the selected username
+    handleSearch({ preventDefault: () => {} }, username);
+  };
   
   // Get sorted NFTs
   const sortedNfts = useCallback(() => {
@@ -296,107 +354,46 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   /**
    * Handle search for Farcaster user and their NFTs
    */
-  const handleSearch = useCallback(async (e) => {
+  const handleSearch = useCallback(async (e, selectedUsername) => {
     if (e) e.preventDefault();
     
-    if (!formSearchQuery || formSearchQuery.trim() === '') {
-      setSearchError('Please enter a username');
-      return;
-    }
+    const cleanQuery = selectedUsername || formSearchQuery.trim();
+    if (!cleanQuery) return;
     
     setIsSearching(true);
     setSearchError(null);
     setUserProfile(null);
     setWalletAddresses([]);
     setUserNfts([]);
-    
-    // Message to users with .eth usernames
-    const originalQuery = formSearchQuery.trim();
-    const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
-    const isWarpcastLink = originalQuery.includes('warpcast.com/');
+    setShowSuggestions(false); // Hide suggestions when search starts
     
     try {
-      // Extract username from Warpcast URLs
-      let cleanQuery = originalQuery;
-      
-      if (isWarpcastLink) {
-        // Extract username from warpcast.com/username format
-        const matches = originalQuery.match(/warpcast\.com\/([^\/\?#]+)/i);
-        if (matches && matches[1]) {
-          cleanQuery = matches[1].trim();
-          console.log(`Extracted username '${cleanQuery}' from Warpcast URL`);
-        }
-      }
-      
-      console.log(`Searching for Farcaster user: ${cleanQuery}`);
-      
-      // Try to find the Farcaster profile using Zapper API
-      let profile;
-      try {
-        profile = await getFarcasterProfile(cleanQuery);
-      } catch (profileError) {
-        console.error('Profile search error:', profileError);
-        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
-      }
+      // Get the Farcaster user profile
+      const profile = await farcasterService.getProfile({ username: cleanQuery });
       
       if (!profile) {
-        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+        setSearchError(`User "${cleanQuery}" not found on Farcaster`);
+        setIsSearching(false);
+        return;
       }
       
-      console.log('Farcaster profile found:', profile);
-      
-      // Get wallet addresses
-      let addresses = [];
-      
-      // Add custody address if it exists
-      if (profile.custodyAddress) {
-        addresses.push(profile.custodyAddress);
-      }
-      
-      // Add connected addresses if they exist
-      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-        addresses = [...addresses, ...profile.connectedAddresses];
-      }
-      
-      // Filter out duplicates and invalid addresses
-      addresses = [...new Set(addresses)].filter(addr => 
-        addr && typeof addr === 'string' && addr.startsWith('0x') && addr.length === 42
-      );
-      
-      if (addresses.length === 0) {
-        console.warn(`No valid addresses found for user ${cleanQuery}`);
-        throw new Error(`Found profile for ${cleanQuery} but no wallet addresses are connected.`);
-      }
-      
+      console.log(`Found Farcaster profile for ${cleanQuery}:`, profile);
       setUserProfile(profile);
+      
+      // Get all wallet addresses for this FID
+      const addresses = await fetchAddressesForFid(profile.fid);
       setWalletAddresses(addresses);
       
-      // Save recently searched profile to storage if available
-      try {
-        const recentSearches = JSON.parse(safeStorage.getItem('recentSearches') || '[]');
-        const updatedSearches = [profile.username, ...recentSearches.filter(name => name !== profile.username)].slice(0, 5);
-        safeStorage.setItem('recentSearches', JSON.stringify(updatedSearches));
-      } catch (storageError) {
-        console.warn('Could not save recent search:', storageError);
-      }
-      
-      // Fetch NFTs if we have wallet addresses
       if (addresses.length > 0) {
-        console.log(`Fetching NFTs for addresses:`, addresses);
-        
         try {
-          // Use the NFTContext to fetch NFTs - this eliminates duplicate fetching
+          // Fetch NFTs for all connected wallets
           const result = await fetchAllNFTsForWallets(addresses, {
             excludeSpam: true,
             fetchAll: true
           });
           
-          // Process result
-          if (!result) {
-            setUserNfts([]);
-            setSearchError('Could not fetch NFTs: Received empty response from server');
-          } else if (result.error) {
-            setUserNfts(result.nfts || []);
+          if (result.error) {
+            console.error('Error fetching NFTs:', result.error);
             setSearchError(`Could not fetch all NFTs: ${result.error}`);
           } else if (!result.nfts) {
             setUserNfts([]);
@@ -426,7 +423,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [formSearchQuery, fetchAllNFTsForWallets]);
+  }, [formSearchQuery, fetchAllNFTsForWallets, fetchAddressesForFid]);
 
   /**
    * Effect for initial search if username is provided
@@ -573,18 +570,48 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       <form onSubmit={handleSearch} className="search-form">
         <div className="search-input-wrapper">
-          <input
-            type="text"
-            value={formSearchQuery}
-            onChange={(e) => setFormSearchQuery(e.target.value)}
-            placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
-            className="search-input"
-            aria-label="Farcaster username"
-            disabled={isSearching}
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck="false"
-          />
+          <div className="username-input-container">
+            <input
+              type="text"
+              ref={searchInputRef}
+              value={formSearchQuery}
+              onChange={(e) => setFormSearchQuery(e.target.value)}
+              placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
+              className="search-input"
+              aria-label="Farcaster username"
+              disabled={isSearching}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+            />
+            
+            {/* Username suggestions dropdown */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div 
+                ref={suggestionsRef}
+                className="username-suggestions"
+              >
+                {suggestions.map((user) => (
+                  <div 
+                    key={user.fid}
+                    className="username-suggestion-item"
+                    onClick={() => handleSelectSuggestion(user.username)}
+                  >
+                    {user.imageUrl && (
+                      <img 
+                        src={user.imageUrl} 
+                        alt=""
+                      />
+                    )}
+                    <div className="suggestion-user-info">
+                      <span className="suggestion-display-name">{user.displayName || user.username}</span>
+                      <span className="suggestion-username">@{user.username}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button 
             type="submit"
             className="search-button"
