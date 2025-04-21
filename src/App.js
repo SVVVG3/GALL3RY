@@ -20,7 +20,7 @@ import './styles/errors.css'; // Import our new error styles
 
 // Import the SDK directly but initialize only in browser
 import { sdk } from '@farcaster/frame-sdk';
-import { isMiniAppEnvironment, dismissSplashScreen } from './utils/miniAppUtils';
+import { isMiniAppEnvironment, dismissSplashScreen, promptAddFrame, isAppAdded } from './utils/miniAppUtils';
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { NFTProvider } from './contexts/NFTContext';
@@ -183,6 +183,7 @@ function AppContent() {
   const [isInMiniApp, setIsInMiniApp] = useState(false);
   const [loading, setLoading] = useState(true);
   const location = useLocation();
+  const hasPromptedAddApp = useRef(false);
   
   // Check if we're in a Mini App environment
   useEffect(() => {
@@ -200,6 +201,43 @@ function AppContent() {
     checkEnvironment();
   }, []);
   
+  // Set up event listeners for Mini App events
+  useEffect(() => {
+    if (isInMiniApp && sdk) {
+      try {
+        // Set up event listeners for app added/removed events
+        const onFrameAdded = () => {
+          console.log("Event received: App was added by user");
+          hasPromptedAddApp.current = true; // Mark as prompted so we don't show it again
+        };
+        
+        const onFrameRemoved = () => {
+          console.log("Event received: App was removed by user");
+          hasPromptedAddApp.current = false; // Reset so we could prompt again if appropriate
+        };
+        
+        // Register the event listeners if sdk.on is available
+        if (typeof sdk.on === 'function') {
+          sdk.on('frameAdded', onFrameAdded);
+          sdk.on('frameRemoved', onFrameRemoved);
+          
+          console.log("Registered Mini App event listeners");
+        }
+        
+        // Cleanup function to remove event listeners
+        return () => {
+          if (typeof sdk.removeListener === 'function') {
+            sdk.removeListener('frameAdded', onFrameAdded);
+            sdk.removeListener('frameRemoved', onFrameRemoved);
+            console.log("Removed Mini App event listeners");
+          }
+        };
+      } catch (error) {
+        console.error("Error setting up Mini App event listeners:", error);
+      }
+    }
+  }, [isInMiniApp]);
+  
   // Handle successful Privy authentication
   useEffect(() => {
     if (isInMiniApp) {
@@ -210,6 +248,28 @@ function AppContent() {
         try {
           const result = await dismissSplashScreen();
           console.log("Splash screen dismiss attempt result:", result);
+          
+          // After splash screen is dismissed, prompt user to add the app if not already added
+          if (result && !hasPromptedAddApp.current) {
+            hasPromptedAddApp.current = true;
+            
+            // Small delay to ensure the app UI is visible before showing the prompt
+            setTimeout(async () => {
+              try {
+                // Check if app is already added using our helper function
+                const appAlreadyAdded = await isAppAdded();
+                
+                if (!appAlreadyAdded) {
+                  console.log("Prompting user to add the app...");
+                  await promptAddFrame();
+                } else {
+                  console.log("App is already added, not showing prompt");
+                }
+              } catch (error) {
+                console.error("Error checking if app is added or prompting to add:", error);
+              }
+            }, 1500);
+          }
         } catch (err) {
           console.error('Error dismissing splash screen:', err);
         }

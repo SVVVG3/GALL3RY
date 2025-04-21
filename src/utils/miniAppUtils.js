@@ -135,23 +135,35 @@ export const dismissSplashScreen = async () => {
       return true;
     }
     
-    // Try using hideSplashScreen method (older API)
-    if (typeof safeSDK.hideSplashScreen === 'function') {
-      logDebug('Calling sdk.hideSplashScreen()');
-      await safeSDK.hideSplashScreen();
-      logDebug('Splash screen dismissed with hideSplashScreen');
+    // Fallback for older SDK versions
+    const methods = [
+      { name: 'hideSplashScreen', fn: safeSDK.hideSplashScreen },
+      { name: 'dismissSplashScreen', fn: safeSDK.dismissSplashScreen },
+      { name: 'ready', fn: safeSDK.ready },
+    ];
+    
+    for (const method of methods) {
+      if (typeof method.fn === 'function') {
+        logDebug(`Calling sdk.${method.name}()`);
+        try {
+          await method.fn();
+          logDebug(`Splash screen dismissed with ${method.name}`);
+          return true;
+        } catch (e) {
+          logDebug(`Failed to dismiss with ${method.name}: ${e.message}`);
+        }
+      }
+    }
+    
+    // Last resort: Try to access ready method directly on SDK
+    if (typeof safeSDK.ready === 'function') {
+      logDebug('Calling sdk.ready()');
+      await safeSDK.ready();
+      logDebug('Splash screen dismissed with sdk.ready');
       return true;
     }
     
-    // Fallback to older SDK versions that might use dismissSplashScreen
-    if (typeof safeSDK.dismissSplashScreen === 'function') {
-      logDebug('Calling sdk.dismissSplashScreen()');
-      await safeSDK.dismissSplashScreen();
-      logDebug('Splash screen dismissed with dismissSplashScreen');
-      return true;
-    }
-    
-    console.warn('No splash screen dismissal method found on SDK');
+    console.warn('No splash screen dismissal method succeeded');
     return false;
   } catch (e) {
     console.error('Error dismissing splash screen:', e);
@@ -220,6 +232,41 @@ export const promptAddFrame = async () => {
     } else {
       console.error('Error adding frame in Mini App:', e);
     }
+    return false;
+  }
+};
+
+/**
+ * Checks if the Mini App has been added by the user
+ * @returns {Promise<boolean>} True if the app has been added, false otherwise
+ */
+export const isAppAdded = async () => {
+  if (!isMiniAppEnvironment()) {
+    logDebug('Not in Mini App environment, cannot check if app is added');
+    return false;
+  }
+
+  try {
+    // First try using context directly (newer SDK versions)
+    if (safeSDK.context && typeof safeSDK.context.client !== 'undefined') {
+      logDebug('Checking app added status from sdk.context.client.added');
+      return !!safeSDK.context.client.added;
+    }
+    
+    // Try the getContext method if available
+    if (typeof safeSDK.getContext === 'function') {
+      logDebug('Fetching context using sdk.getContext()');
+      const context = await safeSDK.getContext();
+      if (context && typeof context.client !== 'undefined') {
+        logDebug('Checking app added status from context.client.added');
+        return !!context.client.added;
+      }
+    }
+    
+    logDebug('Could not determine if app is added, assuming not added');
+    return false;
+  } catch (e) {
+    console.error('Error checking if app is added:', e);
     return false;
   }
 };
