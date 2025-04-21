@@ -184,6 +184,7 @@ function AppContent() {
   const [loading, setLoading] = useState(true);
   const location = useLocation();
   const hasPromptedAddApp = useRef(false);
+  const appInitialized = useRef(false);
   
   // Check if we're in a Mini App environment
   useEffect(() => {
@@ -238,7 +239,7 @@ function AppContent() {
     }
   }, [isInMiniApp]);
   
-  // Handle successful Privy authentication
+  // Handle successful Privy authentication and splash screen dismissal
   useEffect(() => {
     if (isInMiniApp) {
       console.log(`Attempting to dismiss splash screen in mini app environment`);
@@ -249,26 +250,10 @@ function AppContent() {
           const result = await dismissSplashScreen();
           console.log("Splash screen dismiss attempt result:", result);
           
-          // After splash screen is dismissed, prompt user to add the app if not already added
-          if (result && !hasPromptedAddApp.current) {
-            hasPromptedAddApp.current = true;
-            
-            // Small delay to ensure the app UI is visible before showing the prompt
-            setTimeout(async () => {
-              try {
-                // Check if app is already added using our helper function
-                const appAlreadyAdded = await isAppAdded();
-                
-                if (!appAlreadyAdded) {
-                  console.log("Prompting user to add the app...");
-                  await promptAddFrame();
-                } else {
-                  console.log("App is already added, not showing prompt");
-                }
-              } catch (error) {
-                console.error("Error checking if app is added or prompting to add:", error);
-              }
-            }, 1500);
+          // Set app as initialized after splash screen is dismissed
+          if (result) {
+            appInitialized.current = true;
+            console.log("App initialized, ready to prompt for add if needed");
           }
         } catch (err) {
           console.error('Error dismissing splash screen:', err);
@@ -297,6 +282,84 @@ function AppContent() {
       });
     }
   }, [authenticated, user, isInMiniApp]);
+  
+  // DEDICATED EFFECT FOR APP ADD PROMPT: This runs separately from splash screen
+  // dismissal to ensure proper timing and avoid race conditions
+  useEffect(() => {
+    // Only run if we're in a mini app and not loading
+    if (!isInMiniApp || loading) return;
+    
+    // Don't run if we've already prompted
+    if (hasPromptedAddApp.current) {
+      console.log("Already prompted to add app, skipping");
+      return;
+    }
+    
+    // Wait for app to be fully initialized before showing prompt
+    const promptForAppAdd = async () => {
+      // Use a timeout to ensure the app UI is fully visible and stable
+      console.log("Scheduling add app prompt with delay");
+      
+      setTimeout(async () => {
+        try {
+          console.log("Checking if app is already added...");
+          // Check if app is already added using our helper function
+          const appAlreadyAdded = await isAppAdded();
+          
+          if (!appAlreadyAdded) {
+            console.log("App not added, showing prompt to add app");
+            
+            // Direct approach using SDK
+            console.log("Using direct SDK approach for addFrame");
+            try {
+              // Try the SDK actions.addFrame directly
+              if (sdk && sdk.actions && typeof sdk.actions.addFrame === 'function') {
+                console.log("Calling sdk.actions.addFrame() directly");
+                await sdk.actions.addFrame();
+                console.log("sdk.actions.addFrame() call completed");
+              } else {
+                // Fallback to our helper function
+                console.log("Direct SDK call not available, using promptAddFrame helper");
+                await promptAddFrame();
+              }
+            } catch (err) {
+              console.error("Error during direct SDK addFrame call:", err);
+              
+              // If direct SDK call fails, try our helper as a fallback
+              try {
+                console.log("Falling back to promptAddFrame helper");
+                await promptAddFrame();
+              } catch (innerErr) {
+                console.error("Fallback promptAddFrame also failed:", innerErr);
+              }
+            }
+          } else {
+            console.log("App is already added, no need to show prompt");
+          }
+        } catch (error) {
+          console.error("Error in add app prompt flow:", error);
+        } finally {
+          // Mark as prompted regardless of outcome to avoid multiple prompts
+          hasPromptedAddApp.current = true;
+        }
+      }, 2000); // Increased delay to ensure UI is stable
+    };
+    
+    // Wait for app initialization before prompting
+    const checkInitAndPrompt = () => {
+      if (appInitialized.current) {
+        promptForAppAdd();
+      } else {
+        // Check again in a moment
+        setTimeout(checkInitAndPrompt, 500);
+      }
+    };
+    
+    // Start the check cycle
+    checkInitAndPrompt();
+    
+    // No cleanup needed, we control the flow with hasPromptedAddApp
+  }, [isInMiniApp, loading]);
   
   if (loading) {
     return <LoadingScreen />;
