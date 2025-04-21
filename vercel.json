@@ -42,6 +42,11 @@
       "dest": "/logo512.png"
     },
     {
+      "src": "/og-image.png",
+      "dest": "/og-image.png",
+      "headers": { "content-type": "image/png", "cache-control": "public, max-age=86400" }
+    },
+    {
       "src": "/manifest.json",
       "dest": "/manifest.json"
     },
