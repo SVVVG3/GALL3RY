@@ -205,98 +205,113 @@ const makeGraphQLRequest = async (query, variables = {}, endpoints = null, maxRe
 };
 
 /**
- * Get a Farcaster profile by username or FID
+ * Get Farcaster profile by username or FID
+ * With multiple fallback mechanisms for high availability
+ * 
  * @param {string|number} usernameOrFid - Farcaster username or FID
- * @returns {Promise<object>} - Farcaster profile data
+ * @returns {Promise<Object>} - Farcaster profile data
  */
 export const getFarcasterProfile = async (usernameOrFid) => {
-  if (!usernameOrFid) {
-    throw new Error('Username or FID is required');
-  }
-      
-  // Clean up the username - remove @, trim whitespace
-  let cleanInput = usernameOrFid.toString().trim().replace(/^@/, '');
-  
-  // Determine if input is a FID (number) or username (string)
-  const isFid = !isNaN(Number(cleanInput)) && cleanInput.indexOf('.') === -1;
-  
-  console.log(`Fetching Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
-  
-  let errors = [];
-  
   try {
-    // First try the dedicated GET endpoint
+    if (!usernameOrFid) {
+      throw new Error('Username or FID is required');
+    }
+    
+    // Store any errors for detailed reporting
+    let errors = [];
+    
+    // Clean and format the input
+    const cleanInput = String(usernameOrFid).replace('@', '').trim();
+    
+    // Determine if input is FID (number) or username (string)
+    const isFid = !isNaN(Number(cleanInput)) && cleanInput.length < 12;
+    
+    console.log(`Attempting to fetch Farcaster profile for ${isFid ? 'FID' : 'username'}: ${cleanInput}`);
+    
+    // ATTEMPT 1: Try dedicated GET endpoint first 
     try {
       console.log(`Trying dedicated endpoint: ${FARCASTER_PROFILE_ENDPOINT}`);
+      const response = await axios.get(FARCASTER_PROFILE_ENDPOINT, {
+        params: {
+          [isFid ? 'fid' : 'username']: cleanInput
+        },
+        timeout: 5000 // 5 second timeout
+      });
       
-      const params = isFid 
-        ? { fid: parseInt(cleanInput, 10) }
-        : { username: cleanInput };
-        
-      const response = await zapperAxios.get(FARCASTER_PROFILE_ENDPOINT, { params });
-      
-      if (response.data) {
+      if (response.data && (response.data.fid || response.data.username)) {
         console.log('Found Farcaster profile via dedicated endpoint:', response.data);
         return response.data;
       }
-    } catch (dedicatedEndpointError) {
-      console.error('Dedicated endpoint failed:', dedicatedEndpointError.message);
-      errors.push(`Dedicated endpoint: ${dedicatedEndpointError.message}`);
-      
-      // Check if this is an API key issue
-      if (dedicatedEndpointError.response?.status === 403 || 
-          dedicatedEndpointError.message.includes('ERR_BAD_REQUEST')) {
-        console.error('API authorization issue detected. Please check your Zapper API key');
-      }
-      // Continue to try the GraphQL endpoint
+      throw new Error('No profile data in response');
+    } catch (dedicatedError) {
+      console.log('Dedicated endpoint failed:', dedicatedError.message);
+      errors.push(`Dedicated endpoint: ${dedicatedError.message}`);
+      // Continue to try next endpoint
     }
     
-    // If dedicated endpoint fails, try the GraphQL endpoint
+    // ATTEMPT 2: Try GraphQL endpoint
     try {
       console.log(`Trying GraphQL endpoint: ${ZAPPER_ENDPOINT}`);
       
-      // GraphQL query based on Zapper API documentation
-      const query = `
-        query GetFarcasterProfile(${isFid ? '$fid: Int' : '$username: String'}) {
-          farcasterProfile(${isFid ? 'fid: $fid' : 'username: $username'}) {
-            username
+      // Build GraphQL query based on input type
+      const query = isFid ? `
+        query GetFarcasterProfileByFID($fid: Int!) {
+          farcasterProfile(fid: $fid) {
             fid
-            metadata {
-              displayName
-              description
-              imageUrl
-              warpcast
-            }
+            username
+            displayName
+            bio
+            pfpUrl
+            custodyAddress
+            connectedAddresses
+          }
+        }
+      ` : `
+        query GetFarcasterProfileByUsername($username: String!) {
+          farcasterProfile(username: $username) {
+            fid
+            username
+            displayName
+            bio
+            pfpUrl
             custodyAddress
             connectedAddresses
           }
         }
       `;
       
-      // Build variables based on input type
-      const variables = isFid 
-        ? { fid: parseInt(cleanInput, 10) }
-        : { username: cleanInput };
+      const variables = isFid ? { fid: parseInt(cleanInput, 10) } : { username: cleanInput };
       
-      const graphqlResponse = await zapperAxios.post(
-        ZAPPER_ENDPOINT,
-        { query, variables },
-        { 
-          headers: {
-            'Content-Type': 'application/json'
-            // API keys are now handled server-side only
-          }
-        }
-      );
+      // Make the request
+      const response = await axios.post(ZAPPER_ENDPOINT, {
+        query,
+        variables
+      }, {
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000 // 5 second timeout
+      });
       
-      // Check for GraphQL errors
-      if (graphqlResponse.data?.errors) {
-        console.error('GraphQL errors:', graphqlResponse.data.errors);
-        throw new Error(graphqlResponse.data.errors[0]?.message || 'GraphQL error');
+      // Extract profile data from response
+      let profileData = null;
+      
+      if (response.data && response.data.data && response.data.data.farcasterProfile) {
+        const rawProfile = response.data.data.farcasterProfile;
+        
+        // Transform to our internal format
+        profileData = {
+          fid: rawProfile.fid,
+          username: rawProfile.username,
+          metadata: {
+            displayName: rawProfile.displayName,
+            description: rawProfile.bio,
+            imageUrl: rawProfile.pfpUrl
+          },
+          custodyAddress: rawProfile.custodyAddress,
+          connectedAddresses: rawProfile.connectedAddresses || []
+        };
       }
-      
-      // Find profile data in the response
-      const profileData = graphqlResponse.data?.data?.farcasterProfile;
       
       if (profileData) {
         console.log('Found Farcaster profile via GraphQL endpoint:', profileData);
@@ -309,26 +324,26 @@ export const getFarcasterProfile = async (usernameOrFid) => {
       // Continue to try Neynar API
     }
     
-    // If both Zapper endpoints fail, try Neynar API as a last resort
-    if (!isFid) { // Neynar search endpoint works only with usernames
+    // ATTEMPT 3: Try Neynar API as a last resort
+    // Enhanced direct Neynar API fallback
+    const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+
+    if (isFid) {
+      // Fetch by FID
       try {
-        console.log('Trying Neynar API as last resort');
+        console.log(`Trying direct Neynar API for FID: ${cleanInput}`);
         const response = await axios({
           method: 'get',
-          url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(cleanInput)}&limit=1`,
+          url: `https://api.neynar.com/v2/farcaster/user?fid=${cleanInput}`,
           headers: {
-            'accept': 'application/json'
+            'Accept': 'application/json',
+            'api_key': NEYNAR_API_KEY
           },
           timeout: 5000
         });
         
-        if (response.data && response.data.users && response.data.users.length > 0) {
-          // Look for exact match first
-          const exactMatch = response.data.users.find(
-            user => user.username.toLowerCase() === cleanInput.toLowerCase()
-          );
-          
-          const userData = exactMatch || response.data.users[0];
+        if (response.data && response.data.result && response.data.result.user) {
+          const userData = response.data.result.user;
           
           // Convert Neynar response to our format
           const profileData = {
@@ -343,14 +358,91 @@ export const getFarcasterProfile = async (usernameOrFid) => {
             connectedAddresses: userData.connected_addresses || []
           };
           
-          console.log('Found Farcaster profile via Neynar API:', profileData);
+          console.log('Found Farcaster profile via direct Neynar FID API:', profileData);
           return profileData;
         }
-        throw new Error('No profile found in Neynar response');
+        throw new Error('No profile found in Neynar FID response');
       } catch (neynarError) {
-        console.error('Neynar API failed:', neynarError.message);
-        errors.push(`Neynar API: ${neynarError.message}`);
+        console.error('Neynar FID API failed:', neynarError.message);
+        errors.push(`Neynar FID API: ${neynarError.message}`);
       }
+    } else {
+      // Fetch by username
+      try {
+        console.log(`Trying direct Neynar API for username: ${cleanInput}`);
+        const response = await axios({
+          method: 'get',
+          url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(cleanInput)}&limit=10`,
+          headers: {
+            'Accept': 'application/json',
+            'api_key': NEYNAR_API_KEY
+          },
+          timeout: 5000
+        });
+        
+        if (response.data && response.data.result && response.data.result.users && response.data.result.users.length > 0) {
+          // Look for exact match first
+          const exactMatch = response.data.result.users.find(
+            user => user.username.toLowerCase() === cleanInput.toLowerCase()
+          );
+          
+          const userData = exactMatch || response.data.result.users[0];
+          
+          // Convert Neynar response to our format
+          const profileData = {
+            username: userData.username,
+            fid: userData.fid,
+            metadata: {
+              displayName: userData.display_name,
+              imageUrl: userData.pfp_url,
+              description: userData.profile?.bio?.text
+            },
+            custodyAddress: userData.custody_address,
+            connectedAddresses: userData.connected_addresses || []
+          };
+          
+          console.log('Found Farcaster profile via direct Neynar username API:', profileData);
+          return profileData;
+        }
+        throw new Error('No profile found in Neynar username response');
+      } catch (neynarError) {
+        console.error('Neynar username API failed:', neynarError.message);
+        errors.push(`Neynar username API: ${neynarError.message}`);
+      }
+    }
+    
+    // As a last attempt, try using a public API gateway
+    try {
+      console.log('Trying public Farcaster API gateway as final fallback');
+      const response = await axios({
+        method: 'get',
+        url: `https://api.farcasterkit.com/v1/user/${isFid ? 'fid' : 'username'}/${cleanInput}`,
+        timeout: 5000
+      });
+      
+      if (response.data && (response.data.fid || response.data.username)) {
+        const userData = response.data;
+        
+        // Convert response to our format
+        const profileData = {
+          username: userData.username,
+          fid: userData.fid,
+          metadata: {
+            displayName: userData.displayName || userData.username,
+            imageUrl: userData.pfp || userData.avatar,
+            description: userData.bio
+          },
+          custodyAddress: userData.custodyAddress,
+          connectedAddresses: userData.addresses || []
+        };
+        
+        console.log('Found Farcaster profile via public API gateway:', profileData);
+        return profileData;
+      }
+      throw new Error('No profile found in public API gateway response');
+    } catch (publicApiError) {
+      console.error('Public API gateway failed:', publicApiError.message);
+      errors.push(`Public API gateway: ${publicApiError.message}`);
     }
     
     // If we get here, all attempts failed
@@ -369,34 +461,127 @@ export const getFarcasterProfile = async (usernameOrFid) => {
  */
 export const getFarcasterAddresses = async (usernameOrFid) => {
   try {
-    // First get the Farcaster profile
-    const profile = await getFarcasterProfile(usernameOrFid);
+    console.log(`Getting Farcaster addresses for: ${usernameOrFid}`);
     
-    if (!profile) {
-      throw new Error(`No Farcaster profile found for ${usernameOrFid}`);
+    // First try to get the Farcaster profile
+    try {
+      // First get the Farcaster profile
+      const profile = await getFarcasterProfile(usernameOrFid);
+      
+      if (!profile) {
+        console.warn(`No Farcaster profile found for ${usernameOrFid}, checking for fallback data`);
+        throw new Error(`No Farcaster profile found for ${usernameOrFid}`);
+      }
+      
+      // Combine custody address and connected addresses, ensuring no duplicates
+      const allAddresses = new Set();
+      
+      // Add custody address if available
+      if (profile.custodyAddress) {
+        allAddresses.add(profile.custodyAddress.toLowerCase());
+        console.log(`Added custody address: ${profile.custodyAddress.toLowerCase()}`);
+      }
+      
+      // Add all connected addresses
+      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+        profile.connectedAddresses.forEach(addr => {
+          if (addr) {
+            allAddresses.add(addr.toLowerCase());
+            console.log(`Added connected address: ${addr.toLowerCase()}`);
+          }
+        });
+      }
+      
+      const addressArray = Array.from(allAddresses);
+      console.log(`Found ${addressArray.length} unique addresses for Farcaster user ${profile.username || usernameOrFid} (FID: ${profile.fid || 'unknown'})`);
+      
+      // If no addresses were found but we have a profile, try additional methods to find addresses
+      if (addressArray.length === 0) {
+        console.warn('No addresses found from profile data, attempting additional lookup methods');
+        
+        // If we have an FID, try farcasterService.fetchAddressesForFid as a fallback
+        if (profile.fid) {
+          try {
+            const farcasterService = await import('../services/farcasterService');
+            const farcasterAddresses = await farcasterService.fetchAddressesForFid(profile.fid);
+            
+            if (farcasterAddresses && farcasterAddresses.length > 0) {
+              console.log(`Found ${farcasterAddresses.length} addresses from farcasterService`);
+              return farcasterAddresses;
+            }
+          } catch (fallbackError) {
+            console.error('Fallback to farcasterService failed:', fallbackError);
+          }
+        }
+      }
+      
+      return addressArray;
+      
+    } catch (profileError) {
+      console.error('Error fetching Farcaster profile:', profileError);
+      
+      // Try direct Neynar API to get verified addresses if we have a numeric FID
+      if (!isNaN(Number(usernameOrFid)) && String(usernameOrFid).length < 10) {
+        try {
+          console.log(`Trying direct Neynar API for addresses with FID: ${usernameOrFid}`);
+          
+          const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+          const response = await axios({
+            method: 'get',
+            url: `https://api.neynar.com/v2/farcaster/user/verified-addresses?fid=${usernameOrFid}`,
+            headers: {
+              'Accept': 'application/json',
+              'api_key': NEYNAR_API_KEY
+            },
+            timeout: 5000
+          });
+          
+          if (response.data && response.data.verified_addresses) {
+            const addresses = response.data.verified_addresses
+              .map(a => a.addr ? a.addr.toLowerCase() : null)
+              .filter(Boolean);
+              
+            console.log(`Found ${addresses.length} addresses from direct Neynar API call`);
+            return addresses;
+          }
+        } catch (neynarError) {
+          console.error('Direct Neynar API call for addresses failed:', neynarError.message);
+        }
+      }
+      
+      // If all else fails, try the farcasterService as a last resort
+      try {
+        const farcasterService = await import('../services/farcasterService');
+        // If numeric, assume it's an FID
+        if (!isNaN(Number(usernameOrFid))) {
+          const farcasterAddresses = await farcasterService.fetchAddressesForFid(Number(usernameOrFid));
+          if (farcasterAddresses && farcasterAddresses.length > 0) {
+            console.log(`Found ${farcasterAddresses.length} addresses from farcasterService`);
+            return farcasterAddresses;
+          }
+        } else {
+          // For username, try to get profile first, then addresses
+          const profile = await farcasterService.getProfile({ username: String(usernameOrFid).replace('@', '') });
+          if (profile && profile.fid) {
+            const farcasterAddresses = await farcasterService.fetchAddressesForFid(profile.fid);
+            if (farcasterAddresses && farcasterAddresses.length > 0) {
+              console.log(`Found ${farcasterAddresses.length} addresses from farcasterService via username lookup`);
+              return farcasterAddresses;
+            }
+          }
+        }
+      } catch (farcasterServiceError) {
+        console.error('Fallback to farcasterService failed:', farcasterServiceError);
+      }
+      
+      // If all methods have failed, rethrow the original error
+      throw profileError;
     }
-    
-    // Combine custody address and connected addresses, ensuring no duplicates
-    const allAddresses = new Set();
-    
-    // Add custody address if available
-    if (profile.custodyAddress) {
-      allAddresses.add(profile.custodyAddress.toLowerCase());
-    }
-    
-    // Add all connected addresses
-    if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-      profile.connectedAddresses.forEach(addr => {
-        if (addr) allAddresses.add(addr.toLowerCase());
-      });
-    }
-    
-    console.log(`Found ${allAddresses.size} unique addresses for Farcaster user ${profile.username} (FID: ${profile.fid})`);
-    
-    return Array.from(allAddresses);
   } catch (error) {
     console.error('Error fetching Farcaster addresses:', error);
-    throw error;
+    
+    // Let the caller handle the error
+    throw new Error(`Failed to get addresses for Farcaster user: ${usernameOrFid}. ${error.message}`);
   }
 };
 

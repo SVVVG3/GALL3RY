@@ -444,29 +444,33 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   /**
    * Handle search for Farcaster user and their NFTs
    */
-  const handleSearch = useCallback(async (e, selectedUsername) => {
+  const handleSearch = useCallback(async (e) => {
     if (e) e.preventDefault();
     
-    if (!formSearchQuery && !selectedUsername) {
-      setSearchError('Please enter a username');
+    // Record the current position for proper dropdown rendering
+    updateInputRect();
+    
+    const searchQuery = formSearchQuery?.trim() || '';
+    if (!searchQuery) {
+      setSearchError('Please enter a Farcaster username');
       return;
     }
     
+    // Reset states
     setIsSearching(true);
     setSearchError(null);
     setUserProfile(null);
     setWalletAddresses([]);
     setUserNfts([]);
-    setShowSuggestions(false); // Hide suggestions when search starts
-    
-    // Message to users with .eth usernames
-    const originalQuery = selectedUsername || formSearchQuery.trim();
-    const isEthDomain = originalQuery.toLowerCase().endsWith('.eth');
-    const isWarpcastLink = originalQuery.includes('warpcast.com/');
     
     try {
-      // Extract username from Warpcast URLs
-      let cleanQuery = originalQuery;
+      let originalQuery = searchQuery;
+      let cleanQuery = searchQuery.replace('@', '').trim();
+      
+      // Check if it's a Warpcast URL
+      const isWarpcastLink = 
+        searchQuery.includes('warpcast.com/') || 
+        searchQuery.includes('farcaster.xyz/');
       
       if (isWarpcastLink) {
         // Extract username from warpcast.com/username format
@@ -479,13 +483,35 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       console.log(`Searching for Farcaster user: ${cleanQuery}`);
       
-      // Try to find the Farcaster profile using Zapper API
+      // Try to find the Farcaster profile with better error handling
       let profile;
       try {
+        // Try zapperService first
         profile = await getFarcasterProfile(cleanQuery);
       } catch (profileError) {
-        console.error('Profile search error:', profileError);
-        throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+        console.error('Profile search error from zapperService:', profileError);
+        
+        // Fallback to farcasterService if zapperService fails
+        try {
+          console.log('Trying farcasterService as fallback...');
+          const farcasterService = await import('../services/farcasterService');
+          
+          if (cleanQuery.match(/^\d+$/)) {
+            // If numeric, treat as FID
+            profile = await farcasterService.getProfile({ fid: parseInt(cleanQuery, 10) });
+          } else {
+            // Otherwise treat as username
+            profile = await farcasterService.getProfile({ username: cleanQuery });
+          }
+          
+          if (profile) {
+            console.log('Profile found via farcasterService fallback:', profile);
+          }
+        } catch (fallbackError) {
+          console.error('Fallback profile search also failed:', fallbackError);
+          // If both attempts fail, throw a user-friendly error
+          throw new Error(`Could not find Farcaster user "${cleanQuery}". Please check the username and try again.`);
+        }
       }
       
       if (!profile) {
@@ -494,17 +520,47 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       console.log('Farcaster profile found:', profile);
       
-      // Get wallet addresses
+      // Get wallet addresses with enhanced error handling
       let addresses = [];
       
-      // Add custody address if it exists
-      if (profile.custodyAddress) {
-        addresses.push(profile.custodyAddress);
-      }
-      
-      // Add connected addresses if they exist
-      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-        addresses = [...addresses, ...profile.connectedAddresses];
+      try {
+        // Try to get all addresses using zapperService first
+        const allAddresses = await getFarcasterAddresses(cleanQuery);
+        if (allAddresses && allAddresses.length > 0) {
+          addresses = allAddresses;
+          console.log(`Found ${addresses.length} addresses using getFarcasterAddresses`);
+        } else {
+          // Fallback: add individual addresses from the profile
+          console.log('No addresses from getFarcasterAddresses, using profile data directly');
+          
+          // Add custody address if it exists
+          if (profile.custodyAddress) {
+            addresses.push(profile.custodyAddress);
+          }
+          
+          // Add connected addresses if they exist
+          if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+            addresses = [...addresses, ...profile.connectedAddresses];
+          }
+        }
+      } catch (addressError) {
+        console.error('Error getting addresses from zapperService:', addressError);
+        
+        // Fallback to farcasterService as a last resort
+        try {
+          console.log('Trying farcasterService for addresses as fallback...');
+          const farcasterService = await import('../services/farcasterService');
+          
+          if (profile.fid) {
+            const farcasterAddresses = await farcasterService.fetchAddressesForFid(profile.fid);
+            if (farcasterAddresses && farcasterAddresses.length > 0) {
+              addresses = farcasterAddresses;
+              console.log(`Found ${addresses.length} addresses using farcasterService fallback`);
+            }
+          }
+        } catch (fallbackAddressError) {
+          console.error('Fallback address fetch also failed:', fallbackAddressError);
+        }
       }
       
       // Filter out duplicates and invalid addresses
@@ -516,6 +572,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         console.warn(`No valid addresses found for user ${cleanQuery}`);
         throw new Error(`Found profile for ${cleanQuery} but no wallet addresses are connected.`);
       }
+      
+      console.log(`Filtered to ${addresses.length} valid wallet addresses`);
       
       setUserProfile(profile);
       setWalletAddresses(addresses);
@@ -575,7 +633,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [formSearchQuery, fetchAllNFTsForWallets]);
+  }, [formSearchQuery, fetchAllNFTsForWallets, updateInputRect]);
 
   /**
    * Effect for initial search if username is provided
