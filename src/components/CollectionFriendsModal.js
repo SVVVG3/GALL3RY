@@ -159,6 +159,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               const following = await fetchAllFollowing(fid);
               const followingEndTime = Date.now();
               
+              // Check if following is valid and has users array
+              if (!following || !following.users) {
+                throw new Error('Invalid response from fetchAllFollowing: missing users array');
+              }
+              
               console.log(`✅ Found ${following.users.length} following users - API call took ${followingEndTime - followingStartTime}ms`);
               
               // Log a sample of the following users for debugging

@@ -608,11 +608,11 @@ export const fetchAllFollowing = async (fid, options = {}) => {
     // Check if we already have the complete list cached
     const cacheKey = `all-following-${fid}`;
     if (!skipCache) {
-      const cached = getCachedItem(cacheKey);
+      const cached = await getCachedItem(cacheKey);
       if (cached) {
         console.log(`✅ Using cached complete following list for FID ${fid}`);
         return {
-          users: cached.users,
+          users: cached.users || [],
           success: true,
           fromCache: true,
           timestamp: cached.timestamp
@@ -635,8 +635,8 @@ export const fetchAllFollowing = async (fid, options = {}) => {
       
       const pageResult = await farcasterService.getUserFollowing(fid, pageSize, cursor);
       
-      if (!pageResult.success || !Array.isArray(pageResult.users)) {
-        console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult.error);
+      if (!pageResult || !Array.isArray(pageResult.users)) {
+        console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult?.error || 'No users array in response');
         break;
       }
       
@@ -666,7 +666,7 @@ export const fetchAllFollowing = async (fid, options = {}) => {
     };
     
     // Cache the result for future requests (valid for 15 minutes)
-    cacheItem(cacheKey, result, 15 * 60 * 1000);
+    await cacheItem(cacheKey, result, 15 * 60 * 1000);
     
     console.log(`✅ Completed fetching all following for FID ${fid}: ${allUsers.length} users across ${pageCount} pages`);
     
