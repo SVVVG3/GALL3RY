@@ -340,8 +340,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
    * Handle search for Farcaster user and their NFTs
    */
   const handleSearch = useCallback(async (e) => {
-    const query = e.target.value.trim();
-    setFormSearchQuery(query);
+    // Prevent default form submission if this is an event
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+    
+    // Get the query either from the event or use the current formSearchQuery
+    let query = '';
+    if (e && e.target && e.target.value) {
+      query = e.target.value.trim();
+    } else {
+      query = formSearchQuery.trim();
+    }
     
     if (query.length < 1) {
       setUserProfile(null);
@@ -351,6 +361,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     
     try {
       setIsSearching(true);
+      console.log(`Searching for Farcaster user: ${query}`);
       const profile = await farcasterService.getProfile({ username: query });
       
       if (profile) {
@@ -365,7 +376,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [formSearchQuery]);
 
   /**
    * Effect for initial search if username is provided
@@ -541,7 +552,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
-      <form onSubmit={handleSearch} className="search-form">
+      <form onSubmit={(e) => {
+        e.preventDefault();
+        handleSearch(e);
+      }} className="search-form">
         <div className="search-input-wrapper">
           <div className="username-input-container" style={{ position: "relative", flex: "1" }}>
             <input
