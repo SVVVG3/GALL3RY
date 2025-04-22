@@ -473,11 +473,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       if (!addresses || addresses.length === 0) {
         console.log('No addresses found for user');
         setUserNfts([]);
+        setWalletAddresses([]);
         setIsSearching(false);
         return;
       }
       
       console.log(`Found ${addresses.length} addresses for user:`, addresses);
+      
+      // Set the wallet addresses in state so they can be displayed
+      setWalletAddresses(addresses);
       
       // Step 2: Fetch NFTs for all addresses
       const nfts = await fetchUserNfts(addresses);
@@ -502,9 +506,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     }
     
     try {
-      // Create an array of promises to fetch NFTs for each address
+      // Create an array of promises to fetch NFTs for each address across all chains
       const nftPromises = addresses.map(address => 
-        alchemyService.getNftsForOwner(address)
+        alchemyService.fetchNftsAcrossChains(address, {
+          chains: ['eth', 'polygon', 'opt', 'arb', 'base'], // Fetch from all supported chains
+          fetchAll: true, // Ensure we get all pages
+          pageSize: 100,
+          excludeSpam: true,
+          excludeAirdrops: true
+        })
       );
       
       // Wait for all promises to resolve
@@ -514,10 +524,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       const allNfts = [];
       const seenTokenIds = new Set();
       
-      nftResults.forEach(nfts => {
-        if (nfts && Array.isArray(nfts.nfts)) {
-          nfts.nfts.forEach(nft => {
-            const tokenIdentifier = `${nft.contract.address}-${nft.tokenId}`;
+      nftResults.forEach(result => {
+        if (result && Array.isArray(result.nfts)) {
+          result.nfts.forEach(nft => {
+            // Create a unique identifier that includes the network
+            const tokenIdentifier = `${nft.contract?.address || ''}-${nft.tokenId || ''}-${nft.network || 'eth'}`;
             if (!seenTokenIds.has(tokenIdentifier)) {
               seenTokenIds.add(tokenIdentifier);
               // Make a copy of each NFT to ensure it's extensible
