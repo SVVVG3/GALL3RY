@@ -922,110 +922,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     };
   }, [suggestions.length]);
 
-  // Add direct DOM manipulation as last-resort fallback
-  useEffect(() => {
-    const createDirectDropdown = () => {
-      // Only create if we have suggestions and should show them
-      if (!showSuggestions || !suggestions.length) return;
-      
-      console.log('EMERGENCY FALLBACK: Creating direct DOM dropdown');
-      
-      // Remove any existing emergency dropdowns
-      const existingDropdown = document.getElementById('emergency-dropdown');
-      if (existingDropdown) {
-        document.body.removeChild(existingDropdown);
-      }
-      
-      // Create container
-      const container = document.createElement('div');
-      container.id = 'emergency-dropdown';
-      container.style.position = 'fixed';
-      container.style.top = '150px';
-      container.style.left = '10%';
-      container.style.width = '80%';
-      container.style.backgroundColor = '#fff';
-      container.style.border = '4px solid blue';
-      container.style.borderRadius = '8px';
-      container.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
-      container.style.padding = '16px';
-      container.style.zIndex = '10000000';
-      container.style.maxHeight = '400px';
-      container.style.overflowY = 'auto';
-      
-      // Create header
-      const header = document.createElement('div');
-      header.textContent = `${suggestions.length} EMERGENCY SUGGESTIONS`;
-      header.style.fontWeight = 'bold';
-      header.style.marginBottom = '10px';
-      header.style.textAlign = 'center';
-      header.style.padding = '8px';
-      header.style.backgroundColor = '#f0f0f0';
-      container.appendChild(header);
-      
-      // Create suggestion items
-      suggestions.forEach(user => {
-        const item = document.createElement('div');
-        item.style.display = 'flex';
-        item.style.padding = '10px';
-        item.style.borderBottom = '1px solid #eee';
-        item.style.cursor = 'pointer';
-        
-        const nameDiv = document.createElement('div');
-        nameDiv.textContent = `${user.displayName || user.username} (@${user.username})`;
-        nameDiv.style.fontWeight = 'bold';
-        
-        item.appendChild(nameDiv);
-        
-        // Add click handler
-        item.addEventListener('click', () => {
-          setFormSearchQuery(user.username);
-          document.body.removeChild(container);
-          handleSearch({ preventDefault: () => {} });
-        });
-        
-        container.appendChild(item);
-      });
-      
-      // Add close button
-      const closeButton = document.createElement('button');
-      closeButton.textContent = 'Close';
-      closeButton.style.marginTop = '10px';
-      closeButton.style.padding = '8px 16px';
-      closeButton.style.backgroundColor = '#f44336';
-      closeButton.style.color = 'white';
-      closeButton.style.border = 'none';
-      closeButton.style.borderRadius = '4px';
-      closeButton.style.cursor = 'pointer';
-      closeButton.addEventListener('click', () => {
-        document.body.removeChild(container);
-      });
-      
-      container.appendChild(closeButton);
-      
-      // Add to body
-      document.body.appendChild(container);
-    };
-    
-    // Create emergency dropdown on mount if conditions are met
-    createDirectDropdown();
-    
-    // Also create when showSuggestions changes to true
-    if (showSuggestions && suggestions.length > 0) {
-      createDirectDropdown();
-    }
-    
-    // Cleanup on unmount
-    return () => {
-      const existingDropdown = document.getElementById('emergency-dropdown');
-      if (existingDropdown) {
-        document.body.removeChild(existingDropdown);
-      }
-    };
-  }, [showSuggestions, suggestions, handleSearch]);
-
   // Define the dropdown content separately
   const renderSuggestionDropdown = () => (
-    <div style={{ padding: "8px 0" }}>
+    <div style={{ padding: "4px 0" }}>
       {suggestions.length === 0 && (
         <div style={{
           padding: "15px",
@@ -1051,7 +950,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             borderBottom: "1px solid #f3f4f6",
             cursor: "pointer",
             backgroundColor: "#ffffff",
-            transition: "background-color 0.2s"
+            transition: "background-color 0.2s",
+            fontSize: "14px"
           }}
           onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
           onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
@@ -1061,8 +961,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               src={user.imageUrl} 
               alt=""
               style={{
-                width: "36px",
-                height: "36px",
+                width: "32px",
+                height: "32px",
                 borderRadius: "50%",
                 marginRight: "12px",
                 border: "1px solid #e5e7eb",
@@ -1076,15 +976,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             />
           ) : (
             <div style={{
-              width: "36px",
-              height: "36px",
+              width: "32px",
+              height: "32px",
               borderRadius: "50%",
               marginRight: "12px",
               backgroundColor: "#f3f4f6",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "16px",
+              fontSize: "14px",
               fontWeight: "bold",
               color: "#6b7280",
               flexShrink: 0
@@ -1096,7 +996,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             <span 
               style={{
                 fontWeight: "600",
-                fontSize: "16px",
+                fontSize: "14px",
                 color: "#111827",
                 display: "block",
                 lineHeight: "1.2",
@@ -1107,7 +1007,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             </span>
             <span 
               style={{
-                fontSize: "14px",
+                fontSize: "12px",
                 color: "#6b7280",
                 display: "block",
                 lineHeight: "1.2"
@@ -1178,37 +1078,26 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* DIRECT INLINE DROPDOWN: No portals - EXTREME VISIBILITY VERSION */}
+            {/* DIRECT INLINE DROPDOWN with elegant styling */}
             {showSuggestions && suggestions.length > 0 && (
               <div 
                 className="suggestions-dropdown-container"
                 style={{
-                  position: 'fixed', // Change to fixed positioning
-                  top: '100px', // Fixed position at top of viewport
-                  left: '50%', // Center it
-                  transform: 'translateX(-50%)', // Center it properly
-                  width: '80%', // Make it obvious
-                  maxWidth: '500px',
-                  zIndex: 9999999, // Extremely high z-index
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '100%',
+                  zIndex: 100000,
+                  marginTop: '2px',
                   backgroundColor: '#fff',
-                  border: '4px solid red', // Make it unmissable
+                  border: '1px solid #e5e7eb',
                   borderRadius: '8px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                  maxHeight: '400px',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                  maxHeight: '300px',
                   overflowY: 'auto',
-                  padding: '10px',
+                  padding: '0'
                 }}
               >
-                <div style={{ 
-                  textAlign: 'center', 
-                  fontWeight: 'bold', 
-                  marginBottom: '10px',
-                  backgroundColor: '#f0f0f0',
-                  padding: '8px',
-                  borderRadius: '4px'
-                }}>
-                  {suggestions.length} Suggestions Found
-                </div>
                 {renderSuggestionDropdown()}
               </div>
             )}
