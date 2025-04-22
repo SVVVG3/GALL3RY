@@ -214,7 +214,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   
   // Handle suggestion selection with immediate forceful cleanup
   const handleSelectSuggestion = (username) => {
-    console.log('Selection made, forcefully clearing suggestions');
+    console.log('Selection made, setting form query to:', username);
     
     // Immediately hide suggestions
     setShowSuggestions(false);
@@ -228,38 +228,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     // Clear suggestions array
     setSuggestions([]);
     
-    // Force immediate portal removal
-    const forceCleanup = () => {
-      // Find all portal elements
-      const portalElements = document.querySelectorAll('#suggestion-portal');
-      console.log(`Found ${portalElements.length} portals to remove`);
-      
-      // Remove each portal
-      portalElements.forEach(el => {
-        try {
-          // Try to unmount React components first
-          ReactDOM.unmountComponentAtNode(el);
-        } catch (err) {
-          console.error('Error unmounting portal', err);
-        }
-        
-        // Remove from DOM directly
-        try {
-          if (document.body.contains(el)) {
-            document.body.removeChild(el);
-            console.log('Portal removed from DOM');
-          }
-        } catch (err) {
-          console.error('Error removing portal from DOM', err);
-        }
-      });
-    };
-    
-    // Run cleanup immediately
-    forceCleanup();
-    
-    // Execute search immediately - don't wait for setTimeout
-    handleSearch({ preventDefault: () => {} }, username);
+    // Execute search immediately
+    handleSearch({ preventDefault: () => {} });
     
     // Blur the input to hide mobile keyboard
     if (inputRef.current) {
@@ -533,17 +503,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     setShowSuggestions(false);
     shouldShowSuggestionsRef.current = false;
     setSuggestions([]);
-    
-    // Force cleanup of any suggestion portals
-    const portalElements = document.querySelectorAll('#suggestion-portal');
-    portalElements.forEach(el => {
-      try {
-        ReactDOM.unmountComponentAtNode(el);
-        if (document.body.contains(el)) {
-          document.body.removeChild(el);
-        }
-      } catch (err) { /* Ignore errors during cleanup */ }
-    });
     
     const searchQuery = formSearchQuery?.trim() || '';
     if (!searchQuery) {
@@ -950,17 +909,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Define the dropdown content separately
   const renderSuggestionDropdown = () => (
-    <div 
-      className="username-suggestions"
-      onClick={(e) => {
-        // Prevent clicks inside dropdown from bubbling up and triggering document click handler
-        e.stopPropagation();
-      }}
-      data-testid="username-suggestions"
-      style={{
-        padding: "8px 0"
-      }}
-    >
+    <div style={{ padding: "8px 0" }}>
       {suggestions.length === 0 && (
         <div style={{
           padding: "15px",
@@ -974,9 +923,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       {suggestions.map((user) => (
         <div 
           key={user.fid}
-          className="username-suggestion-item"
           onClick={(e) => {
-            e.stopPropagation(); // Prevent event bubbling
+            e.preventDefault();
+            e.stopPropagation();
             handleSelectSuggestion(user.username);
           }}
           style={{
@@ -1113,14 +1062,27 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* 
-              Render suggestions dropdown in a portal
-              - Only show when we have suggestions and are allowed to show them
-            */}
-            {suggestions.length > 0 && showSuggestions && (
-              <SuggestionPortal inputRect={inputRect}>
+            {/* DIRECT INLINE DROPDOWN: No portals */}
+            {showSuggestions && suggestions.length > 0 && (
+              <div 
+                className="suggestions-dropdown-container"
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '100%',
+                  zIndex: 999999,
+                  marginTop: '2px',
+                  backgroundColor: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+                  maxHeight: '300px',
+                  overflowY: 'auto'
+                }}
+              >
                 {renderSuggestionDropdown()}
-              </SuggestionPortal>
+              </div>
             )}
           </div>
           
