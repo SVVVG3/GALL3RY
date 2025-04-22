@@ -53,7 +53,8 @@ const FarcasterSuggestions = ({
         containerRef.current && 
         !containerRef.current.contains(event.target) &&
         inputRef && 
-        !inputRef.contains(event.target)
+        inputRef.current &&
+        !inputRef.current.contains(event.target)
       ) {
         setIsVisible(false);
       }

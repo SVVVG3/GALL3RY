@@ -1,64 +1,140 @@
+/**
+ * API proxy for Neynar API
+ * 
+ * This endpoint forwards requests to various Neynar API endpoints
+ * with proper authentication.
+ */
+
 import axios from 'axios';
 
-// API handler for proxying requests to Neynar API
+// Constants
+const NEYNAR_API_BASE_URL = 'https://api.neynar.com/v2/farcaster';
+const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY;
+
 export default async function handler(req, res) {
+  // CORS headers for cross-origin requests
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
+
+  // Handle OPTIONS requests (pre-flight)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
+  // Only allow GET requests
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed', message: 'Only GET requests are allowed' });
+  }
+
   try {
-    // CORS headers
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
-
-    // Only allow GET requests
-    if (req.method !== 'GET') {
-      return res.status(405).json({ error: 'Method not allowed' });
-    }
-
-    // Get params from the query
-    const { endpoint, ...params } = req.query;
-
-    if (!endpoint) {
-      return res.status(400).json({ error: 'Missing endpoint parameter' });
-    }
-
-    // Get API key from environment variables
-    const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-    
     if (!NEYNAR_API_KEY) {
-      return res.status(500).json({ error: 'Neynar API key not configured' });
+      return res.status(500).json({ 
+        error: 'Neynar API key not configured', 
+        message: 'The Neynar API key is missing in the server configuration'
+      });
     }
 
-    console.log(`Proxying request to Neynar API: ${endpoint} with params:`, params);
-
-    // Construct the Neynar API URL
-    const baseUrl = 'https://api.neynar.com/v2/farcaster';
-    const apiUrl = `${baseUrl}/${endpoint}`;
-
-    // Make the request to Neynar API
-    const response = await axios.get(apiUrl, {
-      headers: {
-        'accept': 'application/json',
-        'api_key': NEYNAR_API_KEY
-      },
-      params,
-      timeout: 10000 // 10 second timeout
-    });
-
-    console.log(`Neynar API response status: ${response.status}`);
+    // Get endpoint from query parameters
+    const { endpoint, ...params } = req.query;
     
-    // Return the response as-is from Neynar
-    return res.status(200).json(response.data);
+    if (!endpoint) {
+      return res.status(400).json({ 
+        error: 'Missing endpoint parameter',
+        message: 'The endpoint parameter is required' 
+      });
+    }
+
+    // Build the appropriate Neynar API URL
+    let apiUrl = '';
+    
+    switch (endpoint) {
+      case 'user/search':
+        apiUrl = `${NEYNAR_API_BASE_URL}/user/search`;
+        break;
+      case 'user':
+        if (params.fid) {
+          apiUrl = `${NEYNAR_API_BASE_URL}/user?fid=${params.fid}`;
+        } else if (params.username) {
+          apiUrl = `${NEYNAR_API_BASE_URL}/user/search?q=${encodeURIComponent(params.username)}&limit=1`;
+        } else {
+          return res.status(400).json({
+            error: 'Missing user identifier',
+            message: 'Either fid or username is required for the user endpoint'
+          });
+        }
+        break;
+      default:
+        apiUrl = `${NEYNAR_API_BASE_URL}/${endpoint}`;
+    }
+
+    console.log(`Forwarding request to Neynar API: ${apiUrl}`);
+    
+    try {
+      // Prepare query parameters excluding 'endpoint'
+      const queryParams = { ...params };
+      if (endpoint === 'user' && params.username) {
+        // Handle user lookup by username differently - using search endpoint
+        delete queryParams.username;
+      }
+      
+      // Make the API request to Neynar
+      const response = await axios({
+        method: 'GET',
+        url: apiUrl,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'GALL3RY/1.0 (+https://gall3ry.vercel.app)',
+          'api_key': NEYNAR_API_KEY
+        },
+        params: Object.keys(queryParams).length > 0 ? queryParams : undefined,
+        timeout: 15000 // Extended timeout to 15 seconds
+      });
+      
+      console.log(`Successful response from Neynar API`);
+      
+      // For username search, if we requested a user by username, extract the first matching user
+      if (endpoint === 'user' && params.username && response.data?.result?.users) {
+        const users = response.data.result.users;
+        if (users.length > 0) {
+          // Find exact username match, or take the first
+          const exactMatch = users.find(u => 
+            u.username.toLowerCase() === params.username.toLowerCase()
+          );
+          
+          const user = exactMatch || users[0];
+          
+          return res.status(200).json({
+            result: {
+              user: user
+            }
+          });
+        } else {
+          return res.status(404).json({
+            error: 'User not found',
+            message: `No user found with username ${params.username}`
+          });
+        }
+      }
+      
+      return res.status(200).json(response.data);
+    } catch (error) {
+      console.error(`Error with Neynar API:`, error.message);
+      
+      // Return a more informative error response
+      return res.status(502).json({ 
+        error: 'Neynar API error',
+        message: error.message,
+        details: error.response?.data || null
+      });
+    }
   } catch (error) {
-    console.error('Error proxying request to Neynar API:', error);
+    console.error('Error in Neynar API proxy:', error);
     
-    // Return appropriate error response
-    const status = error.response?.status || 500;
-    const errorData = error.response?.data || { error: error.message || 'Unknown error' };
-    
-    return res.status(status).json(errorData);
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message
+    });
   }
 } 

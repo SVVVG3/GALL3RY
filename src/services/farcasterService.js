@@ -321,7 +321,36 @@ const farcasterService = {
         }
       }
 
-      // If proxy failed, try direct Neynar API
+      // If proxy failed, try Zapper API for profile info
+      if (!userData) {
+        console.log(`Attempting Zapper API call for profile info for ${queryParam}`);
+        try {
+          // Use Zapper's GraphQL endpoint to fetch profile data
+          const zapperService = await import('./zapperService');
+          const profileData = await zapperService.getFarcasterProfile(queryParam);
+          
+          if (profileData) {
+            console.log(`Successfully found profile data for ${queryParam} via Zapper API`);
+            
+            // Convert to internal format if necessary 
+            userData = profileData;
+            
+            // Format and cache the profile
+            const formattedProfile = formatFarcasterProfile(userData);
+            if (formattedProfile) {
+              await cacheItem(cacheKey, formattedProfile, 5); // Cache for 5 minutes
+              return formattedProfile;
+            }
+          } else {
+            console.warn(`No profile data found for ${queryParam} in Zapper API response`);
+          }
+        } catch (zapperError) {
+          console.error(`Zapper API call failed for ${queryParam}:`, zapperError.message);
+          // Don't throw yet, try Neynar as last resort
+        }
+      }
+
+      // If Zapper also failed, try direct Neynar API as last resort
       if (!userData) {
         console.log(`Attempting direct Neynar API call for ${queryParam}`);
         const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || "NEYNAR_API_DOCS";
@@ -330,12 +359,16 @@ const farcasterService = {
           if (isNumericFid) {
             console.log(`Making direct Neynar API request for FID: ${queryParam}`);
             response = await axios.get(`https://api.neynar.com/v2/farcaster/user?fid=${queryParam}`, {
-              headers: { api_key: NEYNAR_API_KEY },
+              headers: { 
+                'api_key': NEYNAR_API_KEY,
+                'Accept': 'application/json'
+              },
               timeout: 10000
             });
             
-            if (response?.data?.user) {
-              userData = response.data.user;
+            // Check for result.user in updated Neynar API response format
+            if (response?.data?.result?.user) {
+              userData = response.data.result.user;
               console.log(`Successfully found user data for FID ${queryParam} via direct API`);
             } else {
               console.warn(`Direct API returned a response but no user data found for FID ${queryParam}`);
@@ -350,18 +383,22 @@ const farcasterService = {
               : queryParam;
               
             response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(searchQuery)}`, {
-              headers: { api_key: NEYNAR_API_KEY },
+              headers: { 
+                'api_key': NEYNAR_API_KEY,
+                'Accept': 'application/json'
+              },
               timeout: 10000
             });
             
             console.log('Direct API search response received, status:', response.status);
             
-            // Find exact username match in search results
-            if (response?.data?.users && Array.isArray(response.data.users)) {
-              console.log(`Search returned ${response.data.users.length} users`);
+            // Updated to handle the current Neynar API response format
+            if (response?.data?.result?.users && Array.isArray(response.data.result.users)) {
+              const users = response.data.result.users;
+              console.log(`Search returned ${users.length} users`);
               
               // First try exact match with the original query
-              let exactMatch = response.data.users.find(
+              let exactMatch = users.find(
                 u => u.username.toLowerCase() === queryParam.toLowerCase()
               );
               
@@ -370,7 +407,7 @@ const farcasterService = {
                 const usernameWithoutEth = queryParam.split('.')[0].toLowerCase();
                 console.log(`No exact match found, trying without .eth: ${usernameWithoutEth}`);
                 
-                exactMatch = response.data.users.find(
+                exactMatch = users.find(
                   u => u.username.toLowerCase() === usernameWithoutEth
                 );
               }
@@ -378,13 +415,14 @@ const farcasterService = {
               if (exactMatch) {
                 userData = exactMatch;
                 console.log(`Found exact match for username: ${exactMatch.username}`);
-              } else if (response.data.users.length > 0) {
+              } else if (users.length > 0) {
                 // If no exact match but we found users, take the first one
-                userData = response.data.users[0];
+                userData = users[0];
                 console.log(`No exact match found, using first result: ${userData.username}`);
               }
             } else {
-              console.warn('No users array found in search response or empty array');
+              console.warn('No users array found in expected format. Response structure:', 
+                Object.keys(response.data || {}).join(', '));
             }
           }
         } catch (directApiError) {
@@ -401,7 +439,7 @@ const farcasterService = {
       }
 
       if (!userData) {
-        console.warn(`No user data found for ${queryParam}`);
+        console.warn(`No user data found for ${queryParam} after trying all APIs`);
         return null;
       }
 

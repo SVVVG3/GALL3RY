@@ -14,6 +14,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { formatNFTsForDisplay } from '../utils/nftUtils';
 import alchemyService from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
+import * as zapperService from '../services/zapperService';
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -362,7 +363,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     try {
       setIsSearching(true);
       console.log(`Searching for Farcaster user: ${query}`);
-      const profile = await farcasterService.getProfile({ username: query });
+      
+      // First try Zapper API for profile data (more complete wallet address data)
+      let profile = null;
+      
+      try {
+        profile = await zapperService.getFarcasterProfile(query);
+        console.log('Zapper API returned profile:', profile);
+      } catch (zapperError) {
+        console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
+        // Fallback to farcasterService if Zapper fails
+        profile = await farcasterService.getProfile({ username: query });
+      }
       
       if (profile) {
         setUserProfile(profile);
@@ -438,9 +450,25 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     setSearchError('');
     
     try {
-      // Step 1: Get the user's addresses
-      console.log(`Fetching addresses for FID: ${profile.fid}`);
-      const addresses = await farcasterService.getFarcasterAddresses({ fid: profile.fid });
+      // Step 1: Get the user's addresses using Zapper for better address collection
+      console.log(`Fetching addresses for user ${profile.username || profile.fid}`);
+      let addresses = [];
+      
+      try {
+        // First try with Zapper API (more complete address collection)
+        addresses = await zapperService.getFarcasterAddresses(profile.username || profile.fid);
+        console.log(`Zapper service found ${addresses?.length || 0} addresses`);
+      } catch (zapperError) {
+        console.warn('Zapper API address fetch failed, falling back to farcasterService:', zapperError.message);
+        
+        // Fallback to farcasterService if Zapper fails
+        if (profile.fid) {
+          addresses = await farcasterService.fetchAddressesForFid(profile.fid);
+        } else {
+          console.warn('No FID available to fetch addresses with fallback method');
+          addresses = [];
+        }
+      }
       
       if (!addresses || addresses.length === 0) {
         console.log('No addresses found for user');
