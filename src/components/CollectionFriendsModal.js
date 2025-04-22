@@ -295,13 +295,14 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 }));
                 
                 if (owners.length === 0) {
-                  console.warn('⚠️ No collection owners found, falling back to mock data');
+                  console.warn('⚠️ No collection owners found - showing empty state');
                   debug.ownersEmpty = true;
                   setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
                   
-                  const mockFriends = getMockFriends();
-                  setFriends(mockFriends);
-                  setUsingMockData(true);
+                  // Return empty data instead of mock data
+                  setFriends([]);
+                  setTotalFriends(0);
+                  setUsingMockData(false);
                   setLoading(false);
                   return;
                 }
@@ -609,7 +610,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     if (friends.length === 0) {
       return (
         <div className="modal-no-friends">
-          <p>No Data Available For This Collection</p>
+          <p>No Collection Data Can Be Found For This Collection</p>
         </div>
       );
     }
