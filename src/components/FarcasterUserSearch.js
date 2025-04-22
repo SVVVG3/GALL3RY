@@ -524,22 +524,50 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       const allNfts = [];
       const seenTokenIds = new Set();
       
-      nftResults.forEach(result => {
+      // Process each wallet's results
+      nftResults.forEach((result, walletIndex) => {
         if (result && Array.isArray(result.nfts)) {
+          console.log(`Processing ${result.nfts.length} NFTs from wallet ${walletIndex+1}/${addresses.length}`);
+          
+          // Process each NFT in this wallet
           result.nfts.forEach(nft => {
-            // Create a unique identifier that includes the network
-            const tokenIdentifier = `${nft.contract?.address || ''}-${nft.tokenId || ''}-${nft.network || 'eth'}`;
+            // Skip NFTs without proper identifiers
+            if (!nft || !nft.contract || !nft.tokenId) {
+              return;
+            }
+            
+            // Normalize contract address and token ID for consistent comparison
+            const contractAddress = (nft.contract?.address || '').toLowerCase();
+            const tokenId = String(nft.tokenId || '').trim();
+            const network = (nft.network || 'eth').toLowerCase();
+            
+            if (!contractAddress || !tokenId) {
+              return; // Skip NFTs without proper identifiers
+            }
+            
+            // Create a unique identifier across all wallets, chains, and contracts
+            const tokenIdentifier = `${contractAddress}-${tokenId}-${network}`;
+            
             if (!seenTokenIds.has(tokenIdentifier)) {
               seenTokenIds.add(tokenIdentifier);
-              // Make a copy of each NFT to ensure it's extensible
-              const nftCopy = JSON.parse(JSON.stringify(nft));
+              
+              // Make a copy of the NFT to ensure it's extensible and enrich with wallet info
+              const nftCopy = JSON.parse(JSON.stringify({
+                ...nft,
+                ownerWallet: addresses[walletIndex], // Track which wallet owns this NFT
+                uniqueId: tokenIdentifier // Store the unique ID for future reference
+              }));
+              
               allNfts.push(nftCopy);
+            } else {
+              // For debugging - log duplicates we're filtering out
+              console.debug(`Filtered duplicate NFT: ${nft.name || nft.title || tokenId} from ${contractAddress} on ${network}`);
             }
           });
         }
       });
       
-      console.log(`Found ${allNfts.length} unique NFTs across ${addresses.length} wallets`);
+      console.log(`Found ${allNfts.length} unique NFTs across ${addresses.length} wallets (filtered ${seenTokenIds.size - allNfts.length} duplicates)`);
       return allNfts;
     } catch (error) {
       console.error('Error fetching NFTs for addresses:', error);

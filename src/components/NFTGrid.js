@@ -21,6 +21,9 @@ import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized compo
 const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
   console.log(`NFTGrid rendering ${nfts.length} NFTs, isLoading: ${isLoading}`);
   
+  // Deduplicate NFTs by uniqueId or contract+tokenId+network for safety
+  const uniqueNfts = removeDuplicateNfts(nfts);
+  
   // Determine if we're in production (Vercel) or development
   const isProduction = process.env.NODE_ENV === 'production' || 
                        window.location.hostname.includes('vercel.app');
@@ -28,7 +31,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Choose the appropriate NFT card component based on environment
   const CardComponent = isProduction ? VercelNFTCard : NFTCard;
   
-  if (isLoading && (!nfts || nfts.length === 0)) {
+  if (isLoading && (!uniqueNfts || uniqueNfts.length === 0)) {
     return (
       <div className="nft-grid-loader">
         <div className="loader"></div>
@@ -37,7 +40,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     );
   }
 
-  if (!nfts || nfts.length === 0) {
+  if (!uniqueNfts || uniqueNfts.length === 0) {
     return (
       <div className="nft-grid-empty">
         <p className="nft-grid-no-results">{emptyMessage}</p>
@@ -48,7 +51,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   return (
     <div className="nft-grid-container">
       <div className="nft-grid">
-        {nfts.map((nft, index) => {
+        {uniqueNfts.map((nft, index) => {
           // Create a copy of the NFT object to avoid modifying non-extensible objects
           const nftCopy = {...nft};
           
@@ -57,8 +60,8 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
             nftCopy.collection_name = getCollectionName(nft);
           }
           
-          // Debug the NFT data being passed to NFTCard
-          const nftKey = getNftKey(nft) || index;
+          // Use uniqueId if available, otherwise generate a key
+          const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
           
           return (
             <CardComponent 
@@ -71,6 +74,35 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     </div>
   );
 };
+
+// Function to remove duplicate NFTs
+function removeDuplicateNfts(nfts) {
+  if (!nfts || nfts.length === 0) return [];
+  
+  const uniqueMap = new Map();
+  
+  nfts.forEach(nft => {
+    // Skip invalid NFTs
+    if (!nft) return;
+    
+    // Get a unique key for this NFT
+    const key = nft.uniqueId || 
+                `${(nft.contract?.address || '').toLowerCase()}-${nft.tokenId || ''}-${(nft.network || 'eth').toLowerCase()}`;
+    
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, nft);
+    }
+  });
+  
+  const uniqueNfts = [...uniqueMap.values()];
+  
+  // Log if duplicates were found and removed
+  if (uniqueNfts.length < nfts.length) {
+    console.log(`Removed ${nfts.length - uniqueNfts.length} duplicate NFTs in NFTGrid`);
+  }
+  
+  return uniqueNfts;
+}
 
 // Utility functions to handle NFT data
 const getCollectionName = (nft) => {
@@ -155,7 +187,8 @@ const getNftKey = (nft) => {
   
   const contract = getContractAddress(nft);
   const tokenId = getTokenId(nft);
-  return `${contract}-${tokenId}`;
+  const network = nft.network || 'eth';
+  return `${contract}-${tokenId}-${network}`;
 };
 
 export default NFTGrid; 

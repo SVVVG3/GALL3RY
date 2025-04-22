@@ -13,14 +13,19 @@ export const formatNFTsForDisplay = (nfts) => {
     return [];
   }
   
-  return nfts.map(nft => {
+  // Remove any duplicates using uniqueId or contract-tokenId-network as key
+  const uniqueNfts = removeDuplicates(nfts);
+  console.log(`Formatting ${uniqueNfts.length} unique NFTs for display (filtered ${nfts.length - uniqueNfts.length} duplicates)`);
+  
+  return uniqueNfts.map(nft => {
     // Skip null or undefined items
     if (!nft) return null;
     
     // Create a standardized NFT object with consistent property names
     return {
       // Basic NFT properties
-      id: nft.id || `${nft.contractAddress}-${nft.tokenId}` || `${nft.contract?.address}-${nft.tokenId}`,
+      id: nft.uniqueId || nft.id || `${nft.contractAddress}-${nft.tokenId}-${nft.network || 'eth'}` || `${nft.contract?.address}-${nft.tokenId}-${nft.network || 'eth'}`,
+      uniqueId: nft.uniqueId || `${(nft.contract?.address || nft.contractAddress || '').toLowerCase()}-${nft.tokenId || nft.token_id || ''}-${(nft.network || 'eth').toLowerCase()}`,
       tokenId: nft.tokenId || nft.token_id || '0',
       name: nft.name || nft.title || nft.metadata?.name || `#${nft.tokenId || nft.token_id || '0'}`,
       description: nft.description || nft.metadata?.description || '',
@@ -34,6 +39,10 @@ export const formatNFTsForDisplay = (nfts) => {
       contractAddress: nft.contractAddress || nft.contract?.address || '',
       collectionName: nft.collectionName || nft.collection?.name || nft.contract?.name || nft.contractMetadata?.name || '',
       collection_name: nft.collection_name || nft.collection?.name || nft.contract?.name || nft.contractMetadata?.name || '',
+      
+      // Network information
+      network: nft.network || 'eth',
+      ownerWallet: nft.ownerWallet || nft.ownerAddress || '',
       
       // Value information
       floorPrice: nft.floorPrice || nft.collection?.floorPrice ? { 
@@ -60,4 +69,27 @@ export const formatNFTsForDisplay = (nfts) => {
       _originalSource: nft.contractAddress || nft.contract?.address || 'unknown'
     };
   }).filter(Boolean); // Remove any null/undefined items
-}; 
+};
+
+/**
+ * Remove duplicate NFTs based on uniqueId or contract-tokenId-network combination
+ */
+function removeDuplicates(nfts) {
+  if (!nfts || !Array.isArray(nfts) || nfts.length === 0) return [];
+  
+  const uniqueMap = new Map();
+  
+  nfts.forEach(nft => {
+    if (!nft) return;
+    
+    // Create a consistent key for each NFT
+    const uniqueId = nft.uniqueId || 
+                    `${(nft.contract?.address || nft.contractAddress || '').toLowerCase()}-${nft.tokenId || nft.token_id || ''}-${(nft.network || 'eth').toLowerCase()}`;
+    
+    if (!uniqueMap.has(uniqueId)) {
+      uniqueMap.set(uniqueId, nft);
+    }
+  });
+  
+  return [...uniqueMap.values()];
+} 
