@@ -159,7 +159,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     // Set the ref to false to prevent showing suggestions
     shouldShowSuggestionsRef.current = false;
     
-    // Set the form query
+    // Set the form query immediately
     setFormSearchQuery(username);
     
     // Clear suggestions array
@@ -192,18 +192,16 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       });
     };
     
-    // Run cleanup immediately AND after a small delay for safety
+    // Run cleanup immediately
     forceCleanup();
     
-    // Trigger search with a short delay to ensure cleanup is complete
-    setTimeout(() => {
-      handleSearch({ preventDefault: () => {} }, username);
-      
-      // Blur the input to hide mobile keyboard
-      if (inputRef.current) {
-        inputRef.current.blur();
-      }
-    }, 50);
+    // Execute search immediately - don't wait for setTimeout
+    handleSearch({ preventDefault: () => {} }, username);
+    
+    // Blur the input to hide mobile keyboard
+    if (inputRef.current) {
+      inputRef.current.blur();
+    }
     
     // Set a longer delay before allowing suggestions again
     setTimeout(() => {

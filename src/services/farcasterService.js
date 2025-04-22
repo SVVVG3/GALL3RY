@@ -776,13 +776,20 @@ const farcasterService = {
  */
 const extractAddressesFromUserData = (userData) => {
   try {
+    if (!userData) {
+      console.log('userData is null or undefined in extractAddressesFromUserData');
+      return [];
+    }
+    
     // Check various possible paths where addresses could be located
     let addresses = [];
     
     // Check verified_addresses.eth_addresses path (common in newer Neynar API)
     if (userData.verified_addresses?.eth_addresses) {
-      addresses = [...addresses, ...userData.verified_addresses.eth_addresses];
-      console.log(`Found ${userData.verified_addresses.eth_addresses.length} addresses in verified_addresses.eth_addresses`);
+      // Filter out any non-string values before adding
+      const validAddresses = userData.verified_addresses.eth_addresses.filter(addr => typeof addr === 'string');
+      addresses = [...addresses, ...validAddresses];
+      console.log(`Found ${validAddresses.length} addresses in verified_addresses.eth_addresses`);
     }
     
     // Check other properties from Neynar API structure
@@ -803,22 +810,24 @@ const extractAddressesFromUserData = (userData) => {
         }
         // Skip anything else
         return null;
-      }).filter(a => a !== null); // Remove any null values
+      }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
       
       addresses = [...addresses, ...verificationAddresses];
       console.log(`Found ${verificationAddresses.length} addresses in verifications array`);
     }
     
     // Check custody_address (often present in Neynar API)
-    if (userData.custody_address) {
+    if (userData.custody_address && typeof userData.custody_address === 'string') {
       addresses.push(userData.custody_address);
       console.log(`Added custody address: ${userData.custody_address}`);
     }
     
     // Check direct eth_addresses array
     if (Array.isArray(userData.eth_addresses)) {
-      addresses = [...addresses, ...userData.eth_addresses];
-      console.log(`Found ${userData.eth_addresses.length} addresses in eth_addresses`);
+      // Filter for strings only
+      const validEthAddresses = userData.eth_addresses.filter(addr => typeof addr === 'string');
+      addresses = [...addresses, ...validEthAddresses];
+      console.log(`Found ${validEthAddresses.length} addresses in eth_addresses`);
     }
     
     // Check addresses array directly
@@ -839,7 +848,7 @@ const extractAddressesFromUserData = (userData) => {
         }
         // Skip anything else
         return null;
-      }).filter(a => a !== null); // Remove any null values
+      }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
       
       addresses = [...addresses, ...addressesArray];
       console.log(`Found ${addressesArray.length} addresses in addresses array`);
@@ -848,10 +857,14 @@ const extractAddressesFromUserData = (userData) => {
     // Remove duplicates and standardize to lowercase
     if (addresses.length > 0) {
       console.log(`Found total of ${addresses.length} addresses before deduplication`);
-      // Make sure all addresses are strings before calling toLowerCase
-      const uniqueAddresses = [...new Set(addresses.map(addr => 
-        typeof addr === 'string' ? addr.toLowerCase() : null
-      ).filter(a => a !== null))];
+      
+      // Safely convert to lowercase - only process strings
+      const uniqueAddresses = [...new Set(
+        addresses
+          .filter(addr => typeof addr === 'string') // Ensure we only have strings
+          .map(addr => addr.toLowerCase())          // Now safe to call toLowerCase
+      )];
+      
       console.log(`Returning ${uniqueAddresses.length} unique addresses`);
       return uniqueAddresses;
     }
