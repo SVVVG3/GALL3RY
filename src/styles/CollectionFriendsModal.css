@@ -62,7 +62,7 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
 }
 
 .modal-loading, 
@@ -114,7 +114,7 @@
 
 .friends-list {
   width: 100%;
-  margin: 0;
+  margin: 0 auto;
   padding: 16px;
   box-sizing: border-box;
   background-color: #f9f9f9;
@@ -131,6 +131,7 @@
   background-color: white;
   border-radius: 6px;
   margin-bottom: 8px;
+  width: 100%;
 }
 
 .friend-item:last-child {

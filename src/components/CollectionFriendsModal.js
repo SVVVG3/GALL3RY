@@ -459,12 +459,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                   }
                 }
                 
-                // Fall back to mock data
-                console.log('🔄 Falling back to mock data due to errors fetching collection owners');
-                const mockFriends = getMockFriends();
-                setFriends(mockFriends);
-                setUsingMockData(true);
-                debug.finalResult = 'Using mock data due to owners error';
+                // Return empty data instead of using mock data
+                console.log('No collection owners found or error occurred - showing empty state');
+                setFriends([]);
+                setTotalFriends(0);
+                setUsingMockData(false);
+                debug.finalResult = 'No data available';
                 setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
               }
             } catch (apiCallError) {
@@ -483,11 +483,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             debug.followingSuccess = false;
             setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
             
-            // Fall back to mock data
-            console.log('🔄 Falling back to mock data due to errors fetching following users');
-            const mockFriends = getMockFriends();
-            setFriends(mockFriends);
-            setUsingMockData(true);
+            // Return empty data instead of mock data
+            console.log('Unable to fetch following users - showing empty state');
+            setFriends([]);
+            setTotalFriends(0);
+            setUsingMockData(false);
           }
         } else {
           // Not authenticated or no collection address
@@ -519,11 +519,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           }
         }));
         
-        // Fall back to mock data in case of error
-        console.log('🔄 Falling back to mock data due to general error');
-        const mockFriends = getMockFriends();
-        setFriends(mockFriends);
-        setUsingMockData(true);
+        // Return empty data instead of using mock data
+        console.log('No collection owners found or error occurred - showing empty state');
+        setFriends([]);
+        setTotalFriends(0);
+        setUsingMockData(false);
         setLoading(false);
       }
     };
@@ -584,7 +584,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         <div className="modal-loading">
           <div className="spinner"></div>
           <p>Loading friends...</p>
-          <p className="modal-debug-status">{debugInfo.status || 'Initializing...'}</p>
         </div>
       );
     }
@@ -594,12 +593,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         <div className="modal-error">
           <p>{error}</p>
           <button className="modal-close-btn" onClick={onClose}>Close</button>
-          {Object.keys(debugInfo).length > 0 && (
-            <details className="modal-debug-info" open>
-              <summary>Debug Info</summary>
-              <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-            </details>
-          )}
         </div>
       );
     }
@@ -616,24 +609,13 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     if (friends.length === 0) {
       return (
         <div className="modal-no-friends">
-          <p>No friends found who own this collection.</p>
-          {Object.keys(debugInfo).length > 0 && (
-            <details className="modal-debug-info" open>
-              <summary>Debug Info</summary>
-              <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-            </details>
-          )}
+          <p>No Data Available For This Collection</p>
         </div>
       );
     }
     
     return (
       <>
-        {usingMockData && (
-          <div className="mock-data-disclaimer">
-            <p>Using sample data for demonstration. Connect with Farcaster to see your real friends.</p>
-          </div>
-        )}
         <div className="friends-list">
           {friends.map((friend) => (
             <div key={friend.id} className="friend-item">
@@ -653,12 +635,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             </div>
           ))}
         </div>
-        {(usingMockData || Object.keys(debugInfo).length > 0) && (
-          <details className="modal-debug-info">
-            <summary>Debug Info</summary>
-            <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
-          </details>
-        )}
       </>
     );
   };
