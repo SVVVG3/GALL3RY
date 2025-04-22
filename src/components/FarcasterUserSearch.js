@@ -504,7 +504,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     try {
       // Create an array of promises to fetch NFTs for each address
       const nftPromises = addresses.map(address => 
-        alchemyService.getNftsForAddress(address)
+        alchemyService.getNftsForOwner(address)
       );
       
       // Wait for all promises to resolve
@@ -515,9 +515,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       const seenTokenIds = new Set();
       
       nftResults.forEach(nfts => {
-        if (nfts && Array.isArray(nfts)) {
-          nfts.forEach(nft => {
-            const tokenIdentifier = `${nft.contractAddress}-${nft.tokenId}`;
+        if (nfts && Array.isArray(nfts.nfts)) {
+          nfts.nfts.forEach(nft => {
+            const tokenIdentifier = `${nft.contract.address}-${nft.tokenId}`;
             if (!seenTokenIds.has(tokenIdentifier)) {
               seenTokenIds.add(tokenIdentifier);
               allNfts.push(nft);
