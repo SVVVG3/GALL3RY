@@ -1,124 +1,146 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 
 /**
- * A portal component to render suggestions dropdown outside the normal DOM hierarchy
- * to avoid any CSS conflicts or visibility issues
+ * Component that renders a suggestions dropdown outside the normal DOM hierarchy
+ * to avoid CSS conflicts
  */
 const SuggestionPortal = ({ children, inputRect }) => {
   const portalRef = useRef(null);
+  const portalContainerRef = useRef(null);
   
-  // Create a portal container if it doesn't exist
-  useEffect(() => {
-    // Create the portal element if it doesn't exist
-    if (!portalRef.current) {
-      const div = document.createElement('div');
-      div.id = 'suggestion-portal';
-      div.style.position = 'fixed';
-      div.style.zIndex = '9999999';
-      div.style.pointerEvents = 'auto';
-      document.body.appendChild(div);
-      portalRef.current = div;
+  // Function to clean up a single portal
+  const cleanupPortal = () => {
+    try {
+      if (portalContainerRef.current) {
+        // Try to unmount the React component within the portal
+        try {
+          ReactDOM.unmountComponentAtNode(portalContainerRef.current);
+        } catch (err) {
+          console.log('Error unmounting portal component:', err);
+        }
+        
+        // Remove the portal from DOM
+        if (document.body.contains(portalContainerRef.current)) {
+          document.body.removeChild(portalContainerRef.current);
+          console.log('Portal container removed during cleanup');
+        }
+        
+        // Clear references
+        portalContainerRef.current = null;
+        portalRef.current = null;
+      }
+    } catch (err) {
+      console.error('Error during portal cleanup:', err);
+    }
+  };
+  
+  // Function to clean up ALL portals - used as a fallback
+  const cleanupAllPortals = () => {
+    try {
+      const portalElements = document.querySelectorAll('#suggestion-portal');
+      console.log(`Fallback cleanup: found ${portalElements.length} suggestion portals`);
       
-      // Add click listener directly to the portal for selection events
-      div.addEventListener('click', (e) => {
-        // Check if clicked element is a suggestion item
-        if (e.target.closest('.username-suggestion-item')) {
-          console.log('Selection made within portal, forcing cleanup');
-          
-          // Forcefully cleanup immediately
-          try {
-            // Force unmount and removal
-            ReactDOM.unmountComponentAtNode(div);
-            if (document.body.contains(div)) {
-              document.body.removeChild(div);
-            }
-            portalRef.current = null;
-          } catch (err) {
-            console.error('Error in portal cleanup:', err);
-          }
-          
-          // Also check for any other portals that might exist
-          setTimeout(() => {
-            cleanupAllPortals();
-          }, 50);
+      portalElements.forEach(el => {
+        try {
+          // Try to unmount React components first
+          ReactDOM.unmountComponentAtNode(el);
+        } catch (err) {
+          console.log('Error unmounting portal during fallback cleanup:', err);
+        }
+        
+        // Remove from DOM directly
+        if (document.body.contains(el)) {
+          document.body.removeChild(el);
+          console.log('Portal removed during fallback cleanup');
         }
       });
-    }
-    
-    // Cleanup function to remove the portal when component unmounts
-    return () => {
-      cleanupPortal(portalRef.current);
-      cleanupAllPortals();
-    };
-  }, []);
-  
-  // Helper function to clean up a single portal
-  const cleanupPortal = (portal) => {
-    if (portal) {
-      try {
-        ReactDOM.unmountComponentAtNode(portal);
-      } catch (err) {
-        console.error('Error unmounting portal content:', err);
-      }
       
-      try {
-        if (document.body.contains(portal)) {
-          document.body.removeChild(portal);
-        }
-      } catch (err) {
-        console.error('Error removing portal from DOM:', err);
-      }
+      // Clear references regardless
+      portalContainerRef.current = null;
+      portalRef.current = null;
+    } catch (err) {
+      console.error('Error during fallback portal cleanup:', err);
     }
   };
   
-  // Helper function to clean up all suggestion portals
-  const cleanupAllPortals = () => {
-    const existingPortals = document.querySelectorAll('#suggestion-portal');
-    existingPortals.forEach(portal => {
-      try {
-        ReactDOM.unmountComponentAtNode(portal);
-        if (document.body.contains(portal)) {
-          document.body.removeChild(portal);
-        }
-      } catch (err) {
-        console.error('Error cleaning up extra portal:', err);
-      }
-    });
-  };
-  
-  // Close dropdown when clicking outside
   useEffect(() => {
+    // Unique ID for the portal based on timestamp
+    const portalId = `suggestion-portal`;
+    
+    // Clean up any existing portals before creating a new one
+    cleanupAllPortals();
+    
+    // Create a single portal container for this component instance
+    if (!portalContainerRef.current && inputRect) {
+      // Create container
+      const container = document.createElement('div');
+      container.id = portalId;
+      container.style.position = 'absolute';
+      container.style.zIndex = '9999';
+      container.dataset.timestamp = Date.now(); // Add timestamp for debugging
+      
+      // Store ref and append to body
+      portalContainerRef.current = container;
+      document.body.appendChild(container);
+      console.log('Created new portal container', container.dataset.timestamp);
+    }
+    
+    // Position the portal according to input rectangle
+    if (portalContainerRef.current && inputRect) {
+      portalContainerRef.current.style.top = `${inputRect.bottom}px`;
+      portalContainerRef.current.style.left = `${inputRect.left}px`;
+      portalContainerRef.current.style.width = `${inputRect.width}px`;
+    }
+    
+    // Set up portal reference to use in the return statement
+    portalRef.current = portalContainerRef.current;
+    
+    // Add a click event listener to the document to close the portal when clicking outside
     const handleClickOutside = (event) => {
-      // If portal exists and click is outside portal, unmount it
-      if (portalRef.current && !portalRef.current.contains(event.target)) {
-        // Only if the click isn't on an element with searchInput class
-        const isSearchInput = event.target.classList.contains('search-input');
-        if (!isSearchInput) {
-          cleanupPortal(portalRef.current);
-          portalRef.current = null;
-        }
+      // Only process if we have an active portal
+      if (!portalContainerRef.current) return;
+      
+      // Check if click is inside the portal
+      if (portalContainerRef.current && !portalContainerRef.current.contains(event.target)) {
+        // Click is outside, clean up
+        cleanupPortal();
       }
     };
     
-    document.addEventListener('mousedown', handleClickOutside);
+    // Add document-wide click handler
+    document.addEventListener('click', handleClickOutside, true);
+    
+    // Cleanup function
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      // Remove event listener first
+      document.removeEventListener('click', handleClickOutside, true);
+      
+      // Then clean up portal
+      cleanupPortal();
+      
+      // As a fallback, also clean up any remaining portals with the same ID
+      setTimeout(cleanupAllPortals, 10);
+    };
+  }, [inputRect]); // Re-run when inputRect changes
+  
+  // Run cleanup when component unmounts
+  useEffect(() => {
+    return () => {
+      cleanupPortal();
+      setTimeout(cleanupAllPortals, 10);
     };
   }, []);
   
-  // Position the portal based on input position
-  useEffect(() => {
-    if (portalRef.current && inputRect) {
-      portalRef.current.style.top = `${inputRect.bottom}px`;
-      portalRef.current.style.left = `${inputRect.left}px`;
-      portalRef.current.style.width = `${inputRect.width}px`;
-    }
-  }, [inputRect]);
+  // Return null if not set, otherwise create portal with children
+  if (!portalRef.current || !inputRect) {
+    return null;
+  }
   
-  if (!portalRef.current) return null;
-  
-  return ReactDOM.createPortal(children, portalRef.current);
+  return ReactDOM.createPortal(
+    <div className="suggestion-dropdown" data-testid="suggestion-dropdown">{children}</div>,
+    portalRef.current
+  );
 };
 
 export default SuggestionPortal; 

@@ -47,7 +47,21 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const [inputRect, setInputRect] = useState(null);
   
   // Add a ref to track if suggestions should be shown
-  const shouldShowSuggestionsRef = useRef(true);
+  const shouldShowSuggestionsRef = useRef(false); // Start as false to prevent suggestions on initial render
+  
+  // On first render, disable suggestions for a short period to avoid initial popup
+  useEffect(() => {
+    // Start with suggestions disabled
+    shouldShowSuggestionsRef.current = false;
+    
+    // Enable after a delay to avoid showing suggestions on initial render
+    const enableTimer = setTimeout(() => {
+      shouldShowSuggestionsRef.current = true;
+      console.log('Suggestions enabled after initial render');
+    }, 500);
+    
+    return () => clearTimeout(enableTimer);
+  }, []);
   
   // Define updateInputRect function at component level so it's available everywhere
   const updateInputRect = useCallback(() => {
@@ -97,6 +111,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         return;
       }
       
+      if (!shouldShowSuggestionsRef.current) {
+        console.log('Suggestions temporarily disabled');
+        return;
+      }
+      
       console.log('Fetching suggestions for:', formSearchQuery.trim());
       try {
         console.log('Calling farcasterService.searchUsers with:', formSearchQuery.trim());
@@ -104,8 +123,17 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         console.log('Suggestion API response:', users);
         console.log('Response type:', typeof users, 'Is array:', Array.isArray(users), 'Length:', users?.length);
         
+        // Make sure we still want to show suggestions before setting them
+        if (!shouldShowSuggestionsRef.current) {
+          console.log('Suggestions were disabled while fetching');
+          return;
+        }
+        
         // Set suggestions first
         setSuggestions(users);
+        
+        // Update input rect to ensure correct positioning
+        updateInputRect();
         
         // Force-render the suggestions immediately if we have results
         if (users && users.length > 0) {
@@ -122,8 +150,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       }
     };
     
-    fetchSuggestions();
-  }, [formSearchQuery]);
+    // Use a small debounce to avoid excessive API calls
+    const timerId = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timerId);
+  }, [formSearchQuery, updateInputRect]);
 
   // Force-render a log message whenever showSuggestions changes
   useEffect(() => {
@@ -137,16 +167,46 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Ensure suggestions are cleared when component unmounts
   useEffect(() => {
-    return () => {
+    // Define a thorough cleanup function
+    const thoroughCleanup = () => {
+      // 1. Clear state
       setSuggestions([]);
-      // Clean up any suggestion portals that might still exist
-      const existingPortals = document.querySelectorAll('#suggestion-portal');
-      existingPortals.forEach(portal => {
-        if (document.body.contains(portal)) {
-          document.body.removeChild(portal);
-        }
-      });
+      setShowSuggestions(false);
+      shouldShowSuggestionsRef.current = false;
+      
+      // 2. Remove all suggestion portals
+      const removeAllPortals = () => {
+        const portals = document.querySelectorAll('#suggestion-portal');
+        console.log(`Unmounting cleanup: found ${portals.length} portals to remove`);
+        
+        portals.forEach(portal => {
+          try {
+            // Try to unmount React components first
+            ReactDOM.unmountComponentAtNode(portal);
+          } catch (err) {
+            console.error('Error unmounting component in cleanup', err);
+          }
+          
+          // Remove from DOM
+          try {
+            if (document.body.contains(portal)) {
+              document.body.removeChild(portal);
+              console.log('Portal removed in unmount cleanup');
+            }
+          } catch (err) {
+            console.error('Error removing portal in cleanup', err);
+          }
+        });
+      };
+      
+      // Run portal removal immediately and after a short delay to catch any pending renders
+      removeAllPortals();
+      setTimeout(removeAllPortals, 50);
+      setTimeout(removeAllPortals, 200);
     };
+    
+    // Run cleanup on component unmount
+    return thoroughCleanup;
   }, []);
   
   // Handle suggestion selection with immediate forceful cleanup
@@ -465,6 +525,22 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     
     // Record the current position for proper dropdown rendering
     updateInputRect();
+    
+    // Always hide suggestions when starting a search
+    setShowSuggestions(false);
+    shouldShowSuggestionsRef.current = false;
+    setSuggestions([]);
+    
+    // Force cleanup of any suggestion portals
+    const portalElements = document.querySelectorAll('#suggestion-portal');
+    portalElements.forEach(el => {
+      try {
+        ReactDOM.unmountComponentAtNode(el);
+        if (document.body.contains(el)) {
+          document.body.removeChild(el);
+        }
+      } catch (err) { /* Ignore errors during cleanup */ }
+    });
     
     const searchQuery = formSearchQuery?.trim() || '';
     if (!searchQuery) {
@@ -880,13 +956,32 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         maxHeight: "300px",
         overflowY: "auto",
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+        zIndex: 9999,
       }}
+      onClick={(e) => {
+        // Prevent clicks inside dropdown from bubbling up and triggering document click handler
+        e.stopPropagation();
+      }}
+      data-testid="username-suggestions"
     >
+      {suggestions.length === 0 && (
+        <div style={{
+          padding: "15px",
+          textAlign: "center",
+          color: "#6b7280"
+        }}>
+          No suggestions found
+        </div>
+      )}
+      
       {suggestions.map((user) => (
         <div 
           key={user.fid}
           className="username-suggestion-item"
-          onClick={() => handleSelectSuggestion(user.username)}
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent event bubbling
+            handleSelectSuggestion(user.username);
+          }}
           style={{
             padding: "12px 15px",
             display: "flex",
@@ -899,7 +994,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
           onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
         >
-          {user.imageUrl && (
+          {user.imageUrl ? (
             <img 
               src={user.imageUrl} 
               alt=""
@@ -908,9 +1003,30 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 height: "40px",
                 borderRadius: "50%",
                 marginRight: "12px",
-                border: "2px solid #e5e7eb"
+                border: "2px solid #e5e7eb",
+                objectFit: "cover"
+              }}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/assets/placeholder-profile.png';
               }}
             />
+          ) : (
+            <div style={{
+              width: "40px",
+              height: "40px",
+              borderRadius: "50%",
+              marginRight: "12px",
+              backgroundColor: "#e5e7eb",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "18px",
+              fontWeight: "bold",
+              color: "#6b7280"
+            }}>
+              {user.username ? user.username[0].toUpperCase() : '?'}
+            </div>
           )}
           <div className="suggestion-user-info">
             <span 
@@ -918,7 +1034,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 fontWeight: "600",
                 fontSize: "16px",
                 color: "#111827",
-                display: "block"
+                display: "block",
+                lineHeight: "1.2"
               }}
             >
               {user.displayName || user.username}
@@ -927,7 +1044,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               style={{
                 fontSize: "14px",
                 color: "#6b7280",
-                display: "block"
+                display: "block",
+                lineHeight: "1.2"
               }}
             >
               @{user.username}
@@ -951,7 +1069,24 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               type="text"
               ref={inputRef}
               value={formSearchQuery}
-              onChange={(e) => setFormSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setFormSearchQuery(e.target.value);
+                updateInputRect(); // Update rect on each change
+              }}
+              onFocus={() => {
+                updateInputRect(); // Update rect on focus
+                if (formSearchQuery.trim().length >= 2 && suggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
+              onBlur={() => {
+                // Use a small delay to allow click events on suggestions to trigger first
+                setTimeout(() => {
+                  if (document.activeElement !== inputRef.current) {
+                    setShowSuggestions(false);
+                  }
+                }, 150);
+              }}
               placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
               className="search-input"
               style={{
