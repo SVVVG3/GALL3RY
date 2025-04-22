@@ -1,28 +1,29 @@
-/* Collection Friends Modal Styles - Clean, centered design */
+/* Add to the top of the file to eliminate scrollbar width */
+:root {
+  --scrollbar-width: 0px !important;
+  --scrollbar-compensation: 0px !important;
+}
+
+/* Collection Friends Modal Styles - Simplified for maximum reliability */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  display: grid;
+  place-items: center;
   z-index: 1000;
 }
 
 .modal-container {
   background-color: white;
   border-radius: 12px;
-  max-width: 500px;
   width: 90%;
-  position: relative;
-  margin: 0 auto;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 500px;
+  max-height: 90vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .modal-header {
@@ -32,9 +33,6 @@
   padding: 16px;
   border-bottom: 1px solid #eee;
   background-color: white;
-  width: 100%;
-  box-sizing: border-box;
-  flex-shrink: 0;
 }
 
 .modal-header h3 {
@@ -54,7 +52,6 @@
   color: #777;
   padding: 0;
   margin-left: 8px;
-  flex-shrink: 0;
 }
 
 .modal-close-button:hover {
@@ -62,15 +59,16 @@
 }
 
 .modal-content {
-  padding: 0;
-  width: 100%;
-  box-sizing: border-box;
-  max-height: 70vh;
-  overflow-y: auto;
-  background-color: white;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  display: grid;
+  max-height: calc(90vh - 64px);
+}
+
+.modal-content::-webkit-scrollbar {
+  display: none;
+  width: 0;
 }
 
 .modal-loading, 
@@ -84,10 +82,6 @@
   text-align: center;
   padding: 24px;
   min-height: 200px;
-  background-color: white;
-  width: 100%;
-  box-sizing: border-box;
-  flex: 1;
 }
 
 .spinner {
@@ -118,29 +112,31 @@
   background-color: #e9ecef;
 }
 
-.friends-list {
+.mock-data-disclaimer {
+  background-color: #fff3cd;
+  color: #856404;
+  padding: 8px 16px;
+  border-bottom: 1px solid #f5c6cb;
+  font-size: 14px;
+  text-align: center;
   width: 100%;
-  padding: 0;
+}
+
+.friends-list {
+  list-style: none;
   margin: 0;
-  box-sizing: border-box;
-  overflow-y: auto;
-  background-color: white;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
+  padding: 0;
+  width: 100%;
 }
 
 .friend-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 12px;
   align-items: center;
   padding: 12px 16px;
   border-bottom: 1px solid #eee;
   background-color: white;
-  box-sizing: border-box;
-  margin: 0;
-  width: 100%;
-  min-width: 0;
 }
 
 .friend-item:last-child {
@@ -152,7 +148,6 @@
   height: 48px;
   border-radius: 50%;
   overflow: hidden;
-  margin-right: 12px;
   flex-shrink: 0;
 }
 
@@ -175,9 +170,8 @@
 }
 
 .friend-info {
-  flex: 1;
+  overflow: hidden;
   min-width: 0;
-  padding-right: 0;
 }
 
 .friend-info h4 {
@@ -186,7 +180,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
 }
 
 .friend-info p {
@@ -196,20 +189,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  width: 100%;
-}
-
-.mock-data-disclaimer {
-  background-color: #fff3cd;
-  color: #856404;
-  padding: 8px 16px;
-  border-radius: 0;
-  margin: 0;
-  font-size: 14px;
-  text-align: center;
-  width: 100%;
-  box-sizing: border-box;
-  border-bottom: 1px solid #f5c6cb;
 }
 
 .modal-debug-info {
@@ -245,12 +224,8 @@
 
 @media (max-width: 600px) {
   .modal-container {
-    max-width: 100%;
     width: 95%;
-    height: auto;
     max-height: 80vh;
-    border-radius: 12px;
-    margin: 0 auto;
   }
   
   .modal-content {
@@ -267,9 +242,7 @@
   text-align: center;
   background-color: #f9f6ff;
   border-radius: 8px;
-  margin: 15px 0;
-  width: 100%;
-  box-sizing: border-box;
+  margin: 15px;
 }
 
 .unauthenticated-message p {

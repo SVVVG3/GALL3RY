@@ -578,6 +578,45 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     };
   }, [isOpen, onClose]);
 
+  // Add a debugging effect to find scrollbar issues when modal opens
+  useEffect(() => {
+    if (isOpen && modalRef.current) {
+      console.log('Modal debugging: Inspecting for scrollbar issues');
+      
+      // Check for any computed styles or scrollbar issues
+      setTimeout(() => {
+        if (modalRef.current) {
+          const modalEl = modalRef.current;
+          const friendsListEl = modalEl.querySelector('.friends-list');
+          const friendItems = modalEl.querySelectorAll('.friend-item');
+          
+          console.log('Modal container width:', modalEl.offsetWidth);
+          
+          if (friendsListEl) {
+            console.log('Friends list layout:', {
+              scrollWidth: friendsListEl.scrollWidth,
+              clientWidth: friendsListEl.clientWidth,
+              offsetWidth: friendsListEl.offsetWidth,
+              style: window.getComputedStyle(friendsListEl)
+            });
+            
+            // Apply extra style fixes if needed
+            friendsListEl.style.width = '100%';
+            friendsListEl.style.maxWidth = modalEl.offsetWidth + 'px';
+            friendsListEl.style.boxSizing = 'border-box';
+          }
+          
+          // Enforce full width on each friend item
+          friendItems.forEach(item => {
+            item.style.width = '100%';
+            item.style.maxWidth = '100%';
+            item.style.boxSizing = 'border-box';
+          });
+        }
+      }, 300);
+    }
+  }, [isOpen]);
+
   // Only render if modal is open
   if (!isOpen) return null;
 
@@ -623,9 +662,9 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 Using sample data for demonstration purposes
               </div>
             )}
-            <div className="friends-list">
+            <ul className="friends-list" style={{ listStyleType: 'none' }}>
               {friends.map((friend) => (
-                <div key={friend.id} className="friend-item">
+                <li key={friend.id} className="friend-item">
                   <div className="friend-avatar">
                     {friend.avatar ? (
                       <img src={friend.avatar} alt={friend.name} />
@@ -639,9 +678,9 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                     <h4>{friend.name}</h4>
                     <p>@{friend.username}</p>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
       </div>
