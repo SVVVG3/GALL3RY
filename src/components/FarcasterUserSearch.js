@@ -40,7 +40,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Username suggestions dropdown state
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchInputRef = useRef(null);
+  const inputRef = useRef(null);
   const suggestionsRef = useRef(null);
   
   // Add new state for input position
@@ -51,8 +51,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   
   // Define updateInputRect function at component level so it's available everywhere
   const updateInputRect = useCallback(() => {
-    if (searchInputRef.current) {
-      const rect = searchInputRef.current.getBoundingClientRect();
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
       setInputRect(rect);
       console.log('Input rect updated:', rect);
     }
@@ -73,8 +73,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       if (
         suggestionsRef.current && 
         !suggestionsRef.current.contains(event.target) &&
-        searchInputRef.current && 
-        !searchInputRef.current.contains(event.target)
+        inputRef.current && 
+        !inputRef.current.contains(event.target)
       ) {
         setShowSuggestions(false);
       }
@@ -153,6 +153,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const handleSelectSuggestion = (username) => {
     console.log('Selection made, forcefully clearing suggestions');
     
+    // Immediately hide suggestions
+    setShowSuggestions(false);
+    
     // Set the ref to false to prevent showing suggestions
     shouldShowSuggestionsRef.current = false;
     
@@ -187,19 +190,25 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           console.error('Error removing portal from DOM', err);
         }
       });
-      
-      // After a short delay, allow suggestions to be shown again
-      setTimeout(() => {
-        shouldShowSuggestionsRef.current = true;
-      }, 500);
     };
     
     // Run cleanup immediately AND after a small delay for safety
     forceCleanup();
-    setTimeout(forceCleanup, 50);
     
-    // Trigger search
-    handleSearch({ preventDefault: () => {} }, username);
+    // Trigger search with a short delay to ensure cleanup is complete
+    setTimeout(() => {
+      handleSearch({ preventDefault: () => {} }, username);
+      
+      // Blur the input to hide mobile keyboard
+      if (inputRef.current) {
+        inputRef.current.blur();
+      }
+    }, 50);
+    
+    // Set a longer delay before allowing suggestions again
+    setTimeout(() => {
+      shouldShowSuggestionsRef.current = true;
+    }, 500);
   };
   
   // Get sorted NFTs
@@ -816,14 +825,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     window.addEventListener('resize', updateInputRect);
     
     // Update on focus
-    if (searchInputRef.current) {
-      searchInputRef.current.addEventListener('focus', updateInputRect);
+    if (inputRef.current) {
+      inputRef.current.addEventListener('focus', updateInputRect);
     }
     
     return () => {
       window.removeEventListener('resize', updateInputRect);
-      if (searchInputRef.current) {
-        searchInputRef.current.removeEventListener('focus', updateInputRect);
+      if (inputRef.current) {
+        inputRef.current.removeEventListener('focus', updateInputRect);
       }
     };
   }, [updateInputRect]);
@@ -840,7 +849,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   useEffect(() => {
     const handleClickOutside = (event) => {
       // Don't dismiss if clicking on the search input or its children
-      if (searchInputRef.current && searchInputRef.current.contains(event.target)) {
+      if (inputRef.current && inputRef.current.contains(event.target)) {
         return;
       }
       
@@ -942,7 +951,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           <div className="username-input-container" style={{ position: "relative", flex: "1" }}>
             <input
               type="text"
-              ref={searchInputRef}
+              ref={inputRef}
               value={formSearchQuery}
               onChange={(e) => setFormSearchQuery(e.target.value)}
               placeholder="Enter Farcaster username (e.g. dwr, vitalik)"

@@ -26,59 +26,66 @@ const SuggestionPortal = ({ children, inputRect }) => {
         if (e.target.closest('.username-suggestion-item')) {
           console.log('Selection made within portal, forcing cleanup');
           
-          // Use a small timeout to allow the click event to complete
-          setTimeout(() => {
-            try {
-              // Force unmount and removal
-              if (document.body.contains(div)) {
-                ReactDOM.unmountComponentAtNode(div);
-                document.body.removeChild(div);
-                portalRef.current = null;
-              }
-            } catch (err) {
-              console.error('Error in portal cleanup:', err);
+          // Forcefully cleanup immediately
+          try {
+            // Force unmount and removal
+            ReactDOM.unmountComponentAtNode(div);
+            if (document.body.contains(div)) {
+              document.body.removeChild(div);
             }
-          }, 10);
+            portalRef.current = null;
+          } catch (err) {
+            console.error('Error in portal cleanup:', err);
+          }
+          
+          // Also check for any other portals that might exist
+          setTimeout(() => {
+            cleanupAllPortals();
+          }, 50);
         }
       });
     }
     
     // Cleanup function to remove the portal when component unmounts
     return () => {
-      if (portalRef.current) {
-        // Make sure to cleanup any existing portal content
-        try {
-          ReactDOM.unmountComponentAtNode(portalRef.current);
-        } catch (err) {
-          console.error('Error unmounting portal content:', err);
-        }
-        
-        // Remove the DOM element
-        try {
-          if (document.body.contains(portalRef.current)) {
-            document.body.removeChild(portalRef.current);
-          }
-        } catch (err) {
-          console.error('Error removing portal from DOM:', err);
-        }
-        
-        portalRef.current = null;
-      }
-      
-      // Also clean up any other suggestion portals that might exist (safety check)
-      const existingPortals = document.querySelectorAll('#suggestion-portal');
-      existingPortals.forEach(portal => {
-        try {
-          ReactDOM.unmountComponentAtNode(portal);
-          if (document.body.contains(portal)) {
-            document.body.removeChild(portal);
-          }
-        } catch (err) {
-          console.error('Error cleaning up extra portal:', err);
-        }
-      });
+      cleanupPortal(portalRef.current);
+      cleanupAllPortals();
     };
   }, []);
+  
+  // Helper function to clean up a single portal
+  const cleanupPortal = (portal) => {
+    if (portal) {
+      try {
+        ReactDOM.unmountComponentAtNode(portal);
+      } catch (err) {
+        console.error('Error unmounting portal content:', err);
+      }
+      
+      try {
+        if (document.body.contains(portal)) {
+          document.body.removeChild(portal);
+        }
+      } catch (err) {
+        console.error('Error removing portal from DOM:', err);
+      }
+    }
+  };
+  
+  // Helper function to clean up all suggestion portals
+  const cleanupAllPortals = () => {
+    const existingPortals = document.querySelectorAll('#suggestion-portal');
+    existingPortals.forEach(portal => {
+      try {
+        ReactDOM.unmountComponentAtNode(portal);
+        if (document.body.contains(portal)) {
+          document.body.removeChild(portal);
+        }
+      } catch (err) {
+        console.error('Error cleaning up extra portal:', err);
+      }
+    });
+  };
   
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -88,15 +95,8 @@ const SuggestionPortal = ({ children, inputRect }) => {
         // Only if the click isn't on an element with searchInput class
         const isSearchInput = event.target.classList.contains('search-input');
         if (!isSearchInput) {
-          try {
-            ReactDOM.unmountComponentAtNode(portalRef.current);
-            if (document.body.contains(portalRef.current)) {
-              document.body.removeChild(portalRef.current);
-              portalRef.current = null;
-            }
-          } catch (err) {
-            console.error('Error in click outside handler:', err);
-          }
+          cleanupPortal(portalRef.current);
+          portalRef.current = null;
         }
       }
     };
