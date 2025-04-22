@@ -681,7 +681,7 @@ const farcasterService = {
   
   fetchAllFollowing: async (fid, options = {}) => {
     try {
-      const { skipCache = false, maxPages = 10 } = options;
+      const { skipCache = false, maxPages = 100 } = options;
       
       // Check if we already have the complete list cached
       const cacheKey = `all-following-${fid}`;
