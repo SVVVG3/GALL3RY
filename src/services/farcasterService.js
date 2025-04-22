@@ -446,17 +446,66 @@ const farcasterService = {
       
       console.log(`Fetching following for FID ${fid}, limit: ${limit}${cursor ? ', with cursor' : ''}`);
       
-      // Request to following endpoint
-      const response = await axios.get(`${API_URL}/neynar`, {
-        params: {
+      let response;
+      
+      // First try with the proxy API
+      try {
+        // Request to following endpoint via proxy
+        console.log(`Making API request to ${API_URL}/neynar with params:`, {
           endpoint: 'following',
           fid,
           limit,
-          cursor
-        },
-        headers: {
-          'api-key': process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS'
+          cursor: cursor || undefined
+        });
+        
+        response = await axios.get(`${API_URL}/neynar`, {
+          params: {
+            endpoint: 'following',
+            fid,
+            limit,
+            cursor
+          },
+          headers: {
+            'api-key': process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS'
+          },
+          timeout: 10000
+        });
+        
+        console.log('Proxy API responded with status:', response.status);
+      } catch (proxyError) {
+        console.warn(`❌ Proxy API failed for following of FID ${fid}:`, proxyError.message);
+        
+        // Try direct Neynar API as a fallback
+        try {
+          console.log('Attempting direct Neynar API call for following');
+          const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+          
+          // Build the direct API URL
+          const neynarUrl = `https://api.neynar.com/v2/farcaster/following?fid=${fid}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`;
+          console.log(`Direct API call to Neynar URL: ${neynarUrl}`);
+          
+          response = await axios.get(neynarUrl, {
+            headers: { 
+              'api_key': NEYNAR_API_KEY,
+              'Accept': 'application/json'
+            },
+            timeout: 10000
+          });
+          
+          console.log('Direct Neynar API responded with status:', response.status);
+        } catch (directApiError) {
+          console.error('❌ Direct Neynar API call failed:', directApiError.message);
+          throw directApiError;
         }
+      }
+      
+      // Log full response for debugging
+      console.log('Raw API response from following endpoint:', {
+        status: response.status,
+        hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
+        hasResultUsers: response.data?.result?.users ? true : false,
+        usersCount: response.data?.result?.users?.length || 0
       });
       
       // Format response 
@@ -467,22 +516,77 @@ const farcasterService = {
         }
       };
       
-      if (response.data && response.data.result && response.data.result.users) {
-        formattedResponse.users = response.data.result.users.map(user => ({
-          fid: user.user.fid,
-          username: user.user.username,
-          displayName: user.user.display_name,
-          pfp: user.user.pfp_url,
-          bio: user.user.profile?.bio || '',
-          addresses: extractAddressesFromUserData(user)
-        }));
+      if (response.data) {
+        // Check different response formats
+        let usersList = [];
+        
+        if (response.data.result?.users && Array.isArray(response.data.result.users)) {
+          usersList = response.data.result.users;
+          console.log(`Found ${usersList.length} users in standard result.users format`);
+        } else if (response.data.users && Array.isArray(response.data.users)) {
+          usersList = response.data.users;
+          console.log(`Found ${usersList.length} users in direct users format`);
+        } else if (Array.isArray(response.data.result)) {
+          usersList = response.data.result;
+          console.log(`Found ${usersList.length} users in result array format`);
+        } else {
+          console.warn('Could not find users array in response. Available keys:', 
+            Object.keys(response.data.result || response.data));
+          
+          // One more attempt to recursively find a users array
+          const findUsersArray = (obj) => {
+            if (!obj || typeof obj !== 'object') return null;
+            
+            // Check if this object has a 'users' property that is an array
+            if (obj.users && Array.isArray(obj.users)) {
+              return obj.users;
+            }
+            
+            // Check all properties
+            for (const key in obj) {
+              if (obj[key] && typeof obj[key] === 'object') {
+                const result = findUsersArray(obj[key]);
+                if (result) return result;
+              }
+            }
+            
+            return null;
+          };
+          
+          const foundUsers = findUsersArray(response.data);
+          if (foundUsers) {
+            usersList = foundUsers;
+            console.log(`Found ${usersList.length} users by recursive search`);
+          }
+        }
+        
+        if (usersList.length > 0) {
+          formattedResponse.users = usersList.map(user => {
+            // Handle different user object formats
+            const userData = user.user || user;
+            
+            return {
+              fid: userData.fid,
+              username: userData.username,
+              displayName: userData.display_name,
+              imageUrl: userData.pfp_url,
+              bio: userData.profile?.bio || '',
+              addresses: extractAddressesFromUserData(userData)
+            };
+          });
+        }
         
         // Set pagination cursor if available
-        if (response.data.result.next && response.data.result.next.cursor) {
+        if (response.data.result?.next?.cursor) {
           formattedResponse.next.cursor = response.data.result.next.cursor;
+        } else if (response.data.next?.cursor) {
+          formattedResponse.next.cursor = response.data.next.cursor;
         }
         
         console.log(`Found ${formattedResponse.users.length} following users for FID: ${fid}`);
+      } else {
+        console.warn('Invalid response format from API. Expected result.users array.');
+        console.log('Response structure:', JSON.stringify(response.data, null, 2).substring(0, 500) + '...');
       }
       
       // Cache the result
@@ -588,104 +692,136 @@ const farcasterService = {
   
   formatUserProfile: (userData) => {
     // Implementation of formatUserProfile method
+  },
+  
+  fetchAllFollowing: async (fid, options = {}) => {
+    try {
+      const { skipCache = false, maxPages = 10 } = options;
+      
+      // Check if we already have the complete list cached
+      const cacheKey = `all-following-${fid}`;
+      if (!skipCache) {
+        const cached = await getCachedItem(cacheKey);
+        if (cached) {
+          console.log(`✅ Using cached complete following list for FID ${fid}`);
+          return {
+            users: cached.users || [],
+            success: true,
+            fromCache: true,
+            timestamp: cached.timestamp
+          };
+        }
+      }
+      
+      console.log(`🔍 Fetching all following for FID ${fid} with pagination`);
+      
+      let allUsers = [];
+      let hasMore = true;
+      let cursor = null;
+      let pageCount = 0;
+      const pageSize = 100; // Maximum allowed by the API
+      
+      // Fetch all pages of followed users
+      while (hasMore && pageCount < maxPages) {
+        pageCount++;
+        console.log(`📃 Fetching page ${pageCount} of following for FID ${fid}${cursor ? ' with cursor' : ''}`);
+        
+        const pageResult = await farcasterService.getUserFollowing(fid, pageSize, cursor);
+        
+        if (!pageResult || !Array.isArray(pageResult.users)) {
+          console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult?.error || 'No users array in response');
+          break;
+        }
+        
+        // Add users from this page to our collection
+        allUsers = [...allUsers, ...pageResult.users];
+        
+        // Update cursor and check if we should continue
+        cursor = pageResult.next?.cursor;
+        hasMore = !!cursor && pageResult.users.length > 0;
+        
+        console.log(`✅ Added ${pageResult.users.length} users from page ${pageCount}, total: ${allUsers.length}`);
+        
+        // If we didn't get a full page, we're probably at the end
+        if (pageResult.users.length < pageSize) {
+          hasMore = false;
+        }
+      }
+      
+      // Create the result object
+      const result = {
+        users: allUsers,
+        success: true,
+        totalCount: allUsers.length,
+        pagesRetrieved: pageCount,
+        maxPagesReached: pageCount >= maxPages,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Cache the result for future requests (valid for 15 minutes)
+      await cacheItem(cacheKey, result, 15 * 60 * 1000);
+      
+      console.log(`✅ Completed fetching all following for FID ${fid}: ${allUsers.length} users across ${pageCount} pages`);
+      
+      return result;
+    } catch (error) {
+      console.error(`❌ Error in fetchAllFollowing for FID ${fid}:`, error.message);
+      return {
+        users: [],
+        success: false,
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 };
 
 /**
- * Fetches all users that a Farcaster user follows
- * Uses pagination to retrieve the complete list
- * 
- * @param {number} fid - The Farcaster ID of the user
- * @param {object} options - Optional parameters
- * @param {boolean} [options.skipCache=false] - Whether to skip the cache check
- * @param {number} [options.maxPages=10] - Maximum number of pages to fetch (safety limit)
- * @returns {Promise<{users: Array<Object>, success: boolean, error: string|null}>} List of users and metadata
+ * Helper function to extract addresses from user data
+ * Handles different API response formats
  */
-export const fetchAllFollowing = async (fid, options = {}) => {
+const extractAddressesFromUserData = (userData) => {
   try {
-    const { skipCache = false, maxPages = 10 } = options;
+    // Check various possible paths where addresses could be located
+    let addresses = [];
     
-    // Check if we already have the complete list cached
-    const cacheKey = `all-following-${fid}`;
-    if (!skipCache) {
-      const cached = await getCachedItem(cacheKey);
-      if (cached) {
-        console.log(`✅ Using cached complete following list for FID ${fid}`);
-        return {
-          users: cached.users || [],
-          success: true,
-          fromCache: true,
-          timestamp: cached.timestamp
-        };
-      }
+    // Check verified_addresses.eth_addresses path (common in newer API)
+    if (userData.verified_addresses?.eth_addresses) {
+      addresses = [...addresses, ...userData.verified_addresses.eth_addresses];
+      console.log(`Found ${addresses.length} addresses in verified_addresses.eth_addresses`);
     }
     
-    console.log(`🔍 Fetching all following for FID ${fid} with pagination`);
-    
-    let allUsers = [];
-    let hasMore = true;
-    let cursor = null;
-    let pageCount = 0;
-    const pageSize = 100; // Maximum allowed by the API
-    
-    // Fetch all pages of followed users
-    while (hasMore && pageCount < maxPages) {
-      pageCount++;
-      console.log(`📃 Fetching page ${pageCount} of following for FID ${fid}${cursor ? ' with cursor' : ''}`);
-      
-      const pageResult = await farcasterService.getUserFollowing(fid, pageSize, cursor);
-      
-      if (!pageResult || !Array.isArray(pageResult.users)) {
-        console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult?.error || 'No users array in response');
-        break;
-      }
-      
-      // Add users from this page to our collection
-      allUsers = [...allUsers, ...pageResult.users];
-      
-      // Update cursor and check if we should continue
-      cursor = pageResult.next?.cursor;
-      hasMore = !!cursor && pageResult.users.length > 0;
-      
-      console.log(`✅ Added ${pageResult.users.length} users from page ${pageCount}, total: ${allUsers.length}`);
-      
-      // If we didn't get a full page, we're probably at the end
-      if (pageResult.users.length < pageSize) {
-        hasMore = false;
-      }
+    // Check direct eth_addresses array
+    if (Array.isArray(userData.eth_addresses)) {
+      addresses = [...addresses, ...userData.eth_addresses];
+      console.log(`Found ${addresses.length} addresses in eth_addresses`);
     }
     
-    // Create the result object
-    const result = {
-      users: allUsers,
-      success: true,
-      totalCount: allUsers.length,
-      pagesRetrieved: pageCount,
-      maxPagesReached: pageCount >= maxPages,
-      timestamp: new Date().toISOString()
-    };
+    // Check addresses array directly
+    if (Array.isArray(userData.addresses)) {
+      addresses = [...addresses, ...userData.addresses];
+      console.log(`Found ${addresses.length} addresses in addresses array`);
+    }
     
-    // Cache the result for future requests (valid for 15 minutes)
-    await cacheItem(cacheKey, result, 15 * 60 * 1000);
+    // Check custody_address
+    if (userData.custody_address) {
+      addresses.push(userData.custody_address);
+      console.log('Added custody address');
+    }
     
-    console.log(`✅ Completed fetching all following for FID ${fid}: ${allUsers.length} users across ${pageCount} pages`);
+    // Remove duplicates and standardize to lowercase
+    if (addresses.length > 0) {
+      return [...new Set(addresses.map(addr => addr.toLowerCase()))];
+    }
     
-    return result;
-  } catch (error) {
-    console.error(`❌ Error in fetchAllFollowing for FID ${fid}:`, error.message);
-    return {
-      users: [],
-      success: false,
-      error: error.message,
-      timestamp: new Date().toISOString()
-    };
+    return [];
+  } catch (err) {
+    console.error('Error extracting addresses from user data:', err);
+    return [];
   }
 };
-
-// Update the farcasterService object to include the fetchAllFollowing function
-farcasterService.fetchAllFollowing = fetchAllFollowing;
 
 export default farcasterService;
 
 // Export individual functions for direct import
-export const { fetchAddressesForFid, searchUsers, clearCache } = farcasterService; 
+export const { fetchAddressesForFid, searchUsers, clearCache } = farcasterService;

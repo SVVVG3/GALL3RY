@@ -513,19 +513,19 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         id: '1',
         name: 'dwr.eth',
         username: 'dwr',
-        avatar: 'https://pbs.twimg.com/profile_images/1617678299480051713/gYsHfb5j_400x400.jpg',
+        avatar: 'https://cdn.stamp.fyi/avatar/eth:0x2703483b1a5a7c577e8680de9df8be03c6f30e3c?s=300',
       },
       {
         id: '2',
         name: 'Varun Srinivasan',
         username: 'v',
-        avatar: 'https://pbs.twimg.com/profile_images/1631445005312847873/89BCz1TG_400x400.jpg',
+        avatar: 'https://cdn.stamp.fyi/avatar/eth:0xd8da6bf26964af9d7eed9e03e53415d37aa96045?s=300',
       },
       {
         id: '3',
-        name: 'Ted Livingston',
-        username: 'ted',
-        avatar: 'https://pbs.twimg.com/profile_images/1720555225536462848/qh2fJVy0_400x400.jpg',
+        name: 'Dan Savage',
+        username: 'svvvg3.eth',
+        avatar: 'https://cdn.stamp.fyi/avatar/fc:466111?s=300',
       },
     ];
   };
