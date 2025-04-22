@@ -180,3 +180,29 @@ MIT License
 ## Credits
 
 Created by [SVVVG3](https://github.com/SVVVG3)
+
+## Troubleshooting
+
+### Using the farcasterService
+
+When working with the farcasterService, you can import functions in two ways:
+
+1. Default import (object style):
+```javascript
+import farcasterService from '../services/farcasterService';
+
+// Usage:
+const addresses = await farcasterService.fetchAddressesForFid(fid);
+const following = await farcasterService.getUserFollowing(fid);
+```
+
+2. Named imports (direct function import):
+```javascript
+import { fetchAddressesForFid, getUserFollowing } from '../services/farcasterService';
+
+// Usage:
+const addresses = await fetchAddressesForFid(fid);
+const following = await getUserFollowing(fid);
+```
+
+Make sure you're using one of these approaches consistently to avoid "undefined is not a function" errors.
