@@ -38,6 +38,19 @@ const getCachedItem = async (key) => {
   return null;
 };
 
+// Helper function to clear a specific cache item
+const clearCacheItem = async (key) => {
+  try {
+    // Clear from localStorage
+    await localStorageCache.removeItem(key);
+    // Clear from memory cache
+    profileCache.delete(key);
+    console.log(`Cache cleared for key: ${key}`);
+  } catch (e) {
+    console.warn(`Failed to clear cache for key ${key}:`, e.message);
+  }
+};
+
 /**
  * Formats a Farcaster user profile from API response into a consistent structure
  * @param {Object} userData - User data from Neynar API
@@ -437,6 +450,10 @@ const farcasterService = {
       
       const cacheKey = `following:${fid}:${limit}${cursor ? `:${cursor}` : ''}`;
       
+      // Force refresh for debugging - remove after fixing
+      await clearCacheItem(cacheKey);
+      console.log(`Forcing fresh data for FID ${fid} by clearing cache`);
+      
       // Check for cached result
       const cachedResult = await getCachedItem(cacheKey);
       if (cachedResult) {
@@ -480,35 +497,41 @@ const farcasterService = {
           console.log('Attempting direct Neynar API call for following');
           const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
           
-          // Build the direct API URL
+          // Build the direct API URL as per the docs
           const neynarUrl = `https://api.neynar.com/v2/farcaster/following?fid=${fid}&limit=${limit}${cursor ? `&cursor=${cursor}` : ''}`;
           console.log(`Direct API call to Neynar URL: ${neynarUrl}`);
           
           response = await axios.get(neynarUrl, {
             headers: { 
-              'api_key': NEYNAR_API_KEY,
+              'x-api-key': NEYNAR_API_KEY,
               'Accept': 'application/json'
             },
-            timeout: 10000
+            timeout: 15000
           });
           
           console.log('Direct Neynar API responded with status:', response.status);
+          // Log full response for debugging
+          console.log('Full response from direct API:', response.data);
         } catch (directApiError) {
           console.error('❌ Direct Neynar API call failed:', directApiError.message);
+          if (directApiError.response) {
+            console.error('Error response data:', directApiError.response.data);
+            console.error('Error response status:', directApiError.response.status);
+          }
           throw directApiError;
         }
       }
       
       // Log full response for debugging
-      console.log('Raw API response from following endpoint:', {
+      console.log('Raw API response structure:', {
         status: response.status,
         hasData: !!response.data,
         dataKeys: response.data ? Object.keys(response.data) : [],
-        hasResultUsers: response.data?.result?.users ? true : false,
-        usersCount: response.data?.result?.users?.length || 0
+        hasUsers: response.data?.users ? true : false,
+        usersCount: response.data?.users?.length || 0
       });
       
-      // Format response 
+      // Format response according to Neynar API structure
       const formattedResponse = {
         users: [],
         next: {
@@ -517,76 +540,38 @@ const farcasterService = {
       };
       
       if (response.data) {
-        // Check different response formats
-        let usersList = [];
-        
-        if (response.data.result?.users && Array.isArray(response.data.result.users)) {
-          usersList = response.data.result.users;
-          console.log(`Found ${usersList.length} users in standard result.users format`);
-        } else if (response.data.users && Array.isArray(response.data.users)) {
-          usersList = response.data.users;
-          console.log(`Found ${usersList.length} users in direct users format`);
-        } else if (Array.isArray(response.data.result)) {
-          usersList = response.data.result;
-          console.log(`Found ${usersList.length} users in result array format`);
-        } else {
-          console.warn('Could not find users array in response. Available keys:', 
-            Object.keys(response.data.result || response.data));
+        // Check for users array directly as per Neynar docs
+        if (response.data.users && Array.isArray(response.data.users)) {
+          console.log(`Found ${response.data.users.length} users in standard users format`);
           
-          // One more attempt to recursively find a users array
-          const findUsersArray = (obj) => {
-            if (!obj || typeof obj !== 'object') return null;
-            
-            // Check if this object has a 'users' property that is an array
-            if (obj.users && Array.isArray(obj.users)) {
-              return obj.users;
-            }
-            
-            // Check all properties
-            for (const key in obj) {
-              if (obj[key] && typeof obj[key] === 'object') {
-                const result = findUsersArray(obj[key]);
-                if (result) return result;
-              }
-            }
-            
-            return null;
-          };
-          
-          const foundUsers = findUsersArray(response.data);
-          if (foundUsers) {
-            usersList = foundUsers;
-            console.log(`Found ${usersList.length} users by recursive search`);
-          }
-        }
-        
-        if (usersList.length > 0) {
-          formattedResponse.users = usersList.map(user => {
-            // Handle different user object formats
-            const userData = user.user || user;
+          formattedResponse.users = response.data.users.map(item => {
+            // Handle nested user object structure as in Neynar docs
+            const user = item.user || item;
             
             return {
-              fid: userData.fid,
-              username: userData.username,
-              displayName: userData.display_name,
-              imageUrl: userData.pfp_url,
-              bio: userData.profile?.bio || '',
-              addresses: extractAddressesFromUserData(userData)
+              fid: user.fid,
+              username: user.username,
+              displayName: user.display_name,
+              imageUrl: user.pfp_url,
+              bio: user.profile?.bio?.text || '',
+              addresses: extractAddressesFromUserData(user)
             };
           });
+          
+          // Set pagination cursor if available
+          if (response.data.next && response.data.next.cursor) {
+            formattedResponse.next.cursor = response.data.next.cursor;
+          }
+        } else {
+          console.warn('Could not find users array in response. Available keys:', 
+            Object.keys(response.data));
+          
+          // Try to extract from different response formats if needed
+          console.log('Full response data (first 1000 chars):', 
+            JSON.stringify(response.data).substring(0, 1000));
         }
         
-        // Set pagination cursor if available
-        if (response.data.result?.next?.cursor) {
-          formattedResponse.next.cursor = response.data.result.next.cursor;
-        } else if (response.data.next?.cursor) {
-          formattedResponse.next.cursor = response.data.next.cursor;
-        }
-        
-        console.log(`Found ${formattedResponse.users.length} following users for FID: ${fid}`);
-      } else {
-        console.warn('Invalid response format from API. Expected result.users array.');
-        console.log('Response structure:', JSON.stringify(response.data, null, 2).substring(0, 500) + '...');
+        console.log(`Extracted ${formattedResponse.users.length} following users for FID: ${fid}`);
       }
       
       // Cache the result
@@ -700,6 +685,11 @@ const farcasterService = {
       
       // Check if we already have the complete list cached
       const cacheKey = `all-following-${fid}`;
+      
+      // Force refresh for debugging - remove after fixing
+      await clearCacheItem(cacheKey);
+      console.log(`Forcing fresh data for fetchAllFollowing for FID ${fid} by clearing cache`);
+      
       if (!skipCache) {
         const cached = await getCachedItem(cacheKey);
         if (cached) {
@@ -730,6 +720,7 @@ const farcasterService = {
         
         if (!pageResult || !Array.isArray(pageResult.users)) {
           console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult?.error || 'No users array in response');
+          console.log('Page result:', pageResult);
           break;
         }
         
@@ -773,7 +764,10 @@ const farcasterService = {
         timestamp: new Date().toISOString()
       };
     }
-  }
+  },
+  
+  // Add to farcasterService object
+  clearCacheItem: clearCacheItem
 };
 
 /**
@@ -785,35 +779,45 @@ const extractAddressesFromUserData = (userData) => {
     // Check various possible paths where addresses could be located
     let addresses = [];
     
-    // Check verified_addresses.eth_addresses path (common in newer API)
+    // Check verified_addresses.eth_addresses path (common in newer Neynar API)
     if (userData.verified_addresses?.eth_addresses) {
       addresses = [...addresses, ...userData.verified_addresses.eth_addresses];
-      console.log(`Found ${addresses.length} addresses in verified_addresses.eth_addresses`);
+      console.log(`Found ${userData.verified_addresses.eth_addresses.length} addresses in verified_addresses.eth_addresses`);
+    }
+    
+    // Check other properties from Neynar API structure
+    if (userData.verifications && Array.isArray(userData.verifications)) {
+      addresses = [...addresses, ...userData.verifications];
+      console.log(`Found ${userData.verifications.length} addresses in verifications array`);
+    }
+    
+    // Check custody_address (often present in Neynar API)
+    if (userData.custody_address) {
+      addresses.push(userData.custody_address);
+      console.log(`Added custody address: ${userData.custody_address}`);
     }
     
     // Check direct eth_addresses array
     if (Array.isArray(userData.eth_addresses)) {
       addresses = [...addresses, ...userData.eth_addresses];
-      console.log(`Found ${addresses.length} addresses in eth_addresses`);
+      console.log(`Found ${userData.eth_addresses.length} addresses in eth_addresses`);
     }
     
     // Check addresses array directly
     if (Array.isArray(userData.addresses)) {
       addresses = [...addresses, ...userData.addresses];
-      console.log(`Found ${addresses.length} addresses in addresses array`);
-    }
-    
-    // Check custody_address
-    if (userData.custody_address) {
-      addresses.push(userData.custody_address);
-      console.log('Added custody address');
+      console.log(`Found ${userData.addresses.length} addresses in addresses array`);
     }
     
     // Remove duplicates and standardize to lowercase
     if (addresses.length > 0) {
-      return [...new Set(addresses.map(addr => addr.toLowerCase()))];
+      console.log(`Found total of ${addresses.length} addresses before deduplication`);
+      const uniqueAddresses = [...new Set(addresses.map(addr => addr.toLowerCase()))];
+      console.log(`Returning ${uniqueAddresses.length} unique addresses`);
+      return uniqueAddresses;
     }
     
+    console.log('No addresses found for user');
     return [];
   } catch (err) {
     console.error('Error extracting addresses from user data:', err);
