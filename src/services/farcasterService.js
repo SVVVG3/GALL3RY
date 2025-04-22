@@ -281,17 +281,44 @@ const farcasterService = {
 
       // Try the proxy API first
       try {
+        console.log(`Making proxy API request to ${API_URL}/neynar for ${isNumericFid ? 'FID' : 'username'}: ${queryParam}`);
+        
         if (isNumericFid) {
-          response = await axios.get(`${API_URL}/api/neynar?endpoint=user&fid=${queryParam}`, { timeout: 10000 });
+          response = await axios.get(`${API_URL}/neynar`, {
+            params: {
+              endpoint: 'user',
+              fid: queryParam
+            },
+            timeout: 10000
+          });
         } else {
-          response = await axios.get(`${API_URL}/api/neynar?endpoint=user&username=${queryParam}`, { timeout: 10000 });
+          response = await axios.get(`${API_URL}/neynar`, {
+            params: {
+              endpoint: 'user',
+              username: queryParam
+            },
+            timeout: 10000
+          });
         }
+        
+        console.log('Proxy API response:', response.status, response.statusText);
         
         if (response?.data?.result?.user) {
           userData = response.data.result.user;
+          console.log('Successfully got user data from proxy API');
+        } else {
+          console.warn('Proxy API returned a response but no user data was found in expected format');
+          console.log('Response data structure:', JSON.stringify(response.data).substring(0, 200) + '...');
         }
       } catch (proxyError) {
         console.warn(`Proxy API failed for ${queryParam}, falling back to direct Neynar API:`, proxyError.message);
+        if (proxyError.response) {
+          console.warn('Proxy API error response:', {
+            status: proxyError.response.status,
+            statusText: proxyError.response.statusText,
+            data: proxyError.response.data
+          });
+        }
       }
 
       // If proxy failed, try direct Neynar API
@@ -301,29 +328,74 @@ const farcasterService = {
         
         try {
           if (isNumericFid) {
+            console.log(`Making direct Neynar API request for FID: ${queryParam}`);
             response = await axios.get(`https://api.neynar.com/v2/farcaster/user?fid=${queryParam}`, {
               headers: { api_key: NEYNAR_API_KEY },
               timeout: 10000
             });
+            
             if (response?.data?.user) {
               userData = response.data.user;
+              console.log(`Successfully found user data for FID ${queryParam} via direct API`);
+            } else {
+              console.warn(`Direct API returned a response but no user data found for FID ${queryParam}`);
             }
           } else {
-            response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search?q=${queryParam}`, {
+            // For usernames, especially those with .eth, we need to use the search endpoint
+            console.log(`Making direct Neynar API search request for username: ${queryParam}`);
+            
+            // Try to clean username if it has .eth format
+            const searchQuery = queryParam.includes('.eth') 
+              ? queryParam.split('.')[0] // Try without the .eth suffix
+              : queryParam;
+              
+            response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(searchQuery)}`, {
               headers: { api_key: NEYNAR_API_KEY },
               timeout: 10000
             });
             
+            console.log('Direct API search response received, status:', response.status);
+            
             // Find exact username match in search results
-            if (response?.data?.users) {
-              const exactMatch = response.data.users.find(
+            if (response?.data?.users && Array.isArray(response.data.users)) {
+              console.log(`Search returned ${response.data.users.length} users`);
+              
+              // First try exact match with the original query
+              let exactMatch = response.data.users.find(
                 u => u.username.toLowerCase() === queryParam.toLowerCase()
               );
-              if (exactMatch) userData = exactMatch;
+              
+              // If not found and it's an .eth address, try without the .eth suffix
+              if (!exactMatch && queryParam.includes('.eth')) {
+                const usernameWithoutEth = queryParam.split('.')[0].toLowerCase();
+                console.log(`No exact match found, trying without .eth: ${usernameWithoutEth}`);
+                
+                exactMatch = response.data.users.find(
+                  u => u.username.toLowerCase() === usernameWithoutEth
+                );
+              }
+              
+              if (exactMatch) {
+                userData = exactMatch;
+                console.log(`Found exact match for username: ${exactMatch.username}`);
+              } else if (response.data.users.length > 0) {
+                // If no exact match but we found users, take the first one
+                userData = response.data.users[0];
+                console.log(`No exact match found, using first result: ${userData.username}`);
+              }
+            } else {
+              console.warn('No users array found in search response or empty array');
             }
           }
         } catch (directApiError) {
           console.error(`Direct Neynar API failed for ${queryParam}:`, directApiError.message);
+          if (directApiError.response) {
+            console.error('Direct API error response:', {
+              status: directApiError.response.status,
+              statusText: directApiError.response.statusText,
+              data: JSON.stringify(directApiError.response.data).substring(0, 200)
+            });
+          }
           throw directApiError;
         }
       }

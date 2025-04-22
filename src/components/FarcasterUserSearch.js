@@ -368,11 +368,26 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         setUserProfile(profile);
         handleUserProfileFound(profile);
       } else {
-        setSearchError(`No user found with username '${query}'`);
+        // Provide a more detailed error message, especially for .eth addresses
+        if (query.includes('.eth')) {
+          setSearchError(
+            `No user found with username '${query}'. Note that Farcaster usernames might not include the .eth suffix. Try searching for '${query.split('.')[0]}' instead.`
+          );
+        } else {
+          setSearchError(`No user found with username '${query}'. Please check the spelling and try again.`);
+        }
       }
     } catch (error) {
       console.error('Error searching for user:', error);
-      setSearchError(error.message || 'Failed to search user');
+      
+      // Provide more helpful error messages based on the type of error
+      if (error.response && error.response.status === 404) {
+        setSearchError(`User '${query}' not found in the Farcaster network.`);
+      } else if (error.code === 'ECONNABORTED') {
+        setSearchError('Search timed out. Please try again or check your internet connection.');
+      } else {
+        setSearchError(error.message || 'Failed to search user. Please try again later.');
+      }
     } finally {
       setIsSearching(false);
     }
