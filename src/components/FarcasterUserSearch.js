@@ -952,15 +952,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   const renderSuggestionDropdown = () => (
     <div 
       className="username-suggestions"
-      style={{
-        backgroundColor: "#fff",
-        border: "3px solid #8b5cf6", 
-        borderRadius: "8px",
-        maxHeight: "300px",
-        overflowY: "auto",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
-        zIndex: 9999,
-      }}
       onClick={(e) => {
         // Prevent clicks inside dropdown from bubbling up and triggering document click handler
         e.stopPropagation();
@@ -1075,6 +1066,12 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               onChange={(e) => {
                 setFormSearchQuery(e.target.value);
                 updateInputRect(); // Update rect on each change
+                
+                // If we have enough characters, make sure suggestions can be shown
+                if (e.target.value.trim().length >= 2) {
+                  shouldShowSuggestionsRef.current = true;
+                  // We don't set showSuggestions=true here because the API call will do that if it finds suggestions
+                }
               }}
               onFocus={() => {
                 updateInputRect(); // Update rect on focus
@@ -1112,10 +1109,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             
             {/* 
               Render suggestions dropdown in a portal
-              - Check shouldShowSuggestionsRef to decide whether to render
-              - Only render when showSuggestions is true AND we have suggestions
+              - Only show when we have suggestions and are allowed to show them
+              - Simplified condition for better reliability
             */}
-            {showSuggestions && suggestions.length > 0 && inputRect && shouldShowSuggestionsRef.current && (
+            {suggestions.length > 0 && showSuggestions && (
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
               </SuggestionPortal>

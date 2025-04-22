@@ -77,7 +77,8 @@ const SuggestionPortal = ({ children, inputRect }) => {
       const container = document.createElement('div');
       container.id = portalId;
       container.style.position = 'absolute';
-      container.style.zIndex = '9999';
+      container.style.zIndex = '99999'; // Very high z-index to ensure visibility
+      container.style.pointerEvents = 'auto'; // Ensure clicks work
       container.dataset.timestamp = Date.now(); // Add timestamp for debugging
       
       // Store ref and append to body
@@ -88,9 +89,21 @@ const SuggestionPortal = ({ children, inputRect }) => {
     
     // Position the portal according to input rectangle
     if (portalContainerRef.current && inputRect) {
+      // Position directly under the input with fixed coordinates
       portalContainerRef.current.style.top = `${inputRect.bottom}px`;
       portalContainerRef.current.style.left = `${inputRect.left}px`;
       portalContainerRef.current.style.width = `${inputRect.width}px`;
+      console.log(`Portal positioned at top: ${inputRect.bottom}px, left: ${inputRect.left}px`);
+      
+      // Debug the positioning
+      const rect = portalContainerRef.current.getBoundingClientRect();
+      console.log('Portal container position:', {
+        top: rect.top,
+        left: rect.left,
+        width: rect.width,
+        height: rect.height,
+        zIndex: portalContainerRef.current.style.zIndex
+      });
     }
     
     // Set up portal reference to use in the return statement
@@ -138,7 +151,22 @@ const SuggestionPortal = ({ children, inputRect }) => {
   }
   
   return ReactDOM.createPortal(
-    <div className="suggestion-dropdown" data-testid="suggestion-dropdown">{children}</div>,
+    <div 
+      className="suggestion-dropdown" 
+      data-testid="suggestion-dropdown"
+      style={{
+        backgroundColor: "#fff",
+        border: "3px solid #8b5cf6",
+        borderRadius: "8px",
+        maxHeight: "300px",
+        overflowY: "auto",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+        width: "100%",
+        zIndex: 99999
+      }}
+    >
+      {children}
+    </div>,
     portalRef.current
   );
 };
