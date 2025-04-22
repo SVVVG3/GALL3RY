@@ -252,6 +252,38 @@ const alchemyService = {
   },
   
   /**
+   * Creates a consistent unique identifier for NFTs across the application
+   * @param {Object} nft - The NFT object 
+   * @returns {string} A unique identifier string
+   */
+  createConsistentUniqueId(nft) {
+    if (!nft) return '';
+    
+    // Extract contract address - normalize to lowercase
+    const contractAddress = (
+      (nft.contract?.address) || 
+      (nft.contractAddress) || 
+      ''
+    ).toLowerCase();
+    
+    // Extract token ID - normalize to string
+    const tokenId = String(
+      (nft.tokenId) || 
+      (nft.token_id) || 
+      ''
+    ).trim();
+    
+    // Extract network - normalize to lowercase
+    const network = (
+      (nft.network) || 
+      'eth'
+    ).toLowerCase();
+    
+    // Create a consistent unique ID
+    return `${contractAddress}-${tokenId}-${network}`;
+  },
+  
+  /**
    * Fetch NFTs for multiple addresses across multiple chains
    */
   async fetchNftsForMultipleAddresses(addresses, options = {}) {
@@ -305,14 +337,17 @@ const alchemyService = {
       
       // Even if we have errors, proceed with any NFTs we were able to fetch
       
-      // Remove duplicates by using contract address and token ID as unique key
+      // Remove duplicates using our consistent unique ID function
       const seen = new Set();
       let uniqueNfts = allNfts.filter(nft => {
         // Skip invalid NFTs to prevent errors
         if (!nft || !nft.contract || !nft.tokenId) return false;
         
-        const key = `${nft.contract.address}-${nft.tokenId}-${nft.network}`;
-        if (seen.has(key)) return false;
+        const key = this.createConsistentUniqueId(nft);
+        if (!key || seen.has(key)) return false;
+        
+        // Add the unique ID to the NFT object for consistent reference
+        nft.uniqueId = key;
         seen.add(key);
         return true;
       });
@@ -728,5 +763,8 @@ export const fetchNftsForAddresses = (addresses, options) =>
 
 export const fetchAssetTransfers = (addresses, options) =>
   getAssetTransfers(addresses, options);
+
+export const createConsistentUniqueId = (nft) =>
+  alchemyService.createConsistentUniqueId(nft);
 
 export default alchemyService; 

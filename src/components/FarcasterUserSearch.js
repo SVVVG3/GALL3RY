@@ -12,7 +12,7 @@ import farcasterService from '../services/farcasterService';
 import FarcasterSuggestions from './FarcasterSuggestions';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatNFTsForDisplay } from '../utils/nftUtils';
-import alchemyService from '../services/alchemyService';
+import alchemyService, { fetchNftsForAddresses } from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
 
@@ -491,12 +491,24 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Set the wallet addresses in state so they can be displayed
       setWalletAddresses(addresses);
       
-      // Step 2: Fetch NFTs for all addresses
-      const nfts = await fetchUserNfts(addresses);
-      setUserNfts(nfts);
+      // Step 2: Fetch NFTs for all addresses in a single call with enhanced deduplication
+      console.log(`Fetching NFTs for ${addresses.length} wallet addresses...`);
+      const result = await fetchNftsForAddresses(addresses, {
+        chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
+        fetchAll: true,
+        excludeSpam: true,
+        excludeAirdrops: true
+      });
       
-      // Step 3: Format the NFTs for display
-      const formattedNfts = formatNFTsForDisplay(nfts);
+      console.log(`Fetched ${result.nfts.length} unique NFTs across all wallets`);
+      
+      // Store raw NFTs in state
+      setUserNfts(result.nfts);
+      
+      // Format NFTs for display once (formatNFTsForDisplay preserves uniqueIds)
+      const formattedNfts = formatNFTsForDisplay(result.nfts);
+      
+      // Update the Redux store with the formatted NFTs
       dispatch(setNftList(formattedNfts));
       
     } catch (error) {
@@ -504,94 +516,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       setSearchError('Error fetching user data');
     } finally {
       setIsSearching(false);
-    }
-  };
-
-  // Fetch NFTs for multiple wallet addresses
-  const fetchUserNfts = async (addresses) => {
-    if (!addresses || addresses.length === 0) {
-      return [];
-    }
-    
-    try {
-      // Single shared Set to track ALL unique NFTs across ALL wallets
-      const seenTokenIds = new Set();
-      const allUniqueNfts = [];
-      
-      // Process each wallet one at a time to avoid memory issues with large collections
-      for (let walletIndex = 0; walletIndex < addresses.length; walletIndex++) {
-        const address = addresses[walletIndex];
-        console.log(`Fetching NFTs for wallet ${walletIndex + 1}/${addresses.length}: ${address}`);
-        
-        try {
-          // Fetch NFTs for this specific wallet across all chains
-          const result = await alchemyService.fetchNftsAcrossChains(address, {
-            chains: ['eth', 'polygon', 'opt', 'arb', 'base'], // Fetch from all supported chains
-            fetchAll: true, // Ensure we get all pages
-            pageSize: 100,
-            excludeSpam: true,
-            excludeAirdrops: true
-          });
-          
-          if (!result || !Array.isArray(result.nfts)) {
-            console.log(`No NFTs found for wallet ${walletIndex + 1}`);
-            continue;
-          }
-          
-          console.log(`Processing ${result.nfts.length} NFTs from wallet ${walletIndex + 1}/${addresses.length}`);
-          
-          // Count how many new unique NFTs we find in this wallet
-          let newUniqueCount = 0;
-          
-          // Process each NFT in this wallet against our global Set
-          result.nfts.forEach(nft => {
-            // Skip NFTs without proper identifiers
-            if (!nft || !nft.contract || !nft.tokenId) {
-              return;
-            }
-            
-            // Normalize contract address and token ID for consistent comparison
-            const contractAddress = (nft.contract?.address || '').toLowerCase();
-            const tokenId = String(nft.tokenId || '').trim();
-            const network = (nft.network || 'eth').toLowerCase();
-            
-            if (!contractAddress || !tokenId) {
-              return; // Skip NFTs without proper identifiers
-            }
-            
-            // Create a unique identifier across all wallets, chains, and contracts
-            const tokenIdentifier = `${contractAddress}-${tokenId}-${network}`;
-            
-            if (!seenTokenIds.has(tokenIdentifier)) {
-              seenTokenIds.add(tokenIdentifier);
-              newUniqueCount++;
-              
-              // Make a copy of the NFT to ensure it's extensible and enrich with wallet info
-              const nftCopy = JSON.parse(JSON.stringify({
-                ...nft,
-                ownerWallet: address, // Track which wallet owns this NFT
-                uniqueId: tokenIdentifier // Store the unique ID for future reference
-              }));
-              
-              allUniqueNfts.push(nftCopy);
-            } else {
-              // For debugging - log duplicates we're filtering out
-              console.debug(`Filtered duplicate NFT: ${nft.name || nft.title || tokenId} from ${contractAddress} on ${network}`);
-            }
-          });
-          
-          console.log(`Found ${newUniqueCount} new unique NFTs in wallet ${walletIndex + 1}`);
-          
-        } catch (walletError) {
-          console.error(`Error fetching NFTs for wallet ${walletIndex + 1}:`, walletError);
-        }
-      }
-      
-      console.log(`Found ${allUniqueNfts.length} unique NFTs across ${addresses.length} wallets (filtered ${seenTokenIds.size - allUniqueNfts.length} duplicates)`);
-      return allUniqueNfts;
-    } catch (error) {
-      console.error('Error fetching NFTs for addresses:', error);
-      return [];
     }
   };
 

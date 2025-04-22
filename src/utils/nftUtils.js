@@ -1,6 +1,7 @@
 /**
  * Utility functions for processing NFT data
  */
+import { createConsistentUniqueId } from '../services/alchemyService';
 
 /**
  * Formats an array of NFTs for display by standardizing property names and structure
@@ -13,7 +14,7 @@ export const formatNFTsForDisplay = (nfts) => {
     return [];
   }
   
-  // Remove any duplicates using uniqueId or contract-tokenId-network as key
+  // Remove any duplicates using our consistent uniqueId generator from alchemyService
   const uniqueNfts = removeDuplicates(nfts);
   console.log(`Formatting ${uniqueNfts.length} unique NFTs for display (filtered ${nfts.length - uniqueNfts.length} duplicates)`);
   
@@ -21,11 +22,14 @@ export const formatNFTsForDisplay = (nfts) => {
     // Skip null or undefined items
     if (!nft) return null;
     
+    // Get the consistent uniqueId
+    const uniqueId = nft.uniqueId || createConsistentUniqueId(nft);
+    
     // Create a standardized NFT object with consistent property names
     return {
       // Basic NFT properties
-      id: nft.uniqueId || nft.id || `${nft.contractAddress}-${nft.tokenId}-${nft.network || 'eth'}` || `${nft.contract?.address}-${nft.tokenId}-${nft.network || 'eth'}`,
-      uniqueId: nft.uniqueId || `${(nft.contract?.address || nft.contractAddress || '').toLowerCase()}-${nft.tokenId || nft.token_id || ''}-${(nft.network || 'eth').toLowerCase()}`,
+      id: uniqueId,
+      uniqueId,
       tokenId: nft.tokenId || nft.token_id || '0',
       name: nft.name || nft.title || nft.metadata?.name || `#${nft.tokenId || nft.token_id || '0'}`,
       description: nft.description || nft.metadata?.description || '',
@@ -82,9 +86,8 @@ function removeDuplicates(nfts) {
   nfts.forEach(nft => {
     if (!nft) return;
     
-    // Create a consistent key for each NFT
-    const uniqueId = nft.uniqueId || 
-                    `${(nft.contract?.address || nft.contractAddress || '').toLowerCase()}-${nft.tokenId || nft.token_id || ''}-${(nft.network || 'eth').toLowerCase()}`;
+    // Use the consistent uniqueId generation function
+    const uniqueId = nft.uniqueId || createConsistentUniqueId(nft);
     
     if (!uniqueMap.has(uniqueId)) {
       uniqueMap.set(uniqueId, nft);

@@ -2,6 +2,7 @@ import React from 'react';
 import '../styles/NFTGrid.css';
 import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
 import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized component
+import { createConsistentUniqueId } from '../services/alchemyService';
 
 /**
  * NFT Grid component 
@@ -85,12 +86,13 @@ function removeDuplicateNfts(nfts) {
     // Skip invalid NFTs
     if (!nft) return;
     
-    // Get a unique key for this NFT
-    const key = nft.uniqueId || 
-                `${(nft.contract?.address || '').toLowerCase()}-${nft.tokenId || ''}-${(nft.network || 'eth').toLowerCase()}`;
+    // Get a unique key for this NFT using the consistent ID function
+    const key = nft.uniqueId || createConsistentUniqueId(nft);
     
     if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, nft);
+      // If this is a new uniqueId, store the NFT and ensure it has the uniqueId
+      const nftWithId = {...nft, uniqueId: key};
+      uniqueMap.set(key, nftWithId);
     }
   });
   
@@ -185,10 +187,7 @@ const getTokenId = (nft) => {
 const getNftKey = (nft) => {
   if (!nft) return '';
   
-  const contract = getContractAddress(nft);
-  const tokenId = getTokenId(nft);
-  const network = nft.network || 'eth';
-  return `${contract}-${tokenId}-${network}`;
+  return createConsistentUniqueId(nft);
 };
 
 export default NFTGrid; 
