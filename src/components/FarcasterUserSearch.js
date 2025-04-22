@@ -495,15 +495,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Try to find the Farcaster profile with better error handling
       let profile;
       try {
-        // Try zapperService first
+        // Try zapperService first for backward compatibility
         profile = await getFarcasterProfile(cleanQuery);
       } catch (profileError) {
         console.error('Profile search error from zapperService:', profileError);
         
-        // Fallback to farcasterService if zapperService fails
+        // Use farcasterService as fallback
         try {
           console.log('Trying farcasterService as fallback...');
-          const farcasterService = await import('../services/farcasterService');
           
           if (cleanQuery.match(/^\d+$/)) {
             // If numeric, treat as FID
@@ -533,42 +532,69 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       let addresses = [];
       
       try {
-        // Try to get all addresses using zapperService first
-        const allAddresses = await getFarcasterAddresses(cleanQuery);
-        if (allAddresses && allAddresses.length > 0) {
-          addresses = allAddresses;
-          console.log(`Found ${addresses.length} addresses using getFarcasterAddresses`);
-        } else {
-          // Fallback: add individual addresses from the profile
-          console.log('No addresses from getFarcasterAddresses, using profile data directly');
+        // Use the new farcasterService.getFarcasterAddresses function
+        if (profile.fid) {
+          addresses = await farcasterService.getFarcasterAddresses({ fid: profile.fid });
+          console.log(`Found ${addresses.length} addresses using farcasterService.getFarcasterAddresses`);
+        } else if (profile.username) {
+          addresses = await farcasterService.getFarcasterAddresses({ username: profile.username });
+          console.log(`Found ${addresses.length} addresses using farcasterService.getFarcasterAddresses`);
+        }
+        
+        // If no addresses found, fallback to using profile data directly
+        if (!addresses || addresses.length === 0) {
+          console.log('No addresses from farcasterService.getFarcasterAddresses, using profile data directly');
           
           // Add custody address if it exists
           if (profile.custodyAddress) {
             addresses.push(profile.custodyAddress);
+            console.log(`Added custody address from profile: ${profile.custodyAddress}`);
           }
           
           // Add connected addresses if they exist
           if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-            addresses = [...addresses, ...profile.connectedAddresses];
+            profile.connectedAddresses.forEach(addr => {
+              if (addr) {
+                addresses.push(addr);
+                console.log(`Added connected address from profile: ${addr}`);
+              }
+            });
           }
         }
       } catch (addressError) {
-        console.error('Error getting addresses from zapperService:', addressError);
+        console.error('Error getting addresses from farcasterService:', addressError);
         
-        // Fallback to farcasterService as a last resort
-        try {
-          console.log('Trying farcasterService for addresses as fallback...');
-          const farcasterService = await import('../services/farcasterService');
-          
-          if (profile.fid) {
+        // Direct fallback to profile data without additional API calls
+        console.log('Using direct profile data for addresses after API error');
+        
+        // Add custody address if it exists
+        if (profile.custodyAddress) {
+          addresses.push(profile.custodyAddress);
+          console.log(`Added custody address directly: ${profile.custodyAddress}`);
+        }
+        
+        // Add connected addresses if they exist
+        if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+          profile.connectedAddresses.forEach(addr => {
+            if (addr) {
+              addresses.push(addr);
+              console.log(`Added connected address directly: ${addr}`);
+            }
+          });
+        }
+        
+        // Final attempt using legacy fetchAddressesForFid
+        if (addresses.length === 0 && profile.fid) {
+          try {
+            console.log('Trying legacy fetchAddressesForFid as last resort...');
             const farcasterAddresses = await farcasterService.fetchAddressesForFid(profile.fid);
             if (farcasterAddresses && farcasterAddresses.length > 0) {
               addresses = farcasterAddresses;
               console.log(`Found ${addresses.length} addresses using farcasterService fallback`);
             }
+          } catch (fallbackAddressError) {
+            console.error('Legacy address fetch also failed:', fallbackAddressError);
           }
-        } catch (fallbackAddressError) {
-          console.error('Fallback address fetch also failed:', fallbackAddressError);
         }
       }
       

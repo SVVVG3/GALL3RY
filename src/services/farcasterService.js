@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { localStorageCache } from "../utils/cache";
 
 // Constants
 const API_URL = process.env.REACT_APP_API_URL || '/api';
@@ -6,6 +7,71 @@ const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes
 
 // In-memory cache for profiles
 const profileCache = new Map();
+
+// Helper function to cache items in local storage or memory
+const cacheItem = async (key, data, expirationMinutes = 60) => {
+  try {
+    await localStorageCache.setItem(key, data, expirationMinutes);
+  } catch (e) {
+    console.warn('Failed to cache in localStorage, using memory cache:', e.message);
+    profileCache.set(key, {
+      timestamp: Date.now(),
+      data
+    });
+  }
+};
+
+// Helper function to get cached items from local storage or memory
+const getCachedItem = async (key) => {
+  try {
+    const data = await localStorageCache.getItem(key);
+    if (data) {
+      return data;
+    }
+  } catch (e) {
+    console.warn('Failed to retrieve from localStorage, checking memory cache:', e.message);
+    const cachedData = profileCache.get(key);
+    if (cachedData && Date.now() - cachedData.timestamp < CACHE_EXPIRATION_TIME) {
+      return cachedData.data;
+    }
+  }
+  return null;
+};
+
+/**
+ * Formats a Farcaster user profile from API response into a consistent structure
+ * @param {Object} userData - User data from Neynar API
+ * @returns {Object} - Formatted user profile
+ */
+const formatFarcasterProfile = (userData) => {
+  if (!userData) return null;
+  
+  // Extract connected addresses
+  let connectedAddresses = [];
+  
+  // Handle different API response formats
+  if (userData.verified_addresses?.eth_addresses) {
+    connectedAddresses = userData.verified_addresses.eth_addresses.map(addr => addr.toLowerCase());
+  } else if (userData.eth_addresses) {
+    connectedAddresses = userData.eth_addresses.map(addr => addr.toLowerCase());
+  }
+  
+  // Format the profile to match the app's expected structure
+  return {
+    fid: userData.fid,
+    username: userData.username,
+    metadata: {
+      displayName: userData.display_name,
+      description: userData.profile?.bio?.text,
+      imageUrl: userData.pfp_url,
+      warpcast: `https://warpcast.com/${userData.username}`
+    },
+    custodyAddress: userData.custody_address ? userData.custody_address.toLowerCase() : null,
+    connectedAddresses: connectedAddresses,
+    followerCount: userData.follower_count,
+    followingCount: userData.following_count
+  };
+};
 
 /**
  * Service for interacting with Farcaster data
@@ -122,123 +188,101 @@ const farcasterService = {
   },
   
   /**
-   * Get a Farcaster user profile by username or FID
-   * 
-   * @param {Object} params - Parameters
-   * @param {string} [params.username] - Farcaster username
+   * Gets a Farcaster profile by username or FID
+   * @param {Object} params - Query parameters
+   * @param {string} [params.username] - Farcaster username (without @)
    * @param {number} [params.fid] - Farcaster ID
-   * @returns {Promise<Object|null>} - User profile or null if not found
+   * @returns {Promise<Object|null>} Farcaster profile or null if not found
    */
   getProfile: async ({ username, fid }) => {
+    // Validate input - either username or fid must be provided
+    if (!username && !fid) {
+      console.error('Either username or fid is required');
+      return null;
+    }
+
+    const queryParam = username ? username.replace('@', '').trim() : fid;
+    const isNumericFid = !isNaN(Number(queryParam));
+    const cacheKey = `farcaster_profile_${queryParam.toLowerCase()}`;
+    
     try {
-      if (!username && !fid) {
-        throw new Error('Either username or fid must be provided');
-      }
-      
       // Check cache first
-      const cacheKey = username ? `username:${username}` : `fid:${fid}`;
-      const cachedProfile = profileCache.get(cacheKey);
-      
-      if (cachedProfile && Date.now() - cachedProfile.timestamp < CACHE_EXPIRATION_TIME) {
-        console.log('Using cached Farcaster profile');
-        return cachedProfile.data;
+      const cachedProfile = await getCachedItem(cacheKey);
+      if (cachedProfile) {
+        console.log(`Retrieved Farcaster profile from cache for ${queryParam}`);
+        return cachedProfile;
       }
       
-      // Determine the API parameters based on input type
-      let endpoint, params;
+      console.log(`Fetching Farcaster profile for ${isNumericFid ? 'FID' : 'username'}: ${queryParam}`);
       
-      if (username) {
-        endpoint = 'user/search';
-        params = { q: username, limit: 1 };
-      } else {
-        endpoint = 'user';
-        params = { fid };
-      }
-      
-      // Make request through our proxy
-      const response = await axios.get(`${API_URL}/neynar`, {
-        params: {
-          endpoint,
-          ...params
+      let userData = null;
+      let response = null;
+
+      // Try the proxy API first
+      try {
+        if (isNumericFid) {
+          response = await axios.get(`${API_URL}/api/neynar?endpoint=user&fid=${queryParam}`, { timeout: 10000 });
+        } else {
+          response = await axios.get(`${API_URL}/api/neynar?endpoint=user&username=${queryParam}`, { timeout: 10000 });
         }
-      });
-      
-      // Extract the user data from the response
-      let userData;
-      
-      if (username) {
-        // For username search, get the first result if it matches exactly
-        const users = response.data.users || [];
-        userData = users.find(u => u.username.toLowerCase() === username.toLowerCase());
         
-        // If no exact match, use the first result
-        if (!userData && users.length > 0) {
-          userData = users[0];
+        if (response?.data?.result?.user) {
+          userData = response.data.result.user;
         }
-      } else {
-        // For FID lookup, use the direct response
-        userData = response.data.user;
+      } catch (proxyError) {
+        console.warn(`Proxy API failed for ${queryParam}, falling back to direct Neynar API:`, proxyError.message);
       }
-      
+
+      // If proxy failed, try direct Neynar API
       if (!userData) {
+        console.log(`Attempting direct Neynar API call for ${queryParam}`);
+        const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || "NEYNAR_API_DOCS";
+        
+        try {
+          if (isNumericFid) {
+            response = await axios.get(`https://api.neynar.com/v2/farcaster/user?fid=${queryParam}`, {
+              headers: { api_key: NEYNAR_API_KEY },
+              timeout: 10000
+            });
+            if (response?.data?.user) {
+              userData = response.data.user;
+            }
+          } else {
+            response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search?q=${queryParam}`, {
+              headers: { api_key: NEYNAR_API_KEY },
+              timeout: 10000
+            });
+            
+            // Find exact username match in search results
+            if (response?.data?.users) {
+              const exactMatch = response.data.users.find(
+                u => u.username.toLowerCase() === queryParam.toLowerCase()
+              );
+              if (exactMatch) userData = exactMatch;
+            }
+          }
+        } catch (directApiError) {
+          console.error(`Direct Neynar API failed for ${queryParam}:`, directApiError.message);
+          throw directApiError;
+        }
+      }
+
+      if (!userData) {
+        console.warn(`No user data found for ${queryParam}`);
         return null;
       }
-      
-      // Get verified addresses for this user if possible
-      let connectedAddresses = [];
-      try {
-        if (userData.fid) {
-          const addressesResponse = await axios.get(`${API_URL}/neynar`, {
-            params: {
-              endpoint: 'user/verified-addresses',
-              fid: userData.fid
-            }
-          });
-          
-          connectedAddresses = addressesResponse.data.verified_addresses?.map(a => a.addr.toLowerCase()) || [];
-        }
-      } catch (addressError) {
-        console.warn('Could not fetch verified addresses:', addressError.message);
+
+      // Format and cache the profile
+      const formattedProfile = formatFarcasterProfile(userData);
+      if (formattedProfile) {
+        await cacheItem(cacheKey, formattedProfile, 5); // Cache for 5 minutes
+        return formattedProfile;
       }
       
-      // Format the profile to match the structure expected by the app
-      const profile = {
-        fid: userData.fid,
-        username: userData.username,
-        metadata: {
-          displayName: userData.display_name,
-          description: userData.profile?.bio?.text,
-          imageUrl: userData.pfp_url,
-          warpcast: `https://warpcast.com/${userData.username}`
-        },
-        custodyAddress: userData.custody_address,
-        connectedAddresses: connectedAddresses,
-        followerCount: userData.follower_count,
-        followingCount: userData.following_count
-      };
-      
-      // Cache the profile
-      profileCache.set(cacheKey, {
-        timestamp: Date.now(),
-        data: profile
-      });
-      
-      // Also cache by the alternative ID
-      if (username && profile.fid) {
-        profileCache.set(`fid:${profile.fid}`, {
-          timestamp: Date.now(),
-          data: profile
-        });
-      } else if (fid && profile.username) {
-        profileCache.set(`username:${profile.username}`, {
-          timestamp: Date.now(),
-          data: profile
-        });
-      }
-      
-      return profile;
+      return null;
     } catch (error) {
-      console.error('Error fetching Farcaster profile:', error);
+      console.error(`Error fetching Farcaster profile for ${queryParam}:`, error.message);
+      console.error(error.stack);
       return null;
     }
   },
@@ -257,49 +301,112 @@ const farcasterService = {
       console.log(`Fetching addresses for Farcaster FID: ${fid}`);
       
       // Try to get the profile first
-      const profile = await farcasterService.getProfile({ fid });
-      
-      if (!profile) {
-        console.warn(`No profile found for FID: ${fid}, returning empty address array`);
-        return []; // Return empty array instead of throwing to prevent UI breaks
-      }
-      
-      console.log(`Found profile for FID ${fid}:`, { 
-        username: profile.username, 
-        hasCustodyAddress: !!profile.custodyAddress,
-        hasConnectedAddresses: Array.isArray(profile.connectedAddresses) && profile.connectedAddresses.length > 0,
-        connectedAddressCount: profile.connectedAddresses?.length || 0
-      });
-      
-      // Combine custody address and connected addresses, ensuring no duplicates
-      const allAddresses = new Set();
-      
-      // Add custody address if available
-      if (profile.custodyAddress) {
-        const lowerAddress = profile.custodyAddress.toLowerCase();
-        allAddresses.add(lowerAddress);
-        console.log(`Added custody address: ${lowerAddress}`);
-      }
-      
-      // Add all connected addresses
-      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-        profile.connectedAddresses.forEach(addr => {
-          if (addr) {
-            const lowerAddr = addr.toLowerCase();
-            allAddresses.add(lowerAddr);
-            console.log(`Added connected address: ${lowerAddr}`);
-          }
+      try {
+        const profile = await farcasterService.getProfile({ fid });
+        
+        if (!profile) {
+          console.warn(`No profile found for FID: ${fid}, returning empty address array`);
+          return []; // Return empty array instead of throwing to prevent UI breaks
+        }
+        
+        console.log(`Found profile for FID ${fid}:`, { 
+          username: profile.username, 
+          hasCustodyAddress: !!profile.custodyAddress,
+          hasConnectedAddresses: Array.isArray(profile.connectedAddresses) && profile.connectedAddresses.length > 0,
+          connectedAddressCount: profile.connectedAddresses?.length || 0
         });
+        
+        // Combine custody address and connected addresses, ensuring no duplicates
+        const allAddresses = new Set();
+        
+        // Add custody address if available
+        if (profile.custodyAddress) {
+          const lowerAddress = profile.custodyAddress.toLowerCase();
+          allAddresses.add(lowerAddress);
+          console.log(`Added custody address: ${lowerAddress}`);
+        }
+        
+        // Add all connected addresses
+        if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+          profile.connectedAddresses.forEach(addr => {
+            if (addr) {
+              const lowerAddr = addr.toLowerCase();
+              allAddresses.add(lowerAddr);
+              console.log(`Added connected address: ${lowerAddr}`);
+            }
+          });
+        }
+        
+        const addressArray = Array.from(allAddresses);
+        console.log(`Found ${addressArray.length} unique addresses for Farcaster FID: ${fid}`);
+        
+        if (addressArray.length === 0) {
+          console.warn(`No addresses found for FID ${fid} even though profile exists`);
+        }
+        
+        return addressArray;
+      } catch (profileError) {
+        console.error('Profile fetch error:', profileError.message);
+        
+        // Try direct API call to Neynar as fallback
+        try {
+          console.log('Trying direct Neynar API call for addresses');
+          const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+          
+          // First get basic user info to get custody address
+          const userResponse = await axios({
+            method: 'get',
+            url: `https://api.neynar.com/v2/farcaster/user?fid=${fid}`,
+            headers: {
+              'Accept': 'application/json',
+              'api_key': NEYNAR_API_KEY
+            },
+            timeout: 8000
+          });
+          
+          const addresses = new Set();
+          
+          if (userResponse.data?.result?.user?.custody_address) {
+            addresses.add(userResponse.data.result.user.custody_address.toLowerCase());
+            console.log(`Added custody address from direct API: ${userResponse.data.result.user.custody_address}`);
+          }
+          
+          // Then get verified addresses
+          const verifiedAddressesResponse = await axios({
+            method: 'get',
+            url: `https://api.neynar.com/v2/farcaster/user/verified-addresses?fid=${fid}`,
+            headers: {
+              'Accept': 'application/json',
+              'api_key': NEYNAR_API_KEY
+            },
+            timeout: 8000
+          });
+          
+          if (verifiedAddressesResponse.data?.verified_addresses) {
+            verifiedAddressesResponse.data.verified_addresses.forEach(addrObj => {
+              if (addrObj.addr) {
+                addresses.add(addrObj.addr.toLowerCase());
+                console.log(`Added verified address from direct API: ${addrObj.addr}`);
+              }
+            });
+          } else if (verifiedAddressesResponse.data?.result?.verified_addresses) {
+            verifiedAddressesResponse.data.result.verified_addresses.forEach(addrObj => {
+              if (addrObj.addr) {
+                addresses.add(addrObj.addr.toLowerCase());
+                console.log(`Added verified address from direct API: ${addrObj.addr}`);
+              }
+            });
+          }
+          
+          const addressArray = Array.from(addresses);
+          console.log(`Found ${addressArray.length} addresses via direct Neynar API`);
+          
+          return addressArray;
+        } catch (directApiError) {
+          console.error('Direct API call failed:', directApiError.message);
+          throw directApiError;
+        }
       }
-      
-      const addressArray = Array.from(allAddresses);
-      console.log(`Found ${addressArray.length} unique addresses for Farcaster FID: ${fid}`);
-      
-      if (addressArray.length === 0) {
-        console.warn(`No addresses found for FID ${fid} even though profile exists`);
-      }
-      
-      return addressArray;
     } catch (error) {
       console.error(`Error fetching addresses for FID ${fid}:`, error);
       console.error('Error details:', {
@@ -308,7 +415,6 @@ const farcasterService = {
       });
       
       // Return empty array instead of throwing to prevent UI breaks
-      // This is a change from the previous implementation that threw the error
       return [];
     }
   },
@@ -411,6 +517,63 @@ const farcasterService = {
       });
       
       return { users: [], next: { cursor: null } };
+    }
+  },
+  
+  /**
+   * Gets all addresses connected to a Farcaster user
+   * @param {Object} params - Query parameters
+   * @param {string} [params.username] - Farcaster username (without @)
+   * @param {number} [params.fid] - Farcaster ID
+   * @returns {Promise<Array<string>>} Array of connected Ethereum addresses (lowercase)
+   */
+  getFarcasterAddresses: async ({ username, fid }) => {
+    try {
+      const cacheKey = `farcaster_addresses_${username ? username.toLowerCase() : `fid_${fid}`}`;
+      
+      // Check cache first
+      const cachedAddresses = await getCachedItem(cacheKey);
+      if (cachedAddresses) {
+        console.log(`Retrieved Farcaster addresses from cache for ${username || fid}`);
+        return cachedAddresses;
+      }
+      
+      // Get the user profile to extract addresses
+      const profile = await farcasterService.getProfile({ username, fid });
+      
+      if (!profile) {
+        console.warn(`No profile found for ${username || fid}, cannot get addresses`);
+        return [];
+      }
+      
+      // Collect all addresses from the profile
+      const addresses = [];
+      
+      // Add custody address if it exists
+      if (profile.custodyAddress) {
+        addresses.push(profile.custodyAddress.toLowerCase());
+      }
+      
+      // Add all connected addresses
+      if (profile.connectedAddresses && profile.connectedAddresses.length) {
+        profile.connectedAddresses.forEach(address => {
+          // Only add Ethereum addresses (skip Solana)
+          if (address && address.startsWith('0x')) {
+            addresses.push(address.toLowerCase());
+          }
+        });
+      }
+      
+      // Remove duplicates
+      const uniqueAddresses = [...new Set(addresses)];
+      
+      // Cache the addresses
+      await cacheItem(cacheKey, uniqueAddresses, 5); // Cache for 5 minutes
+      
+      return uniqueAddresses;
+    } catch (error) {
+      console.error(`Error fetching addresses for ${username || fid}:`, error.message);
+      return [];
     }
   },
   
