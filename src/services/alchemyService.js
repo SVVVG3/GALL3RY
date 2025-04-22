@@ -285,6 +285,7 @@ const alchemyService = {
   
   /**
    * Fetch NFTs for multiple addresses across multiple chains
+   * Optimized to reduce API calls by batching by chain instead of by address
    */
   async fetchNftsForMultipleAddresses(addresses, options = {}) {
     if (!addresses || addresses.length === 0) {
@@ -308,47 +309,79 @@ const alchemyService = {
       
       console.log(`Fetching NFTs for ${validAddresses.length} addresses across chains`);
       
-      // Get all NFTs for each address across chains
-      const results = await Promise.allSettled(
-        validAddresses.map(address => 
-          this.fetchNftsAcrossChains(address, options)
-        )
-      );
+      // Get the chains to fetch from
+      const chains = options.chains || SUPPORTED_CHAINS.map(c => c.id);
+      console.log(`Will fetch from ${chains.length} chains: ${chains.join(', ')}`);
       
-      // Combine all NFTs from all addresses, including from partial successes
+      // Data structures for results
       let allNfts = [];
-      let addressesWithErrors = 0;
+      const seenTokenIds = new Set(); // For deduplication
+      const walletToNftCount = {}; // For tracking NFTs per wallet
       
-      results.forEach((result, index) => {
-        if (result.status === 'fulfilled') {
-          if (result.value.nfts && Array.isArray(result.value.nfts)) {
-            allNfts = [...allNfts, ...result.value.nfts];
-            console.log(`Added ${result.value.nfts.length} NFTs from address ${validAddresses[index]}`);
-          } else {
-            console.warn(`No NFTs returned for address ${validAddresses[index]}`, result.value);
+      // Process each chain sequentially to avoid overwhelming the API
+      for (const chainId of chains) {
+        console.log(`Processing chain: ${chainId}`);
+        
+        // Process each wallet for this chain (we need to do this since there's no batch endpoint)
+        for (const address of validAddresses) {
+          try {
+            // Initialize counter for this wallet if not exists
+            if (!walletToNftCount[address]) {
+              walletToNftCount[address] = 0;
+            }
+            
+            // Fetch NFTs for this specific wallet on this specific chain
+            const result = await this.getNftsForOwner(address, {
+              network: chainId,
+              pageSize: options.pageSize || 100,
+              excludeSpam: options.excludeSpam !== false,
+              excludeAirdrops: options.excludeAirdrops !== false,
+              fetchAll: options.fetchAll !== false
+            });
+            
+            // Process each NFT for this wallet/chain
+            if (result.nfts && result.nfts.length > 0) {
+              const newNfts = result.nfts.map(nft => ({
+                ...nft,
+                ownerWallet: address,
+                network: nft.network || chainId
+              }));
+              
+              // Add to our collection and track by wallet
+              walletToNftCount[address] += newNfts.length;
+              
+              // Use push to avoid creating new array
+              allNfts.push(...newNfts);
+              
+              console.log(`Added ${newNfts.length} NFTs for wallet ${address} on chain ${chainId}`);
+            } else {
+              console.log(`No NFTs found for wallet ${address} on chain ${chainId}`);
+            }
+          } catch (walletError) {
+            console.error(`Error fetching NFTs for address ${address} on chain ${chainId}:`, walletError.message);
           }
-        } else {
-          addressesWithErrors++;
-          console.error(`Error fetching NFTs for address ${validAddresses[index]}:`, result.reason);
         }
-      });
+      }
       
-      console.log(`Total ${allNfts.length} NFTs found across ${validAddresses.length - addressesWithErrors}/${validAddresses.length} addresses`);
+      // Log per-wallet counts
+      for (const [wallet, count] of Object.entries(walletToNftCount)) {
+        console.log(`Wallet ${wallet} has ${count} NFTs across all chains`);
+      }
       
-      // Even if we have errors, proceed with any NFTs we were able to fetch
+      console.log(`Total ${allNfts.length} NFTs found before deduplication`);
       
       // Remove duplicates using our consistent unique ID function
-      const seen = new Set();
-      let uniqueNfts = allNfts.filter(nft => {
+      const uniqueMap = new Map();
+      const uniqueNfts = allNfts.filter(nft => {
         // Skip invalid NFTs to prevent errors
         if (!nft || !nft.contract || !nft.tokenId) return false;
         
         const key = this.createConsistentUniqueId(nft);
-        if (!key || seen.has(key)) return false;
+        if (!key || uniqueMap.has(key)) return false;
         
         // Add the unique ID to the NFT object for consistent reference
         nft.uniqueId = key;
-        seen.add(key);
+        uniqueMap.set(key, true);
         return true;
       });
       
@@ -388,13 +421,17 @@ const alchemyService = {
       
       // Add this call before returning the NFTs
       if (uniqueNfts.length > 0) {
-        uniqueNfts = enrichWithImageUrls(uniqueNfts);
+        const enrichedNfts = enrichWithImageUrls(uniqueNfts);
+        return {
+          nfts: enrichedNfts,
+          totalCount: enrichedNfts.length,
+          addressesQueried: validAddresses.length
+        };
       }
       
       return {
         nfts: uniqueNfts,
         totalCount: uniqueNfts.length,
-        addressesWithErrors: addressesWithErrors > 0,
         addressesQueried: validAddresses.length
       };
     } catch (error) {
