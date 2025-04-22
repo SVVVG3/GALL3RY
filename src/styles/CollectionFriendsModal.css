@@ -248,18 +248,18 @@
 .auth-prompt {
   display: flex;
   justify-content: center;
-  margin-top: 15px;
+  margin-top: 16px;
 }
 
 .auth-prompt .sign-in-button {
   background-color: #8b5cf6;
   color: white;
   border: none;
-  border-radius: 20px;
-  padding: 8px 20px;
-  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 16px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s;
 }
 
 .auth-prompt .sign-in-button:hover {
