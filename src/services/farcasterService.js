@@ -825,3 +825,6 @@ export default farcasterService;
 
 // Export individual functions for direct import
 export const { fetchAddressesForFid, searchUsers, clearCache } = farcasterService;
+
+// Also export the fetchAllFollowing function
+export const fetchAllFollowing = farcasterService.fetchAllFollowing;
