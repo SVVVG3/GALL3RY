@@ -520,7 +520,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             const tokenIdentifier = `${nft.contract.address}-${nft.tokenId}`;
             if (!seenTokenIds.has(tokenIdentifier)) {
               seenTokenIds.add(tokenIdentifier);
-              allNfts.push(nft);
+              // Make a copy of each NFT to ensure it's extensible
+              const nftCopy = JSON.parse(JSON.stringify(nft));
+              allNfts.push(nftCopy);
             }
           });
         }

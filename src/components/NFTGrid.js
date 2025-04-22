@@ -49,19 +49,21 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     <div className="nft-grid-container">
       <div className="nft-grid">
         {nfts.map((nft, index) => {
-          // Ensure collection_name is set on the nft object if not already present
-          if (!nft.collection_name) {
-            nft.collection_name = getCollectionName(nft);
+          // Create a copy of the NFT object to avoid modifying non-extensible objects
+          const nftCopy = {...nft};
+          
+          // Ensure collection_name is set on the copy of the nft object
+          if (!nftCopy.collection_name) {
+            nftCopy.collection_name = getCollectionName(nft);
           }
           
           // Debug the NFT data being passed to NFTCard
           const nftKey = getNftKey(nft) || index;
-          console.log(`Rendering NFT ${nftKey} with ${isProduction ? 'VercelNFTCard' : 'NFTCard'}`, nft);
           
           return (
             <CardComponent 
               key={nftKey} 
-              nft={nft}
+              nft={nftCopy}
             />
           );
         })}

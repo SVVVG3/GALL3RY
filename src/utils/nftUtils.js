@@ -33,19 +33,31 @@ export const formatNFTsForDisplay = (nfts) => {
       // Contract information
       contractAddress: nft.contractAddress || nft.contract?.address || '',
       collectionName: nft.collectionName || nft.collection?.name || nft.contract?.name || nft.contractMetadata?.name || '',
+      collection_name: nft.collection_name || nft.collection?.name || nft.contract?.name || nft.contractMetadata?.name || '',
       
       // Value information
-      floorPrice: nft.floorPrice || nft.collection?.floorPrice || {
-        value: nft.contractMetadata?.openSea?.floorPrice || nft.contract?.openSeaMetadata?.floorPrice || 0,
-        valueUsd: nft.contractMetadata?.openSea?.floorPriceUsd || 0
-      },
+      floorPrice: nft.floorPrice || nft.collection?.floorPrice ? { 
+        value: nft.floorPrice?.value || nft.collection?.floorPrice?.value || nft.contractMetadata?.openSea?.floorPrice || nft.contract?.openSeaMetadata?.floorPrice || 0,
+        valueUsd: nft.floorPrice?.valueUsd || nft.collection?.floorPrice?.valueUsd || nft.contractMetadata?.openSea?.floorPriceUsd || 0
+      } : undefined,
       
       // Timestamps
       mintedAt: nft.mintedAt || nft.timeLastUpdated || nft.createdAt || null,
       lastTransferTimestamp: nft.lastTransferTimestamp || nft.transferTimestamp || nft.lastActivityTimestamp || null,
       
-      // Keep the original data for reference
-      _originalData: nft
+      // Include important original properties that might be referenced elsewhere
+      contract: nft.contract ? { 
+        address: nft.contract.address,
+        name: nft.contract.name,
+        symbol: nft.contract.symbol,
+        tokenType: nft.contract.tokenType
+      } : undefined,
+      
+      metadata: nft.metadata ? JSON.parse(JSON.stringify(nft.metadata)) : undefined,
+      
+      // Store minimal original data as a stringified copy for reference
+      // This avoids carrying potentially non-extensible objects
+      _originalSource: nft.contractAddress || nft.contract?.address || 'unknown'
     };
   }).filter(Boolean); // Remove any null/undefined items
 }; 
