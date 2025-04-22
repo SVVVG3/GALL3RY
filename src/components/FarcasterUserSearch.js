@@ -159,11 +159,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   useEffect(() => {
     console.log('🔴 showSuggestions state changed to:', showSuggestions);
     console.log('🔵 Current suggestions count:', suggestions.length);
+    console.log('🟢 shouldShowSuggestionsRef.current:', shouldShowSuggestionsRef.current);
+    console.log('🟡 inputRect exists:', !!inputRect);
     
     if (showSuggestions && suggestions.length > 0) {
       console.log('Should be showing dropdown now with', suggestions.length, 'items');
+      console.log('Portal conditions met:', showSuggestions && suggestions.length > 0 && !!inputRect && shouldShowSuggestionsRef.current);
     }
-  }, [showSuggestions, suggestions]);
+  }, [showSuggestions, suggestions, inputRect]);
 
   // Ensure suggestions are cleared when component unmounts
   useEffect(() => {
@@ -1075,7 +1078,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               }}
               onFocus={() => {
                 updateInputRect(); // Update rect on focus
+                // If we have enough characters and suggestions exist, show them
                 if (formSearchQuery.trim().length >= 2 && suggestions.length > 0) {
+                  console.log('Input focused with existing suggestions, showing dropdown');
+                  shouldShowSuggestionsRef.current = true;
                   setShowSuggestions(true);
                 }
               }}
@@ -1107,8 +1113,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             {/* 
               Render suggestions dropdown in a portal
               - Check shouldShowSuggestionsRef to decide whether to render
+              - Only render when showSuggestions is true AND we have suggestions
             */}
-            {suggestions.length > 0 && inputRect && shouldShowSuggestionsRef.current && (
+            {showSuggestions && suggestions.length > 0 && inputRect && shouldShowSuggestionsRef.current && (
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
               </SuggestionPortal>
