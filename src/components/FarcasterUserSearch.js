@@ -139,6 +139,21 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         if (users && users.length > 0) {
           console.log('FORCE SHOWING SUGGESTIONS: TRUE - with', users.length, 'suggestions');
           setShowSuggestions(true);
+          console.log('DEBUG: Setting showSuggestions=true, current state:', {
+            suggestions: users.length,
+            shouldShowSuggestionsRef: shouldShowSuggestionsRef.current,
+            formSearchQuery: formSearchQuery.trim()
+          });
+          
+          // Force browser to recognize state change
+          setTimeout(() => {
+            console.log('AFTER TIMEOUT - Render check - showSuggestions:', showSuggestions);
+            console.log('Suggestions count:', suggestions.length);
+            console.log('shouldShowSuggestionsRef.current:', shouldShowSuggestionsRef.current);
+            console.log('Are conditions met for showing dropdown?', showSuggestions && suggestions.length > 0);
+            // Force DOM update by accessing document
+            document.title = document.title;
+          }, 50);
         } else {
           console.log('No suggestions found, hiding dropdown');
           setShowSuggestions(false);
@@ -907,6 +922,107 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     };
   }, [suggestions.length]);
 
+  // Add direct DOM manipulation as last-resort fallback
+  useEffect(() => {
+    const createDirectDropdown = () => {
+      // Only create if we have suggestions and should show them
+      if (!showSuggestions || !suggestions.length) return;
+      
+      console.log('EMERGENCY FALLBACK: Creating direct DOM dropdown');
+      
+      // Remove any existing emergency dropdowns
+      const existingDropdown = document.getElementById('emergency-dropdown');
+      if (existingDropdown) {
+        document.body.removeChild(existingDropdown);
+      }
+      
+      // Create container
+      const container = document.createElement('div');
+      container.id = 'emergency-dropdown';
+      container.style.position = 'fixed';
+      container.style.top = '150px';
+      container.style.left = '10%';
+      container.style.width = '80%';
+      container.style.backgroundColor = '#fff';
+      container.style.border = '4px solid blue';
+      container.style.borderRadius = '8px';
+      container.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+      container.style.padding = '16px';
+      container.style.zIndex = '10000000';
+      container.style.maxHeight = '400px';
+      container.style.overflowY = 'auto';
+      
+      // Create header
+      const header = document.createElement('div');
+      header.textContent = `${suggestions.length} EMERGENCY SUGGESTIONS`;
+      header.style.fontWeight = 'bold';
+      header.style.marginBottom = '10px';
+      header.style.textAlign = 'center';
+      header.style.padding = '8px';
+      header.style.backgroundColor = '#f0f0f0';
+      container.appendChild(header);
+      
+      // Create suggestion items
+      suggestions.forEach(user => {
+        const item = document.createElement('div');
+        item.style.display = 'flex';
+        item.style.padding = '10px';
+        item.style.borderBottom = '1px solid #eee';
+        item.style.cursor = 'pointer';
+        
+        const nameDiv = document.createElement('div');
+        nameDiv.textContent = `${user.displayName || user.username} (@${user.username})`;
+        nameDiv.style.fontWeight = 'bold';
+        
+        item.appendChild(nameDiv);
+        
+        // Add click handler
+        item.addEventListener('click', () => {
+          setFormSearchQuery(user.username);
+          document.body.removeChild(container);
+          handleSearch({ preventDefault: () => {} });
+        });
+        
+        container.appendChild(item);
+      });
+      
+      // Add close button
+      const closeButton = document.createElement('button');
+      closeButton.textContent = 'Close';
+      closeButton.style.marginTop = '10px';
+      closeButton.style.padding = '8px 16px';
+      closeButton.style.backgroundColor = '#f44336';
+      closeButton.style.color = 'white';
+      closeButton.style.border = 'none';
+      closeButton.style.borderRadius = '4px';
+      closeButton.style.cursor = 'pointer';
+      closeButton.addEventListener('click', () => {
+        document.body.removeChild(container);
+      });
+      
+      container.appendChild(closeButton);
+      
+      // Add to body
+      document.body.appendChild(container);
+    };
+    
+    // Create emergency dropdown on mount if conditions are met
+    createDirectDropdown();
+    
+    // Also create when showSuggestions changes to true
+    if (showSuggestions && suggestions.length > 0) {
+      createDirectDropdown();
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      const existingDropdown = document.getElementById('emergency-dropdown');
+      if (existingDropdown) {
+        document.body.removeChild(existingDropdown);
+      }
+    };
+  }, [showSuggestions, suggestions, handleSearch]);
+
   // Define the dropdown content separately
   const renderSuggestionDropdown = () => (
     <div style={{ padding: "8px 0" }}>
@@ -1062,25 +1178,37 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               spellCheck="false"
             />
             
-            {/* DIRECT INLINE DROPDOWN: No portals */}
+            {/* DIRECT INLINE DROPDOWN: No portals - EXTREME VISIBILITY VERSION */}
             {showSuggestions && suggestions.length > 0 && (
               <div 
                 className="suggestions-dropdown-container"
                 style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  width: '100%',
-                  zIndex: 999999,
-                  marginTop: '2px',
+                  position: 'fixed', // Change to fixed positioning
+                  top: '100px', // Fixed position at top of viewport
+                  left: '50%', // Center it
+                  transform: 'translateX(-50%)', // Center it properly
+                  width: '80%', // Make it obvious
+                  maxWidth: '500px',
+                  zIndex: 9999999, // Extremely high z-index
                   backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
+                  border: '4px solid red', // Make it unmissable
                   borderRadius: '8px',
-                  boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-                  maxHeight: '300px',
-                  overflowY: 'auto'
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                  maxHeight: '400px',
+                  overflowY: 'auto',
+                  padding: '10px',
                 }}
               >
+                <div style={{ 
+                  textAlign: 'center', 
+                  fontWeight: 'bold', 
+                  marginBottom: '10px',
+                  backgroundColor: '#f0f0f0',
+                  padding: '8px',
+                  borderRadius: '4px'
+                }}>
+                  {suggestions.length} Suggestions Found
+                </div>
                 {renderSuggestionDropdown()}
               </div>
             )}
