@@ -76,10 +76,13 @@ const SuggestionPortal = ({ children, inputRect }) => {
       // Create container
       const container = document.createElement('div');
       container.id = portalId;
-      container.style.position = 'absolute';
-      container.style.zIndex = '99999'; // Very high z-index to ensure visibility
-      container.style.pointerEvents = 'auto'; // Ensure clicks work
-      container.dataset.timestamp = Date.now(); // Add timestamp for debugging
+      container.style.position = 'fixed';
+      container.style.zIndex = '999999';
+      container.style.pointerEvents = 'auto';
+      container.style.minHeight = '100px';
+      container.style.backgroundColor = '#fff';
+      container.style.border = '3px solid red';
+      container.dataset.timestamp = Date.now();
       
       // Store ref and append to body
       portalContainerRef.current = container;
@@ -89,10 +92,18 @@ const SuggestionPortal = ({ children, inputRect }) => {
     
     // Position the portal according to input rectangle
     if (portalContainerRef.current && inputRect) {
+      // Convert page coordinates to viewport coordinates for fixed positioning
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+      
       // Position directly under the input with fixed coordinates
+      const fixedTop = inputRect.bottom + scrollTop;
+      const fixedLeft = inputRect.left + scrollLeft;
+      
       portalContainerRef.current.style.top = `${inputRect.bottom}px`;
       portalContainerRef.current.style.left = `${inputRect.left}px`;
       portalContainerRef.current.style.width = `${inputRect.width}px`;
+      portalContainerRef.current.style.display = 'block';
       console.log(`Portal positioned at top: ${inputRect.bottom}px, left: ${inputRect.left}px`);
       
       // Debug the positioning
@@ -102,7 +113,8 @@ const SuggestionPortal = ({ children, inputRect }) => {
         left: rect.left,
         width: rect.width,
         height: rect.height,
-        zIndex: portalContainerRef.current.style.zIndex
+        zIndex: portalContainerRef.current.style.zIndex,
+        display: portalContainerRef.current.style.display
       });
     }
     
@@ -162,7 +174,10 @@ const SuggestionPortal = ({ children, inputRect }) => {
         overflowY: "auto",
         boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
         width: "100%",
-        zIndex: 99999
+        minHeight: "50px",
+        zIndex: 999999,
+        position: "relative",
+        display: "block"
       }}
     >
       {children}

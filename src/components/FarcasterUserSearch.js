@@ -1056,6 +1056,16 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
+      {/* Debugging info - remove after fixing */}
+      {process.env.NODE_ENV !== 'production' && (
+        <div style={{ position: 'fixed', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '10px', borderRadius: '5px', fontSize: '12px', zIndex: 1000000 }}>
+          <div>Suggestions: {suggestions.length}</div>
+          <div>Show: {showSuggestions.toString()}</div>
+          <div>ShouldShow: {shouldShowSuggestionsRef.current.toString()}</div>
+          <div>InputRect: {inputRect ? 'yes' : 'no'}</div>
+        </div>
+      )}
+      
       <form onSubmit={handleSearch} className="search-form">
         <div className="search-input-wrapper">
           <div className="username-input-container" style={{ position: "relative", flex: "1" }}>
@@ -1116,6 +1126,28 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
               </SuggestionPortal>
+            )}
+            
+            {/* DIRECT APPROACH: Also render directly inline as a fallback */}
+            {suggestions.length > 0 && showSuggestions && (
+              <div 
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  width: '100%',
+                  backgroundColor: '#fff',
+                  border: '3px solid #8b5cf6',
+                  borderRadius: '8px',
+                  maxHeight: '300px',
+                  overflowY: 'auto',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+                  zIndex: 999999,
+                  marginTop: '5px'
+                }}
+              >
+                {renderSuggestionDropdown()}
+              </div>
             )}
           </div>
           
