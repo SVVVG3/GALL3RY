@@ -455,6 +455,43 @@ export const getFarcasterProfile = async (usernameOrFid) => {
 };
 
 /**
+ * Get Farcaster addresses from an existing profile object
+ * Avoids redundant profile fetching when we already have the profile
+ * 
+ * @param {Object} profile - Farcaster profile object with custody and connected addresses
+ * @returns {Promise<string[]>} - Array of wallet addresses
+ */
+export const getAddressesFromProfile = (profile) => {
+  if (!profile) {
+    throw new Error('Profile is required');
+  }
+  
+  // Combine custody address and connected addresses, ensuring no duplicates
+  const allAddresses = new Set();
+  
+  // Add custody address if available
+  if (profile.custodyAddress) {
+    allAddresses.add(profile.custodyAddress.toLowerCase());
+    console.log(`Added custody address: ${profile.custodyAddress.toLowerCase()}`);
+  }
+  
+  // Add all connected addresses
+  if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
+    profile.connectedAddresses.forEach(addr => {
+      if (addr) {
+        allAddresses.add(addr.toLowerCase());
+        console.log(`Added connected address: ${addr.toLowerCase()}`);
+      }
+    });
+  }
+  
+  const addressArray = Array.from(allAddresses);
+  console.log(`Found ${addressArray.length} unique addresses for Farcaster user ${profile.username || profile.fid} (FID: ${profile.fid || 'unknown'})`);
+  
+  return addressArray;
+};
+
+/**
  * Get all wallet addresses associated with a Farcaster profile (both custody and connected)
  * @param {string|number} usernameOrFid - Farcaster username or FID
  * @returns {Promise<string[]>} - Array of all addresses associated with the Farcaster profile
@@ -473,49 +510,8 @@ export const getFarcasterAddresses = async (usernameOrFid) => {
         throw new Error(`No Farcaster profile found for ${usernameOrFid}`);
       }
       
-      // Combine custody address and connected addresses, ensuring no duplicates
-      const allAddresses = new Set();
-      
-      // Add custody address if available
-      if (profile.custodyAddress) {
-        allAddresses.add(profile.custodyAddress.toLowerCase());
-        console.log(`Added custody address: ${profile.custodyAddress.toLowerCase()}`);
-      }
-      
-      // Add all connected addresses
-      if (profile.connectedAddresses && profile.connectedAddresses.length > 0) {
-        profile.connectedAddresses.forEach(addr => {
-          if (addr) {
-            allAddresses.add(addr.toLowerCase());
-            console.log(`Added connected address: ${addr.toLowerCase()}`);
-          }
-        });
-      }
-      
-      const addressArray = Array.from(allAddresses);
-      console.log(`Found ${addressArray.length} unique addresses for Farcaster user ${profile.username || usernameOrFid} (FID: ${profile.fid || 'unknown'})`);
-      
-      // If no addresses were found but we have a profile, try additional methods to find addresses
-      if (addressArray.length === 0) {
-        console.warn('No addresses found from profile data, attempting additional lookup methods');
-        
-        // If we have an FID, try farcasterService.fetchAddressesForFid as a fallback
-        if (profile.fid) {
-          try {
-            const farcasterService = await import('../services/farcasterService');
-            const farcasterAddresses = await farcasterService.fetchAddressesForFid(profile.fid);
-            
-            if (farcasterAddresses && farcasterAddresses.length > 0) {
-              console.log(`Found ${farcasterAddresses.length} addresses from farcasterService`);
-              return farcasterAddresses;
-            }
-          } catch (fallbackError) {
-            console.error('Fallback to farcasterService failed:', fallbackError);
-          }
-        }
-      }
-      
-      return addressArray;
+      // Use our helper function to extract addresses from the profile
+      return getAddressesFromProfile(profile);
       
     } catch (profileError) {
       console.error('Error fetching Farcaster profile:', profileError);

@@ -450,23 +450,31 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     setSearchError('');
     
     try {
-      // Step 1: Get the user's addresses using Zapper for better address collection
+      // Step 1: Get the user's addresses using the profile we already have
       console.log(`Fetching addresses for user ${profile.username || profile.fid}`);
       let addresses = [];
       
       try {
-        // First try with Zapper API (more complete address collection)
-        addresses = await zapperService.getFarcasterAddresses(profile.username || profile.fid);
-        console.log(`Zapper service found ${addresses?.length || 0} addresses`);
-      } catch (zapperError) {
-        console.warn('Zapper API address fetch failed, falling back to farcasterService:', zapperError.message);
+        // Use the profile we already have instead of fetching it again
+        addresses = zapperService.getAddressesFromProfile(profile);
+        console.log(`Got ${addresses?.length || 0} addresses from existing profile`);
+      } catch (error) {
+        console.warn('Error getting addresses from profile, falling back to API calls:', error.message);
         
-        // Fallback to farcasterService if Zapper fails
-        if (profile.fid) {
-          addresses = await farcasterService.fetchAddressesForFid(profile.fid);
-        } else {
-          console.warn('No FID available to fetch addresses with fallback method');
-          addresses = [];
+        // Fallback to traditional API call if direct extraction fails
+        try {
+          addresses = await zapperService.getFarcasterAddresses(profile.username || profile.fid);
+          console.log(`Zapper service found ${addresses?.length || 0} addresses`);
+        } catch (zapperError) {
+          console.warn('Zapper API address fetch failed, falling back to farcasterService:', zapperError.message);
+          
+          // Fallback to farcasterService if Zapper fails
+          if (profile.fid) {
+            addresses = await farcasterService.fetchAddressesForFid(profile.fid);
+          } else {
+            console.warn('No FID available to fetch addresses with fallback method');
+            addresses = [];
+          }
         }
       }
       
@@ -506,30 +514,36 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     }
     
     try {
-      // Create an array of promises to fetch NFTs for each address across all chains
-      const nftPromises = addresses.map(address => 
-        alchemyService.fetchNftsAcrossChains(address, {
-          chains: ['eth', 'polygon', 'opt', 'arb', 'base'], // Fetch from all supported chains
-          fetchAll: true, // Ensure we get all pages
-          pageSize: 100,
-          excludeSpam: true,
-          excludeAirdrops: true
-        })
-      );
-      
-      // Wait for all promises to resolve
-      const nftResults = await Promise.all(nftPromises);
-      
-      // Combine and deduplicate NFTs from all addresses
-      const allNfts = [];
+      // Single shared Set to track ALL unique NFTs across ALL wallets
       const seenTokenIds = new Set();
+      const allUniqueNfts = [];
       
-      // Process each wallet's results
-      nftResults.forEach((result, walletIndex) => {
-        if (result && Array.isArray(result.nfts)) {
-          console.log(`Processing ${result.nfts.length} NFTs from wallet ${walletIndex+1}/${addresses.length}`);
+      // Process each wallet one at a time to avoid memory issues with large collections
+      for (let walletIndex = 0; walletIndex < addresses.length; walletIndex++) {
+        const address = addresses[walletIndex];
+        console.log(`Fetching NFTs for wallet ${walletIndex + 1}/${addresses.length}: ${address}`);
+        
+        try {
+          // Fetch NFTs for this specific wallet across all chains
+          const result = await alchemyService.fetchNftsAcrossChains(address, {
+            chains: ['eth', 'polygon', 'opt', 'arb', 'base'], // Fetch from all supported chains
+            fetchAll: true, // Ensure we get all pages
+            pageSize: 100,
+            excludeSpam: true,
+            excludeAirdrops: true
+          });
           
-          // Process each NFT in this wallet
+          if (!result || !Array.isArray(result.nfts)) {
+            console.log(`No NFTs found for wallet ${walletIndex + 1}`);
+            continue;
+          }
+          
+          console.log(`Processing ${result.nfts.length} NFTs from wallet ${walletIndex + 1}/${addresses.length}`);
+          
+          // Count how many new unique NFTs we find in this wallet
+          let newUniqueCount = 0;
+          
+          // Process each NFT in this wallet against our global Set
           result.nfts.forEach(nft => {
             // Skip NFTs without proper identifiers
             if (!nft || !nft.contract || !nft.tokenId) {
@@ -550,25 +564,31 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             
             if (!seenTokenIds.has(tokenIdentifier)) {
               seenTokenIds.add(tokenIdentifier);
+              newUniqueCount++;
               
               // Make a copy of the NFT to ensure it's extensible and enrich with wallet info
               const nftCopy = JSON.parse(JSON.stringify({
                 ...nft,
-                ownerWallet: addresses[walletIndex], // Track which wallet owns this NFT
+                ownerWallet: address, // Track which wallet owns this NFT
                 uniqueId: tokenIdentifier // Store the unique ID for future reference
               }));
               
-              allNfts.push(nftCopy);
+              allUniqueNfts.push(nftCopy);
             } else {
               // For debugging - log duplicates we're filtering out
               console.debug(`Filtered duplicate NFT: ${nft.name || nft.title || tokenId} from ${contractAddress} on ${network}`);
             }
           });
+          
+          console.log(`Found ${newUniqueCount} new unique NFTs in wallet ${walletIndex + 1}`);
+          
+        } catch (walletError) {
+          console.error(`Error fetching NFTs for wallet ${walletIndex + 1}:`, walletError);
         }
-      });
+      }
       
-      console.log(`Found ${allNfts.length} unique NFTs across ${addresses.length} wallets (filtered ${seenTokenIds.size - allNfts.length} duplicates)`);
-      return allNfts;
+      console.log(`Found ${allUniqueNfts.length} unique NFTs across ${addresses.length} wallets (filtered ${seenTokenIds.size - allUniqueNfts.length} duplicates)`);
+      return allUniqueNfts;
     } catch (error) {
       console.error('Error fetching NFTs for addresses:', error);
       return [];
