@@ -466,6 +466,7 @@ const alchemyService = {
   
   /**
    * Get wallet addresses that own NFTs from a specified contract
+   * Updated to match the Alchemy NFT API v3 documentation
    * 
    * @param {string} contractAddress - The NFT contract address
    * @param {string} [network='eth'] - Blockchain network (eth, polygon, etc.)
@@ -489,36 +490,100 @@ const alchemyService = {
         timestamp: new Date().toISOString()
       });
 
-      // Initialize endpoints if needed - call the global function
+      // Initialize endpoints if needed
       await initializeEndpoints();
       
       console.log(`After initialization, using ALCHEMY_ENDPOINT: ${ALCHEMY_ENDPOINT}`);
 
-      // Build the API request params
-      const params = {
-        endpoint: 'getOwnersForContract',
-        contractAddress,
-        network
-      };
+      let response;
       
-      console.log('Making Alchemy API request with params:', params);
+      // First try with our proxy API
+      try {
+        // Build the API request params for our proxy
+        const params = {
+          endpoint: 'getOwnersForContract',
+          contractAddress,
+          network
+        };
+        
+        console.log('Making proxy Alchemy API request with params:', params);
 
-      // Make the API request with a longer timeout for potentially slow networks like Base
-      const response = await axios.get(ALCHEMY_ENDPOINT, {
-        params,
-        timeout: 20000 // 20 seconds - increased from 15 seconds
-      });
+        // Make the API request with a longer timeout
+        response = await axios.get(ALCHEMY_ENDPOINT, {
+          params,
+          timeout: 20000 // 20 seconds - increased from 15 seconds
+        });
+        
+        console.log('Proxy API responded with status:', response.status);
+      } catch (proxyError) {
+        console.error(`❌ Proxy API failed for getOwnersForContract for ${contractAddress}:`, proxyError.message);
+        
+        // Try direct Alchemy API as a fallback
+        try {
+          console.log('Attempting direct Alchemy API call for getOwnersForContract');
+          const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || '';
+          
+          if (!ALCHEMY_API_KEY) {
+            console.error('Missing Alchemy API key for direct API call');
+            throw new Error('Alchemy API key not available');
+          }
+          
+          // Format network for direct API
+          const networkPrefix = network === 'eth' ? 'eth-mainnet' : 
+                               network === 'polygon' ? 'polygon-mainnet' : 
+                               network === 'opt' ? 'opt-mainnet' : 
+                               network === 'arb' ? 'arb-mainnet' : 
+                               network === 'base' ? 'base-mainnet' : 'eth-mainnet';
+          
+          // Build the direct API URL as per the docs
+          const directUrl = `https://${networkPrefix}.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}/getOwnersForContract`;
+          
+          console.log(`Direct API call to Alchemy URL: ${directUrl}`);
+          
+          response = await axios.get(directUrl, {
+            params: {
+              contractAddress,
+              withTokenBalances: false // Don't need token balances, just owners
+            },
+            timeout: 20000
+          });
+          
+          console.log('Direct Alchemy API responded with status:', response.status);
+          // Log full response structure for debugging
+          console.log('Response structure from direct API:', {
+            hasData: !!response.data,
+            dataKeys: response.data ? Object.keys(response.data) : [],
+            ownersCount: response.data?.owners?.length || 0
+          });
+        } catch (directApiError) {
+          console.error('❌ Direct Alchemy API call failed:', directApiError.message);
+          if (directApiError.response) {
+            console.error('Error response data:', directApiError.response.data);
+            console.error('Error response status:', directApiError.response.status);
+          }
+          throw directApiError;
+        }
+      }
 
-      console.log('Alchemy API response received:', {
+      // Log full response for debugging
+      console.log('Alchemy API response structure:', {
         status: response.status,
         hasData: !!response.data,
+        dataKeys: response.data ? Object.keys(response.data) : [],
         hasOwners: Array.isArray(response.data?.owners),
         ownersCount: response.data?.owners?.length || 0
       });
 
+      // Extract owners from the response according to the API documentation
       const owners = response.data?.owners || [];
 
       console.log(`Found ${owners.length} owners for contract ${contractAddress}`);
+      
+      if (owners.length > 0) {
+        console.log('Sample of owner addresses:', owners.slice(0, 5));
+      } else {
+        console.warn(`No owners found for contract ${contractAddress}. This could be an issue with the contract address or API.`);
+      }
       
       // Convert all addresses to lowercase for consistency
       return owners.map(owner => owner.toLowerCase());

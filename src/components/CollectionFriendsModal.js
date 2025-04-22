@@ -26,6 +26,26 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   const [debugInfo, setDebugInfo] = useState({});
   const [timeMarkers, setTimeMarkers] = useState({});
 
+  // Helper function to normalize contract addresses
+  const normalizeContractAddress = (address) => {
+    if (!address) return '';
+    
+    // Remove any network prefix (e.g., "eth:" or "polygon:")
+    if (address.includes(':')) {
+      const [_, cleanAddress] = address.split(':');
+      console.log(`Normalized contract address from ${address} to ${cleanAddress}`);
+      return cleanAddress;
+    }
+    
+    // Ensure the address starts with 0x
+    if (!address.startsWith('0x')) {
+      console.log(`Adding 0x prefix to ${address}`);
+      return `0x${address}`;
+    }
+    
+    return address;
+  };
+
   // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -244,7 +264,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                   alchemyServiceReady: !!alchemyService?.getOwnersForContract
                 });
                 
-                const owners = await alchemyService.getOwnersForContract(collectionAddress);
+                // Normalize the contract address before calling the API
+                const normalizedAddress = normalizeContractAddress(collectionAddress);
+                console.log(`Using normalized contract address: ${normalizedAddress}`);
+                
+                const owners = await alchemyService.getOwnersForContract(normalizedAddress);
                 const ownersEndTime = Date.now();
                 
                 console.log(`✅ Found ${owners.length} collection owners - API call took ${ownersEndTime - ownersStartTime}ms`);
@@ -374,9 +398,10 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
                 
                 // Try with the correct format if the contract address includes a network prefix
-                if (collectionAddress.includes(':')) {
-                  const cleanAddress = collectionAddress.split(':')[1];
-                  console.log(`🔄 Trying with cleaned address: ${cleanAddress}`);
+                if (collectionAddress.includes(':') || !collectionAddress.startsWith('0x')) {
+                  // Use our existing normalize function
+                  const cleanAddress = normalizeContractAddress(collectionAddress);
+                  console.log(`🔄 Trying with normalized address: ${cleanAddress}`);
                   try {
                     const cleanedStartTime = Date.now();
                     const owners = await alchemyService.getOwnersForContract(cleanAddress);
