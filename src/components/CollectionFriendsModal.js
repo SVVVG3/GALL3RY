@@ -618,6 +618,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           </div>
         ) : (
           <div className="modal-content">
+            {usingMockData && (
+              <div className="mock-data-disclaimer">
+                Using sample data for demonstration purposes
+              </div>
+            )}
             <div className="friends-list">
               {friends.map((friend) => (
                 <div key={friend.id} className="friend-item">
