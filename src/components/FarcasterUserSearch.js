@@ -957,6 +957,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         e.stopPropagation();
       }}
       data-testid="username-suggestions"
+      style={{
+        padding: "8px 0"
+      }}
     >
       {suggestions.length === 0 && (
         <div style={{
@@ -977,15 +980,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             handleSelectSuggestion(user.username);
           }}
           style={{
-            padding: "12px 15px",
+            padding: "10px 15px",
             display: "flex",
             alignItems: "center",
-            borderBottom: "1px solid #e5e7eb",
+            borderBottom: "1px solid #f3f4f6",
             cursor: "pointer",
             backgroundColor: "#ffffff",
             transition: "background-color 0.2s"
           }}
-          onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f3f4f6"}
+          onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
           onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
         >
           {user.imageUrl ? (
@@ -993,12 +996,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               src={user.imageUrl} 
               alt=""
               style={{
-                width: "40px",
-                height: "40px",
+                width: "36px",
+                height: "36px",
                 borderRadius: "50%",
                 marginRight: "12px",
-                border: "2px solid #e5e7eb",
-                objectFit: "cover"
+                border: "1px solid #e5e7eb",
+                objectFit: "cover",
+                flexShrink: 0
               }}
               onError={(e) => {
                 e.target.onerror = null;
@@ -1007,17 +1011,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             />
           ) : (
             <div style={{
-              width: "40px",
-              height: "40px",
+              width: "36px",
+              height: "36px",
               borderRadius: "50%",
               marginRight: "12px",
-              backgroundColor: "#e5e7eb",
+              backgroundColor: "#f3f4f6",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: "18px",
+              fontSize: "16px",
               fontWeight: "bold",
-              color: "#6b7280"
+              color: "#6b7280",
+              flexShrink: 0
             }}>
               {user.username ? user.username[0].toUpperCase() : '?'}
             </div>
@@ -1029,7 +1034,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 fontSize: "16px",
                 color: "#111827",
                 display: "block",
-                lineHeight: "1.2"
+                lineHeight: "1.2",
+                marginBottom: "2px"
               }}
             >
               {user.displayName || user.username}
@@ -1055,16 +1061,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       <div className="search-header">
         <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
-      
-      {/* Debugging info - remove after fixing */}
-      {process.env.NODE_ENV !== 'production' && (
-        <div style={{ position: 'fixed', top: '10px', right: '10px', background: 'rgba(0,0,0,0.7)', color: 'white', padding: '10px', borderRadius: '5px', fontSize: '12px', zIndex: 1000000 }}>
-          <div>Suggestions: {suggestions.length}</div>
-          <div>Show: {showSuggestions.toString()}</div>
-          <div>ShouldShow: {shouldShowSuggestionsRef.current.toString()}</div>
-          <div>InputRect: {inputRect ? 'yes' : 'no'}</div>
-        </div>
-      )}
       
       <form onSubmit={handleSearch} className="search-form">
         <div className="search-input-wrapper">
@@ -1120,34 +1116,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             {/* 
               Render suggestions dropdown in a portal
               - Only show when we have suggestions and are allowed to show them
-              - Simplified condition for better reliability
             */}
             {suggestions.length > 0 && showSuggestions && (
               <SuggestionPortal inputRect={inputRect}>
                 {renderSuggestionDropdown()}
               </SuggestionPortal>
-            )}
-            
-            {/* DIRECT APPROACH: Also render directly inline as a fallback */}
-            {suggestions.length > 0 && showSuggestions && (
-              <div 
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  width: '100%',
-                  backgroundColor: '#fff',
-                  border: '3px solid #8b5cf6',
-                  borderRadius: '8px',
-                  maxHeight: '300px',
-                  overflowY: 'auto',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                  zIndex: 999999,
-                  marginTop: '5px'
-                }}
-              >
-                {renderSuggestionDropdown()}
-              </div>
             )}
           </div>
           
