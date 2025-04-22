@@ -41,9 +41,20 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [inputRect, setInputRect] = useState(null);
   
   // Input reference for positioning the dropdown
   const inputRef = useRef(null);
+  
+  // Define the updateInputRect function
+  const updateInputRect = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setInputRect(rect);
+      console.log('Updated input rect:', rect);
+    }
+  }, [inputRef]);
   
   // NFT filtering and sorting from redux
   const { searchTerm, sortOption, sortDirection } = useSelector(state => ({
