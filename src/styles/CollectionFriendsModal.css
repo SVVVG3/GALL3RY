@@ -61,6 +61,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  background-color: white;
 }
 
 .modal-loading, 
@@ -74,12 +75,10 @@
   text-align: center;
   padding: 24px;
   min-height: 200px;
-  background-color: #fff;
   width: 100%;
   box-sizing: border-box;
   margin: 0 auto;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  background-color: white;
 }
 
 .spinner {
@@ -112,33 +111,24 @@
 
 .friends-list {
   width: 100%;
-  margin: 0 auto;
-  padding: 12px;
+  padding: 0;
+  margin: 0;
   box-sizing: border-box;
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  max-height: 60vh;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  background-color: white;
 }
 
 .friend-item {
   display: flex;
   align-items: center;
-  padding: 12px;
+  padding: 12px 16px;
   border-bottom: 1px solid #eee;
   background-color: white;
-  border-radius: 6px;
-  margin-bottom: 8px;
   width: 100%;
-  max-width: 450px;
   box-sizing: border-box;
 }
 
 .friend-item:last-child {
-  margin-bottom: 0;
   border-bottom: none;
 }
 
@@ -232,9 +222,8 @@
     max-width: 100%;
     height: auto;
     max-height: 80vh;
-    border-radius: 12px;
+    border-radius: 8px;
     margin: 0 auto;
-    left: 0;
   }
   
   .modal-content {
@@ -242,17 +231,8 @@
     padding: 16px;
   }
   
-  .friend-item {
-    margin-bottom: 8px;
-  }
-  
   .modal-header h3 {
     font-size: 16px;
-  }
-  
-  .modal-close-button {
-    top: 50%;
-    right: 12px;
   }
 }
 
