@@ -578,68 +578,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     };
   }, [isOpen, onClose]);
 
-  // Handle rendering content based on loading/error state
-  const renderContent = () => {
-    if (loading) {
-      return (
-        <div className="modal-loading">
-          <div className="spinner"></div>
-          <p>Loading friends...</p>
-        </div>
-      );
-    }
-    
-    if (error) {
-      return (
-        <div className="modal-error">
-          <p>{error}</p>
-          <button className="modal-close-btn" onClick={onClose}>Close</button>
-        </div>
-      );
-    }
-    
-    if (!isUserAuthenticated) {
-      return (
-        <div className="modal-auth-required">
-          <p>Please connect with Farcaster to see friends who own this collection.</p>
-          <button className="modal-close-btn" onClick={onClose}>Close</button>
-        </div>
-      );
-    }
-    
-    if (friends.length === 0) {
-      return (
-        <div className="modal-no-friends">
-          <p>No Collection Data Can Be Found For This Collection</p>
-        </div>
-      );
-    }
-    
-    return (
-      <>
-        <div className="friends-list">
-          {friends.map((friend) => (
-            <div key={friend.id} className="friend-item">
-              <div className="friend-avatar">
-                {friend.avatar ? (
-                  <img src={friend.avatar} alt={friend.name} />
-                ) : (
-                  <div className="default-avatar">
-                    {friend.name.charAt(0)}
-                  </div>
-                )}
-              </div>
-              <div className="friend-info">
-                <h4>{friend.name}</h4>
-                <p>@{friend.username}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </>
-    );
-  };
-
   // Only render if modal is open
   if (!isOpen) return null;
 
@@ -650,9 +588,47 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           <h3>Friends owning {collectionName}</h3>
           <button className="modal-close-button" onClick={onClose}>×</button>
         </div>
-        <div className="modal-content">
-          {renderContent()}
-        </div>
+        {/* Replace multi-layer nesting with a single content container */}
+        {loading ? (
+          <div className="modal-content modal-loading">
+            <div className="spinner"></div>
+            <p>Loading friends...</p>
+          </div>
+        ) : error ? (
+          <div className="modal-content modal-error">
+            <p>{error}</p>
+            <button className="modal-close-btn" onClick={onClose}>Close</button>
+          </div>
+        ) : !isUserAuthenticated ? (
+          <div className="modal-content modal-auth-required">
+            <p>Please connect with Farcaster to see friends who own this collection.</p>
+            <button className="modal-close-btn" onClick={onClose}>Close</button>
+          </div>
+        ) : friends.length === 0 ? (
+          <div className="modal-content modal-no-friends">
+            <p>No Collection Data Can Be Found For This Collection</p>
+          </div>
+        ) : (
+          <div className="modal-content">
+            {friends.map((friend) => (
+              <div key={friend.id} className="friend-item">
+                <div className="friend-avatar">
+                  {friend.avatar ? (
+                    <img src={friend.avatar} alt={friend.name} />
+                  ) : (
+                    <div className="default-avatar">
+                      {friend.name.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <div className="friend-info">
+                  <h4>{friend.name}</h4>
+                  <p>@{friend.username}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>,
     document.body
