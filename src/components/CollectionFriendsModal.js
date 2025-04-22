@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePrivy } from '@privy-io/react-auth';
-import farcasterService from '../services/farcasterService';
+import farcasterService, { fetchAllFollowing } from '../services/farcasterService';
 import alchemyService from '../services/alchemyService';
 import '../styles/CollectionFriendsModal.css';
 
@@ -149,13 +149,14 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           
           // 1. Get following users from Farcaster
           try {
-            console.log('🌐 Starting Neynar API call to get following users...');
-            console.log('API Parameters:', { fid, limit: 100 });
+            console.log('🌐 Starting Neynar API call to get all following users...');
+            console.log('API Parameters:', { fid });
             
             const followingStartTime = Date.now();
             // Add try/catch to explicitly log any errors during API call
             try {
-              const following = await farcasterService.getUserFollowing(fid, 100);
+              // Use fetchAllFollowing instead of getUserFollowing to get all following users
+              const following = await fetchAllFollowing(fid);
               const followingEndTime = Date.now();
               
               console.log(`✅ Found ${following.users.length} following users - API call took ${followingEndTime - followingStartTime}ms`);
@@ -172,9 +173,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               
               debug.following = {
                 count: following.users.length,
-                success: true,
+                success: following.success,
+                pagesRetrieved: following.pagesRetrieved,
                 responseTime: followingEndTime - followingStartTime,
-                hasUsers: following.users.length > 0
+                hasUsers: following.users.length > 0,
+                fromCache: following.fromCache
               };
               
               setDebugInfo(prevDebug => ({ 

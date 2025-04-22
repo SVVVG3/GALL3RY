@@ -420,103 +420,97 @@ const farcasterService = {
   },
   
   /**
-   * Get users that a Farcaster user follows
-   * @param {number} fid - Farcaster FID of the user
-   * @param {number} [limit=25] - Maximum number of results to return
-   * @param {string} [cursor] - Pagination cursor for fetching next page
-   * @returns {Promise<{users: Array, next: {cursor: string|null}}>} - Array of following users and pagination info
+   * Gets users that a Farcaster user follows
+   * @param {number} fid - Farcaster ID to fetch following for
+   * @param {number} [limit=100] - Number of results to return
+   * @param {string} [cursor] - Pagination cursor
+   * @param {boolean} [fetchAll=false] - Whether to fetch all following across multiple pages
+   * @returns {Promise<{users: Array, next: {cursor: string|null}}>} - Following users and pagination cursor
    */
-  getUserFollowing: async (fid, limit = 25, cursor = null) => {
+  getUserFollowing: async (fid, limit = 100, cursor = null, fetchAll = false) => {
     try {
-      if (!fid) {
-        throw new Error('FID is required');
+      // If fetchAll is true, delegate to fetchAllFollowing helper
+      if (fetchAll) {
+        console.log(`Fetching all following for FID ${fid}`);
+        return await fetchAllFollowing(fid, limit);
       }
       
-      // Check cache first
-      const cacheKey = `following:${fid}:${limit}:${cursor || 'initial'}`;
-      const cachedResult = profileCache.get(cacheKey);
+      const cacheKey = `following:${fid}:${limit}${cursor ? `:${cursor}` : ''}`;
       
-      if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_EXPIRATION_TIME) {
-        console.log('Using cached following list');
-        return cachedResult.data;
+      // Check for cached result
+      const cachedResult = await getCachedItem(cacheKey);
+      if (cachedResult) {
+        console.log(`Retrieved following from cache for FID ${fid}`);
+        return cachedResult;
       }
       
-      // Build params for the request
-      const params = {
-        endpoint: 'following',
-        fid,
-        limit,
-      };
+      console.log(`Fetching following for FID ${fid}, limit: ${limit}${cursor ? ', with cursor' : ''}`);
       
-      // Add cursor if provided
-      if (cursor) {
-        params.cursor = cursor;
-      }
+      // Request to following endpoint
+      const response = await axios.get(`${API_URL}/neynar`, {
+        params: {
+          endpoint: 'following',
+          fid,
+          limit,
+          cursor
+        },
+        headers: {
+          'api-key': process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS'
+        }
+      });
       
-      console.log(`Fetching following list for FID: ${fid}`);
-      
-      // Make request to Neynar through our proxy
-      const response = await axios.get(`${API_URL}/neynar`, { params });
-      
-      // Format the response consistently
-      let following = {
+      // Format response 
+      const formattedResponse = {
         users: [],
-        next: { cursor: null }
+        next: {
+          cursor: null
+        }
       };
       
-      // Parse response based on format returned from API
-      if (response.data?.users) {
-        following.users = response.data.users.map(user => ({
+      if (response.data && response.data.result && response.data.result.users) {
+        formattedResponse.users = response.data.result.users.map(user => ({
           fid: user.user.fid,
           username: user.user.username,
-          displayName: user.user.display_name || user.user.username,
-          imageUrl: user.user.pfp_url,
-          bio: user.user.profile?.bio?.text,
-          addresses: [
-            user.user.custody_address,
-            ...(user.user.verified_addresses?.eth_addresses || [])
-          ].filter(Boolean).map(addr => addr.toLowerCase())
+          displayName: user.user.display_name,
+          pfp: user.user.pfp_url,
+          bio: user.user.profile?.bio || '',
+          addresses: extractAddressesFromUserData(user)
         }));
         
-        // Get pagination cursor if available
-        following.next.cursor = response.data.next?.cursor || null;
-      } else if (response.data?.result?.users) {
-        // Handle v2 API format
-        following.users = response.data.result.users.map(user => ({
-          fid: user.user.fid,
-          username: user.user.username,
-          displayName: user.user.display_name || user.user.username,
-          imageUrl: user.user.pfp_url,
-          bio: user.user.profile?.bio?.text,
-          addresses: [
-            user.user.custody_address,
-            ...(user.user.verified_addresses?.eth_addresses || [])
-          ].filter(Boolean).map(addr => addr.toLowerCase())
-        }));
+        // Set pagination cursor if available
+        if (response.data.result.next && response.data.result.next.cursor) {
+          formattedResponse.next.cursor = response.data.result.next.cursor;
+        }
         
-        // Get pagination cursor if available
-        following.next.cursor = response.data.result.next?.cursor || null;
+        console.log(`Found ${formattedResponse.users.length} following users for FID: ${fid}`);
       }
-      
-      console.log(`Found ${following.users.length} following users for FID: ${fid}`);
       
       // Cache the result
-      profileCache.set(cacheKey, {
-        timestamp: Date.now(),
-        data: following
-      });
+      await cacheItem(cacheKey, formattedResponse, 5); // Cache for 5 minutes
       
-      return following;
+      return formattedResponse;
     } catch (error) {
-      console.error(`Error fetching following list for FID ${fid}:`, error);
-      console.error('Error details:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      });
+      console.error(`Error fetching following for FID ${fid}:`, error);
       
-      return { users: [], next: { cursor: null } };
+      // Log more detailed error information
+      if (error.response) {
+        console.error('Error response:', {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        });
+      } else if (error.request) {
+        console.error('No response received:', error.request);
+      } else {
+        console.error('Error message:', error.message);
+      }
+      
+      // Return empty result with error
+      return {
+        users: [],
+        next: { cursor: null },
+        error: error.message
+      };
     }
   },
   
@@ -582,10 +576,116 @@ const farcasterService = {
    */
   clearCache: () => {
     profileCache.clear();
+  },
+  
+  getCast: async (fid) => {
+    // Implementation of getCast method
+  },
+  
+  getMentionSuggestions: async (query) => {
+    // Implementation of getMentionSuggestions method
+  },
+  
+  formatUserProfile: (userData) => {
+    // Implementation of formatUserProfile method
   }
 };
+
+/**
+ * Fetches all users that a Farcaster user follows
+ * Uses pagination to retrieve the complete list
+ * 
+ * @param {number} fid - The Farcaster ID of the user
+ * @param {object} options - Optional parameters
+ * @param {boolean} [options.skipCache=false] - Whether to skip the cache check
+ * @param {number} [options.maxPages=10] - Maximum number of pages to fetch (safety limit)
+ * @returns {Promise<{users: Array<Object>, success: boolean, error: string|null}>} List of users and metadata
+ */
+export const fetchAllFollowing = async (fid, options = {}) => {
+  try {
+    const { skipCache = false, maxPages = 10 } = options;
+    
+    // Check if we already have the complete list cached
+    const cacheKey = `all-following-${fid}`;
+    if (!skipCache) {
+      const cached = getCachedItem(cacheKey);
+      if (cached) {
+        console.log(`✅ Using cached complete following list for FID ${fid}`);
+        return {
+          users: cached.users,
+          success: true,
+          fromCache: true,
+          timestamp: cached.timestamp
+        };
+      }
+    }
+    
+    console.log(`🔍 Fetching all following for FID ${fid} with pagination`);
+    
+    let allUsers = [];
+    let hasMore = true;
+    let cursor = null;
+    let pageCount = 0;
+    const pageSize = 100; // Maximum allowed by the API
+    
+    // Fetch all pages of followed users
+    while (hasMore && pageCount < maxPages) {
+      pageCount++;
+      console.log(`📃 Fetching page ${pageCount} of following for FID ${fid}${cursor ? ' with cursor' : ''}`);
+      
+      const pageResult = await farcasterService.getUserFollowing(fid, pageSize, cursor);
+      
+      if (!pageResult.success || !Array.isArray(pageResult.users)) {
+        console.error(`❌ Error fetching page ${pageCount} for FID ${fid}:`, pageResult.error);
+        break;
+      }
+      
+      // Add users from this page to our collection
+      allUsers = [...allUsers, ...pageResult.users];
+      
+      // Update cursor and check if we should continue
+      cursor = pageResult.next?.cursor;
+      hasMore = !!cursor && pageResult.users.length > 0;
+      
+      console.log(`✅ Added ${pageResult.users.length} users from page ${pageCount}, total: ${allUsers.length}`);
+      
+      // If we didn't get a full page, we're probably at the end
+      if (pageResult.users.length < pageSize) {
+        hasMore = false;
+      }
+    }
+    
+    // Create the result object
+    const result = {
+      users: allUsers,
+      success: true,
+      totalCount: allUsers.length,
+      pagesRetrieved: pageCount,
+      maxPagesReached: pageCount >= maxPages,
+      timestamp: new Date().toISOString()
+    };
+    
+    // Cache the result for future requests (valid for 15 minutes)
+    cacheItem(cacheKey, result, 15 * 60 * 1000);
+    
+    console.log(`✅ Completed fetching all following for FID ${fid}: ${allUsers.length} users across ${pageCount} pages`);
+    
+    return result;
+  } catch (error) {
+    console.error(`❌ Error in fetchAllFollowing for FID ${fid}:`, error.message);
+    return {
+      users: [],
+      success: false,
+      error: error.message,
+      timestamp: new Date().toISOString()
+    };
+  }
+};
+
+// Update the farcasterService object to include the fetchAllFollowing function
+farcasterService.fetchAllFollowing = fetchAllFollowing;
 
 export default farcasterService;
 
 // Export individual functions for direct import
-export const { fetchAddressesForFid, getUserFollowing, getProfile, searchUsers, clearCache } = farcasterService; 
+export const { fetchAddressesForFid, searchUsers, clearCache } = farcasterService; 
