@@ -99,40 +99,79 @@ const farcasterService = {
    */
   searchUsers: async (query, limit = 5) => {
     try {
+      // Validate inputs
+      if (!query || typeof query !== 'string') {
+        console.error('Invalid query provided to searchUsers:', query);
+        return [];
+      }
+      
+      // Sanitize the query
+      const sanitizedQuery = query.trim();
+      if (sanitizedQuery.length === 0) {
+        console.log('Empty query after trimming, returning empty results');
+        return [];
+      }
+      
       // Check cache first
-      const cacheKey = `search:${query}:${limit}`;
+      const cacheKey = `search:${sanitizedQuery}:${limit}`;
       const cachedResult = profileCache.get(cacheKey);
       
       if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_EXPIRATION_TIME) {
-        console.log('Using cached Farcaster profile search result');
+        console.log(`Using cached Farcaster profile search result for "${sanitizedQuery}"`);
         return cachedResult.data;
       }
       
-      console.log(`Making API request to ${API_URL}/neynar for user search with query: "${query}"`);
+      console.log(`Making API request to ${API_URL}/neynar for user search with query: "${sanitizedQuery}"`);
       
-      // Use our proxy endpoint instead of calling Neynar directly
-      const response = await axios.get(`${API_URL}/neynar`, {
-        params: {
-          endpoint: 'user/search',
-          q: query,
-          limit
-        }
-      });
+      let response;
+      // Try our proxy endpoint first
+      try {
+        response = await axios.get(`${API_URL}/neynar`, {
+          params: {
+            endpoint: 'user/search',
+            q: sanitizedQuery,
+            limit
+          },
+          timeout: 8000 // 8 second timeout
+        });
+      } catch (proxyError) {
+        console.error('Proxy endpoint failed:', proxyError.message);
+        
+        // Fall back to direct Neynar API if proxy fails
+        console.log('Falling back to direct Neynar API for search');
+        const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || "NEYNAR_API_DOCS";
+        
+        response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search`, {
+          params: { q: sanitizedQuery, limit },
+          headers: { api_key: NEYNAR_API_KEY },
+          timeout: 8000
+        });
+      }
       
-      console.log('Raw API response:', response.data);
+      if (!response || !response.data) {
+        console.error('Empty or invalid response from API');
+        return [];
+      }
+      
+      console.log('Raw API response received');
       
       // Handle different response formats
       let usersData = [];
       
       // Check if response is in format { users: [...] }
-      if (response.data && response.data.users) {
+      if (response.data && Array.isArray(response.data.users)) {
         usersData = response.data.users;
         console.log('Found users in direct users array format');
       } 
       // Check if response is in format { result: { users: [...] } }
-      else if (response.data && response.data.result && response.data.result.users) {
+      else if (response.data?.result && Array.isArray(response.data.result.users)) {
         usersData = response.data.result.users;
         console.log('Found users in result.users format');
+      }
+      // If we're getting direct array response
+      else if (Array.isArray(response.data)) {
+        usersData = response.data;
+        console.log('API returned direct array of users');
       }
       // Check if array is wrapped in some other property
       else {
@@ -159,27 +198,36 @@ const farcasterService = {
         }
       }
       
-      if (usersData.length === 0) {
-        console.warn('No users found in API response:', response.data);
+      if (!Array.isArray(usersData) || usersData.length === 0) {
+        console.warn('No users found in API response or invalid format');
         return [];
       }
       
-      console.log('Found users data:', usersData);
+      console.log(`Found ${usersData.length} users in API response`);
       
       // Format the response to match the structure expected by the app
-      const users = usersData.map(user => ({
-        fid: user.fid,
-        username: user.username,
-        displayName: user.display_name,
-        imageUrl: user.pfp_url,
-        bio: user.profile?.bio?.text,
-        followerCount: user.follower_count,
-        followingCount: user.following_count,
-        // Neynar doesn't provide connected addresses in search results
-        connectedAddresses: []
-      })) || [];
+      const users = usersData.map(user => {
+        // Validate user object
+        if (!user || typeof user !== 'object') return null;
+        
+        return {
+          // Required fields - use fallbacks if missing
+          fid: user.fid || 0,
+          username: user.username || '',
+          
+          // Optional fields with fallbacks
+          displayName: user.display_name || user.displayName || user.username || '',
+          imageUrl: user.pfp_url || user.pfpUrl || user.profile?.pfp?.url || '',
+          bio: user.profile?.bio?.text || user.bio || '',
+          followerCount: user.follower_count || user.followerCount || 0,
+          followingCount: user.following_count || user.followingCount || 0,
+          
+          // Neynar doesn't provide connected addresses in search results
+          connectedAddresses: []
+        };
+      }).filter(user => user !== null && user.fid && user.username); // Filter out invalid users
       
-      console.log(`Processed ${users.length} user suggestions from API response`);
+      console.log(`Processed ${users.length} valid user suggestions from API response`);
       
       // Cache the result
       profileCache.set(cacheKey, {
@@ -612,51 +660,135 @@ const farcasterService = {
    */
   getFarcasterAddresses: async ({ username, fid }) => {
     try {
-      const cacheKey = `farcaster_addresses_${username ? username.toLowerCase() : `fid_${fid}`}`;
+      // Exit early if no username or fid provided
+      if (!username && !fid) {
+        console.error('getFarcasterAddresses: No username or fid provided');
+        return null;
+      }
+
+      // Check if we have the addresses cached
+      const cacheKey = username 
+        ? `farcaster_addresses_${username.toLowerCase().replace('@', '')}` 
+        : `farcaster_addresses_fid_${fid}`;
       
-      // Check cache first
-      const cachedAddresses = await getCachedItem(cacheKey);
+      const cachedAddresses = getCachedItem(cacheKey);
       if (cachedAddresses) {
-        console.log(`Retrieved Farcaster addresses from cache for ${username || fid}`);
+        console.log(`Retrieved cached addresses for ${username || fid}`);
         return cachedAddresses;
       }
       
-      // Get the user profile to extract addresses
-      const profile = await farcasterService.getProfile({ username, fid });
+      console.log(`Fetching addresses for ${username || fid}`);
       
-      if (!profile) {
-        console.warn(`No profile found for ${username || fid}, cannot get addresses`);
-        return [];
+      // Get the profile first to get the FID if only username is provided
+      let profile;
+      try {
+        profile = await getProfile({ username, fid });
+        if (!profile) {
+          console.error(`Profile not found for ${username || fid}`);
+          return null;
+        }
+      } catch (error) {
+        console.error(`Error fetching profile for ${username || fid}:`, error);
+        return null;
       }
-      
-      // Collect all addresses from the profile
-      const addresses = [];
-      
-      // Add custody address if it exists
-      if (profile.custodyAddress) {
-        addresses.push(profile.custodyAddress.toLowerCase());
+
+      // Use the FID from the profile
+      const userFid = profile.fid;
+      if (!userFid) {
+        console.error(`No FID found in profile for ${username || fid}`);
+        return null;
       }
+
+      // Extract and validate the custody address from the profile
+      let ethAddresses = [];
       
-      // Add all connected addresses
-      if (profile.connectedAddresses && profile.connectedAddresses.length) {
-        profile.connectedAddresses.forEach(address => {
-          // Only add Ethereum addresses (skip Solana)
-          if (address && address.startsWith('0x')) {
-            addresses.push(address.toLowerCase());
+      if (profile.custody_address) {
+        // Make sure the custody address is a valid string before using toLowerCase
+        const custodyAddress = typeof profile.custody_address === 'string' 
+          ? profile.custody_address.toLowerCase()
+          : null;
+        
+        if (custodyAddress) {
+          ethAddresses.push(custodyAddress);
+        } else {
+          console.warn('Invalid custody address format:', profile.custody_address);
+        }
+      }
+
+      // Try to extract addresses from the verification data
+      try {
+        if (profile.verifications && Array.isArray(profile.verifications)) {
+          // Filter and validate each verification address
+          const verifiedAddresses = profile.verifications
+            .filter(v => typeof v === 'string' && v.trim() !== '')
+            .map(v => {
+              // Normalize and validate each address
+              try {
+                return typeof v === 'string' ? v.toLowerCase() : null;
+              } catch (err) {
+                console.warn(`Invalid verification address: ${v}`);
+                return null;
+              }
+            })
+            .filter(Boolean); // Remove null/undefined entries
+          
+          // Add verified addresses to the list
+          ethAddresses = [...ethAddresses, ...verifiedAddresses];
+        }
+      } catch (error) {
+        console.error(`Error processing verification addresses for ${username || fid}:`, error);
+      }
+
+      // Try to extract addresses from connected data
+      try {
+        // Extract from user data if available
+        if (profile.userData) {
+          const extractedAddresses = extractAddressesFromUserData(profile.userData);
+          if (extractedAddresses && Array.isArray(extractedAddresses)) {
+            // Filter, validate and normalize each extracted address
+            const validatedAddresses = extractedAddresses
+              .filter(addr => addr && typeof addr === 'string' && addr.trim() !== '')
+              .map(addr => {
+                try {
+                  return addr.toLowerCase();
+                } catch (err) {
+                  console.warn(`Invalid extracted address: ${addr}`);
+                  return null;
+                }
+              })
+              .filter(Boolean); // Remove null values
+            
+            ethAddresses = [...ethAddresses, ...validatedAddresses];
           }
-        });
+        }
+      } catch (error) {
+        console.error(`Error extracting addresses from userData for ${username || fid}:`, error);
       }
+
+      // Deduplicate addresses - ensure all are valid strings first
+      const uniqueAddresses = [...new Set(ethAddresses.filter(
+        addr => addr && typeof addr === 'string' && addr.startsWith('0x')
+      ))];
+
+      // Only get ENS info if we have at least one ETH address
+      let result = { addresses: uniqueAddresses };
       
-      // Remove duplicates
-      const uniqueAddresses = [...new Set(addresses)];
-      
-      // Cache the addresses
-      await cacheItem(cacheKey, uniqueAddresses, 5); // Cache for 5 minutes
-      
-      return uniqueAddresses;
+      if (uniqueAddresses.length > 0) {
+        console.log(`Found ${uniqueAddresses.length} unique addresses for ${username || fid}`);
+      } else {
+        console.warn(`No valid addresses found for ${username || fid}`);
+      }
+
+      // Add user profile to the result
+      result.profile = profile;
+
+      // Cache the result
+      cacheItem(cacheKey, result, 5 * 60 * 1000); // 5 minutes cache
+
+      return result;
     } catch (error) {
-      console.error(`Error fetching addresses for ${username || fid}:`, error.message);
-      return [];
+      console.error('Error in getFarcasterAddresses:', error);
+      return null;
     }
   },
   
@@ -771,8 +903,11 @@ const farcasterService = {
 };
 
 /**
- * Helper function to extract addresses from user data
- * Handles different API response formats
+ * Helper function to extract Ethereum addresses from Farcaster user data
+ * Handles different API response formats from Neynar and other providers
+ * 
+ * @param {Object} userData - The user data object from Farcaster API
+ * @returns {Array<string>} - Array of unique, lowercase Ethereum addresses
  */
 const extractAddressesFromUserData = (userData) => {
   try {
@@ -786,86 +921,127 @@ const extractAddressesFromUserData = (userData) => {
     
     // Check verified_addresses.eth_addresses path (common in newer Neynar API)
     if (userData.verified_addresses?.eth_addresses) {
-      // Filter out any non-string values before adding
-      const validAddresses = userData.verified_addresses.eth_addresses.filter(addr => typeof addr === 'string');
-      addresses = [...addresses, ...validAddresses];
-      console.log(`Found ${validAddresses.length} addresses in verified_addresses.eth_addresses`);
+      try {
+        // Filter out any non-string values before adding
+        const validAddresses = Array.isArray(userData.verified_addresses.eth_addresses) 
+          ? userData.verified_addresses.eth_addresses.filter(addr => typeof addr === 'string')
+          : [];
+        addresses = [...addresses, ...validAddresses];
+        console.log(`Found ${validAddresses.length} addresses in verified_addresses.eth_addresses`);
+      } catch (err) {
+        console.error('Error processing verified_addresses.eth_addresses:', err);
+      }
     }
     
     // Check other properties from Neynar API structure
-    if (userData.verifications && Array.isArray(userData.verifications)) {
-      // Handle verifications array properly - may contain objects or strings
-      const verificationAddresses = userData.verifications.map(v => {
-        // If it's an object with 'address' property, use that
-        if (typeof v === 'object' && v !== null && v.address) {
-          return v.address;
-        } 
-        // If it's an object with 'addr' property, use that
-        else if (typeof v === 'object' && v !== null && v.addr) {
-          return v.addr;
+    if (userData.verifications) {
+      try {
+        if (Array.isArray(userData.verifications)) {
+          // Handle verifications array properly - may contain objects or strings
+          const verificationAddresses = userData.verifications.map(v => {
+            // If it's an object with 'address' property, use that
+            if (typeof v === 'object' && v !== null && v.address) {
+              return v.address;
+            } 
+            // If it's an object with 'addr' property, use that
+            else if (typeof v === 'object' && v !== null && v.addr) {
+              return v.addr;
+            }
+            // If it's a string, assume it's an address
+            else if (typeof v === 'string') {
+              return v;
+            }
+            // Skip anything else
+            return null;
+          }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
+          
+          addresses = [...addresses, ...verificationAddresses];
+          console.log(`Found ${verificationAddresses.length} addresses in verifications array`);
+        } else {
+          console.log('verifications property exists but is not an array:', typeof userData.verifications);
         }
-        // If it's a string, assume it's an address
-        else if (typeof v === 'string') {
-          return v;
-        }
-        // Skip anything else
-        return null;
-      }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
-      
-      addresses = [...addresses, ...verificationAddresses];
-      console.log(`Found ${verificationAddresses.length} addresses in verifications array`);
+      } catch (err) {
+        console.error('Error processing verifications:', err);
+      }
     }
     
     // Check custody_address (often present in Neynar API)
     if (userData.custody_address && typeof userData.custody_address === 'string') {
-      addresses.push(userData.custody_address);
-      console.log(`Added custody address: ${userData.custody_address}`);
+      try {
+        addresses.push(userData.custody_address);
+        console.log(`Added custody address: ${userData.custody_address}`);
+      } catch (err) {
+        console.error('Error processing custody_address:', err);
+      }
     }
     
     // Check direct eth_addresses array
-    if (Array.isArray(userData.eth_addresses)) {
-      // Filter for strings only
-      const validEthAddresses = userData.eth_addresses.filter(addr => typeof addr === 'string');
-      addresses = [...addresses, ...validEthAddresses];
-      console.log(`Found ${validEthAddresses.length} addresses in eth_addresses`);
+    if (userData.eth_addresses) {
+      try {
+        // Filter for strings only
+        const validEthAddresses = Array.isArray(userData.eth_addresses)
+          ? userData.eth_addresses.filter(addr => typeof addr === 'string')
+          : [];
+        addresses = [...addresses, ...validEthAddresses];
+        console.log(`Found ${validEthAddresses.length} addresses in eth_addresses`);
+      } catch (err) {
+        console.error('Error processing eth_addresses:', err);
+      }
     }
     
     // Check addresses array directly
-    if (Array.isArray(userData.addresses)) {
-      // Handle addresses array properly - may contain objects or strings
-      const addressesArray = userData.addresses.map(a => {
-        // If it's an object with 'address' property, use that
-        if (typeof a === 'object' && a !== null && a.address) {
-          return a.address;
-        } 
-        // If it's an object with 'addr' property, use that
-        else if (typeof a === 'object' && a !== null && a.addr) {
-          return a.addr;
+    if (userData.addresses) {
+      try {
+        if (Array.isArray(userData.addresses)) {
+          // Handle addresses array properly - may contain objects or strings
+          const addressesArray = userData.addresses.map(a => {
+            // If it's an object with 'address' property, use that
+            if (typeof a === 'object' && a !== null && a.address) {
+              return a.address;
+            } 
+            // If it's an object with 'addr' property, use that
+            else if (typeof a === 'object' && a !== null && a.addr) {
+              return a.addr;
+            }
+            // If it's a string, assume it's an address
+            else if (typeof a === 'string') {
+              return a;
+            }
+            // Skip anything else
+            return null;
+          }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
+          
+          addresses = [...addresses, ...addressesArray];
+          console.log(`Found ${addressesArray.length} addresses in addresses array`);
+        } else {
+          console.log('addresses property exists but is not an array:', typeof userData.addresses);
         }
-        // If it's a string, assume it's an address
-        else if (typeof a === 'string') {
-          return a;
-        }
-        // Skip anything else
-        return null;
-      }).filter(a => a !== null && typeof a === 'string'); // Only keep string values
-      
-      addresses = [...addresses, ...addressesArray];
-      console.log(`Found ${addressesArray.length} addresses in addresses array`);
+      } catch (err) {
+        console.error('Error processing addresses array:', err);
+      }
     }
     
     // Remove duplicates and standardize to lowercase
     if (addresses.length > 0) {
       console.log(`Found total of ${addresses.length} addresses before deduplication`);
       
+      // Validation: Only keep addresses that look like Ethereum addresses
+      const validEthAddresses = addresses
+        .filter(addr => typeof addr === 'string')
+        .filter(addr => addr.match(/^(0x)?[0-9a-f]{40}$/i));
+      
       // Safely convert to lowercase - only process strings
       const uniqueAddresses = [...new Set(
-        addresses
-          .filter(addr => typeof addr === 'string') // Ensure we only have strings
-          .map(addr => addr.toLowerCase())          // Now safe to call toLowerCase
+        validEthAddresses.map(addr => {
+          // Add 0x prefix if missing
+          if (!addr.startsWith('0x')) {
+            return '0x' + addr.toLowerCase();
+          }
+          return addr.toLowerCase();
+        })
       )];
       
-      console.log(`Returning ${uniqueAddresses.length} unique addresses`);
+      console.log(`Returning ${uniqueAddresses.length} unique valid Ethereum addresses`);
       return uniqueAddresses;
     }
     
@@ -873,6 +1049,11 @@ const extractAddressesFromUserData = (userData) => {
     return [];
   } catch (err) {
     console.error('Error extracting addresses from user data:', err);
+    console.error('Error details:', {
+      message: err.message,
+      stack: err.stack,
+      userData: userData ? 'userData exists' : 'userData is null or undefined'
+    });
     return [];
   }
 };
