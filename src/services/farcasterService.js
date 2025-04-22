@@ -787,8 +787,26 @@ const extractAddressesFromUserData = (userData) => {
     
     // Check other properties from Neynar API structure
     if (userData.verifications && Array.isArray(userData.verifications)) {
-      addresses = [...addresses, ...userData.verifications];
-      console.log(`Found ${userData.verifications.length} addresses in verifications array`);
+      // Handle verifications array properly - may contain objects or strings
+      const verificationAddresses = userData.verifications.map(v => {
+        // If it's an object with 'address' property, use that
+        if (typeof v === 'object' && v !== null && v.address) {
+          return v.address;
+        } 
+        // If it's an object with 'addr' property, use that
+        else if (typeof v === 'object' && v !== null && v.addr) {
+          return v.addr;
+        }
+        // If it's a string, assume it's an address
+        else if (typeof v === 'string') {
+          return v;
+        }
+        // Skip anything else
+        return null;
+      }).filter(a => a !== null); // Remove any null values
+      
+      addresses = [...addresses, ...verificationAddresses];
+      console.log(`Found ${verificationAddresses.length} addresses in verifications array`);
     }
     
     // Check custody_address (often present in Neynar API)
@@ -805,14 +823,35 @@ const extractAddressesFromUserData = (userData) => {
     
     // Check addresses array directly
     if (Array.isArray(userData.addresses)) {
-      addresses = [...addresses, ...userData.addresses];
-      console.log(`Found ${userData.addresses.length} addresses in addresses array`);
+      // Handle addresses array properly - may contain objects or strings
+      const addressesArray = userData.addresses.map(a => {
+        // If it's an object with 'address' property, use that
+        if (typeof a === 'object' && a !== null && a.address) {
+          return a.address;
+        } 
+        // If it's an object with 'addr' property, use that
+        else if (typeof a === 'object' && a !== null && a.addr) {
+          return a.addr;
+        }
+        // If it's a string, assume it's an address
+        else if (typeof a === 'string') {
+          return a;
+        }
+        // Skip anything else
+        return null;
+      }).filter(a => a !== null); // Remove any null values
+      
+      addresses = [...addresses, ...addressesArray];
+      console.log(`Found ${addressesArray.length} addresses in addresses array`);
     }
     
     // Remove duplicates and standardize to lowercase
     if (addresses.length > 0) {
       console.log(`Found total of ${addresses.length} addresses before deduplication`);
-      const uniqueAddresses = [...new Set(addresses.map(addr => addr.toLowerCase()))];
+      // Make sure all addresses are strings before calling toLowerCase
+      const uniqueAddresses = [...new Set(addresses.map(addr => 
+        typeof addr === 'string' ? addr.toLowerCase() : null
+      ).filter(a => a !== null))];
       console.log(`Returning ${uniqueAddresses.length} unique addresses`);
       return uniqueAddresses;
     }
