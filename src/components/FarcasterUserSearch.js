@@ -11,10 +11,20 @@ import NFTSortControls from './NFTSortControls';
 import farcasterService from '../services/farcasterService';
 import FarcasterSuggestions from './FarcasterSuggestions';
 import { useDispatch, useSelector } from 'react-redux';
-import { formatNFTsForDisplay } from '../utils/nftUtils';
+import { formatNFTsForDisplay, removeDuplicates } from '../utils/nftUtils';
 import alchemyService, { fetchNftsForAddresses } from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
+import { CloseIcon } from '@chakra-ui/icons';
+
+// Validates if a string is a valid Ethereum address
+const isValidAddress = (address) => {
+  return address && 
+         typeof address === 'string' && 
+         address.startsWith('0x') && 
+         address.length === 42 &&
+         /^0x[0-9a-fA-F]{40}$/.test(address);
+};
 
 /**
  * FarcasterUserSearch component - simplified to avoid circular dependencies
@@ -438,104 +448,56 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Handle when a user profile is found
   const handleUserProfileFound = async (profile) => {
-    if (!profile) {
-      setIsSearching(false);
-      setSearchError('No user found with that username');
-      setUserProfile(null);
-      return;
-    }
-    
-    setUserProfile(profile);
+    // Set loading state
     setIsSearching(true);
-    setSearchError('');
+    setSearchError(null);
     
     try {
-      // Step 1: Get the user's addresses using the profile we already have
-      console.log(`Fetching addresses for user ${profile.username || profile.fid}`);
-      let addresses = [];
+      console.log('User profile found:', profile);
       
-      try {
-        // Use the profile we already have instead of fetching it again
-        addresses = zapperService.getAddressesFromProfile(profile);
-        console.log(`Got ${addresses?.length || 0} addresses from existing profile`);
-      } catch (error) {
-        console.warn('Error getting addresses from profile, falling back to API calls:', error.message);
-        
-        // Fallback to traditional API call if direct extraction fails
-        try {
-          addresses = await zapperService.getFarcasterAddresses(profile.username || profile.fid);
-          console.log(`Zapper service found ${addresses?.length || 0} addresses`);
-        } catch (zapperError) {
-          console.warn('Zapper API address fetch failed, falling back to farcasterService:', zapperError.message);
-          
-          // Fallback to farcasterService if Zapper fails
-          if (profile.fid) {
-            addresses = await farcasterService.fetchAddressesForFid(profile.fid);
-          } else {
-            console.warn('No FID available to fetch addresses with fallback method');
-            addresses = [];
-          }
+      // Prepare wallet addresses
+      const walletAddresses = [
+        ...new Set([
+          profile.data.custody_address,
+          ...(profile.data.verified_addresses || [])
+        ])
+      ].filter(address => isValidAddress(address));
+      
+      console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
+      
+      if (walletAddresses.length === 0) {
+        throw new Error('No valid wallet addresses found');
+      }
+
+      // Fetch NFTs for all valid addresses across all chains
+      const nfts = await alchemyService.fetchNftsForMultipleAddresses(
+        walletAddresses,
+        ['eth', 'polygon', 'opt', 'arb', 'base'],
+        {
+          excludeSpam: true,
+          excludeAirdrops: true
         }
-      }
+      );
       
-      if (!addresses || addresses.length === 0) {
-        console.log('No addresses found for user');
-        setUserNfts([]);
-        setWalletAddresses([]);
-        setIsSearching(false);
-        return;
-      }
+      console.log(`Fetched ${nfts.length} NFTs for user ${profile.data.username}`);
       
-      console.log(`Found ${addresses.length} addresses for user:`, addresses);
+      // Format NFTs for display
+      const formattedNfts = formatNFTsForDisplay(nfts);
       
-      // Set the wallet addresses in state so they can be displayed
-      setWalletAddresses(addresses);
+      // Final deduplication before updating state
+      const uniqueNfts = removeDuplicates(formattedNfts);
       
-      // Step 2: Fetch NFTs for all addresses in a single call with enhanced deduplication
-      console.log(`Fetching NFTs for ${addresses.length} wallet addresses...`);
-      const result = await fetchNftsForAddresses(addresses, {
-        chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
-        fetchAll: true,
-        excludeSpam: true,
-        excludeAirdrops: true,
-        // Focus on ETH mainnet first, only get true chain-specific NFTs from other chains
-        fetchSecondaryChains: true
-      });
+      console.log(`After final deduplication: ${uniqueNfts.length} unique NFTs`);
       
-      // Log the detailed results for debugging
-      console.log(`Fetched ${result.nfts.length} unique NFTs across all wallets`);
-      
-      // Verify uniqueIds are present
-      const missingUniqueIds = result.nfts.filter(nft => !nft.uniqueId).length;
-      if (missingUniqueIds > 0) {
-        console.warn(`Warning: ${missingUniqueIds} NFTs are missing uniqueId property`);
-      }
-      
-      // Double-check for duplicates with same uniqueId
-      const uniqueIdMap = new Map();
-      const duplicateCount = result.nfts.filter(nft => {
-        if (!nft.uniqueId) return false;
-        if (uniqueIdMap.has(nft.uniqueId)) return true;
-        uniqueIdMap.set(nft.uniqueId, true);
-        return false;
-      }).length;
-      
-      if (duplicateCount > 0) {
-        console.warn(`Warning: Found ${duplicateCount} duplicate NFTs with the same uniqueId`);
-      }
-      
-      // Store raw NFTs in state
-      setUserNfts(result.nfts);
-      
-      // Format NFTs for display once (formatNFTsForDisplay preserves uniqueIds)
-      const formattedNfts = formatNFTsForDisplay(result.nfts);
-      
-      // Update the Redux store with the formatted NFTs
-      dispatch(setNftList(formattedNfts));
-      
+      // Update state and Redux store
+      setUserNfts(uniqueNfts);
+      setWalletAddresses(walletAddresses);
+      setUserProfile(profile);
+      dispatch(setNftList(uniqueNfts));
+
     } catch (error) {
-      console.error('Error processing user profile:', error);
-      setSearchError('Error fetching user data');
+      console.error('Error in handleUserProfileFound:', error);
+      setSearchError(`Error fetching NFTs: ${error.message}`);
     } finally {
       setIsSearching(false);
     }
