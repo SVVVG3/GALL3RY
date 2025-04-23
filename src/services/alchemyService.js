@@ -68,7 +68,7 @@ const SUPPORTED_CHAINS = [
  * Service for interacting with Alchemy NFT APIs
  * Updated to follow Alchemy NFT API v3 documentation
  */
-export default class AlchemyService {
+class AlchemyService {
   constructor() {
     this.apiKey = null;
     this.requestCache = new Map();
@@ -382,7 +382,7 @@ export default class AlchemyService {
         error: error.message
       };
     }
-  },
+  }
   
   /**
    * Creates a consistent unique identifier for NFTs across the application
@@ -415,7 +415,7 @@ export default class AlchemyService {
     
     // Create a consistent unique ID - independent of wallet
     return `${network}:${contractAddress}:${tokenId}`;
-  },
+  }
   
   /**
    * Fetch NFTs for multiple wallet addresses with optional deduplication
@@ -564,7 +564,7 @@ export default class AlchemyService {
       chainsQueried: chainsToFetch,
       errors: totalErrors
     };
-  },
+  }
   
   /**
    * Helper function to determine if a collection exists on a specific chain
@@ -599,7 +599,7 @@ export default class AlchemyService {
     
     // Check if the contract address is in the list for this chain
     return chainCollections[chainId]?.includes(contractAddress) || false;
-  },
+  }
   
   /**
    * Get metadata for a specific NFT
@@ -644,7 +644,7 @@ export default class AlchemyService {
       console.error(`Error fetching NFT metadata for ${contractAddress} token ${tokenId} on ${chainId}:`, error);
       return null;
     }
-  },
+  }
   
   /**
    * Get the best quality image URL for an NFT
@@ -676,7 +676,7 @@ export default class AlchemyService {
       console.error('Error getting NFT image URL:', error.message);
       return null;
     }
-  },
+  }
   
   /**
    * Gets NFTs for a specific collection
@@ -734,7 +734,7 @@ export default class AlchemyService {
       console.error(`Error fetching NFTs for collection ${contractAddress} on ${chain}:`, error);
       return { nfts: [] };
     }
-  },
+  }
   
   /**
    * Get wallet addresses that own NFTs from a specified contract
@@ -894,7 +894,7 @@ export default class AlchemyService {
       // Always return an empty array instead of failing completely
       return [];
     }
-  },
+  }
   
   /**
    * Gets metadata for a specific contract
@@ -946,7 +946,7 @@ export default class AlchemyService {
       console.error(`Error fetching contract metadata for ${contractAddress} on ${chain}:`, error);
       return {};
     }
-  },
+  }
 
   /**
    * Gets all NFTs for a contract address
@@ -996,7 +996,7 @@ export default class AlchemyService {
       console.error(`Error fetching NFTs for contract ${contractAddress} on ${chainId}:`, error);
       return { nfts: [], pageKey: null };
     }
-  },
+  }
 
   /**
    * Gets all owners for a NFT
@@ -1040,7 +1040,7 @@ export default class AlchemyService {
       console.error(`Error fetching owners for NFT ${contractAddress}:${tokenId} on ${chainId}:`, error);
       return [];
     }
-  },
+  }
 
   /**
    * Gets all NFTs for an owner across all supported chains
@@ -1090,7 +1090,7 @@ export default class AlchemyService {
       console.error('Error fetching NFTs across chains:', error);
       return {};
     }
-  },
+  }
 
   /**
    * Gets metadata for a specific token
@@ -1140,7 +1140,7 @@ export default class AlchemyService {
       console.error(`Error fetching token metadata for ${contractAddress}:${tokenId} on ${chain}:`, error);
       return null;
     }
-  },
+  }
 
   /**
    * Gets tokens for a specific owner
@@ -1189,8 +1189,8 @@ export default class AlchemyService {
       console.error(`Error fetching tokens for owner ${owner} on ${chain}:`, error);
       return { tokens: [] };
     }
-  },
-};
+  }
+}
 
 /**
  * Get asset transfers for addresses to track NFT ownership history
