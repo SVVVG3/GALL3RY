@@ -192,12 +192,31 @@ const alchemyService = {
       // Build parameters according to Alchemy API documentation
       const params = new URLSearchParams({
         owner: ownerAddress,
-        pageSize: pageSize,
-        excludeFilters: [
-          ...(options.excludeSpam ? ['SPAM'] : []),
-          ...(options.excludeAirdrops ? ['AIRDROPS'] : [])
-        ].join(','),
+        pageSize: pageSize
       });
+      
+      // Add excludeFilters only if we're actually excluding something
+      const filtersToExclude = [
+        ...(options.excludeSpam ? ['SPAM'] : []),
+        ...(options.excludeAirdrops ? ['AIRDROPS'] : [])
+      ];
+      
+      if (filtersToExclude.length > 0) {
+        params.set('excludeFilters', filtersToExclude.join(','));
+      }
+      
+      // Include filters for only specific token types if specified
+      if (options.includeFilters && options.includeFilters.length > 0) {
+        params.set('includeFilters', options.includeFilters.join(','));
+      }
+      
+      // Add withMetadata parameter if specified
+      if (options.withMetadata !== undefined) {
+        params.set('withMetadata', options.withMetadata.toString());
+      } else {
+        // Default to true as we generally want metadata
+        params.set('withMetadata', 'true');
+      }
 
       let allNfts = [];
       let pageKey = null;
@@ -209,7 +228,10 @@ const alchemyService = {
           params.set('pageKey', pageKey);
         }
 
-        const response = await fetch(`${apiUrl}?${params.toString()}`);
+        const requestUrl = `${apiUrl}?${params.toString()}`;
+        console.log(`Fetching NFTs from: ${requestUrl}`);
+        
+        const response = await fetch(requestUrl);
         
         if (!response.ok) {
           console.error(`Error fetching NFTs: ${response.status}`);
@@ -221,8 +243,11 @@ const alchemyService = {
         }
 
         const data = await response.json();
+        console.log(`API Response data:`, data);
         
-        if (data.nfts) {
+        if (data.ownedNfts) {
+          allNfts = [...allNfts, ...data.ownedNfts];
+        } else if (data.nfts) {
           allNfts = [...allNfts, ...data.nfts];
         }
         
@@ -265,15 +290,26 @@ const alchemyService = {
       
       // Make parallel requests to all chains
       const results = await Promise.allSettled(
-        chains.map(chainId => 
-          this.getNftsForOwner(ownerAddress, {
+        chains.map(chainId => {
+          // Setup options for this request
+          const fetchOptions = {
             network: chainId,
             pageSize,
-            excludeSpam: options.excludeSpam !== false,
-            excludeAirdrops: options.excludeAirdrops !== false,
-            fetchAll: fetchAll
-          })
-        )
+            withMetadata: true,
+            fetchAll
+          };
+          
+          // Only add exclude filters if they are explicitly set
+          if (options.excludeSpam === true) {
+            fetchOptions.excludeSpam = true;
+          }
+          
+          if (options.excludeAirdrops === true) {
+            fetchOptions.excludeAirdrops = true;
+          }
+          
+          return this.getNftsForOwner(ownerAddress, fetchOptions);
+        })
       );
       
       // Combine results from successful requests
@@ -400,12 +436,21 @@ const alchemyService = {
           // Setup options for this request
           const fetchOptions = {
             network: chain,
-            excludeSpam: options.excludeSpam !== false,
-            excludeAirdrops: options.excludeAirdrops !== false,
+            withMetadata: true,
+            pageSize: 100,
             fetchAll: options.fetchAll === true
           };
           
-          console.log(`Fetching NFTs for wallet ${address} on chain ${chain} with filters: ${options.excludeSpam !== false ? 'SPAM' : ''}, ${options.excludeAirdrops !== false ? 'AIRDROPS' : ''}`);
+          // Only add excludeFilters if they are explicitly set to true
+          if (options.excludeSpam === true) {
+            fetchOptions.excludeSpam = true;
+          }
+          
+          if (options.excludeAirdrops === true) {
+            fetchOptions.excludeAirdrops = true;
+          }
+          
+          console.log(`Fetching NFTs for wallet ${address} on chain ${chain} with filters: ${options.excludeSpam === true ? 'SPAM' : 'none'}, ${options.excludeAirdrops === true ? 'AIRDROPS' : 'none'}`);
           
           // Get NFTs for this wallet on this chain
           const result = await this.getNftsForOwner(address, fetchOptions);
