@@ -457,8 +457,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Prepare wallet addresses
       const walletAddresses = [
         ...new Set([
-          profile.data.custody_address,
-          ...(profile.data.verified_addresses || [])
+          profile.custodyAddress,
+          ...(profile.connectedAddresses || [])
         ])
       ].filter(address => isValidAddress(address));
       
@@ -469,16 +469,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       }
 
       // Fetch NFTs for all valid addresses across all chains
-      const nfts = await alchemyService.fetchNftsForMultipleAddresses(
+      const result = await alchemyService.fetchNftsForMultipleAddresses(
         walletAddresses,
-        ['eth', 'polygon', 'opt', 'arb', 'base'],
         {
+          chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
           excludeSpam: true,
           excludeAirdrops: true
         }
       );
       
-      console.log(`Fetched ${nfts.length} NFTs for user ${profile.data.username}`);
+      const nfts = result.nfts || [];
+      
+      console.log(`Fetched ${nfts.length} NFTs for user ${profile.username}`);
       
       // Format NFTs for display
       const formattedNfts = formatNFTsForDisplay(nfts);
