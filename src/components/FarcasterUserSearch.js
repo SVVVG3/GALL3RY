@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
 import NFTGrid from './NFTGrid';
-import { FaSort } from 'react-icons/fa';
+import { FaSort, FaTimes } from 'react-icons/fa';
 import '../styles/FarcasterUserSearch.css';
 import '../styles/FarcasterProfile.css';
 import safeStorage from '../utils/storage';
@@ -15,7 +15,6 @@ import { formatNFTsForDisplay, removeDuplicates } from '../utils/nftUtils';
 import alchemyService, { fetchNftsForAddresses } from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
-import { CloseIcon } from '@chakra-ui/icons';
 
 // Validates if a string is a valid Ethereum address
 const isValidAddress = (address) => {
