@@ -63,16 +63,43 @@ export default async function handler(req, res) {
       });
     }
 
-    // Get the query params and remove the endpoint and network params to avoid duplication
-    const queryParams = new URLSearchParams(req.query);
-    queryParams.delete('endpoint');
-    queryParams.delete('network');
-
     // Build the full URL with the appropriate network
     const baseUrl = `https://${networkEndpoint}.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
+    
+    // Create a new URLSearchParams object for the query
+    const queryParams = new URLSearchParams();
+    
+    // Copy all query parameters except endpoint, network, and excludeFilters
+    Object.keys(req.query).forEach(key => {
+      if (key !== 'endpoint' && key !== 'network' && key !== 'excludeFilters[]') {
+        queryParams.append(key, req.query[key]);
+      }
+    });
+    
+    // Handle excludeFilters specially - Alchemy expects a single parameter with comma-separated values
+    // instead of multiple parameters with the same name
+    if (req.query['excludeFilters[]']) {
+      const filters = Array.isArray(req.query['excludeFilters[]']) 
+        ? req.query['excludeFilters[]'] 
+        : [req.query['excludeFilters[]']];
+      
+      // Only add the excludeFilters if we have valid filters
+      // According to Alchemy API docs, only SPAM is valid for excludeFilters
+      const validFilters = filters.filter(filter => 
+        ['SPAM'].includes(filter.toUpperCase())
+      );
+      
+      if (validFilters.length > 0) {
+        queryParams.append('excludeFilters', validFilters.join(','));
+      }
+      
+      console.log(`Using excludeFilters: ${validFilters.join(',') || 'none'}`);
+    }
+    
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
     console.log(`Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
+    console.log(`Full URL: ${apiUrl}`);
     
     try {
       // Forward the request to Alchemy
