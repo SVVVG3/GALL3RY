@@ -500,7 +500,27 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         excludeAirdrops: true
       });
       
+      // Log the detailed results for debugging
       console.log(`Fetched ${result.nfts.length} unique NFTs across all wallets`);
+      
+      // Verify uniqueIds are present
+      const missingUniqueIds = result.nfts.filter(nft => !nft.uniqueId).length;
+      if (missingUniqueIds > 0) {
+        console.warn(`Warning: ${missingUniqueIds} NFTs are missing uniqueId property`);
+      }
+      
+      // Double-check for duplicates with same uniqueId
+      const uniqueIdMap = new Map();
+      const duplicateCount = result.nfts.filter(nft => {
+        if (!nft.uniqueId) return false;
+        if (uniqueIdMap.has(nft.uniqueId)) return true;
+        uniqueIdMap.set(nft.uniqueId, true);
+        return false;
+      }).length;
+      
+      if (duplicateCount > 0) {
+        console.warn(`Warning: Found ${duplicateCount} duplicate NFTs with the same uniqueId`);
+      }
       
       // Store raw NFTs in state
       setUserNfts(result.nfts);

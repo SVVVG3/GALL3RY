@@ -81,26 +81,42 @@ function removeDuplicateNfts(nfts) {
   if (!nfts || nfts.length === 0) return [];
   
   const uniqueMap = new Map();
+  const duplicatesFound = [];
   
   nfts.forEach(nft => {
     // Skip invalid NFTs
     if (!nft) return;
     
     // Get a unique key for this NFT using the consistent ID function
+    // Prioritize existing uniqueId to avoid regenerating it
     const key = nft.uniqueId || createConsistentUniqueId(nft);
     
     if (!uniqueMap.has(key)) {
       // If this is a new uniqueId, store the NFT and ensure it has the uniqueId
       const nftWithId = {...nft, uniqueId: key};
       uniqueMap.set(key, nftWithId);
+    } else {
+      // Track duplicates for logging
+      duplicatesFound.push({
+        key,
+        name: nft.name || nft.title || `Token #${nft.tokenId || nft.token_id}`,
+        collection: nft.collection?.name || nft.contract?.name || 'Unknown Collection'
+      });
     }
   });
   
   const uniqueNfts = [...uniqueMap.values()];
   
-  // Log if duplicates were found and removed
+  // Log if duplicates were found and removed with details
   if (uniqueNfts.length < nfts.length) {
     console.log(`Removed ${nfts.length - uniqueNfts.length} duplicate NFTs in NFTGrid`);
+    
+    // Log a sample of duplicates for debugging
+    if (duplicatesFound.length > 0) {
+      console.log(`Sample of removed duplicates:`, 
+        duplicatesFound.slice(0, Math.min(5, duplicatesFound.length))
+      );
+    }
   }
   
   return uniqueNfts;

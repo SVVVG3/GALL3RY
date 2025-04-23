@@ -82,17 +82,37 @@ function removeDuplicates(nfts) {
   if (!nfts || !Array.isArray(nfts) || nfts.length === 0) return [];
   
   const uniqueMap = new Map();
+  const duplicatesInfo = [];
   
   nfts.forEach(nft => {
     if (!nft) return;
     
     // Use the consistent uniqueId generation function
+    // Important: we prioritize existing uniqueId to ensure consistency
     const uniqueId = nft.uniqueId || createConsistentUniqueId(nft);
     
     if (!uniqueMap.has(uniqueId)) {
-      uniqueMap.set(uniqueId, nft);
+      // Make sure we maintain the uniqueId for downstream processing
+      uniqueMap.set(uniqueId, {...nft, uniqueId});
+    } else {
+      // Track duplicates for debugging
+      duplicatesInfo.push({
+        uniqueId,
+        name: nft.name || nft.title || `Token #${nft.tokenId}`,
+        tokenId: nft.tokenId || nft.token_id,
+        contract: nft.contractAddress || nft.contract?.address,
+        collection: nft.collection?.name || nft.contract?.name
+      });
     }
   });
   
-  return [...uniqueMap.values()];
+  const uniqueNfts = [...uniqueMap.values()];
+  
+  if (duplicatesInfo.length > 0) {
+    console.log(`nftUtils: Removed ${duplicatesInfo.length} duplicates - sample:`, 
+      duplicatesInfo.slice(0, Math.min(3, duplicatesInfo.length))
+    );
+  }
+  
+  return uniqueNfts;
 } 

@@ -91,7 +91,8 @@ const alchemyService = {
       pageSize = 100,
       excludeSpam = true,
       excludeAirdrops = true,
-      fetchAll = true  // New option to fetch all pages
+      fetchAll = true,  // New option to fetch all pages
+      chainVerification = true // New option to verify chain ownership
     } = options;
     
     const chainId = this.getChainId(network);
@@ -125,11 +126,83 @@ const alchemyService = {
         // Use the dynamically updated ALCHEMY_ENDPOINT instead of calling getBaseUrl()
         const response = await axios.get(ALCHEMY_ENDPOINT, { params });
         
-        // Get NFTs from this page
-        const nftsFromPage = (response.data?.ownedNfts || []).map(nft => ({
+        // Get NFTs from this page and verify they belong to this chain if chainVerification is enabled
+        let nftsFromPage = (response.data?.ownedNfts || []);
+
+        // Apply chain verification if enabled to filter out NFTs that don't belong to this chain
+        if (chainVerification) {
+          const originalCount = nftsFromPage.length;
+          nftsFromPage = nftsFromPage.filter(nft => {
+            // Check if the NFT has chain-specific identifiers
+            const tokenMetadata = nft.contract?.tokenMetadata || {};
+            const contractMetadata = nft.contract?.contractMetadata || {};
+            const tokenUri = nft.tokenUri?.gateway || '';
+            
+            // Look for chain-specific indicators
+            if (chainId === 'polygon' && (
+                nft.id?.toString().includes('polygon') || 
+                tokenUri.includes('polygon') || 
+                (contractMetadata.openSea?.chain === 'polygon')
+            )) {
+              return true;
+            } else if (chainId === 'opt' && (
+                nft.id?.toString().includes('optimism') || 
+                tokenUri.includes('optimism') || 
+                (contractMetadata.openSea?.chain === 'optimism')
+            )) {
+              return true;
+            } else if (chainId === 'arb' && (
+                nft.id?.toString().includes('arbitrum') || 
+                tokenUri.includes('arbitrum') || 
+                (contractMetadata.openSea?.chain === 'arbitrum')
+            )) {
+              return true;
+            } else if (chainId === 'base' && (
+                nft.id?.toString().includes('base') || 
+                tokenUri.includes('base') || 
+                (contractMetadata.openSea?.chain === 'base')
+            )) {
+              return true;
+            } else if (chainId === 'eth') {
+              // For ETH mainnet, only include if no other chain indicators are present
+              const hasOtherChainIndicator = 
+                nft.id?.toString().includes('polygon') || 
+                nft.id?.toString().includes('optimism') || 
+                nft.id?.toString().includes('arbitrum') || 
+                nft.id?.toString().includes('base') ||
+                tokenUri.includes('polygon') || 
+                tokenUri.includes('optimism') || 
+                tokenUri.includes('arbitrum') || 
+                tokenUri.includes('base') ||
+                ['polygon', 'optimism', 'arbitrum', 'base'].includes(contractMetadata.openSea?.chain);
+              
+              return !hasOtherChainIndicator;
+            }
+            
+            // Default to allowing the NFT if we can't determine its chain
+            return true;
+          });
+          
+          if (originalCount !== nftsFromPage.length) {
+            console.log(`Chain verification removed ${originalCount - nftsFromPage.length} NFTs that don't belong to ${chainId}`);
+          }
+        }
+        
+        // Map the NFTs to include additional data
+        nftsFromPage = nftsFromPage.map(nft => ({
           ...nft,
           network: chainId,
-          ownerAddress
+          ownerAddress,
+          // Add a uniqueId directly when fetching to ensure consistency
+          uniqueId: this.createConsistentUniqueId({
+            ...nft,
+            network: chainId,
+            contract: {
+              ...nft.contract,
+              address: nft.contract?.address
+            },
+            tokenId: nft.tokenId
+          })
         }));
         
         // Add to our collection
@@ -297,7 +370,7 @@ const alchemyService = {
       // Filter out any invalid addresses to prevent errors
       const validAddresses = addresses.filter(addr => 
         addr && typeof addr === 'string' && addr.length > 0 && addr.startsWith('0x')
-      );
+      ).map(addr => addr.toLowerCase());
       
       if (validAddresses.length === 0) {
         console.warn('No valid ETH addresses found after filtering', { 
@@ -315,7 +388,8 @@ const alchemyService = {
       
       // Data structures for results
       let allNfts = [];
-      const seenTokenIds = new Set(); // For deduplication
+      // Use a Map for deduplication with uniqueId as the key
+      const uniqueNftsMap = new Map();
       const walletToNftCount = {}; // For tracking NFTs per wallet
       
       // Process each chain sequentially to avoid overwhelming the API
@@ -336,24 +410,34 @@ const alchemyService = {
               pageSize: options.pageSize || 100,
               excludeSpam: options.excludeSpam !== false,
               excludeAirdrops: options.excludeAirdrops !== false,
-              fetchAll: options.fetchAll !== false
+              fetchAll: options.fetchAll !== false,
+              chainVerification: true // Enable chain verification
             });
             
             // Process each NFT for this wallet/chain
             if (result.nfts && result.nfts.length > 0) {
-              const newNfts = result.nfts.map(nft => ({
-                ...nft,
-                ownerWallet: address,
-                network: nft.network || chainId
-              }));
+              // Add NFTs to the unique map instead of the array directly
+              result.nfts.forEach(nft => {
+                if (!nft || !nft.contract || !nft.tokenId) return;
+                
+                // Make sure we have a valid uniqueId
+                const uniqueId = nft.uniqueId || this.createConsistentUniqueId(nft);
+                
+                // Only add if not already in the map
+                if (!uniqueNftsMap.has(uniqueId)) {
+                  uniqueNftsMap.set(uniqueId, {
+                    ...nft,
+                    uniqueId,
+                    ownerWallet: address,
+                    network: nft.network || chainId
+                  });
+                  
+                  // Increment wallet count
+                  walletToNftCount[address]++;
+                }
+              });
               
-              // Add to our collection and track by wallet
-              walletToNftCount[address] += newNfts.length;
-              
-              // Use push to avoid creating new array
-              allNfts.push(...newNfts);
-              
-              console.log(`Added ${newNfts.length} NFTs for wallet ${address} on chain ${chainId}`);
+              console.log(`Added ${result.nfts.length} NFTs for wallet ${address} on chain ${chainId}`);
             } else {
               console.log(`No NFTs found for wallet ${address} on chain ${chainId}`);
             }
@@ -363,29 +447,15 @@ const alchemyService = {
         }
       }
       
+      // Create the final array from our map of unique NFTs
+      allNfts = Array.from(uniqueNftsMap.values());
+      
       // Log per-wallet counts
       for (const [wallet, count] of Object.entries(walletToNftCount)) {
         console.log(`Wallet ${wallet} has ${count} NFTs across all chains`);
       }
       
-      console.log(`Total ${allNfts.length} NFTs found before deduplication`);
-      
-      // Remove duplicates using our consistent unique ID function
-      const uniqueMap = new Map();
-      const uniqueNfts = allNfts.filter(nft => {
-        // Skip invalid NFTs to prevent errors
-        if (!nft || !nft.contract || !nft.tokenId) return false;
-        
-        const key = this.createConsistentUniqueId(nft);
-        if (!key || uniqueMap.has(key)) return false;
-        
-        // Add the unique ID to the NFT object for consistent reference
-        nft.uniqueId = key;
-        uniqueMap.set(key, true);
-        return true;
-      });
-      
-      console.log(`After removing duplicates: ${uniqueNfts.length} unique NFTs`);
+      console.log(`Found ${allNfts.length} unique NFTs across all wallets after deduplication`);
       
       // Enrich NFT data with image URLs if they're missing
       const enrichWithImageUrls = (nfts) => {
@@ -420,8 +490,8 @@ const alchemyService = {
       };
       
       // Add this call before returning the NFTs
-      if (uniqueNfts.length > 0) {
-        const enrichedNfts = enrichWithImageUrls(uniqueNfts);
+      if (allNfts.length > 0) {
+        const enrichedNfts = enrichWithImageUrls(allNfts);
         return {
           nfts: enrichedNfts,
           totalCount: enrichedNfts.length,
@@ -430,8 +500,8 @@ const alchemyService = {
       }
       
       return {
-        nfts: uniqueNfts,
-        totalCount: uniqueNfts.length,
+        nfts: allNfts,
+        totalCount: allNfts.length,
         addressesQueried: validAddresses.length
       };
     } catch (error) {
