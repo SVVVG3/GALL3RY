@@ -25,6 +25,36 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Deduplicate NFTs by uniqueId or contract+tokenId+network for safety
   const uniqueNfts = removeDuplicateNfts(nfts);
   
+  // Additional verification to ensure visual uniqueness
+  // Using a Set to track unique NFT identifiers
+  const seenIds = new Set();
+  const visuallyUniqueNfts = uniqueNfts.filter(nft => {
+    if (!nft) return false;
+    
+    // Skip any NFTs without a valid ID
+    if (!nft.uniqueId && !getNftKey(nft)) return false;
+    
+    // Use the existing uniqueId or generate a key
+    const nftKey = nft.uniqueId || getNftKey(nft);
+    
+    // If we've seen this key before, filter it out
+    if (seenIds.has(nftKey)) {
+      return false;
+    }
+    
+    // Otherwise, record that we've seen it and keep it
+    seenIds.add(nftKey);
+    return true;
+  });
+  
+  // Log if we found and removed any additional visual duplicates
+  if (visuallyUniqueNfts.length < uniqueNfts.length) {
+    console.log(`Removed ${uniqueNfts.length - visuallyUniqueNfts.length} additional visual duplicates in NFTGrid`);
+  }
+  
+  // Update the rendering variable to use our visually unique NFTs
+  const nftsToRender = visuallyUniqueNfts;
+  
   // Determine if we're in production (Vercel) or development
   const isProduction = process.env.NODE_ENV === 'production' || 
                        window.location.hostname.includes('vercel.app');
@@ -32,7 +62,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Choose the appropriate NFT card component based on environment
   const CardComponent = isProduction ? VercelNFTCard : NFTCard;
   
-  if (isLoading && (!uniqueNfts || uniqueNfts.length === 0)) {
+  if (isLoading && (!nftsToRender || nftsToRender.length === 0)) {
     return (
       <div className="nft-grid-loader">
         <div className="loader"></div>
@@ -41,7 +71,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     );
   }
 
-  if (!uniqueNfts || uniqueNfts.length === 0) {
+  if (!nftsToRender || nftsToRender.length === 0) {
     return (
       <div className="nft-grid-empty">
         <p className="nft-grid-no-results">{emptyMessage}</p>
@@ -52,7 +82,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   return (
     <div className="nft-grid-container">
       <div className="nft-grid">
-        {uniqueNfts.map((nft, index) => {
+        {nftsToRender.map((nft, index) => {
           // Create a copy of the NFT object to avoid modifying non-extensible objects
           const nftCopy = {...nft};
           

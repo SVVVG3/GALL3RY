@@ -493,14 +493,29 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Format NFTs for display
       const formattedNfts = formatNFTsForDisplay(nfts);
       
+      // Additional deduplication at visual display level to prevent duplicates
+      const uniqueIdsSet = new Set();
+      const visuallyUniqueNfts = formattedNfts.filter(nft => {
+        if (!nft || !nft.uniqueId) return false;
+        
+        // If we've seen this ID before, it's a duplicate
+        if (uniqueIdsSet.has(nft.uniqueId)) {
+          return false;
+        }
+        
+        // Otherwise, add it to our set and keep it
+        uniqueIdsSet.add(nft.uniqueId);
+        return true;
+      });
+      
       // Log uniqueness stats
-      console.log(`Original NFTs: ${nfts.length}, Formatted NFTs: ${formattedNfts.length}`);
+      console.log(`Original NFTs: ${nfts.length}, Formatted NFTs: ${formattedNfts.length}, Final unique NFTs: ${visuallyUniqueNfts.length}`);
       
       // Update state and Redux store
-      setUserNfts(formattedNfts);
+      setUserNfts(visuallyUniqueNfts);
       setWalletAddresses(walletAddresses);
       setUserProfile(profile);
-      dispatch(setNftList(formattedNfts));
+      dispatch(setNftList(visuallyUniqueNfts));
 
     } catch (error) {
       console.error('Error in handleUserProfileFound:', error);
