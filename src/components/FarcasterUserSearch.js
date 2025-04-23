@@ -12,7 +12,7 @@ import farcasterService from '../services/farcasterService';
 import FarcasterSuggestions from './FarcasterSuggestions';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatNFTsForDisplay, removeDuplicates } from '../utils/nftUtils';
-import alchemyService, { fetchNftsForAddresses } from '../services/alchemyService';
+import alchemyService, { fetchNftsForAddresses, fetchNftsSimple, fetchNftsForFarcaster } from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
 
@@ -472,39 +472,35 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         throw new Error('No valid wallet addresses found');
       }
 
-      // Fetch NFTs for all valid addresses across all chains
-      const result = await alchemyService.fetchNftsForMultipleAddresses(
+      // Use our new dedicated method for Farcaster users
+      const result = await fetchNftsForFarcaster(
         walletAddresses,
         {
           chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
-          excludeSpam: true,
-          excludeAirdrops: true
+          excludeSpam: true
         }
       );
       
-      const nfts = result.uniqueNfts || [];
+      if (result.error) {
+        throw new Error(result.error);
+      }
+      
+      const nfts = result.nfts || [];
       
       console.log(`Fetched ${nfts.length} NFTs for user ${profile.username}`);
+      console.log(`NFT distribution by wallets:`, result.walletNftCounts);
       
       // Format NFTs for display
       const formattedNfts = formatNFTsForDisplay(nfts);
       
-      // Check for duplicates before and after formatting
-      const uniqueIdsBeforeFormatting = new Set(nfts.map(nft => nft.uniqueId));
-      const uniqueIdsAfterFormatting = new Set(formattedNfts.map(nft => nft.uniqueId));
-      
-      console.log(`Unique NFT IDs: ${uniqueIdsBeforeFormatting.size} before formatting, ${uniqueIdsAfterFormatting.size} after formatting`);
-      
-      // Final deduplication before updating state
-      const uniqueNfts = removeDuplicates(formattedNfts);
-      
-      console.log(`After final deduplication: ${uniqueNfts.length} unique NFTs`);
+      // Log uniqueness stats
+      console.log(`Original NFTs: ${nfts.length}, Formatted NFTs: ${formattedNfts.length}`);
       
       // Update state and Redux store
-      setUserNfts(uniqueNfts);
+      setUserNfts(formattedNfts);
       setWalletAddresses(walletAddresses);
       setUserProfile(profile);
-      dispatch(setNftList(uniqueNfts));
+      dispatch(setNftList(formattedNfts));
 
     } catch (error) {
       console.error('Error in handleUserProfileFound:', error);

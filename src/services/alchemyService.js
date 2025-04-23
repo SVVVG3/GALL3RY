@@ -681,24 +681,44 @@ class AlchemyService {
     await this.initApiKey();
 
     try {
-      const metadata = await this.getNftMetadata(contractAddress, tokenId, options);
+      // Create a cache key for the image URL
+      const chainId = options.chainId || 'eth';
+      const cacheKey = `image_url_${contractAddress.toLowerCase()}_${tokenId}_${chainId.toLowerCase()}`;
+      
+      // Check if we have a valid cached response
+      const cachedResponse = await this.getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        console.log(`Using cached image URL for ${contractAddress} token ${tokenId} on ${chainId}`);
+        return cachedResponse;
+      }
+      
+      const metadata = await this.getNftMetadata(contractAddress, tokenId, chainId);
+      
+      let imageUrl = null;
       
       // Try to get the best quality image available from v3 API response format
-      if (metadata.media && metadata.media.length > 0) {
+      if (metadata && metadata.media && metadata.media.length > 0) {
         // Return the highest resolution image
         const gatewayUrl = metadata.media[0].gateway;
-        if (gatewayUrl) return gatewayUrl;
+        if (gatewayUrl) imageUrl = gatewayUrl;
         
-        const rawUrl = metadata.media[0].raw;
-        if (rawUrl) return rawUrl;
+        if (!imageUrl) {
+          const rawUrl = metadata.media[0].raw;
+          if (rawUrl) imageUrl = rawUrl;
+        }
       }
       
       // Fallback to metadata image
-      if (metadata.metadata && metadata.metadata.image) {
-        return metadata.metadata.image;
+      if (!imageUrl && metadata && metadata.metadata && metadata.metadata.image) {
+        imageUrl = metadata.metadata.image;
       }
       
-      return null;
+      // Cache the result if we found an image URL
+      if (imageUrl) {
+        await this.setCachedResponse(cacheKey, imageUrl);
+      }
+      
+      return imageUrl;
     } catch (error) {
       console.error('Error getting NFT image URL:', error.message);
       return null;
@@ -779,6 +799,16 @@ class AlchemyService {
       if (!contractAddress) {
         console.error('Contract address is missing or empty');
         throw new Error('Contract address is required');
+      }
+      
+      // Create a cache key based on contract address and network
+      const cacheKey = `owners_${contractAddress.toLowerCase()}_${network.toLowerCase()}`;
+      
+      // Check if we have a valid cached response
+      const cachedResponse = await this.getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        console.log(`Using cached owners for contract ${contractAddress} on ${network} (${cachedResponse.length} owners)`);
+        return cachedResponse;
       }
 
       console.log(`Fetching owners for contract ${contractAddress} on ${network}`);
@@ -884,7 +914,14 @@ class AlchemyService {
       }
       
       // Convert all addresses to lowercase for consistency
-      return owners.map(owner => owner.toLowerCase());
+      const normalizedOwners = owners.map(owner => owner.toLowerCase());
+      
+      // Cache the results
+      if (normalizedOwners.length > 0) {
+        await this.setCachedResponse(cacheKey, normalizedOwners);
+      }
+      
+      return normalizedOwners;
     } catch (error) {
       // Enhanced error logging with network-specific information
       console.error(`Error fetching owners for contract ${contractAddress} on ${network}:`, error.message);
@@ -1003,9 +1040,8 @@ class AlchemyService {
       if (options.pageSize) url += `&pageSize=${options.pageSize}`;
       if (options.withMetadata !== undefined) url += `&withMetadata=${options.withMetadata}`;
       
-      console.log(`Fetching NFTs for contract ${contractAddress} on ${chainId} from: ${url}`);
+      console.log(`Fetching NFTs for contract ${contractAddress} on ${chainId} with URL: ${url}`);
       
-      // Make request
       const response = await fetch(url, {
         method: 'GET',
         headers: {
@@ -1033,101 +1069,136 @@ class AlchemyService {
   }
 
   /**
-   * Get asset transfers for addresses to track NFT ownership history
-   * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
+   * Simplified method to fetch NFTs for Farcaster users
+   * Uses the well-tested getNftsForOwner method for each combination
+   * @param {string[]} addresses - Array of wallet addresses
+   * @param {object} options - Options for the API request
+   * @returns {Promise<Object>} - Object containing NFTs and other metadata
    */
-  async getAssetTransfers(addresses, options = {}) {
-    // Make sure API key is initialized
-    await this.initApiKey();
-    
-    if (!addresses || addresses.length === 0) {
-      console.warn('No addresses provided to getAssetTransfers');
-      return { transfers: [], transferMap: {} };
-    }
-    
+  async fetchNftsForFarcaster(addresses, options = {}) {
     try {
-      // Get the chains to fetch from (defaulting to ETH only for transfers to reduce API calls)
-      const chain = options.chain || 'eth';
-      
-      // Clean and validate addresses
-      const validAddresses = addresses
-        .filter(addr => addr && typeof addr === 'string')
-        .map(addr => addr.toLowerCase().trim());
+      // Filter valid addresses
+      const validAddresses = (addresses || [])
+        .filter(address => address && typeof address === 'string' && address.trim() !== '')
+        .map(address => address.toLowerCase().trim());
       
       if (validAddresses.length === 0) {
-        console.warn('No valid addresses after formatting');
-        return { transfers: [], transferMap: {} };
+        console.log('No valid addresses provided');
+        return { nfts: [], errors: ['No valid addresses provided'] };
       }
       
-      console.log(`Fetching NFT transfers for ${validAddresses.length} addresses on ${chain}`);
+      console.log(`Fetching NFTs for ${validAddresses.length} wallet addresses using direct method`);
       
-      // Build the params for the Alchemy API call
-      const params = {
-        endpoint: 'getAssetTransfers',
-        chain,
-        addresses: validAddresses.join(','),
-        order: options.order || 'desc',
-        debug: options.debug === true ? 'true' : undefined,
-        category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
+      // Determine chains to fetch from
+      const chainsToFetch = options.chains || ['eth', 'polygon', 'opt', 'arb', 'base'];
+      console.log(`Fetching from chains: ${chainsToFetch.join(', ')}`);
+      
+      // Set up fetch options - simplify to only what Alchemy API supports
+      const fetchOptions = {
+        withMetadata: true,
+        pageSize: options.pageSize || '100'
       };
       
-      console.log(`Fetching transfers with params:`, {
-        endpoint: params.endpoint,
-        chain: params.chain,
-        addressCount: validAddresses.length,
-        order: params.order,
-        debug: params.debug
+      // Only add excludeSpam if needed - this is the only valid filter
+      if (options.excludeSpam) {
+        fetchOptions.excludeSpam = true;
+      }
+      
+      const allNfts = [];
+      const walletNftCounts = {};
+      const errors = [];
+      
+      // Initialize wallet NFT counts
+      validAddresses.forEach(addr => {
+        walletNftCounts[addr] = 0;
       });
       
-      // Call our backend API which will handle the RPC call
-      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
-      
-      // Check if we got a valid response
-      if (!response.data) {
-        console.warn('Empty response from getAssetTransfers API');
-        return { transfers: [], transferMap: {} };
+      // For each address and chain combination, fetch NFTs
+      for (const address of validAddresses) {
+        for (const chain of chainsToFetch) {
+          try {
+            console.log(`Fetching NFTs for ${address} on ${chain}`);
+            const result = await this.getNftsForOwner(address, fetchOptions, chain);
+            
+            if (result.error) {
+              console.error(`Error fetching NFTs for ${address} on ${chain}: ${result.error}`);
+              errors.push(`${chain}: ${result.error}`);
+              continue;
+            }
+            
+            if (result.ownedNfts && Array.isArray(result.ownedNfts)) {
+              // Add wallet and chain info to each NFT
+              const nftsWithInfo = result.ownedNfts.map(nft => ({
+                ...nft,
+                chain: chain,
+                chainId: chain,
+                network: chain,
+                ownerAddress: address
+              }));
+              
+              // Track count for this wallet
+              walletNftCounts[address] += nftsWithInfo.length;
+              
+              // Add to the combined list
+              allNfts.push(...nftsWithInfo);
+            }
+          } catch (error) {
+            console.error(`Error fetching NFTs for ${address} on ${chain}:`, error);
+            errors.push(`${chain}: ${error.message}`);
+          }
+        }
       }
       
-      // Check if we have the transferMap
-      if (!response.data.transferMap) {
-        console.warn('Response missing transferMap:', response.data);
-        return { 
-          transfers: response.data.transfers || [], 
-          transferMap: {},
-          diagnostic: response.data.diagnostic || { error: 'Missing transferMap in response' }
-        };
-      }
+      // Log counts per wallet
+      Object.entries(walletNftCounts).forEach(([wallet, count]) => {
+        if (count > 0) {
+          console.log(`Found ${count} NFTs for wallet ${wallet}`);
+        }
+      });
       
-      console.log(`Got transfer data with ${response.data.count || 0} entries, ${Object.keys(response.data.transferMap).length} mapped items`);
+      // De-duplicate NFTs using a Map
+      const uniqueNftsMap = new Map();
+      
+      allNfts.forEach(nft => {
+        try {
+          // Create a unique ID for deduplication
+          const contractAddress = (nft.contract?.address || '').toLowerCase();
+          const tokenId = String(nft.tokenId || '').trim();
+          const chain = (nft.chain || 'eth').toLowerCase();
+          
+          // Skip NFTs without proper ID information
+          if (!contractAddress || !tokenId) return;
+          
+          const uniqueId = `${chain}:${contractAddress}:${tokenId}`;
+          
+          if (!uniqueNftsMap.has(uniqueId)) {
+            // Add uniqueId to the NFT object
+            uniqueNftsMap.set(uniqueId, {
+              ...nft,
+              uniqueId
+            });
+          }
+        } catch (err) {
+          console.error('Error processing NFT:', err);
+        }
+      });
+      
+      // Convert the unique NFTs map to an array
+      const uniqueNfts = Array.from(uniqueNftsMap.values());
+      console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets`);
       
       return {
-        transfers: response.data.transfers || [],
-        transferMap: response.data.transferMap || {},
-        processedCount: response.data.processedCount,
-        diagnostic: response.data.diagnostic
+        nfts: uniqueNfts,
+        totalFound: uniqueNfts.length,
+        walletNftCounts,
+        errors: errors.length > 0 ? errors : undefined
       };
     } catch (error) {
-      console.error('Error fetching asset transfers:', error);
-      const errorDetails = {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data
-      };
-      console.error('Error details:', errorDetails);
-      
-      return { 
-        transfers: [], 
-        transferMap: {},
-        error: error.message,
-        diagnostic: { error: error.message, stack: error.stack, details: errorDetails }
-      };
+      console.error('Error in fetchNftsForFarcaster:', error);
+      return { nfts: [], error: error.message };
     }
   }
 }
-
-// Create an instance of the AlchemyService class
-const alchemyService = new AlchemyService();
 
 // Export convenience functions
 export const fetchNftsForOwner = (address, options) => 
@@ -1145,4 +1216,10 @@ export const createConsistentUniqueId = (nft) =>
 export const fetchAssetTransfers = (addresses, options) =>
   alchemyService.getAssetTransfers(addresses, options);
 
+export const fetchNftsSimple = (addresses, options) =>
+  alchemyService.fetchNftsSimple(addresses, options);
+
+export const fetchNftsForFarcaster = (addresses, options) =>
+  alchemyService.fetchNftsForFarcaster(addresses, options);
+  
 export default alchemyService;
