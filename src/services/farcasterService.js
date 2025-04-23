@@ -5,8 +5,100 @@ import { localStorageCache } from "../utils/cache";
 const API_URL = process.env.REACT_APP_API_URL || '/api';
 const CACHE_EXPIRATION_TIME = 30 * 60 * 1000; // 30 minutes
 
-// In-memory cache for profiles
-const profileCache = new Map();
+// Constants for cache management
+const CACHE_CONFIG = {
+  TTL: 10 * 60 * 1000, // 10 minutes
+  KEYS: {
+    PROFILE_PREFIX: 'farcaster_profile_',
+    SEARCH_PREFIX: 'farcaster_search_'
+  }
+};
+
+// ProfileCache class for managing Farcaster profile data
+class ProfileCache {
+  constructor() {
+    this.cache = new Map();
+    this.initializeFromStorage();
+  }
+
+  // Initialize cache from localStorage
+  initializeFromStorage() {
+    try {
+      const now = Date.now();
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith(CACHE_CONFIG.KEYS.PROFILE_PREFIX)) {
+          const data = JSON.parse(localStorage.getItem(key));
+          if (data && data._timestamp && (now - data._timestamp) < CACHE_CONFIG.TTL) {
+            this.cache.set(key, data);
+          } else {
+            localStorage.removeItem(key);
+          }
+        }
+      });
+    } catch (error) {
+      console.warn('Error initializing profile cache:', error);
+    }
+  }
+
+  // Generate cache key
+  generateKey(identifier) {
+    return `${CACHE_CONFIG.KEYS.PROFILE_PREFIX}${identifier.toLowerCase()}`;
+  }
+
+  // Get profile from cache
+  get(identifier) {
+    const key = this.generateKey(identifier);
+    const data = this.cache.get(key);
+    
+    if (data && (Date.now() - data._timestamp) < CACHE_CONFIG.TTL) {
+      return data;
+    }
+    
+    this.delete(identifier);
+    return null;
+  }
+
+  // Set profile in cache
+  set(identifier, profile) {
+    if (!profile) return;
+    
+    const key = this.generateKey(identifier);
+    const data = { ...profile, _timestamp: Date.now() };
+    
+    try {
+      this.cache.set(key, data);
+      localStorage.setItem(key, JSON.stringify(data));
+    } catch (error) {
+      console.warn('Error setting profile cache:', error);
+    }
+  }
+
+  // Delete profile from cache
+  delete(identifier) {
+    const key = this.generateKey(identifier);
+    this.cache.delete(key);
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.warn('Error deleting from profile cache:', error);
+    }
+  }
+
+  // Clear all profiles from cache
+  clear() {
+    this.cache.clear();
+    try {
+      Object.keys(localStorage)
+        .filter(key => key.startsWith(CACHE_CONFIG.KEYS.PROFILE_PREFIX))
+        .forEach(key => localStorage.removeItem(key));
+    } catch (error) {
+      console.warn('Error clearing profile cache:', error);
+    }
+  }
+}
+
+// Initialize the profile cache
+const profileCache = new ProfileCache();
 
 // Helper function to cache items in local storage or memory
 const cacheItem = async (key, data, expirationMinutes = 60) => {
@@ -113,12 +205,16 @@ const farcasterService = {
       }
       
       // Check cache first
-      const cacheKey = `search:${sanitizedQuery}:${limit}`;
-      const cachedResult = profileCache.get(cacheKey);
+      const cacheKey = `${CACHE_CONFIG.KEYS.SEARCH_PREFIX}${sanitizedQuery.toLowerCase()}_${limit}`;
+      const cachedResults = localStorage.getItem(cacheKey);
       
-      if (cachedResult && Date.now() - cachedResult.timestamp < CACHE_EXPIRATION_TIME) {
-        console.log(`Using cached Farcaster profile search result for "${sanitizedQuery}"`);
-        return cachedResult.data;
+      if (cachedResults) {
+        const { results, timestamp } = JSON.parse(cachedResults);
+        if (Date.now() - timestamp < CACHE_CONFIG.TTL) {
+          console.log(`Using cached Farcaster profile search result for "${sanitizedQuery}"`);
+          return results;
+        }
+        localStorage.removeItem(cacheKey);
       }
       
       console.log(`Making API request to ${API_URL}/neynar for user search with query: "${sanitizedQuery}"`);
@@ -230,10 +326,13 @@ const farcasterService = {
       console.log(`Processed ${users.length} valid user suggestions from API response`);
       
       // Cache the result
-      profileCache.set(cacheKey, {
-        timestamp: Date.now(),
-        data: users
-      });
+      localStorage.setItem(
+        CACHE_CONFIG.KEYS.SEARCH_PREFIX + cacheKey,
+        JSON.stringify({
+          results: users,
+          timestamp: Date.now()
+        })
+      );
       
       return users;
     } catch (error) {
@@ -264,11 +363,11 @@ const farcasterService = {
 
     const queryParam = username ? username.replace('@', '').trim() : fid;
     const isNumericFid = !isNaN(Number(queryParam));
-    const cacheKey = `farcaster_profile_${queryParam.toLowerCase()}`;
+    const cacheKey = `${CACHE_CONFIG.KEYS.PROFILE_PREFIX}${queryParam.toLowerCase()}`;
     
     try {
       // Check cache first
-      const cachedProfile = await getCachedItem(cacheKey);
+      const cachedProfile = profileCache.get(cacheKey);
       if (cachedProfile) {
         console.log(`Retrieved Farcaster profile from cache for ${queryParam}`);
         return cachedProfile;
@@ -338,7 +437,7 @@ const farcasterService = {
             // Format and cache the profile
             const formattedProfile = formatFarcasterProfile(userData);
             if (formattedProfile) {
-              await cacheItem(cacheKey, formattedProfile, 5); // Cache for 5 minutes
+              profileCache.set(cacheKey, formattedProfile);
               return formattedProfile;
             }
           } else {
@@ -446,7 +545,7 @@ const farcasterService = {
       // Format and cache the profile
       const formattedProfile = formatFarcasterProfile(userData);
       if (formattedProfile) {
-        await cacheItem(cacheKey, formattedProfile, 5); // Cache for 5 minutes
+        profileCache.set(cacheKey, formattedProfile);
         return formattedProfile;
       }
       

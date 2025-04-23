@@ -451,24 +451,26 @@ class AlchemyService {
         const fetchOptions = {
           withMetadata: true,
           pageSize: 100,
-          ...options
+          ...options,
+          // Ensure we fetch from all supported chains
+          chains: SUPPORTED_CHAINS.map(c => c.id)
         };
 
-        // Get NFTs for this address
-        const result = await this.getNftsForOwner(address, fetchOptions, options.chain || 'eth');
+        // Get NFTs across all chains for this address
+        const result = await this.fetchNftsAcrossChains(address, fetchOptions);
         
-        if (result.ownedNfts?.length > 0) {
-          console.log(`Found ${result.ownedNfts.length} NFTs for wallet ${address}`);
+        if (result.nfts?.length > 0) {
+          console.log(`Found ${result.nfts.length} NFTs for wallet ${address} across all chains`);
           
           // Process each NFT
-          for (const nft of result.ownedNfts) {
+          for (const nft of result.nfts) {
             const uniqueId = this.createConsistentUniqueId(nft);
             if (!uniqueNftsMap.has(uniqueId)) {
               uniqueNftsMap.set(uniqueId, nft);
             }
           }
         } else {
-          console.log(`No NFTs found for wallet ${address}`);
+          console.log(`No NFTs found for wallet ${address} across any chains`);
         }
       } catch (error) {
         console.error(`Error fetching NFTs for ${address}:`, error);
@@ -482,7 +484,7 @@ class AlchemyService {
     // Convert the map values to an array
     const uniqueNfts = Array.from(uniqueNftsMap.values());
     
-    console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets after deduplication`);
+    console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets and chains after deduplication`);
     
     return {
       nfts: uniqueNfts,
