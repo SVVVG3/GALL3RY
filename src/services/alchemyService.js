@@ -1055,4 +1055,118 @@ class AlchemyService {
       return { nfts: [], pageKey: '' };
     }
   }
+
+  /**
+   * Get asset transfers for addresses to track NFT ownership history
+   * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
+   */
+  async getAssetTransfers(addresses, options = {}) {
+    // Make sure API key is initialized
+    await this.initApiKey();
+    
+    if (!addresses || addresses.length === 0) {
+      console.warn('No addresses provided to getAssetTransfers');
+      return { transfers: [], transferMap: {} };
+    }
+    
+    try {
+      // Get the chains to fetch from (defaulting to ETH only for transfers to reduce API calls)
+      const chain = options.chain || 'eth';
+      
+      // Clean and validate addresses
+      const validAddresses = addresses
+        .filter(addr => addr && typeof addr === 'string')
+        .map(addr => addr.toLowerCase().trim());
+      
+      if (validAddresses.length === 0) {
+        console.warn('No valid addresses after formatting');
+        return { transfers: [], transferMap: {} };
+      }
+      
+      console.log(`Fetching NFT transfers for ${validAddresses.length} addresses on ${chain}`);
+      
+      // Build the params for the Alchemy API call
+      const params = {
+        endpoint: 'getAssetTransfers',
+        chain,
+        addresses: validAddresses.join(','),
+        order: options.order || 'desc',
+        debug: options.debug === true ? 'true' : undefined,
+        category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
+      };
+      
+      console.log(`Fetching transfers with params:`, {
+        endpoint: params.endpoint,
+        chain: params.chain,
+        addressCount: validAddresses.length,
+        order: params.order,
+        debug: params.debug
+      });
+      
+      // Call our backend API which will handle the RPC call
+      const response = await axios.get(ALCHEMY_ENDPOINT, { params });
+      
+      // Check if we got a valid response
+      if (!response.data) {
+        console.warn('Empty response from getAssetTransfers API');
+        return { transfers: [], transferMap: {} };
+      }
+      
+      // Check if we have the transferMap
+      if (!response.data.transferMap) {
+        console.warn('Response missing transferMap:', response.data);
+        return { 
+          transfers: response.data.transfers || [], 
+          transferMap: {},
+          diagnostic: response.data.diagnostic || { error: 'Missing transferMap in response' }
+        };
+      }
+      
+      console.log(`Got transfer data with ${response.data.count || 0} entries, ${Object.keys(response.data.transferMap).length} mapped items`);
+      
+      return {
+        transfers: response.data.transfers || [],
+        transferMap: response.data.transferMap || {},
+        processedCount: response.data.processedCount,
+        diagnostic: response.data.diagnostic
+      };
+    } catch (error) {
+      console.error('Error fetching asset transfers:', error);
+      const errorDetails = {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      };
+      console.error('Error details:', errorDetails);
+      
+      return { 
+        transfers: [], 
+        transferMap: {},
+        error: error.message,
+        diagnostic: { error: error.message, stack: error.stack, details: errorDetails }
+      };
+    }
+  }
 }
+
+// Create an instance of the AlchemyService class
+const alchemyService = new AlchemyService();
+
+// Export convenience functions
+export const fetchNftsForOwner = (address, options) => 
+  alchemyService.getNftsForOwner(address, options);
+
+export const fetchNftsAcrossChains = (address, options) =>
+  alchemyService.fetchNftsAcrossChains(address, options);
+
+export const fetchNftsForAddresses = (addresses, options) =>
+  alchemyService.fetchNftsForMultipleAddresses(addresses, options);
+
+export const createConsistentUniqueId = (nft) =>
+  alchemyService.createConsistentUniqueId(nft);
+
+export const fetchAssetTransfers = (addresses, options) =>
+  alchemyService.getAssetTransfers(addresses, options);
+
+export default alchemyService;
