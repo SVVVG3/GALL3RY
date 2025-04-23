@@ -243,7 +243,7 @@ class AlchemyService {
       if (options.pageSize) params.pageSize = options.pageSize;
       if (options.withMetadata !== undefined) params.withMetadata = options.withMetadata;
       
-      // Handle excludeFilters properly as a comma-separated string instead of an array
+      // Handle excludeFilters properly as an array
       let excludeFilters = [];
       
       // First, collect all filters that need to be excluded
@@ -262,9 +262,9 @@ class AlchemyService {
       
       // Only add the excludeFilters if there are filters to exclude
       if (excludeFilters.length > 0) {
-        // Convert the array to a comma-separated string
-        params.excludeFilters = excludeFilters.join(',');
-        console.log(`Using exclude filters: ${params.excludeFilters}`);
+        // Pass the array directly to the backend
+        params.excludeFilters = excludeFilters;
+        console.log(`Using exclude filters: ${excludeFilters.join(',')}`);
       }
       
       console.log(`Fetching NFTs for ${owner} on ${chain} from ${ALCHEMY_ENDPOINT}`);
@@ -504,12 +504,11 @@ class AlchemyService {
         
         // Only add excludeFilters if we have any
         if (excludeFilters.length > 0) {
+          // Pass the array directly - the backend API in all-in-one.js expects an array
+          // and will handle string conversion if needed. The Alchemy API expects filters
+          // as an array, and our backend handles any necessary conversions.
           fetchOptions.excludeFilters = excludeFilters;
-        }
-        
-        // Log the filters we're using
-        if (fetchOptions.excludeFilters?.length > 0) {
-          console.log(`Fetching NFTs for wallet ${address} on chain ${chain} with filters: ${fetchOptions.excludeFilters.join(', ')}`);
+          console.log(`Fetching NFTs for wallet ${address} on chain ${chain} with filters: ${excludeFilters.join(',')}`);
         }
         
         // Add task to the array
