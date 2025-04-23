@@ -1196,6 +1196,10 @@ class AlchemyService {
  * Get asset transfers for addresses to track NFT ownership history
  * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
  */
+
+// Create an instance of the AlchemyService class
+const alchemyService = new AlchemyService();
+
 AlchemyService.prototype.getAssetTransfers = async function(addresses, options = {}) {
   // Make sure API key is initialized
   await this.initApiKey();
