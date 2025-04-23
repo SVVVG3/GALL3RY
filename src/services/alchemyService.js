@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getApiBaseUrl } from '../utils/runtimeConfig';
+import { getApiBaseUrl, getAlchemyApiKey } from '../utils/runtimeConfig';
 
 // Base URL for Alchemy API requests
 const getBaseUrl = () => {
@@ -69,6 +69,67 @@ const SUPPORTED_CHAINS = [
  * Updated to follow Alchemy NFT API v3 documentation
  */
 const alchemyService = {
+  // Store the API key
+  apiKey: null,
+
+  // Initialize the API key
+  async initApiKey() {
+    if (!this.apiKey) {
+      this.apiKey = await getAlchemyApiKey();
+      if (!this.apiKey) {
+        // Fallback to environment variable directly as a last resort
+        this.apiKey = process.env.REACT_APP_ALCHEMY_API_KEY;
+        console.warn('Using fallback Alchemy API key from environment variables');
+      }
+      console.log(`Alchemy API key initialized: ${this.apiKey ? 'Successfully' : 'Failed'}`);
+    }
+    return this.apiKey;
+  },
+
+  /**
+   * Get the Alchemy API URL for a given network and endpoint type
+   * @param {string} network - The network/chain to use (eth, polygon, etc.)
+   * @param {string} endpointType - Either 'nft' for NFT API or 'core' for Core API
+   * @returns {string} - The formatted URL
+   */
+  async getAlchemyUrl(network = 'eth', endpointType = 'nft') {
+    // Make sure API key is initialized
+    await this.initApiKey();
+    
+    // Map network to correct endpoint
+    let networkEndpoint;
+    switch (network.toLowerCase()) {
+      case 'eth':
+      case 'ethereum':
+        networkEndpoint = 'eth-mainnet';
+        break;
+      case 'polygon':
+        networkEndpoint = 'polygon-mainnet';
+        break;
+      case 'arb':
+      case 'arbitrum':
+        networkEndpoint = 'arb-mainnet';
+        break;
+      case 'opt':
+      case 'optimism':
+        networkEndpoint = 'opt-mainnet';
+        break;
+      case 'base':
+        networkEndpoint = 'base-mainnet';
+        break;
+      default:
+        networkEndpoint = 'eth-mainnet'; // Default to Ethereum mainnet
+    }
+    
+    // Build the appropriate URL
+    if (endpointType === 'nft') {
+      return `https://${networkEndpoint}.g.alchemy.com/nft/v3/${this.apiKey}`;
+    } else {
+      // Core API uses v2 endpoint
+      return `https://${networkEndpoint}.g.alchemy.com/v2/${this.apiKey}`;
+    }
+  },
+
   /**
    * Helper to convert network name to chain ID
    */
@@ -104,32 +165,28 @@ const alchemyService = {
       return { nfts: [], totalCount: 0 };
     }
 
-    // Map network option to correct Alchemy endpoint
-    let networkEndpoint;
-    switch (options.network) {
-      case 'eth':
-        networkEndpoint = 'eth-mainnet';
-        break;
-      case 'polygon':
-        networkEndpoint = 'polygon-mainnet';
-        break;
-      case 'arb':
-      case 'arbitrum':
-        networkEndpoint = 'arb-mainnet';
-        break;
-      case 'opt':
-      case 'optimism':
-        networkEndpoint = 'opt-mainnet';
-        break;
-      case 'base':
-        networkEndpoint = 'base-mainnet';
-        break;
-      default:
-        networkEndpoint = 'eth-mainnet'; // Default to Ethereum mainnet
+    // Make sure API key is initialized
+    await this.initApiKey();
+
+    if (!this.apiKey) {
+      console.error('Alchemy API key not found');
+      return { 
+        nfts: [], 
+        totalCount: 0, 
+        error: 'Alchemy API key not configured'
+      };
     }
 
+    // Get the network/chain to use
+    const network = options.network || 'eth';
+
     try {
-      const apiUrl = `https://${networkEndpoint}.g.alchemy.com/nft/v3/${this.apiKey}/getNFTsForOwner`;
+      console.log(`Using API key: ${this.apiKey ? 'Found' : 'Not Found'}`);
+      
+      // Get the base API URL
+      const baseUrl = await this.getAlchemyUrl(network, 'nft');
+      const apiUrl = `${baseUrl}/getNFTsForOwner`;
+      
       const pageSize = options.pageSize || 100;
       
       // Build parameters according to Alchemy API documentation
@@ -175,14 +232,14 @@ const alchemyService = {
         // Exit condition: no more pages or reached max pages
       } while (pageKey && safetyCounter < maxPages);
 
-      console.log(`Fetched ${allNfts.length} NFTs for ${ownerAddress} on ${options.network}`);
+      console.log(`Fetched ${allNfts.length} NFTs for ${ownerAddress} on ${network}`);
       
       return {
         nfts: allNfts,
         totalCount: allNfts.length
       };
     } catch (error) {
-      console.error(`Error in getNftsForOwner for ${options.network}:`, error);
+      console.error(`Error in getNftsForOwner for ${network}:`, error);
       return { 
         nfts: [], 
         totalCount: 0, 
@@ -195,6 +252,9 @@ const alchemyService = {
    * Fetch NFTs across multiple chains and combine the results
    */
   async fetchNftsAcrossChains(ownerAddress, options = {}) {
+    // Make sure API key is initialized
+    await this.initApiKey();
+    
     // Get the chains to fetch from
     const chains = options.chains || SUPPORTED_CHAINS.map(c => c.id);
     const pageSize = options.pageSize || 100;
@@ -299,23 +359,22 @@ const alchemyService = {
   },
   
   /**
-   * Fetch NFTs for multiple wallet addresses across multiple chains
-   * Using network-specific Alchemy endpoints
-   * @param {Array<string>} addresses - Array of wallet addresses
-   * @param {Object} options - Options for the fetch operation
-   * @returns {Promise<Object>} - The fetched NFTs and metadata
+   * Fetch NFTs for multiple wallet addresses with optional deduplication
+   * @param {string[]} addresses - Array of wallet addresses
+   * @param {Object} options - Options for filtering and pagination
+   * @returns {Promise<Object>} - NFTs and metadata
    */
   async fetchNftsForMultipleAddresses(addresses, options = {}) {
-    // Check if addresses are provided and filter out invalid ones
-    if (!addresses || !addresses.length) {
-      console.warn('No addresses provided to fetchNftsForMultipleAddresses');
-      return { nfts: [], totalCount: 0 };
-    }
+    // Make sure API key is initialized
+    await this.initApiKey();
 
-    // Filter valid addresses
-    const validAddresses = addresses.filter(addr => addr && this.isValidAddress(addr));
+    console.log(`Fetching NFTs for ${addresses.length} addresses across ${options.chains?.length || 'all'} chains`);
+    
+    // Filter for valid addresses
+    const validAddresses = addresses.filter(addr => this.isValidAddress(addr));
+    
     if (validAddresses.length === 0) {
-      console.warn('No valid addresses found among provided addresses');
+      console.log('No valid addresses provided');
       return { nfts: [], totalCount: 0 };
     }
 
@@ -472,6 +531,9 @@ const alchemyService = {
    * Updated for Alchemy NFT API v3
    */
   async getNftMetadata(contractAddress, tokenId, options = {}) {
+    // Make sure API key is initialized
+    await this.initApiKey();
+
     const { network = 'ethereum' } = options;
     
     try {
@@ -496,6 +558,9 @@ const alchemyService = {
    * Get the best quality image URL for an NFT
    */
   async getNftImageUrl(contractAddress, tokenId, options = {}) {
+    // Make sure API key is initialized
+    await this.initApiKey();
+
     try {
       const metadata = await this.getNftMetadata(contractAddress, tokenId, options);
       
@@ -526,6 +591,9 @@ const alchemyService = {
    * Updated for Alchemy NFT API v3
    */
   async getNftsForCollection(contractAddress, options = {}) {
+    // Make sure API key is initialized
+    await this.initApiKey();
+
     const { network = 'ethereum', pageKey, pageSize = 100 } = options;
     
     try {
@@ -562,6 +630,9 @@ const alchemyService = {
    * @returns {Promise<string[]>} Array of wallet addresses
    */
   async getOwnersForContract(contractAddress, network = 'eth') {
+    // Make sure API key is initialized
+    await this.initApiKey();
+
     try {
       if (!contractAddress) {
         console.error('Contract address is missing or empty');
@@ -610,22 +681,18 @@ const alchemyService = {
         // Try direct Alchemy API as a fallback
         try {
           console.log('Attempting direct Alchemy API call for getOwnersForContract');
-          const ALCHEMY_API_KEY = process.env.REACT_APP_ALCHEMY_API_KEY || '';
           
-          if (!ALCHEMY_API_KEY) {
+          if (!this.apiKey) {
             console.error('Missing Alchemy API key for direct API call');
             throw new Error('Alchemy API key not available');
           }
           
-          // Format network for direct API
-          const networkPrefix = network === 'eth' ? 'eth-mainnet' : 
-                               network === 'polygon' ? 'polygon-mainnet' : 
-                               network === 'opt' ? 'opt-mainnet' : 
-                               network === 'arb' ? 'arb-mainnet' : 
-                               network === 'base' ? 'base-mainnet' : 'eth-mainnet';
+          // Map the network to the appropriate endpoint prefix
+          // Get the base API URL using our helper
+          const baseUrl = await this.getAlchemyUrl(network, 'nft');
           
           // Build the direct API URL as per the docs
-          const directUrl = `https://${networkPrefix}.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}/getOwnersForContract`;
+          const directUrl = `${baseUrl}/getOwnersForContract`;
           
           console.log(`Direct API call to Alchemy URL: ${directUrl}`);
           
@@ -719,7 +786,10 @@ const alchemyService = {
  * Get asset transfers for addresses to track NFT ownership history
  * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
  */
-async function getAssetTransfers(addresses, options = {}) {
+alchemyService.getAssetTransfers = async function(addresses, options = {}) {
+  // Make sure API key is initialized
+  await this.initApiKey();
+  
   if (!addresses || addresses.length === 0) {
     console.warn('No addresses provided to getAssetTransfers');
     return { transfers: [], transferMap: {} };
@@ -803,7 +873,7 @@ async function getAssetTransfers(addresses, options = {}) {
       diagnostic: { error: error.message, stack: error.stack, details: errorDetails }
     };
   }
-}
+};
 
 // Export convenience functions
 export const fetchNftsForOwner = (address, options) => 
@@ -816,7 +886,7 @@ export const fetchNftsForAddresses = (addresses, options) =>
   alchemyService.fetchNftsForMultipleAddresses(addresses, options);
 
 export const fetchAssetTransfers = (addresses, options) =>
-  getAssetTransfers(addresses, options);
+  alchemyService.getAssetTransfers(addresses, options);
 
 export const createConsistentUniqueId = (nft) =>
   alchemyService.createConsistentUniqueId(nft);
