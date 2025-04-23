@@ -243,9 +243,11 @@ class AlchemyService {
         pageSize: options.pageSize || '100'
       });
 
-      // Handle excludeFilters
-      if (options.excludeFilters && options.excludeFilters.length > 0) {
-        queryParams.append('excludeFilters[]', options.excludeFilters.join(','));
+      // Handle excludeFilters - append each filter separately
+      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
+        options.excludeFilters.forEach(filter => {
+          queryParams.append('excludeFilters[]', filter);
+        });
       }
 
       // Add pageKey if provided
