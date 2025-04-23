@@ -424,7 +424,7 @@ class AlchemyService {
       ''
     ).toLowerCase();
     
-    // Extract token ID - normalize to string
+    // Extract token ID - normalize to string and remove leading zeros
     const tokenId = String(
       (nft.tokenId) || 
       (nft.token_id) || 
@@ -435,10 +435,12 @@ class AlchemyService {
     const network = (
       (nft.network) || 
       (nft.chain) ||
+      (nft.chainId) ||
       'eth'
     ).toLowerCase();
     
     // Create a consistent unique ID - independent of wallet
+    // This ensures the same NFT owned by different wallets is considered the same
     return `${network}:${contractAddress}:${tokenId}`;
   }
   
@@ -540,15 +542,21 @@ class AlchemyService {
             walletNftCount[address] += nfts.length;
             
             nfts.forEach(nft => {
-              // Create a unique identifier for this NFT
-              const uniqueId = `${chain}-${nft.contract.address}-${nft.tokenId}`;
+              // Use our consistent unique ID function for better deduplication
+              const uniqueId = this.createConsistentUniqueId({
+                ...nft,
+                chain
+              });
               
               if (!uniqueNftsMap.has(uniqueId)) {
-                // Add chain information to the NFT
+                // Add chain and ownership information to the NFT
                 uniqueNftsMap.set(uniqueId, {
                   ...nft,
+                  chain,
                   chainId: chain,
-                  ownerAddress: address
+                  network: chain,
+                  ownerAddress: address,
+                  uniqueId // Add the uniqueId to the NFT object for future reference
                 });
               }
             });

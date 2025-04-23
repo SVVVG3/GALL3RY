@@ -489,6 +489,12 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Format NFTs for display
       const formattedNfts = formatNFTsForDisplay(nfts);
       
+      // Check for duplicates before and after formatting
+      const uniqueIdsBeforeFormatting = new Set(nfts.map(nft => nft.uniqueId));
+      const uniqueIdsAfterFormatting = new Set(formattedNfts.map(nft => nft.uniqueId));
+      
+      console.log(`Unique NFT IDs: ${uniqueIdsBeforeFormatting.size} before formatting, ${uniqueIdsAfterFormatting.size} after formatting`);
+      
       // Final deduplication before updating state
       const uniqueNfts = removeDuplicates(formattedNfts);
       
