@@ -482,7 +482,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         }
       );
       
-      const nfts = result.nfts || [];
+      const nfts = result.uniqueNfts || [];
       
       console.log(`Fetched ${nfts.length} NFTs for user ${profile.username}`);
       
