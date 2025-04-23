@@ -497,7 +497,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
         fetchAll: true,
         excludeSpam: true,
-        excludeAirdrops: true
+        excludeAirdrops: true,
+        // Focus on ETH mainnet first, only get true chain-specific NFTs from other chains
+        fetchSecondaryChains: true
       });
       
       // Log the detailed results for debugging

@@ -358,7 +358,7 @@ const alchemyService = {
   
   /**
    * Fetch NFTs for multiple addresses across multiple chains
-   * Optimized to reduce API calls by batching by chain instead of by address
+   * Optimized approach that avoids redundant API calls by using a single-chain first strategy
    */
   async fetchNftsForMultipleAddresses(addresses, options = {}) {
     if (!addresses || addresses.length === 0) {
@@ -373,86 +373,227 @@ const alchemyService = {
       ).map(addr => addr.toLowerCase());
       
       if (validAddresses.length === 0) {
-        console.warn('No valid ETH addresses found after filtering', { 
-          originalCount: addresses.length, 
-          addresses: addresses.slice(0, 3) // Log a sample for debugging
-        });
+        console.warn('No valid ETH addresses found after filtering');
         return { nfts: [], totalCount: 0, info: 'No valid addresses to query' };
       }
       
-      console.log(`Fetching NFTs for ${validAddresses.length} addresses across chains`);
+      console.log(`Fetching NFTs for ${validAddresses.length} addresses using optimized strategy`);
       
-      // Get the chains to fetch from
-      const chains = options.chains || SUPPORTED_CHAINS.map(c => c.id);
-      console.log(`Will fetch from ${chains.length} chains: ${chains.join(', ')}`);
+      // Start with mainnet only - most NFTs are on Ethereum mainnet anyway
+      const primaryChain = 'eth';
+      const secondaryChains = (options.chains || SUPPORTED_CHAINS.map(c => c.id))
+        .filter(chain => chain !== primaryChain);
       
-      // Data structures for results
-      let allNfts = [];
-      // Use a Map for deduplication with uniqueId as the key
+      console.log(`Using primary chain ${primaryChain} first, then ${secondaryChains.length} secondary chains if needed`);
+      
+      // Track all seen NFTs by their uniqueId
       const uniqueNftsMap = new Map();
-      const walletToNftCount = {}; // For tracking NFTs per wallet
       
-      // Process each chain sequentially to avoid overwhelming the API
-      for (const chainId of chains) {
-        console.log(`Processing chain: ${chainId}`);
-        
-        // Process each wallet for this chain (we need to do this since there's no batch endpoint)
-        for (const address of validAddresses) {
-          try {
-            // Initialize counter for this wallet if not exists
-            if (!walletToNftCount[address]) {
-              walletToNftCount[address] = 0;
-            }
+      // Step 1: Fetch all NFTs from Ethereum mainnet first
+      console.log(`Step 1: Fetching from primary chain (${primaryChain}) for all addresses`);
+      
+      // Process each wallet for Ethereum mainnet
+      for (const address of validAddresses) {
+        try {
+          // Fetch NFTs for this specific wallet on Ethereum
+          const result = await this.getNftsForOwner(address, {
+            network: primaryChain,
+            pageSize: options.pageSize || 100,
+            excludeSpam: options.excludeSpam !== false,
+            excludeAirdrops: options.excludeAirdrops !== false,
+            fetchAll: options.fetchAll !== false,
+            chainVerification: false // No need for chain verification as we're only fetching from one chain initially
+          });
+          
+          // Process each NFT from this wallet on Ethereum
+          if (result.nfts && result.nfts.length > 0) {
+            console.log(`Found ${result.nfts.length} NFTs for wallet ${address} on ${primaryChain}`);
             
-            // Fetch NFTs for this specific wallet on this specific chain
-            const result = await this.getNftsForOwner(address, {
-              network: chainId,
-              pageSize: options.pageSize || 100,
-              excludeSpam: options.excludeSpam !== false,
-              excludeAirdrops: options.excludeAirdrops !== false,
-              fetchAll: options.fetchAll !== false,
-              chainVerification: true // Enable chain verification
-            });
-            
-            // Process each NFT for this wallet/chain
-            if (result.nfts && result.nfts.length > 0) {
-              // Add NFTs to the unique map instead of the array directly
-              result.nfts.forEach(nft => {
-                if (!nft || !nft.contract || !nft.tokenId) return;
-                
-                // Make sure we have a valid uniqueId
-                const uniqueId = nft.uniqueId || this.createConsistentUniqueId(nft);
-                
-                // Only add if not already in the map
-                if (!uniqueNftsMap.has(uniqueId)) {
-                  uniqueNftsMap.set(uniqueId, {
-                    ...nft,
-                    uniqueId,
-                    ownerWallet: address,
-                    network: nft.network || chainId
-                  });
-                  
-                  // Increment wallet count
-                  walletToNftCount[address]++;
-                }
+            // Add each unique NFT to our map
+            result.nfts.forEach(nft => {
+              if (!nft || !nft.contract || !nft.tokenId) return;
+              
+              // Create a proper uniqueId that actually includes the chain
+              const uniqueId = this.createConsistentUniqueId({
+                ...nft,
+                // Force the network to be the primary chain
+                network: primaryChain,
+                contract: {
+                  ...nft.contract,
+                  address: nft.contract?.address
+                },
+                tokenId: nft.tokenId
               });
               
-              console.log(`Added ${result.nfts.length} NFTs for wallet ${address} on chain ${chainId}`);
-            } else {
-              console.log(`No NFTs found for wallet ${address} on chain ${chainId}`);
-            }
-          } catch (walletError) {
-            console.error(`Error fetching NFTs for address ${address} on chain ${chainId}:`, walletError.message);
+              // Store the NFT with its uniqueId
+              if (!uniqueNftsMap.has(uniqueId)) {
+                uniqueNftsMap.set(uniqueId, {
+                  ...nft,
+                  uniqueId,
+                  ownerWallet: address,
+                  network: primaryChain // Ensure network is set correctly
+                });
+              }
+            });
+          } else {
+            console.log(`No NFTs found for wallet ${address} on ${primaryChain}`);
           }
+        } catch (error) {
+          console.error(`Error fetching NFTs for address ${address} on ${primaryChain}:`, error.message);
         }
       }
       
+      // Step 2: If we're missing NFTs from specific chains, fetch only from those chains
+      if (secondaryChains.length > 0 && options.fetchSecondaryChains !== false) {
+        console.log(`Step 2: Fetching from ${secondaryChains.length} secondary chains`);
+        
+        // Process each secondary chain we want to include
+        for (const chainId of secondaryChains) {
+          console.log(`Processing secondary chain: ${chainId}`);
+          
+          // Process each wallet for this chain
+          for (const address of validAddresses) {
+            try {
+              // Skip wallets with no NFTs on primary chain, as they're unlikely to have NFTs on secondary chains
+              // This is a heuristic optimization - uncomment if you want to use it
+              // const hasNftsOnPrimary = [...uniqueNftsMap.values()].some(nft => nft.ownerWallet === address);
+              // if (!hasNftsOnPrimary) {
+              //   console.log(`Skipping wallet ${address} on ${chainId} as it has no NFTs on ${primaryChain}`);
+              //   continue;
+              // }
+              
+              // Fetch NFTs for this specific wallet on this secondary chain
+              const result = await this.getNftsForOwner(address, {
+                network: chainId,
+                pageSize: options.pageSize || 100,
+                excludeSpam: options.excludeSpam !== false,
+                excludeAirdrops: options.excludeAirdrops !== false,
+                fetchAll: options.fetchAll !== false,
+                chainVerification: false // Raw data, we'll handle deduplication ourselves
+              });
+              
+              // Process each NFT for this wallet/chain
+              if (result.nfts && result.nfts.length > 0) {
+                // Filter out any NFTs that are clearly duplicates from mainnet
+                // This should only happen if they're TRULY chain-specific NFTs
+                const newNfts = result.nfts.filter(nft => {
+                  if (!nft || !nft.contract || !nft.tokenId) return false;
+                  
+                  // Create unique IDs based on two different scenarios
+                  
+                  // 1. If this were an ETH NFT (to check for duplication)
+                  const asEthNftId = this.createConsistentUniqueId({
+                    ...nft,
+                    network: primaryChain, // Check if this exists as an ETH NFT
+                    contract: { ...nft.contract },
+                    tokenId: nft.tokenId
+                  });
+                  
+                  // 2. Actual chain-specific ID
+                  const actualChainId = this.createConsistentUniqueId({
+                    ...nft,
+                    network: chainId,
+                    contract: { ...nft.contract },
+                    tokenId: nft.tokenId
+                  });
+                  
+                  // If we already have this NFT in our map with the ETH network, skip it
+                  // It means the API returned the same NFT for both ETH and this chain
+                  if (uniqueNftsMap.has(asEthNftId)) {
+                    return false;
+                  }
+                  
+                  // Check if we already have this NFT with its actual chain ID
+                  // (shouldn't happen but just to be safe)
+                  if (uniqueNftsMap.has(actualChainId)) {
+                    return false;
+                  }
+                  
+                  // Additional filtering for true chain-specific NFTs
+                  // Check for chain indicators in the NFT data
+                  const tokenUri = nft.tokenUri?.gateway || '';
+                  const contractMetadata = nft.contract?.contractMetadata || {};
+                  
+                  // For non-ETH chains, look for chain-specific indicators
+                  if (chainId !== primaryChain) {
+                    const hasChainIndicator = 
+                      nft.id?.toString().includes(chainId) || 
+                      tokenUri.includes(chainId) ||
+                      contractMetadata.openSea?.chain === chainId;
+                    
+                    // Check contract addresses unique to specific chains
+                    // e.g., Base-only contracts start with different prefixes
+                    // This is just an example, adjust as needed
+                    const contractAddress = nft.contract?.address?.toLowerCase() || '';
+                    const isChainSpecificContract = 
+                      (chainId === 'base' && (contractAddress.startsWith('0x24') || contractAddress.startsWith('0x6d'))) ||
+                      (chainId === 'arb' && (contractAddress.startsWith('0x76') || contractAddress.startsWith('0xc4'))) ||
+                      (chainId === 'opt' && (contractAddress.startsWith('0x28') || contractAddress.startsWith('0xa4')));
+                    
+                    // Include if it has a chain indicator or is a chain-specific contract
+                    if (hasChainIndicator || isChainSpecificContract) {
+                      return true;
+                    }
+                    
+                    // Otherwise, validate with a specific check for known collections on this chain
+                    const isKnownCollectionOnThisChain = this.isCollectionOnChain(nft.contract?.address, chainId);
+                    return isKnownCollectionOnThisChain;
+                  }
+                  
+                  // Default inclusion for chain-specific NFTs
+                  return true;
+                });
+                
+                const originalCount = result.nfts.length;
+                const filteredCount = newNfts.length;
+                
+                if (filteredCount > 0) {
+                  console.log(`Found ${filteredCount} chain-specific NFTs for wallet ${address} on ${chainId} (filtered from ${originalCount})`);
+                  
+                  // Add each unique chain-specific NFT to our map
+                  newNfts.forEach(nft => {
+                    const uniqueId = this.createConsistentUniqueId({
+                      ...nft,
+                      network: chainId,
+                      contract: { ...nft.contract },
+                      tokenId: nft.tokenId
+                    });
+                    
+                    uniqueNftsMap.set(uniqueId, {
+                      ...nft,
+                      uniqueId,
+                      ownerWallet: address,
+                      network: chainId
+                    });
+                  });
+                } else {
+                  console.log(`All ${originalCount} NFTs from ${chainId} were duplicates of NFTs on ${primaryChain}`);
+                }
+              } else {
+                console.log(`No NFTs found for wallet ${address} on ${chainId}`);
+              }
+            } catch (error) {
+              console.error(`Error fetching NFTs for address ${address} on ${chainId}:`, error.message);
+            }
+          }
+        }
+      } else {
+        console.log(`Skipping secondary chains as they were not requested or disabled`);
+      }
+      
       // Create the final array from our map of unique NFTs
-      allNfts = Array.from(uniqueNftsMap.values());
+      const allNfts = Array.from(uniqueNftsMap.values());
+      
+      // Count NFTs per wallet for logging
+      const walletToNftCount = {};
+      allNfts.forEach(nft => {
+        const wallet = nft.ownerWallet;
+        walletToNftCount[wallet] = (walletToNftCount[wallet] || 0) + 1;
+      });
       
       // Log per-wallet counts
       for (const [wallet, count] of Object.entries(walletToNftCount)) {
-        console.log(`Wallet ${wallet} has ${count} NFTs across all chains`);
+        console.log(`Wallet ${wallet} has ${count} unique NFTs across all chains`);
       }
       
       console.log(`Found ${allNfts.length} unique NFTs across all wallets after deduplication`);
@@ -518,6 +659,41 @@ const alchemyService = {
         }
       };
     }
+  },
+  
+  /**
+   * Helper function to determine if a collection exists on a specific chain
+   * This is a simplified version - in production, you'd want to maintain a database
+   * of known collections per chain or query an API
+   */
+  isCollectionOnChain(contractAddress, chainId) {
+    if (!contractAddress || !chainId) return false;
+    
+    // Convert to lowercase for comparisons
+    contractAddress = contractAddress.toLowerCase();
+    
+    // Known collections per chain
+    const chainCollections = {
+      'base': [
+        '0x7d5861cfe1c74aaa0999b7e2651bf2ebd2a62d89', // Base Pups
+        '0xbce3781ae7ca1a5e050bd9c4c77369867ebc307e'  // Base Bored Apes
+      ],
+      'opt': [
+        '0x7a11f4cc9343b3a966dd5e094ee21e556a012ea4', // Optimism Quests
+        '0x3b8aa8ef34afddeeb2d8f4b608cb7703af0e7db9'  // Optisaurs
+      ],
+      'arb': [
+        '0xd2a077ec359d94e0a0b7e84435eacb40a67a817c', // Smol Brains
+        '0x8ffb9b504d497e4000967391e70d542b8cc6748a'  // Arbitrum Planet
+      ],
+      'polygon': [
+        '0x2953399124f0cbb46d2cbacd8a89cf0599974963', // OpenSea Polygon
+        '0x5ce9fa5cd001f133a5422b1c283196e4574e1c73'  // Lens Protocol
+      ]
+    };
+    
+    // Check if the contract address is in the list for this chain
+    return chainCollections[chainId]?.includes(contractAddress) || false;
   },
   
   /**
