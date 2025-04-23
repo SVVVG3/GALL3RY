@@ -78,7 +78,7 @@ export const formatNFTsForDisplay = (nfts) => {
 /**
  * Remove duplicate NFTs based on uniqueId or contract-tokenId-network combination
  */
-function removeDuplicates(nfts) {
+export function removeDuplicates(nfts) {
   if (!nfts || !Array.isArray(nfts) || nfts.length === 0) return [];
   
   const uniqueMap = new Map();
