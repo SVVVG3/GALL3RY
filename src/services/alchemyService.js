@@ -243,20 +243,28 @@ class AlchemyService {
       if (options.pageSize) params.pageSize = options.pageSize;
       if (options.withMetadata !== undefined) params.withMetadata = options.withMetadata;
       
-      // Handle excludeFilters properly as an array parameter
+      // Handle excludeFilters properly as a comma-separated string instead of an array
+      let excludeFilters = [];
+      
+      // First, collect all filters that need to be excluded
       if (options.excludeFilters && options.excludeFilters.length > 0) {
-        params.excludeFilters = options.excludeFilters;
+        excludeFilters = [...options.excludeFilters];
       }
       
       // Support for individual filter flags
-      if (options.excludeSpam === true && (!options.excludeFilters || !options.excludeFilters.includes('SPAM'))) {
-        params.excludeFilters = params.excludeFilters || [];
-        params.excludeFilters.push('SPAM');
+      if (options.excludeSpam === true && !excludeFilters.includes('SPAM')) {
+        excludeFilters.push('SPAM');
       }
       
-      if (options.excludeAirdrops === true && (!options.excludeFilters || !options.excludeFilters.includes('AIRDROP'))) {
-        params.excludeFilters = params.excludeFilters || [];
-        params.excludeFilters.push('AIRDROP');
+      if (options.excludeAirdrops === true && !excludeFilters.includes('AIRDROP')) {
+        excludeFilters.push('AIRDROP');
+      }
+      
+      // Only add the excludeFilters if there are filters to exclude
+      if (excludeFilters.length > 0) {
+        // Convert the array to a comma-separated string
+        params.excludeFilters = excludeFilters.join(',');
+        console.log(`Using exclude filters: ${params.excludeFilters}`);
       }
       
       console.log(`Fetching NFTs for ${owner} on ${chain} from ${ALCHEMY_ENDPOINT}`);
@@ -479,25 +487,24 @@ class AlchemyService {
         };
         
         // Handle excludeFilters properly 
+        let excludeFilters = [];
+        
         if (options.excludeFilters && options.excludeFilters.length > 0) {
-          fetchOptions.excludeFilters = options.excludeFilters;
-        } else {
-          // Create excludeFilters array if not already provided
-          const excludeFilters = [];
-          
-          // Only add filters if they are explicitly set to true
-          if (options.excludeSpam === true) {
-            excludeFilters.push('SPAM');
-          }
-          
-          if (options.excludeAirdrops === true) {
-            excludeFilters.push('AIRDROP');
-          }
-          
-          // Only add the excludeFilters array if there are filters to exclude
-          if (excludeFilters.length > 0) {
-            fetchOptions.excludeFilters = excludeFilters;
-          }
+          excludeFilters = [...options.excludeFilters];
+        }
+        
+        // Add individual filter flags
+        if (options.excludeSpam === true && !excludeFilters.includes('SPAM')) {
+          excludeFilters.push('SPAM');
+        }
+        
+        if (options.excludeAirdrops === true && !excludeFilters.includes('AIRDROP')) {
+          excludeFilters.push('AIRDROP');
+        }
+        
+        // Only add excludeFilters if we have any
+        if (excludeFilters.length > 0) {
+          fetchOptions.excludeFilters = excludeFilters;
         }
         
         // Log the filters we're using
@@ -1018,13 +1025,20 @@ class AlchemyService {
       // Add optional parameters
       if (options.pageKey) url += `&pageKey=${options.pageKey}`;
       if (options.pageSize) url += `&pageSize=${options.pageSize}`;
-      if (options.withMetadata) url += `&withMetadata=true`;
+      if (options.withMetadata !== undefined) url += `&withMetadata=${options.withMetadata}`;
       
-      const response = await fetch(url);
+      console.log(`Fetching NFTs for contract ${contractAddress} on ${chainId} from: ${url}`);
+      
+      // Make request
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json'
+        }
+      });
       
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to fetch NFTs for contract: ${error}`);
+        throw new Error(`Failed to fetch NFTs for contract ${contractAddress} on ${chainId}: ${response.statusText}`);
       }
       
       const data = await response.json();
@@ -1038,315 +1052,7 @@ class AlchemyService {
       return data;
     } catch (error) {
       console.error(`Error fetching NFTs for contract ${contractAddress} on ${chainId}:`, error);
-      return { nfts: [], pageKey: null };
-    }
-  }
-
-  /**
-   * Gets all owners for a NFT
-   * @param {string} contractAddress - The contract address
-   * @param {string} tokenId - The token ID
-   * @param {string} chainId - The chain ID, e.g. 'eth', 'polygon', etc.
-   * @returns {Promise<Array>} - The owners
-   */
-  async getOwnersForNft(contractAddress, tokenId, chainId = 'eth') {
-    try {
-      // Create a cache key based on contract address, token ID, and chain ID
-      const cacheKey = `nft_owners_${contractAddress.toLowerCase()}_${tokenId}_${chainId.toLowerCase()}`;
-      
-      // Check if we have a valid cached response
-      const cachedResponse = this.requestCache.get(cacheKey);
-      if (cachedResponse && cachedResponse.timestamp > Date.now() - this.cacheTTL) {
-        console.log(`Using cached owners for NFT ${contractAddress}:${tokenId} on ${chainId}`);
-        return cachedResponse.data;
-      }
-      
-      const baseUrl = await this.getAlchemyUrl(chainId);
-      const url = `${baseUrl}/getOwnersForNft?contractAddress=${contractAddress}&tokenId=${tokenId}`;
-      
-      const response = await fetch(url);
-      
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Failed to fetch owners for NFT: ${error}`);
-      }
-      
-      const data = await response.json();
-      
-      // Store in cache
-      this.requestCache.set(cacheKey, {
-        data: data.owners,
-        timestamp: Date.now()
-      });
-      
-      return data.owners;
-    } catch (error) {
-      console.error(`Error fetching owners for NFT ${contractAddress}:${tokenId} on ${chainId}:`, error);
-      return [];
-    }
-  }
-
-  /**
-   * Gets all NFTs for an owner across all supported chains
-   * @param {string} owner - The wallet address
-   * @param {object} options - Additional options
-   * @returns {Promise<Object>} - NFTs grouped by chain
-   */
-  async getAllNftsForOwner(owner, options = {}) {
-    try {
-      // Create a cache key based on owner address and serialized options
-      const serializedOptions = JSON.stringify(options);
-      const cacheKey = `all_owner_nfts_${owner.toLowerCase()}_${serializedOptions}`;
-      
-      // Check if we have a valid cached response for all chains
-      const cachedResponse = this.requestCache.get(cacheKey);
-      if (cachedResponse && cachedResponse.timestamp > Date.now() - this.cacheTTL) {
-        console.log(`Using cached NFTs for owner ${owner} across all chains`);
-        return cachedResponse.data;
-      }
-      
-      // Get NFTs from all chains concurrently
-      const supportedChains = ['eth', 'polygon', 'opt', 'arb', 'base'];
-      const results = await Promise.allSettled(
-        supportedChains.map(chain => this.getNftsForOwner(owner, options, chain))
-      );
-      
-      // Process results
-      const nftsByChain = {};
-      results.forEach((result, index) => {
-        const chain = supportedChains[index];
-        if (result.status === 'fulfilled') {
-          nftsByChain[chain] = result.value.ownedNfts || [];
-        } else {
-          console.error(`Failed to fetch NFTs on ${chain}:`, result.reason);
-          nftsByChain[chain] = [];
-        }
-      });
-      
-      // Store in cache
-      this.requestCache.set(cacheKey, {
-        data: nftsByChain,
-        timestamp: Date.now()
-      });
-      
-      return nftsByChain;
-    } catch (error) {
-      console.error('Error fetching NFTs across chains:', error);
-      return {};
-    }
-  }
-
-  /**
-   * Gets metadata for a specific token
-   * @param {string} contractAddress - The contract address
-   * @param {string} tokenId - The token ID
-   * @param {string} chain - The blockchain network
-   * @returns {Promise<Object>} - Token metadata
-   */
-  async getTokenMetadata(contractAddress, tokenId, chain = 'eth') {
-    try {
-      // Create a cache key based on contract address, token ID and chain
-      const cacheKey = `token_metadata_${contractAddress.toLowerCase()}_${tokenId}_${chain}`;
-      
-      // Check if we have a valid cached response
-      const cachedResponse = this.requestCache.get(cacheKey);
-      if (cachedResponse && cachedResponse.timestamp > Date.now() - this.cacheTTL) {
-        console.log(`Using cached metadata for token ${contractAddress}:${tokenId} on ${chain}`);
-        return cachedResponse.data;
-      }
-      
-      // Build URL
-      const url = this.getAlchemyUrl(chain, 'getTokenMetadata', `tokenId=${tokenId}`);
-      console.log(`Fetching token metadata from: ${url}`);
-      
-      // Make request
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch token metadata: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Store in cache
-      this.requestCache.set(cacheKey, {
-        data,
-        timestamp: Date.now()
-      });
-      
-      return data;
-    } catch (error) {
-      console.error(`Error fetching token metadata for ${contractAddress}:${tokenId} on ${chain}:`, error);
-      return null;
-    }
-  }
-
-  /**
-   * Gets tokens for a specific owner
-   * @param {string} owner - The owner address
-   * @param {string} chain - The blockchain network
-   * @returns {Promise<Array>} - The tokens
-   */
-  async getTokensForOwner(owner, chain = 'eth') {
-    try {
-      // Create a cache key based on owner address and chain
-      const cacheKey = `owner_tokens_${owner.toLowerCase()}_${chain}`;
-      
-      // Check if we have a valid cached response
-      const cachedResponse = this.requestCache.get(cacheKey);
-      if (cachedResponse && cachedResponse.timestamp > Date.now() - this.cacheTTL) {
-        console.log(`Using cached tokens for owner ${owner} on ${chain}`);
-        return cachedResponse.data;
-      }
-      
-      // Build URL
-      const url = this.getAlchemyUrl(chain, 'getTokenBalances', `owner=${owner}`);
-      console.log(`Fetching tokens from: ${url}`);
-      
-      // Make request
-      const response = await fetch(url, {
-        method: 'GET',
-        headers: {
-          'accept': 'application/json'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch tokens: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      // Store in cache
-      this.requestCache.set(cacheKey, {
-        data,
-        timestamp: Date.now()
-      });
-      
-      return data;
-    } catch (error) {
-      console.error(`Error fetching tokens for owner ${owner} on ${chain}:`, error);
-      return { tokens: [] };
+      return { nfts: [], pageKey: '' };
     }
   }
 }
-
-/**
- * Get asset transfers for addresses to track NFT ownership history
- * Uses Alchemy's getAssetTransfers endpoint to get NFT transfer history
- */
-
-// Create an instance of the AlchemyService class
-const alchemyService = new AlchemyService();
-
-AlchemyService.prototype.getAssetTransfers = async function(addresses, options = {}) {
-  // Make sure API key is initialized
-  await this.initApiKey();
-  
-  if (!addresses || addresses.length === 0) {
-    console.warn('No addresses provided to getAssetTransfers');
-    return { transfers: [], transferMap: {} };
-  }
-  
-  try {
-    // Get the chains to fetch from (defaulting to ETH only for transfers to reduce API calls)
-    const chain = options.chain || 'eth';
-    
-    // Clean and validate addresses
-    const validAddresses = addresses
-      .filter(addr => addr && typeof addr === 'string')
-      .map(addr => addr.toLowerCase().trim());
-    
-    if (validAddresses.length === 0) {
-      console.warn('No valid addresses after formatting');
-      return { transfers: [], transferMap: {} };
-    }
-    
-    console.log(`Fetching NFT transfers for ${validAddresses.length} addresses on ${chain}`);
-    
-    // Build the params for the Alchemy API call
-    const params = {
-      endpoint: 'getAssetTransfers',
-      chain,
-      addresses: validAddresses.join(','),
-      order: options.order || 'desc',
-      debug: options.debug === true ? 'true' : undefined,
-      category: ['ERC721', 'ERC1155'] // Explicitly specify NFT categories
-    };
-    
-    console.log(`Fetching transfers with params:`, {
-      endpoint: params.endpoint,
-      chain: params.chain,
-      addressCount: validAddresses.length,
-      order: params.order,
-      debug: params.debug
-    });
-    
-    // Call our backend API which will handle the RPC call
-    const response = await axios.get(ALCHEMY_ENDPOINT, { params });
-    
-    // Check if we got a valid response
-    if (!response.data) {
-      console.warn('Empty response from getAssetTransfers API');
-      return { transfers: [], transferMap: {} };
-    }
-    
-    // Check if we have the transferMap
-    if (!response.data.transferMap) {
-      console.warn('Response missing transferMap:', response.data);
-      return { 
-        transfers: response.data.transfers || [], 
-        transferMap: {},
-        diagnostic: response.data.diagnostic || { error: 'Missing transferMap in response' }
-      };
-    }
-    
-    console.log(`Got transfer data with ${response.data.count || 0} entries, ${Object.keys(response.data.transferMap).length} mapped items`);
-    
-    return {
-      transfers: response.data.transfers || [],
-      transferMap: response.data.transferMap || {},
-      processedCount: response.data.processedCount,
-      diagnostic: response.data.diagnostic
-    };
-  } catch (error) {
-    console.error('Error fetching asset transfers:', error);
-    const errorDetails = {
-      message: error.message,
-      status: error.response?.status,
-      statusText: error.response?.statusText,
-      data: error.response?.data
-    };
-    console.error('Error details:', errorDetails);
-    
-    return { 
-      transfers: [], 
-      transferMap: {},
-      error: error.message,
-      diagnostic: { error: error.message, stack: error.stack, details: errorDetails }
-    };
-  }
-};
-
-// Export convenience functions
-export const fetchNftsForOwner = (address, options) => 
-  alchemyService.getNftsForOwner(address, options);
-
-export const fetchNftsAcrossChains = (address, options) =>
-  alchemyService.fetchNftsAcrossChains(address, options);
-
-export const fetchNftsForAddresses = (addresses, options) =>
-  alchemyService.fetchNftsForMultipleAddresses(addresses, options);
-
-export const fetchAssetTransfers = (addresses, options) =>
-  alchemyService.getAssetTransfers(addresses, options);
-
-export const createConsistentUniqueId = (nft) =>
-  alchemyService.createConsistentUniqueId(nft);
-
-export default alchemyService; 
