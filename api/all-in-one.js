@@ -639,27 +639,108 @@ async function handleFarcasterProfileRequest(req, res) {
     const identifier = fid || username.toLowerCase();
     const cacheKey = `farcaster_profile_${identifier}`;
 
-    // Check Redis cache first
-    const cachedProfile = await redis.get(cacheKey);
+    // Use local memory cache instead of Redis
+    const cachedProfile = CACHE.get('profiles', cacheKey);
     if (cachedProfile) {
       console.log(`Cache hit for Farcaster profile: ${identifier}`);
-      return res.json(JSON.parse(cachedProfile));
+      return res.json(cachedProfile);
     }
 
+    // If we're looking up by username, try the Neynar search endpoint first as it's more reliable
+    if (username) {
+      try {
+        const neynarApiKey = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || '';
+        if (!neynarApiKey) {
+          console.warn('No Neynar API key found, skipping search endpoint');
+        } else {
+          console.log(`Trying Neynar search for username: ${username}`);
+          
+          const searchResponse = await axios.get(`https://api.neynar.com/v2/farcaster/user/search`, {
+            params: { q: username, limit: 5 },
+            headers: { 'api-key': neynarApiKey },
+            timeout: 5000
+          });
+          
+          if (searchResponse.data?.result?.users?.length > 0) {
+            // Look for exact match first
+            const exactMatch = searchResponse.data.result.users.find(
+              user => user.username.toLowerCase() === username.toLowerCase()
+            );
+            
+            const userData = exactMatch || searchResponse.data.result.users[0];
+            
+            if (userData && userData.fid) {
+              console.log(`Found user via Neynar search, fetching additional data for FID: ${userData.fid}`);
+              
+              // Now get the full user data with verified addresses
+              const userResponse = await axios.get(`https://api.neynar.com/v2/farcaster/user`, {
+                params: { fid: userData.fid },
+                headers: { 'api-key': neynarApiKey },
+                timeout: 5000
+              });
+              
+              if (userResponse.data?.result?.user) {
+                // Also fetch verified addresses separately as they might not be included in the user endpoint
+                try {
+                  const addressesResponse = await axios.get(`https://api.neynar.com/v2/farcaster/user/verified-addresses`, {
+                    params: { fid: userData.fid },
+                    headers: { 'api-key': neynarApiKey },
+                    timeout: 5000
+                  });
+                  
+                  // If we have verified addresses, add them to the user data
+                  if (addressesResponse.data?.verified_addresses) {
+                    console.log(`Found ${addressesResponse.data.verified_addresses.length} verified addresses`);
+                    
+                    if (!userResponse.data.result.user.verified_addresses) {
+                      userResponse.data.result.user.verified_addresses = {};
+                    }
+                    
+                    userResponse.data.result.user.verified_addresses.eth_addresses = 
+                      addressesResponse.data.verified_addresses
+                        .filter(a => a.type === 'ethereum')
+                        .map(a => a.addr);
+                  }
+                } catch (addressesError) {
+                  console.warn('Failed to fetch additional verified addresses:', addressesError.message);
+                }
+                
+                const profile = formatFarcasterProfile(userResponse.data);
+                
+                if (profile) {
+                  // Cache the profile
+                  CACHE.set('profiles', cacheKey, profile, 600000); // 10 minutes cache
+                  return res.json(profile);
+                }
+              }
+            }
+          }
+        }
+      } catch (neynarError) {
+        console.error('Neynar search/user endpoint failed:', neynarError.message);
+      }
+    }
+
+    // Fall back to the original endpoints approach if the optimized path didn't work
+    console.log(`Falling back to API endpoints approach for ${identifier}`);
+    
     // API endpoints to try in order
     const endpoints = [
       {
-        url: `${FARCASTER_CONFIG.API_ENDPOINTS.NEYNAR}/user`,
+        name: 'Neynar API',
+        url: `https://api.neynar.com/v2/farcaster/user`,
         params: fid ? { fid } : { username },
-        headers: { 'api-key': process.env.NEYNAR_API_KEY }
+        headers: { 'api-key': process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || '' }
       },
       {
+        name: 'Zapper API',
         url: `${FARCASTER_CONFIG.API_ENDPOINTS.ZAPPER}/profile`,
         params: fid ? { fid } : { username },
-        headers: { 'X-API-KEY': process.env.ZAPPER_API_KEY }
+        headers: { 'X-API-KEY': process.env.ZAPPER_API_KEY || '' }
       },
       {
-        url: `${FARCASTER_CONFIG.API_ENDPOINTS.PUBLIC}/profiles/${identifier}`,
+        name: 'Public API',
+        url: `https://api.farcaster.xyz/v1/profiles/${identifier}`,
         params: {},
         headers: {}
       }
@@ -671,31 +752,78 @@ async function handleFarcasterProfileRequest(req, res) {
     // Try each endpoint until we get a successful response
     for (const endpoint of endpoints) {
       try {
-        const response = await fetch(
-          `${endpoint.url}?${new URLSearchParams(endpoint.params)}`,
-          { headers: endpoint.headers }
-        );
+        console.log(`Trying ${endpoint.name} for ${identifier}...`);
+        
+        // Skip if API key is missing and it's required
+        if ((endpoint.name === 'Neynar API' || endpoint.name === 'Zapper API') && 
+            (!endpoint.headers['api-key'] && !endpoint.headers['X-API-KEY'])) {
+          console.warn(`Skipping ${endpoint.name} - API key missing`);
+          continue;
+        }
+        
+        const paramString = new URLSearchParams(endpoint.params).toString();
+        const requestUrl = `${endpoint.url}${paramString ? '?' + paramString : ''}`;
+        console.log(`Making request to: ${requestUrl.replace(/api-key=[^&]+/, 'api-key=REDACTED')}`);
+        
+        const response = await axios.get(requestUrl, { 
+          headers: endpoint.headers,
+          timeout: 5000 // 5 second timeout
+        });
 
-        if (!response.ok) {
-          errors.push(`${endpoint.url}: ${response.status}`);
+        if (!response.data) {
+          errors.push(`${endpoint.name}: No data received`);
           continue;
         }
 
-        const data = await response.json();
-        profile = formatFarcasterProfile(data);
+        profile = formatFarcasterProfile(response.data);
         
         if (profile) {
-          // Cache successful response
-          await redis.setex(
-            cacheKey,
-            FARCASTER_CONFIG.CACHE_TTL / 1000, // Convert to seconds for Redis
-            JSON.stringify(profile)
-          );
+          console.log(`Successfully retrieved profile from ${endpoint.name}`);
           
+          // If we got a profile but no connected addresses and we have an FID,
+          // try to fetch verified addresses directly
+          if (profile.fid && (!profile.connectedAddresses || profile.connectedAddresses.length === 0)) {
+            try {
+              const neynarApiKey = process.env.NEYNAR_API_KEY || process.env.REACT_APP_NEYNAR_API_KEY || '';
+              if (neynarApiKey) {
+                console.log(`Fetching additional verified addresses for FID: ${profile.fid}`);
+                const addressesResponse = await axios.get(`https://api.neynar.com/v2/farcaster/user/verified-addresses`, {
+                  params: { fid: profile.fid },
+                  headers: { 'api-key': neynarApiKey },
+                  timeout: 5000
+                });
+                
+                if (addressesResponse.data?.verified_addresses) {
+                  const ethAddresses = addressesResponse.data.verified_addresses
+                    .filter(a => a.type === 'ethereum')
+                    .map(a => a.addr.toLowerCase());
+                  
+                  if (ethAddresses.length > 0) {
+                    console.log(`Found ${ethAddresses.length} additional ETH addresses for FID: ${profile.fid}`);
+                    profile.connectedAddresses = [
+                      ...(profile.connectedAddresses || []),
+                      ...ethAddresses
+                    ];
+                    
+                    // Deduplicate addresses
+                    profile.connectedAddresses = [...new Set(profile.connectedAddresses)];
+                  }
+                }
+              }
+            } catch (addressesError) {
+              console.warn('Failed to fetch additional verified addresses:', addressesError.message);
+            }
+          }
+          
+          // Cache successful response
+          CACHE.set('profiles', cacheKey, profile, 600000); // 10 minutes cache
+          
+          console.log(`Returning profile with ${profile.connectedAddresses?.length || 0} connected addresses`);
           return res.json(profile);
         }
       } catch (error) {
-        errors.push(`${endpoint.url}: ${error.message}`);
+        console.error(`${endpoint.name} error:`, error.message);
+        errors.push(`${endpoint.name}: ${error.message}`);
       }
     }
 
@@ -707,7 +835,11 @@ async function handleFarcasterProfileRequest(req, res) {
     });
   } catch (error) {
     console.error('Error in handleFarcasterProfileRequest:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 
@@ -717,6 +849,23 @@ function formatFarcasterProfile(data) {
     // Handle Neynar API response format
     if (data.result?.user) {
       const user = data.result.user;
+      const connectedAddresses = [];
+      
+      // Extract connected ETH addresses from verified_addresses
+      if (user.verified_addresses && user.verified_addresses.eth_addresses) {
+        user.verified_addresses.eth_addresses.forEach(addr => {
+          if (addr && typeof addr === 'string') {
+            connectedAddresses.push(addr.toLowerCase());
+          }
+        });
+      }
+
+      // Get custody address as well if available
+      const custodyAddress = user.custody_address ? user.custody_address.toLowerCase() : null;
+      if (custodyAddress && !connectedAddresses.includes(custodyAddress)) {
+        connectedAddresses.push(custodyAddress);
+      }
+      
       return {
         fid: user.fid,
         username: user.username,
@@ -726,6 +875,8 @@ function formatFarcasterProfile(data) {
         followingCount: user.followingCount,
         activeStatus: user.activeStatus,
         viewerContext: user.viewerContext,
+        custodyAddress: custodyAddress,
+        connectedAddresses: connectedAddresses,
         _timestamp: Date.now()
       };
     }
@@ -733,6 +884,23 @@ function formatFarcasterProfile(data) {
     // Handle Zapper API response format
     if (data.profile) {
       const profile = data.profile;
+      const connectedAddresses = [];
+      
+      // Extract addresses if available
+      if (profile.addresses && Array.isArray(profile.addresses)) {
+        profile.addresses.forEach(addr => {
+          if (addr && typeof addr === 'string') {
+            connectedAddresses.push(addr.toLowerCase());
+          }
+        });
+      }
+      
+      // Get custody address as well if available
+      const custodyAddress = profile.custody_address ? profile.custody_address.toLowerCase() : null;
+      if (custodyAddress && !connectedAddresses.includes(custodyAddress)) {
+        connectedAddresses.push(custodyAddress);
+      }
+      
       return {
         fid: profile.fid,
         username: profile.username,
@@ -741,12 +909,31 @@ function formatFarcasterProfile(data) {
         followerCount: profile.followers,
         followingCount: profile.following,
         activeStatus: profile.active ? 'active' : 'inactive',
+        custodyAddress: custodyAddress,
+        connectedAddresses: connectedAddresses,
         _timestamp: Date.now()
       };
     }
     
     // Handle public API response format
     if (data.fid) {
+      const connectedAddresses = [];
+      
+      // Extract addresses if available
+      if (data.verified_addresses && Array.isArray(data.verified_addresses)) {
+        data.verified_addresses.forEach(addr => {
+          if (addr && typeof addr === 'string') {
+            connectedAddresses.push(addr.toLowerCase());
+          }
+        });
+      }
+      
+      // Get custody address as well if available
+      const custodyAddress = data.custody_address ? data.custody_address.toLowerCase() : null;
+      if (custodyAddress && !connectedAddresses.includes(custodyAddress)) {
+        connectedAddresses.push(custodyAddress);
+      }
+      
       return {
         fid: data.fid,
         username: data.username,
@@ -755,6 +942,8 @@ function formatFarcasterProfile(data) {
         followerCount: data.followers_count,
         followingCount: data.following_count,
         activeStatus: data.active ? 'active' : 'inactive',
+        custodyAddress: custodyAddress,
+        connectedAddresses: connectedAddresses,
         _timestamp: Date.now()
       };
     }
