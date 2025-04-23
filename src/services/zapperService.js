@@ -331,7 +331,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
     if (isFid) {
       // Fetch by FID
       try {
-        console.log(`Trying direct Neynar API for FID: ${cleanInput}`);
+        console.log(`Trying direct Neynar API with FID: ${cleanInput}`);
         const response = await axios({
           method: 'get',
           url: `https://api.neynar.com/v2/farcaster/user?fid=${cleanInput}`,
@@ -345,6 +345,43 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         if (response.data && response.data.result && response.data.result.user) {
           const userData = response.data.result.user;
           
+          // Extract connected addresses from verified_addresses
+          const connectedAddresses = [];
+          if (userData.verified_addresses && Array.isArray(userData.verified_addresses.eth_addresses)) {
+            userData.verified_addresses.eth_addresses.forEach(addr => {
+              if (addr) connectedAddresses.push(addr.toLowerCase());
+            });
+          }
+          
+          // If we have a FID but no connected addresses, try to fetch them directly
+          if (userData.fid && connectedAddresses.length === 0) {
+            try {
+              console.log(`No connected addresses found in profile response, fetching directly for FID: ${userData.fid}`);
+              const verifiedResponse = await axios({
+                method: 'get',
+                url: `https://api.neynar.com/v2/farcaster/user/verified-addresses?fid=${userData.fid}`,
+                headers: {
+                  'Accept': 'application/json',
+                  'api_key': NEYNAR_API_KEY
+                },
+                timeout: 5000
+              });
+              
+              if (verifiedResponse.data && verifiedResponse.data.verified_addresses) {
+                verifiedResponse.data.verified_addresses.forEach(addr => {
+                  if (addr.type === 'ethereum' && addr.addr) {
+                    connectedAddresses.push(addr.addr.toLowerCase());
+                  }
+                });
+                console.log(`Found ${connectedAddresses.length} additional addresses from verified-addresses endpoint`);
+              }
+            } catch (verifiedError) {
+              console.warn('Failed to fetch additional verified addresses:', verifiedError.message);
+            }
+          }
+          
+          console.log(`Found ${connectedAddresses.length} connected ETH addresses for FID ${userData.fid}`);
+          
           // Convert Neynar response to our format
           const profileData = {
             username: userData.username,
@@ -354,8 +391,8 @@ export const getFarcasterProfile = async (usernameOrFid) => {
               imageUrl: userData.pfp_url,
               description: userData.profile?.bio?.text
             },
-            custodyAddress: userData.custody_address,
-            connectedAddresses: userData.connected_addresses || []
+            custodyAddress: userData.custody_address ? userData.custody_address.toLowerCase() : null,
+            connectedAddresses: connectedAddresses
           };
           
           console.log('Found Farcaster profile via direct Neynar FID API:', profileData);
@@ -372,7 +409,7 @@ export const getFarcasterProfile = async (usernameOrFid) => {
         console.log(`Trying direct Neynar API for username: ${cleanInput}`);
         const response = await axios({
           method: 'get',
-          url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(cleanInput)}&limit=10`,
+          url: `https://api.neynar.com/v2/farcaster/user/by_username?username=${encodeURIComponent(cleanInput)}`,
           headers: {
             'Accept': 'application/json',
             'api_key': NEYNAR_API_KEY
@@ -380,13 +417,18 @@ export const getFarcasterProfile = async (usernameOrFid) => {
           timeout: 5000
         });
         
-        if (response.data && response.data.result && response.data.result.users && response.data.result.users.length > 0) {
-          // Look for exact match first
-          const exactMatch = response.data.result.users.find(
-            user => user.username.toLowerCase() === cleanInput.toLowerCase()
-          );
+        if (response.data && response.data.user) {
+          const userData = response.data.user;
           
-          const userData = exactMatch || response.data.result.users[0];
+          // Extract connected addresses from verified_addresses
+          const connectedAddresses = [];
+          if (userData.verified_addresses && Array.isArray(userData.verified_addresses.eth_addresses)) {
+            userData.verified_addresses.eth_addresses.forEach(addr => {
+              if (addr) connectedAddresses.push(addr.toLowerCase());
+            });
+          }
+          
+          console.log(`Found ${connectedAddresses.length} connected ETH addresses for user ${userData.username}`);
           
           // Convert Neynar response to our format
           const profileData = {
@@ -397,8 +439,8 @@ export const getFarcasterProfile = async (usernameOrFid) => {
               imageUrl: userData.pfp_url,
               description: userData.profile?.bio?.text
             },
-            custodyAddress: userData.custody_address,
-            connectedAddresses: userData.connected_addresses || []
+            custodyAddress: userData.custody_address ? userData.custody_address.toLowerCase() : null,
+            connectedAddresses: connectedAddresses
           };
           
           console.log('Found Farcaster profile via direct Neynar username API:', profileData);
