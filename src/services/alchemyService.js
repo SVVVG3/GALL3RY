@@ -96,6 +96,14 @@ const alchemyService = {
     // Make sure API key is initialized
     await this.initApiKey();
     
+    // In production or on Vercel, we should use the server-side proxy API
+    // This ensures the API key is never exposed to the client
+    if (typeof window !== 'undefined' && (process.env.NODE_ENV === 'production' || window.location.hostname.includes('vercel.app'))) {
+      // Use our server-side proxy API
+      return `${window.location.origin}/api/alchemy/${network}`;
+    }
+    
+    // For local development direct mode (not recommended for production)
     // Map network to correct endpoint
     let networkEndpoint;
     switch (network.toLowerCase()) {
@@ -121,7 +129,7 @@ const alchemyService = {
         networkEndpoint = 'eth-mainnet'; // Default to Ethereum mainnet
     }
     
-    // Build the appropriate URL
+    // Build the appropriate URL - For local development only
     if (endpointType === 'nft') {
       return `https://${networkEndpoint}.g.alchemy.com/nft/v3/${this.apiKey}`;
     } else {
@@ -181,7 +189,7 @@ const alchemyService = {
     const network = options.network || 'eth';
 
     try {
-      console.log(`Using API key: ${this.apiKey ? 'Found' : 'Not Found'}`);
+      console.log(`Using API key: ${this.apiKey ? 'Available' : 'Not Available'}`);
       
       // Get the base API URL
       const baseUrl = await this.getAlchemyUrl(network, 'nft');
@@ -228,8 +236,11 @@ const alchemyService = {
           params.set('pageKey', pageKey);
         }
 
+        // Create the request URL
         const requestUrl = `${apiUrl}?${params.toString()}`;
-        console.log(`Fetching NFTs from: ${requestUrl}`);
+        
+        // Log request details without exposing the full URL with the API key
+        console.log(`Fetching NFTs for owner ${ownerAddress} on network ${network}`);
         
         const response = await fetch(requestUrl);
         
@@ -243,7 +254,9 @@ const alchemyService = {
         }
 
         const data = await response.json();
-        console.log(`API Response data:`, data);
+        
+        // Log response structure but not the full data which might contain sensitive info
+        console.log(`API Response received with ${data.ownedNfts?.length || data.nfts?.length || 0} NFTs`);
         
         if (data.ownedNfts) {
           allNfts = [...allNfts, ...data.ownedNfts];
