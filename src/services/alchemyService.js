@@ -230,18 +230,26 @@ class AlchemyService {
       // Build query parameters
       const queryParams = new URLSearchParams({
         endpoint: 'getNFTsForOwner',
-        network: chain, // Use network instead of chain to match API expectations
+        network: chain,
         owner,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
         pageSize: options.pageSize || '100'
       });
 
       // Handle excludeFilters - only add if explicitly set to true
+      const excludeFilters = [];
       if (options.excludeSpam === true) {
-        queryParams.append('excludeSpam', 'true');
+        excludeFilters.push('SPAM');
       }
       if (options.excludeAirdrops === true) {
-        queryParams.append('excludeAirdrops', 'true');
+        excludeFilters.push('AIRDROP');
+      }
+      
+      // Only add excludeFilters if we have any
+      if (excludeFilters.length > 0) {
+        excludeFilters.forEach(filter => {
+          queryParams.append('excludeFilters[]', filter);
+        });
       }
 
       // Add pageKey if provided
@@ -260,10 +268,20 @@ class AlchemyService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Failed to fetch NFTs: ${errorText}`);
+        console.error(`Failed to fetch NFTs on ${chain}:`, errorText);
+        throw new Error(`Failed to fetch NFTs on ${chain}: ${errorText}`);
       }
 
       const data = await response.json();
+      
+      // Add chain information to each NFT
+      if (data.ownedNfts) {
+        data.ownedNfts = data.ownedNfts.map(nft => ({
+          ...nft,
+          chain,
+          network: chain // Add both for compatibility
+        }));
+      }
       
       // Handle pagination if fetchAll is true
       if (options.fetchAll && data.pageKey) {
@@ -288,7 +306,7 @@ class AlchemyService {
       
       return data;
     } catch (error) {
-      console.error(`Error in getNftsForOwner:`, error);
+      console.error(`Error in getNftsForOwner for ${chain}:`, error);
       return { error: error.message, ownedNfts: [] };
     }
   }
@@ -297,11 +315,8 @@ class AlchemyService {
    * Fetch NFTs across multiple chains and combine the results
    */
   async fetchNftsAcrossChains(ownerAddress, options = {}) {
-    // Make sure API key is initialized
-    await this.initApiKey();
-    
     // Get the chains to fetch from
-    const chains = options.chains || SUPPORTED_CHAINS.map(c => c.id);
+    const chains = options.chains || ['eth', 'polygon', 'opt', 'arb', 'base'];
     const pageSize = options.pageSize || 100;
     const fetchAll = options.fetchAll !== false; // Default to true
     
@@ -310,32 +325,28 @@ class AlchemyService {
       
       // Make parallel requests to all chains
       const results = await Promise.allSettled(
-        chains.map(chainId => {
-          // Setup options for this request
-          const fetchOptions = {
-            pageSize,
-            withMetadata: true,
-            fetchAll
-          };
-          
-          // Create excludeFilters array for Alchemy API
-          const excludeFilters = [];
-          
-          // Only add filters if they are explicitly set to true
-          if (options.excludeSpam === true) {
-            excludeFilters.push('SPAM');
+        chains.map(async (chainId) => {
+          try {
+            // Setup options for this request
+            const fetchOptions = {
+              pageSize,
+              withMetadata: true,
+              fetchAll,
+              excludeSpam: options.excludeSpam,
+              excludeAirdrops: options.excludeAirdrops
+            };
+            
+            const result = await this.getNftsForOwner(ownerAddress, fetchOptions, chainId);
+            
+            // Return both the chain and the result for better error handling
+            return {
+              chainId,
+              data: result
+            };
+          } catch (error) {
+            // Throw with chain context
+            throw new Error(`Chain ${chainId}: ${error.message}`);
           }
-          
-          if (options.excludeAirdrops === true) {
-            excludeFilters.push('AIRDROP');
-          }
-          
-          // Only add the excludeFilters array if there are filters to exclude
-          if (excludeFilters.length > 0) {
-            fetchOptions.excludeFilters = excludeFilters;
-          }
-          
-          return this.getNftsForOwner(ownerAddress, fetchOptions, chainId);
         })
       );
       
@@ -343,47 +354,53 @@ class AlchemyService {
       let allNfts = [];
       let totalErrors = 0;
       let totalCount = 0;
+      let errors = [];
       
-      results.forEach((result, index) => {
-        const chainId = chains[index];
-        
-        if (result.status === 'fulfilled') {
-          const nfts = result.value.ownedNfts || [];
+      results.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value.data.ownedNfts) {
+          const { chainId, data } = result.value;
+          const nfts = data.ownedNfts || [];
           totalCount += nfts.length;
           
-          // Tag each NFT with its chain if not already tagged
-          allNfts = [
-            ...allNfts,
-            ...nfts.map(nft => ({
-              ...nft,
-              network: nft.network || chainId
-            }))
-          ];
-          
-          console.log(`Added ${nfts.length} NFTs from ${chainId}`);
+          if (nfts.length > 0) {
+            console.log(`Added ${nfts.length} NFTs from ${chainId}`);
+            allNfts = [...allNfts, ...nfts];
+          }
         } else {
           totalErrors++;
-          console.error(`Failed to fetch NFTs from ${chainId}:`, result.reason);
+          const chainId = chains[totalErrors - 1];
+          const error = result.reason?.message || 'Unknown error';
+          console.error(`Failed to fetch NFTs from ${chainId}:`, error);
+          errors.push({ chain: chainId, error });
         }
       });
       
       console.log(`Total: ${allNfts.length} NFTs found across ${chains.length - totalErrors}/${chains.length} chains`);
       
+      if (allNfts.length > 0) {
+        console.log(`Found ${allNfts.length} NFTs for wallet ${ownerAddress} across all chains`);
+      } else {
+        console.log(`No NFTs found for wallet ${ownerAddress} across any chains`);
+      }
+      
       return {
         nfts: allNfts,
         totalCount,
-        hasMore: false, // We don't handle pagination across chains in this implementation
-        chainsWithErrors: totalErrors > 0
+        hasMore: false,
+        chainsWithErrors: totalErrors > 0,
+        errors
       };
     } catch (error) {
-      console.error('Error in fetchNftsAcrossChains:', error.message);
-      // Even if there's an overall error, return any NFTs we might have fetched
-      // instead of returning an empty array which would break the UI
-      return {
+      console.error('Error in fetchNftsAcrossChains:', error);
+      return { 
         nfts: [],
         totalCount: 0,
         hasMore: false,
-        error: error.message
+        error: error.message,
+        errors: [{
+          chain: 'all',
+          error: error.message
+        }]
       };
     }
   }

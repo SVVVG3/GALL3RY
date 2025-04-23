@@ -45,7 +45,14 @@ export default async function handler(req, res) {
 
     // Get the network from URL path or default to ethereum
     const networkParam = req.query.network || 'eth';
-    const networkEndpoint = NETWORK_ENDPOINTS[networkParam.toLowerCase()] || 'eth-mainnet';
+    const networkEndpoint = NETWORK_ENDPOINTS[networkParam.toLowerCase()];
+    
+    if (!networkEndpoint) {
+      return res.status(400).json({
+        error: 'Invalid network',
+        message: `Network ${networkParam} is not supported. Supported networks are: ${Object.keys(NETWORK_ENDPOINTS).join(', ')}`
+      });
+    }
 
     // Get the endpoint from URL path or query parameter
     const endpoint = req.query.endpoint;
@@ -62,10 +69,10 @@ export default async function handler(req, res) {
     queryParams.delete('network');
 
     // Build the full URL with the appropriate network
-    const alchemyBaseUrl = `https://${networkEndpoint}.g.alchemy.com/nft/v3/`;
-    const apiUrl = `${alchemyBaseUrl}${ALCHEMY_API_KEY}/${endpoint}?${queryParams.toString()}`;
+    const baseUrl = `https://${networkEndpoint}.g.alchemy.com/nft/v3/${ALCHEMY_API_KEY}`;
+    const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
-    console.log(`Forwarding request to Alchemy API: ${endpoint} on network ${networkParam}`);
+    console.log(`Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
     
     try {
       // Forward the request to Alchemy
@@ -79,12 +86,15 @@ export default async function handler(req, res) {
         timeout: 15000 // Extended timeout to 15 seconds
       });
       
-      console.log(`Successful response from Alchemy API for ${networkParam}`);
+      console.log(`Successful response from Alchemy API for ${networkEndpoint}`);
       return res.status(200).json(response.data);
     } catch (error) {
-      console.error(`Error with Alchemy API on ${networkParam}:`, error.message);
+      console.error(`Error with Alchemy API on ${networkEndpoint}:`, error.message);
+      if (error.response?.data) {
+        console.error('Alchemy API error details:', error.response.data);
+      }
       
-      return res.status(502).json({ 
+      return res.status(error.response?.status || 502).json({ 
         error: 'Failed to fetch from Alchemy API',
         message: error.message,
         details: error.response?.data || null
