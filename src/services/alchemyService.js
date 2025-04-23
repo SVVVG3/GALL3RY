@@ -227,11 +227,9 @@ class AlchemyService {
       
       console.log(`Cache miss for NFTs fetch: ${owner.slice(0, 8)}... on ${chain}`);
       
-      // Use the proxy endpoint
-      const baseUrl = '/api/alchemy-proxy';
-      
       // Build query parameters
       const queryParams = new URLSearchParams({
+        endpoint: 'getNFTsForOwner',
         owner,
         chain,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
@@ -251,7 +249,7 @@ class AlchemyService {
         queryParams.append('pageKey', options.pageKey);
       }
 
-      const url = `${baseUrl}?${queryParams.toString()}`;
+      const url = `${ALCHEMY_ENDPOINT}?${queryParams.toString()}`;
       
       const response = await fetch(url, {
         method: 'GET',
