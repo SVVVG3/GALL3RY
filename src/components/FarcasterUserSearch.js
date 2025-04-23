@@ -472,12 +472,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         throw new Error('No valid wallet addresses found');
       }
 
-      // Use our new dedicated method for Farcaster users
+      // Use our dedicated method for Farcaster users with pagination enabled
       const result = await fetchNftsForFarcaster(
         walletAddresses,
         {
           chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
-          excludeSpam: true
+          excludeSpam: true,
+          excludeAirdrops: true, // Add filtering for airdrops as supported by Alchemy
+          pageSize: 100
         }
       );
       
@@ -487,35 +489,21 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       const nfts = result.nfts || [];
       
-      console.log(`Fetched ${nfts.length} NFTs for user ${profile.username}`);
+      console.log(`Fetched ${nfts.length} unique NFTs for user ${profile.username}`);
       console.log(`NFT distribution by wallets:`, result.walletNftCounts);
       
-      // Format NFTs for display
+      // Format NFTs for display - no need for additional deduplication
+      // as fetchNftsForFarcaster already handles this with createConsistentUniqueId
       const formattedNfts = formatNFTsForDisplay(nfts);
       
-      // Additional deduplication at visual display level to prevent duplicates
-      const uniqueIdsSet = new Set();
-      const visuallyUniqueNfts = formattedNfts.filter(nft => {
-        if (!nft || !nft.uniqueId) return false;
-        
-        // If we've seen this ID before, it's a duplicate
-        if (uniqueIdsSet.has(nft.uniqueId)) {
-          return false;
-        }
-        
-        // Otherwise, add it to our set and keep it
-        uniqueIdsSet.add(nft.uniqueId);
-        return true;
-      });
-      
-      // Log uniqueness stats
-      console.log(`Original NFTs: ${nfts.length}, Formatted NFTs: ${formattedNfts.length}, Final unique NFTs: ${visuallyUniqueNfts.length}`);
+      // Log stats without additional deduplication
+      console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
       
       // Update state and Redux store
-      setUserNfts(visuallyUniqueNfts);
+      setUserNfts(formattedNfts);
       setWalletAddresses(walletAddresses);
       setUserProfile(profile);
-      dispatch(setNftList(visuallyUniqueNfts));
+      dispatch(setNftList(formattedNfts));
 
     } catch (error) {
       console.error('Error in handleUserProfileFound:', error);

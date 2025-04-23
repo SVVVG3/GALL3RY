@@ -14,15 +14,14 @@ export const formatNFTsForDisplay = (nfts) => {
     return [];
   }
   
-  // Remove any duplicates using our consistent uniqueId generator from alchemyService
-  const uniqueNfts = removeDuplicates(nfts);
-  console.log(`Formatting ${uniqueNfts.length} unique NFTs for display (filtered ${nfts.length - uniqueNfts.length} duplicates)`);
+  // NFTs already deduplicated in alchemyService, no need for additional deduplication
+  console.log(`Formatting ${nfts.length} NFTs for display`);
   
-  return uniqueNfts.map(nft => {
+  return nfts.map(nft => {
     // Skip null or undefined items
     if (!nft) return null;
     
-    // Get the consistent uniqueId
+    // Get the consistent uniqueId - should already exist from alchemyService
     const uniqueId = nft.uniqueId || createConsistentUniqueId(nft);
     
     // Create a standardized NFT object with consistent property names
