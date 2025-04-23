@@ -227,27 +227,23 @@ class AlchemyService {
       
       console.log(`Cache miss for NFTs fetch: ${owner.slice(0, 8)}... on ${chain}`);
       
-      // Initialize API key
-      await this.initApiKey();
-      
-      // Get the network name for URL
-      const network = this.getNetworkFromChainId(chain);
-      
-      // Construct base URL
-      const baseUrl = `https://${network}.g.alchemy.com/nft/v3/${this.apiKey}/getNFTsForOwner`;
+      // Use the proxy endpoint
+      const baseUrl = '/api/alchemy-proxy';
       
       // Build query parameters
       const queryParams = new URLSearchParams({
-        owner: owner,
+        owner,
+        chain,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
         pageSize: options.pageSize || '100'
       });
 
-      // Handle excludeFilters - append each filter separately
-      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
-        options.excludeFilters.forEach(filter => {
-          queryParams.append('excludeFilters[]', filter);
-        });
+      // Handle excludeFilters - only add if explicitly set to true
+      if (options.excludeSpam === true) {
+        queryParams.append('excludeSpam', 'true');
+      }
+      if (options.excludeAirdrops === true) {
+        queryParams.append('excludeAirdrops', 'true');
       }
 
       // Add pageKey if provided
@@ -256,8 +252,7 @@ class AlchemyService {
       }
 
       const url = `${baseUrl}?${queryParams.toString()}`;
-      console.log(`Fetching NFTs from: ${url}`);
-
+      
       const response = await fetch(url, {
         method: 'GET',
         headers: {
