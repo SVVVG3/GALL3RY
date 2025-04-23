@@ -1200,6 +1200,9 @@ class AlchemyService {
   }
 }
 
+// Create an instance of the AlchemyService class
+const alchemyService = new AlchemyService();
+
 // Export convenience functions
 export const fetchNftsForOwner = (address, options) => 
   alchemyService.getNftsForOwner(address, options);
