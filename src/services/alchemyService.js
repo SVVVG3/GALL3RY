@@ -230,8 +230,8 @@ class AlchemyService {
       // Build query parameters
       const queryParams = new URLSearchParams({
         endpoint: 'getNFTsForOwner',
+        network: chain, // Use network instead of chain to match API expectations
         owner,
-        chain,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
         pageSize: options.pageSize || '100'
       });
@@ -259,7 +259,8 @@ class AlchemyService {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch NFTs: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Failed to fetch NFTs: ${errorText}`);
       }
 
       const data = await response.json();
