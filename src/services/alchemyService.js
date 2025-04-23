@@ -133,10 +133,22 @@ class AlchemyService {
     if (typeof window !== 'undefined') {
       // Client-side (browser) - always use proxy
       baseUrl = process.env.NODE_ENV === 'production'
-        ? '/api/alchemy-proxy'
-        : 'http://localhost:3000/api/alchemy-proxy';
+        ? '/api/alchemy'
+        : 'http://localhost:3000/api/alchemy';
         
-      baseUrl = `${baseUrl}/${chainId}`;
+      // Always include the network/chain parameter
+      let networkParam = chainId ? `?network=${chainId}` : '';
+      if (networkParam && queryParams) {
+        // If we already have query params, use & instead of ?
+        networkParam = networkParam.replace('?', '&');
+      }
+      
+      // Add the network to the query string
+      if (queryParams && !queryParams.includes('network=')) {
+        queryParams += networkParam;
+      } else if (!queryParams) {
+        queryParams = networkParam.replace('&', '?');
+      }
     } else {
       // Server-side - construct direct URL (API key not exposed to client)
       const network = this.getNetworkFromChainId(chainId);
@@ -230,19 +242,41 @@ class AlchemyService {
       // Build query parameters
       const queryParams = new URLSearchParams({
         endpoint: 'getNFTsForOwner',
-        network: chain,
+        network: chain, // IMPORTANT: Use 'network' param for consistent handling
         owner,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
         pageSize: options.pageSize || '100'
       });
 
-      // According to Alchemy docs, handle excludeFilters - Can include SPAM and AIRDROPS
+      // Handle excludeFilters array properly according to Alchemy API v3 docs
+      const excludeFilters = [];
+      
+      // Add SPAM filter if requested
       if (options.excludeSpam === true) {
-        queryParams.append('excludeFilters[]', 'SPAM');
+        excludeFilters.push('SPAM');
       }
       
+      // Add AIRDROPS filter if requested
       if (options.excludeAirdrops === true) {
-        queryParams.append('excludeFilters[]', 'AIRDROPS');
+        excludeFilters.push('AIRDROPS');
+      }
+      
+      // If custom excludeFilters were provided, use those instead
+      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
+        // Use the provided filters directly
+        options.excludeFilters.forEach(filter => {
+          if (!excludeFilters.includes(filter)) {
+            excludeFilters.push(filter);
+          }
+        });
+      }
+      
+      // Add all excludeFilters to query params
+      if (excludeFilters.length > 0) {
+        excludeFilters.forEach(filter => {
+          queryParams.append('excludeFilters[]', filter);
+        });
+        console.log(`Excluding filters: ${excludeFilters.join(', ')}`);
       }
       
       // Add pageKey if provided
@@ -269,13 +303,19 @@ class AlchemyService {
 
       const data = await response.json();
       
-      // Add chain information to each NFT
+      // Verify chain info is included in the response; if not, add it
       if (data.ownedNfts) {
-        data.ownedNfts = data.ownedNfts.map(nft => ({
-          ...nft,
-          chain,
-          network: chain // Add both for compatibility
-        }));
+        data.ownedNfts = data.ownedNfts.map(nft => {
+          if (!nft.chain && !nft.network) {
+            return {
+              ...nft,
+              chain,
+              network: chain,
+              chainId: chain
+            };
+          }
+          return nft;
+        });
       }
       
       // Handle pagination if fetchAll is true
@@ -327,20 +367,23 @@ class AlchemyService {
         return { error: 'No wallet address provided', ownedNfts: [] };
       }
       
-      this.initializeApiKey();
+      this.initApiKey();
       
       if (!this.apiKey) {
         console.error('No API key available for Alchemy requests');
         return { error: 'API key configuration error', ownedNfts: [] };
       }
 
+      // Define the supported chains from the SUPPORTED_CHAINS constant
+      this.supportedChains = ['eth', 'polygon', 'opt', 'arb', 'base'];
+      
       // Determine chains to fetch
       const chainFilter = options.chains || this.supportedChains;
       const chainsToFetch = Array.isArray(chainFilter) 
         ? this.supportedChains.filter(chain => chainFilter.includes(chain))
         : this.supportedChains;
       
-      console.log(`Fetching NFTs across ${chainsToFetch.length} chains for ${owner}`);
+      console.log(`Fetching NFTs across ${chainsToFetch.length} chains for ${owner}: ${chainsToFetch.join(', ')}`);
       
       // Set up fetch options - include metadata and pagination settings
       const fetchOptions = {
@@ -350,17 +393,17 @@ class AlchemyService {
         fetchAll: options.fetchAll !== false
       };
       
-      // Handle filters - only add SPAM as a valid filter
-      // AIRDROP is not a valid filter according to Alchemy API v3
+      // Handle filters - only add filters supported by Alchemy API
       fetchOptions.excludeSpam = options.excludeSpam === true;
       
-      // Remove any invalid filter options that could cause API errors
-      if (fetchOptions.excludeFilters) {
-        delete fetchOptions.excludeFilters;
+      // Add excludeAirdrops if specified - proper handling in the getNftsForOwner method
+      if (options.excludeAirdrops === true) {
+        fetchOptions.excludeAirdrops = true;
       }
       
-      if (fetchOptions.excludeAirdrops) {
-        delete fetchOptions.excludeAirdrops;
+      // Handle excludeFilters if provided
+      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
+        fetchOptions.excludeFilters = [...options.excludeFilters];
       }
 
       // Create an array of promises, one for each chain
@@ -475,6 +518,11 @@ class AlchemyService {
       
       console.log(`Fetching NFTs for ${validAddresses.length} wallet addresses`);
       
+      // Define the supported chains if not already defined
+      if (!this.supportedChains) {
+        this.supportedChains = ['eth', 'polygon', 'opt', 'arb', 'base'];
+      }
+      
       // Set up fetch options with defaults
       const fetchOptions = {
         ...options,
@@ -482,17 +530,18 @@ class AlchemyService {
         pageSize: options.pageSize || '100'
       };
       
-      // Only include valid filters
-      // Alchemy API v3 only supports SPAM as a valid filter
-      fetchOptions.excludeSpam = options.excludeSpam === true;
-      
-      // Remove any invalid filter options that could cause API errors
-      if (fetchOptions.excludeFilters) {
-        delete fetchOptions.excludeFilters;
+      // Properly handle filter options
+      if (options.excludeSpam === true) {
+        fetchOptions.excludeSpam = true;
       }
       
-      if (fetchOptions.excludeAirdrops) {
-        delete fetchOptions.excludeAirdrops;
+      if (options.excludeAirdrops === true) {
+        fetchOptions.excludeAirdrops = true;
+      }
+      
+      // Handle excludeFilters if provided
+      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
+        fetchOptions.excludeFilters = [...options.excludeFilters];
       }
       
       // Determine chains to fetch from
@@ -1220,6 +1269,233 @@ class AlchemyService {
       };
     } catch (error) {
       console.error('Error in fetchNftsForFarcaster:', error);
+      return { nfts: [], error: error.message };
+    }
+  }
+
+  /**
+   * Fetches asset transfers for a given address or list of addresses
+   * @param {string|string[]} addresses - The address(es) to get transfers for
+   * @param {Object} options - Additional options for the request
+   * @returns {Promise<Object>} - The transfers data
+   */
+  async getAssetTransfers(addresses, options = {}) {
+    try {
+      // Make sure API key is initialized
+      await this.initApiKey();
+
+      // Handle single address or array of addresses
+      const addressList = Array.isArray(addresses) ? addresses : [addresses];
+      const validAddresses = addressList.filter(addr => this.isValidAddress(addr));
+      
+      if (validAddresses.length === 0) {
+        console.error('No valid addresses provided for getAssetTransfers');
+        return { transfers: [] };
+      }
+      
+      // Create a cache key based on addresses and options
+      const addressKey = validAddresses.sort().join(',').toLowerCase();
+      const optionsKey = JSON.stringify(options);
+      const cacheKey = `asset_transfers_${addressKey}_${optionsKey}`;
+      
+      // Check if we have a valid cached response
+      const cachedResponse = await this.getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        console.log(`Using cached asset transfers for ${validAddresses.length} addresses`);
+        return cachedResponse;
+      }
+      
+      // Determine chain/network to use
+      const chainId = options.chainId || options.chain || 'eth';
+      console.log(`Fetching asset transfers on ${chainId} for ${validAddresses.length} addresses`);
+      
+      // Log all parameters
+      console.log('getAssetTransfers parameters:', {
+        addresses: validAddresses,
+        chainId,
+        options
+      });
+      
+      // Build the request payload
+      const params = {
+        fromBlock: options.fromBlock || '0x0',
+        toBlock: options.toBlock || 'latest',
+        withMetadata: options.withMetadata !== false,
+        excludeZeroValue: options.excludeZeroValue !== false,
+        maxCount: options.maxCount || '0x3e8', // Default to 1000 in hex
+        category: options.category || ['erc721', 'erc1155'] // Default to NFTs only
+      };
+      
+      // Add address filters - API expects lowercase addresses
+      if (options.fromAddress || options.toAddress) {
+        if (options.fromAddress) {
+          params.fromAddress = options.fromAddress.toLowerCase();
+        }
+        if (options.toAddress) {
+          params.toAddress = options.toAddress.toLowerCase();
+        }
+      } else {
+        // Use addresses as both from and to if no specific direction is requested
+        params.toAddress = validAddresses.map(addr => addr.toLowerCase());
+        params.fromAddress = validAddresses.map(addr => addr.toLowerCase());
+      }
+      
+      // Try using the built-in URL helper
+      try {
+        // Build URL - this requires the JSON-RPC format
+        const baseUrl = await this.getAlchemyUrl(chainId);
+        
+        // Create the JSON-RPC payload
+        const payload = {
+          id: 1,
+          jsonrpc: "2.0",
+          method: "alchemy_getAssetTransfers",
+          params: [params]
+        };
+        
+        console.log(`Making direct API request for asset transfers to: ${baseUrl}`);
+        
+        // Make POST request with JSON payload
+        const response = await fetch(baseUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Check for error in the response
+        if (data.error) {
+          throw new Error(`API error: ${data.error.message || JSON.stringify(data.error)}`);
+        }
+        
+        // Extract the result from the JSON-RPC response
+        const result = data.result || {};
+        
+        // Format the response in a consistent way
+        const formattedResponse = {
+          transfers: result.transfers || [],
+          pageKey: result.pageKey,
+          totalCount: result.transfers?.length || 0
+        };
+        
+        // Cache the results if we have transfers
+        if (formattedResponse.transfers.length > 0) {
+          await this.setCachedResponse(cacheKey, formattedResponse);
+        }
+        
+        console.log(`Found ${formattedResponse.totalCount} transfers for ${validAddresses.length} addresses`);
+        return formattedResponse;
+      } catch (error) {
+        console.error('Error in getAssetTransfers:', error.message);
+        return { transfers: [], error: error.message };
+      }
+    } catch (error) {
+      console.error('Top-level error in getAssetTransfers:', error);
+      return { transfers: [], error: error.message };
+    }
+  }
+
+  /**
+   * Simplified method to fetch NFTs for multiple addresses
+   * This is a lightweight version of fetchNftsForMultipleAddresses with fewer options
+   * @param {string[]} addresses - Array of wallet addresses
+   * @param {object} options - Simple options for the API request
+   * @returns {Promise<Object>} - Object containing NFTs and other metadata
+   */
+  async fetchNftsSimple(addresses, options = {}) {
+    try {
+      // Filter valid addresses
+      const validAddresses = (addresses || [])
+        .filter(address => this.isValidAddress(address))
+        .map(address => address.toLowerCase());
+      
+      if (validAddresses.length === 0) {
+        console.log('No valid addresses provided for fetchNftsSimple');
+        return { nfts: [] };
+      }
+      
+      console.log(`[fetchNftsSimple] Fetching NFTs for ${validAddresses.length} addresses`);
+      
+      // Determine chains to fetch from - default to just Ethereum for simplicity
+      const chainsToFetch = options.chains || ['eth'];
+      
+      // Build simplified options for the underlying method
+      const fetchOptions = {
+        withMetadata: true,
+        pageSize: options.pageSize || '100',
+        excludeSpam: options.excludeSpam !== false
+      };
+      
+      // Create fetch tasks for each address
+      const fetchPromises = validAddresses.map(address => 
+        this.fetchNftsAcrossChains(address, {
+          ...fetchOptions,
+          chains: chainsToFetch
+        })
+      );
+      
+      // Execute all fetch tasks in parallel
+      const results = await Promise.allSettled(fetchPromises);
+      
+      // Combine and deduplicate results
+      const uniqueNftsMap = new Map();
+      const errors = [];
+      let totalCount = 0;
+      
+      results.forEach((result, index) => {
+        const address = validAddresses[index];
+        
+        if (result.status === 'fulfilled') {
+          const data = result.value;
+          const nfts = data.ownedNfts || [];
+          totalCount += nfts.length;
+          
+          if (data.error) {
+            errors.push(`${address}: ${data.error}`);
+          }
+          
+          // Add ownership information and deduplicate
+          nfts.forEach(nft => {
+            const uniqueId = this.createConsistentUniqueId({
+              ...nft,
+              chain: nft.chain || nft.chainId || 'eth'
+            });
+            
+            if (!uniqueNftsMap.has(uniqueId)) {
+              uniqueNftsMap.set(uniqueId, {
+                ...nft,
+                ownerAddress: address,
+                uniqueId
+              });
+            }
+          });
+        } else {
+          errors.push(`Error fetching for ${address}: ${result.reason}`);
+        }
+      });
+      
+      // Convert the Map to an array
+      const uniqueNfts = Array.from(uniqueNftsMap.values());
+      
+      console.log(`[fetchNftsSimple] Found ${uniqueNfts.length} unique NFTs from ${totalCount} total`);
+      
+      return {
+        nfts: uniqueNfts,
+        totalFound: uniqueNfts.length,
+        totalProcessed: totalCount,
+        errors: errors.length > 0 ? errors : undefined
+      };
+    } catch (error) {
+      console.error('Error in fetchNftsSimple:', error);
       return { nfts: [], error: error.message };
     }
   }

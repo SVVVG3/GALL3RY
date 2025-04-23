@@ -31,6 +31,16 @@ const CACHE = {
   }
 };
 
+// Farcaster API configuration
+const FARCASTER_CONFIG = {
+  CACHE_TTL: 10 * 60 * 1000, // 10 minutes
+  API_ENDPOINTS: {
+    NEYNAR: 'https://api.neynar.com/v2/farcaster',
+    ZAPPER: 'https://api.zapper.xyz/v2/farcaster',
+    PUBLIC: 'https://api.farcaster.xyz/v1'
+  }
+};
+
 // -----------------------------------------------------------------------
 // CORS HEADERS
 // -----------------------------------------------------------------------
@@ -280,73 +290,105 @@ async function handleAlchemyRequest(req, res) {
   try {
     // Get endpoint from query params
     const endpoint = req.query.endpoint;
-    const chain = req.query.chain || 'eth';
+    // Extract network parameter (support 'chain' or 'network' for backward compatibility)
+    const network = req.query.network || req.query.chain || 'eth';
     
     if (!endpoint) {
       return res.status(400).json({ error: 'Missing endpoint parameter' });
     }
     
-    // Define Alchemy V3 NFT endpoints - format based on official docs
+    // Standard chain mapping function for all endpoints
+    const getChainUrl = (chain = 'eth') => {
+      // Map chain IDs to their correct Alchemy URL formats
+      const chainUrlMap = {
+        'eth': 'eth-mainnet',
+        'ethereum': 'eth-mainnet',
+        'polygon': 'polygon-mainnet',
+        'arbitrum': 'arb-mainnet',
+        'arb': 'arb-mainnet',
+        'optimism': 'opt-mainnet',
+        'opt': 'opt-mainnet',
+        'base': 'base-mainnet',
+        'zora': 'zora-mainnet'
+      };
+      
+      return chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
+    };
+    
+    // Define all Alchemy endpoints and their URL construction
     const ENDPOINTS = {
-      'getnftsforowner': (apiKey, chain = 'eth') => {
-        // Map chain IDs to their correct Alchemy URL formats
-        const chainUrlMap = {
-          'eth': 'eth-mainnet',
-          'ethereum': 'eth-mainnet',
-          'polygon': 'polygon-mainnet',
-          'arbitrum': 'arb-mainnet',
-          'optimism': 'opt-mainnet',
-          'base': 'base-mainnet',
-          'zora': 'zora-mainnet'
-        };
-        
-        // Get the correct chain URL or default to eth-mainnet
-        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
-        
-        // Build the full URL with the correct format
+      // NFT API v3 endpoints (format: /nft/v3/{apiKey})
+      'getnftsforowner': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
         const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
         return `${baseUrl}${apiKey}/getNFTsForOwner`;
       },
-      'getassettransfers': (apiKey, chain = 'eth') => {
-        // Map chain IDs to their correct Alchemy URL formats
-        const chainUrlMap = {
-          'eth': 'eth-mainnet',
-          'ethereum': 'eth-mainnet',
-          'polygon': 'polygon-mainnet',
-          'arbitrum': 'arb-mainnet',
-          'optimism': 'opt-mainnet',
-          'base': 'base-mainnet',
-          'zora': 'zora-mainnet'
-        };
-        
-        // Get the correct chain URL or default to eth-mainnet
-        const chainUrl = chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
-        
-        // Build the URL for Alchemy's Core API (getAssetTransfers is part of core, not NFT API)
+      'getnftsforcollection': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getNFTsForCollection`;
+      },
+      'getnftmetadata': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getNFTMetadata`;
+      },
+      'getcontractmetadata': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getContractMetadata`;
+      },
+      'getownersforcontract': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getOwnersForContract`;
+      },
+      'getcontractsforowner': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
+        const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+        return `${baseUrl}${apiKey}/getContractsForOwner`;
+      },
+      
+      // Core API endpoints (format: /v2/{apiKey})
+      'getassettransfers': (apiKey, chain) => {
+        const chainUrl = getChainUrl(chain);
         return `https://${chainUrl}.g.alchemy.com/v2/${apiKey}`;
+      },
+      
+      // Default handler for any other endpoint
+      'default': (apiKey, chain, endpoint) => {
+        const chainUrl = getChainUrl(chain);
+        // Determine if this is likely a NFT API or Core API call
+        if (endpoint.toLowerCase().includes('nft')) {
+          // NFT API v3
+          const baseUrl = `https://${chainUrl}.g.alchemy.com/nft/v3/`;
+          return `${baseUrl}${apiKey}/${endpoint}`;
+        } else {
+          // Default to Core API
+          return `https://${chainUrl}.g.alchemy.com/v2/${apiKey}`;
+        }
       }
     };
     
     // Normalize the endpoint name to lowercase for case-insensitive comparison
     const normalizedEndpoint = endpoint.toLowerCase();
     
-    // Validate endpoint
-    if (!ENDPOINTS[normalizedEndpoint]) {
-      return res.status(400).json({ 
-        error: `Invalid endpoint: ${endpoint}`,
-        validEndpoints: Object.keys(ENDPOINTS).join(', ')
-      });
-    }
-    
     // Check cache for this request
     const cacheKey = CACHE.getKey(normalizedEndpoint, req.query);
     const cachedData = CACHE.get('requests', cacheKey);
     if (cachedData) {
+      console.log(`Cache hit for ${normalizedEndpoint} request on ${network}`);
       return res.status(200).json(cachedData);
     }
     
-    // Build the request URL using the normalized endpoint
-    const endpointUrl = ENDPOINTS[normalizedEndpoint](apiKey, chain);
+    // Get the appropriate URL builder function for this endpoint
+    const urlBuilder = ENDPOINTS[normalizedEndpoint] || ENDPOINTS.default;
+    
+    // Build the request URL using the right chain
+    const endpointUrl = urlBuilder(apiKey, network, endpoint);
+    
+    console.log(`Routing Alchemy request for ${normalizedEndpoint} to ${network} network`);
+    console.log(`Using URL: ${endpointUrl.replace(apiKey, '[REDACTED]')}`);
     
     // Special handling for getAssetTransfers - uses JSON-RPC instead of REST
     if (normalizedEndpoint === 'getassettransfers') {
@@ -359,7 +401,7 @@ async function handleAlchemyRequest(req, res) {
       }
       
       // Try to use cached transfer data first
-      const transferCacheKey = addresses.sort().join(',');
+      const transferCacheKey = `${network}_${addresses.sort().join(',')}`;
       const cachedTransfers = CACHE.get('transfers', transferCacheKey);
       if (cachedTransfers) {
         return res.status(200).json(cachedTransfers);
@@ -385,7 +427,7 @@ async function handleAlchemyRequest(req, res) {
         ]
       };
       
-      console.log(`Fetching asset transfers for ${addresses.length} addresses`);
+      console.log(`Fetching asset transfers for ${addresses.length} addresses on ${network}`);
       
       // Make the request to Alchemy RPC endpoint
       const response = await axios.post(endpointUrl, rpcPayload, {
@@ -442,7 +484,7 @@ async function handleAlchemyRequest(req, res) {
           dataAvailable: transfers.length > 0,
           diagnostic: {
             addressCount: addresses.length,
-            chain: chain,
+            chain: network,
             requestMethod: 'alchemy_getAssetTransfers',
             transferCountFromRPC: transfers.length
           }
@@ -462,7 +504,7 @@ async function handleAlchemyRequest(req, res) {
         dataAvailable: false,
         diagnostic: {
           addressCount: addresses.length,
-          chain: chain,
+          chain: network,
           error: "No transfers found or unexpected response format",
           requestMethod: 'alchemy_getAssetTransfers'
         }
@@ -478,6 +520,7 @@ async function handleAlchemyRequest(req, res) {
     // Remove our custom parameters so they don't get sent to Alchemy
     delete requestParams.endpoint;
     delete requestParams.chain;
+    delete requestParams.network;
     
     // Enhanced handling for getNFTsForOwner
     if (normalizedEndpoint === 'getnftsforowner') {
@@ -505,48 +548,67 @@ async function handleAlchemyRequest(req, res) {
     }
     
     // Make the API request
-    console.log(`Making Alchemy API request to ${normalizedEndpoint} for chain ${chain}`);
+    console.log(`Making Alchemy API request to ${normalizedEndpoint} for chain ${network}`);
     const response = await axios.get(endpointUrl, { 
       params: requestParams,
       timeout: 15000 // 15 second timeout
     });
     
-    // If this is a getNftsForOwner request, ensure ownerAddress is set on each NFT
-    // AND add transferTimestamp from our cached transfer data if available
-    if (normalizedEndpoint === 'getnftsforowner' && response.data?.ownedNfts && requestParams.owner) {
-      // Try to get cached transfer data to enhance the NFTs with timestamps
-      const ownerAddress = requestParams.owner.toLowerCase();
-      const transferCacheKey = ownerAddress;
-      const cachedTransfers = CACHE.get('transfers', transferCacheKey);
-      
-      // Enhanced NFTs with better field normalization and timestamps if available
-      response.data.ownedNfts = response.data.ownedNfts.map(nft => {
-        // Get the contract address in lowercase
-        const contractAddress = (nft.contract?.address || '').toLowerCase();
-        const tokenId = nft.tokenId || '';
-        const key = `${contractAddress}:${tokenId}`;
-        
-        // Start with basic owner info
-        const enhancedNft = {
+    // Add chain information to each item in the response for multi-chain compatibility
+    if (response.data) {
+      // Different endpoints have different response formats
+      if (normalizedEndpoint === 'getnftsforowner' && response.data.ownedNfts) {
+        // Add chain info to each NFT in the response
+        response.data.ownedNfts = response.data.ownedNfts.map(nft => ({
           ...nft,
-          ownerAddress,
-          // Normalize important fields that might be differently named
-          name: nft.name || nft.title || `#${nft.tokenId || '0'}`,
-          collection: {
-            name: nft.contract?.name || 
-                  nft.collection?.name || 
-                  nft.contractMetadata?.name || 
-                  `Contract ${contractAddress.substring(0, 6)}...`
-          }
-        };
+          chain: network,
+          network: network,
+          chainId: network
+        }));
         
-        // Add transfer timestamp if we have it in our cache
-        if (cachedTransfers && cachedTransfers.transferMap && cachedTransfers.transferMap[key]) {
-          enhancedNft.transferTimestamp = cachedTransfers.transferMap[key].timestamp;
+        // Try to get cached transfer data to enhance the NFTs with timestamps
+        if (requestParams.owner) {
+          const ownerAddress = requestParams.owner.toLowerCase();
+          const transferCacheKey = `${network}_${ownerAddress}`;
+          const cachedTransfers = CACHE.get('transfers', transferCacheKey);
+          
+          // Enhanced NFTs with better field normalization and timestamps if available
+          response.data.ownedNfts = response.data.ownedNfts.map(nft => {
+            // Get the contract address in lowercase
+            const contractAddress = (nft.contract?.address || '').toLowerCase();
+            const tokenId = nft.tokenId || '';
+            const key = `${contractAddress}:${tokenId}`;
+            
+            // Start with basic owner info
+            const enhancedNft = {
+              ...nft,
+              ownerAddress,
+              // Normalize important fields that might be differently named
+              name: nft.name || nft.title || `#${nft.tokenId || '0'}`,
+              collection: {
+                name: nft.contract?.name || 
+                      nft.collection?.name || 
+                      nft.contractMetadata?.name || 
+                      `Contract ${contractAddress.substring(0, 6)}...`
+              }
+            };
+            
+            // Add transfer timestamp if we have it in our cache
+            if (cachedTransfers && cachedTransfers.transferMap && cachedTransfers.transferMap[key]) {
+              enhancedNft.transferTimestamp = cachedTransfers.transferMap[key].timestamp;
+            }
+            
+            return enhancedNft;
+          });
         }
-        
-        return enhancedNft;
-      });
+      }
+      
+      // Add diagnostic info to help with debugging
+      response.data._diagnostic = {
+        chain: network,
+        endpoint: normalizedEndpoint,
+        timestamp: new Date().toISOString()
+      };
     }
     
     // Cache the response data
@@ -568,168 +630,139 @@ async function handleAlchemyRequest(req, res) {
 // HANDLER: FARCASTER PROFILE
 // -----------------------------------------------------------------------
 async function handleFarcasterProfileRequest(req, res) {
-  // Zapper GraphQL API URLs for fallback
-  const PRIMARY_API_URL = 'https://api.zapper.xyz/v2/graphql';
-  const BACKUP_API_URL = 'https://public.zapper.xyz/graphql';
-
   try {
-    // Get Zapper API key from environment variables
-    const apiKey = process.env.ZAPPER_API_KEY || '';
-    
-    if (!apiKey) {
-      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
-      return res.status(500).json({
-        error: 'API Configuration Error',
-        message: 'Zapper API key is missing. Please check server configuration.'
-      });
+    const { fid, username } = req.query;
+    if (!fid && !username) {
+      return res.status(400).json({ error: 'Missing fid or username parameter' });
     }
 
-    // Get username or FID from query parameters
-    const { username, fid } = req.query;
-    
-    if (!username && !fid) {
-      return res.status(400).json({
-        error: 'Invalid Request',
-        message: 'Either username or fid parameter is required'
-      });
-    }
+    const identifier = fid || username.toLowerCase();
+    const cacheKey = `farcaster_profile_${identifier}`;
 
-    console.log(`Farcaster profile request via dedicated endpoint for: ${username || fid}`);
-    
-    // Check cache first
-    const cacheKey = username || `fid-${fid}`;
-    const cachedProfile = CACHE.get('profiles', cacheKey);
+    // Check Redis cache first
+    const cachedProfile = await redis.get(cacheKey);
     if (cachedProfile) {
-      return res.status(200).json(cachedProfile);
+      console.log(`Cache hit for Farcaster profile: ${identifier}`);
+      return res.json(JSON.parse(cachedProfile));
     }
-    
-    // Build the GraphQL query based on what was provided
-    const query = `
-      query GetFarcasterProfile(${fid ? '$fid: Int' : '$username: String'}) {
-        farcasterProfile(${fid ? 'fid: $fid' : 'username: $username'}) {
-          username
-          fid
-          metadata {
-            displayName
-            description
-            imageUrl
-            warpcast
-          }
-          custodyAddress
-          connectedAddresses
-        }
-      }
-    `;
 
-    // Build variables based on what was provided
-    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
-
-    // Debug request details
-    console.log('Farcaster REQUEST - GraphQL query:', query.replace(/\s+/g, ' ').trim().substring(0, 100) + '...');
-    console.log('Farcaster REQUEST - Variables:', JSON.stringify(variables));
-
-    // Set up headers with API key according to documentation
-    const headers = {
-      'Content-Type': 'application/json',
-      'x-zapper-api-key': apiKey,
-      'User-Agent': 'Gall3ry/1.0.0',
-      'Accept': 'application/json'
-    };
-    
-    // Create an array of endpoints to try in sequence
+    // API endpoints to try in order
     const endpoints = [
-      { url: PRIMARY_API_URL, name: 'Primary API endpoint' },
-      { url: BACKUP_API_URL, name: 'Backup public endpoint' }
+      {
+        url: `${FARCASTER_CONFIG.API_ENDPOINTS.NEYNAR}/user`,
+        params: fid ? { fid } : { username },
+        headers: { 'api-key': process.env.NEYNAR_API_KEY }
+      },
+      {
+        url: `${FARCASTER_CONFIG.API_ENDPOINTS.ZAPPER}/profile`,
+        params: fid ? { fid } : { username },
+        headers: { 'X-API-KEY': process.env.ZAPPER_API_KEY }
+      },
+      {
+        url: `${FARCASTER_CONFIG.API_ENDPOINTS.PUBLIC}/profiles/${identifier}`,
+        params: {},
+        headers: {}
+      }
     ];
-    
-    let lastError = null;
-    
-    // Try each endpoint in sequence
+
+    let profile = null;
+    let errors = [];
+
+    // Try each endpoint until we get a successful response
     for (const endpoint of endpoints) {
       try {
-        console.log(`Trying Farcaster profile endpoint: ${endpoint.name}`);
-        // Make the GraphQL request to Zapper with better error handling
-        const response = await axios({
-          method: 'post',
-          url: endpoint.url,
-          headers: headers,
-          data: {
-            query,
-            variables
-          },
-          timeout: 15000 // Extended to 15 second timeout for better reliability
-        });
+        const response = await fetch(
+          `${endpoint.url}?${new URLSearchParams(endpoint.params)}`,
+          { headers: endpoint.headers }
+        );
+
+        if (!response.ok) {
+          errors.push(`${endpoint.url}: ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+        profile = formatFarcasterProfile(data);
         
-        console.log(`Farcaster RESPONSE - Success from ${endpoint.name}, Status: ${response.status}`);
-        
-        // Check for GraphQL errors
-        if (response.data?.errors) {
-          console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
-          
-          // Only log this as a warning and continue to the next endpoint if this isn't a "not found" error
-          const notFoundError = response.data.errors.some(err => 
-            err.message && (
-              err.message.includes('not found') || 
-              err.message.includes('No profile') ||
-              err.message.includes('Invalid')
-            )
+        if (profile) {
+          // Cache successful response
+          await redis.setex(
+            cacheKey,
+            FARCASTER_CONFIG.CACHE_TTL / 1000, // Convert to seconds for Redis
+            JSON.stringify(profile)
           );
           
-          if (notFoundError) {
-            // This is a valid "not found" response, return it directly
-            return res.status(404).json({
-              error: 'Profile Not Found',
-              message: `No Farcaster profile found for ${username || fid}`
-            });
-          }
-          
-          // For other GraphQL errors, try the next endpoint
-          lastError = new Error('GraphQL Errors: ' + response.data.errors.map(e => e.message).join('; '));
-          continue;
-        }
-        
-        // Return the profile data
-        if (response.data?.data?.farcasterProfile) {
-          // Cache the profile
-          CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
-          
-          return res.status(200).json(response.data.data.farcasterProfile);
-        } else {
-          // No profile found but no errors either (unusual case)
-          lastError = new Error('Profile data not found in response');
-          continue;
+          return res.json(profile);
         }
       } catch (error) {
-        console.error(`Error with Farcaster endpoint ${endpoint.name}:`, error.message);
-        if (error.response) {
-          console.error('RESPONSE ERROR - Status:', error.response.status);
-          console.error('RESPONSE ERROR - Data:', JSON.stringify(error.response.data).substring(0, 200));
-        } else if (error.request) {
-          console.error('REQUEST ERROR - No response received');
-        }
-        
-        lastError = error;
-        // Continue to next endpoint
+        errors.push(`${endpoint.url}: ${error.message}`);
       }
     }
-    
+
     // If we get here, all endpoints failed
-    console.error('All Farcaster profile endpoints failed');
-    
-    return res.status(lastError?.response?.status || 502).json({
-      error: 'Error fetching Farcaster profile',
-      message: `All Farcaster endpoints failed: ${lastError?.message || 'Unknown error'}`,
-      details: lastError?.response?.data
+    console.error('Failed to fetch Farcaster profile:', errors);
+    return res.status(404).json({
+      error: 'Profile not found',
+      details: errors
     });
   } catch (error) {
-    console.error('Unexpected error in Farcaster profile handler:', error);
+    console.error('Error in handleFarcasterProfileRequest:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+}
+
+// Helper function to format profile data consistently
+function formatFarcasterProfile(data) {
+  try {
+    // Handle Neynar API response format
+    if (data.result?.user) {
+      const user = data.result.user;
+      return {
+        fid: user.fid,
+        username: user.username,
+        displayName: user.displayName,
+        pfp: user.pfp?.url,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        activeStatus: user.activeStatus,
+        viewerContext: user.viewerContext,
+        _timestamp: Date.now()
+      };
+    }
     
-    // Return an appropriate error response
-    return res.status(error.response?.status || 500).json({
-      error: 'Error fetching Farcaster profile',
-      message: error.message,
-      details: error.response?.data
-    });
+    // Handle Zapper API response format
+    if (data.profile) {
+      const profile = data.profile;
+      return {
+        fid: profile.fid,
+        username: profile.username,
+        displayName: profile.displayName,
+        pfp: profile.avatar,
+        followerCount: profile.followers,
+        followingCount: profile.following,
+        activeStatus: profile.active ? 'active' : 'inactive',
+        _timestamp: Date.now()
+      };
+    }
+    
+    // Handle public API response format
+    if (data.fid) {
+      return {
+        fid: data.fid,
+        username: data.username,
+        displayName: data.display_name,
+        pfp: data.avatar_url,
+        followerCount: data.followers_count,
+        followingCount: data.following_count,
+        activeStatus: data.active ? 'active' : 'inactive',
+        _timestamp: Date.now()
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error formatting Farcaster profile:', error);
+    return null;
   }
 }
 
@@ -1069,118 +1102,6 @@ async function handleLoginRequest(req, res) {
   return res.status(200).json({ 
     status: 'Login API stub' 
   });
-}
-
-// -----------------------------------------------------------------------
-// HANDLER: FARCASTER
-// -----------------------------------------------------------------------
-async function handleFarcasterRequest(req, res) {
-  // Zapper GraphQL API URL
-  const ZAPPER_API_URL = 'https://public.zapper.xyz/graphql';
-
-  try {
-    // Get Zapper API key from environment variables
-    const apiKey = process.env.ZAPPER_API_KEY || '';
-    
-    if (!apiKey) {
-      console.warn('⚠️ No ZAPPER_API_KEY found in environment variables!');
-      return res.status(500).json({
-        error: 'API Configuration Error',
-        message: 'Zapper API key is missing. Please check server configuration.'
-      });
-    }
-
-    // Get username or FID from query parameters
-    const { username, fid } = req.query;
-    
-    if (!username && !fid) {
-      return res.status(400).json({
-        error: 'Invalid Request',
-        message: 'Either username or fid parameter is required'
-      });
-    }
-
-    console.log(`Farcaster profile request via /api/farcaster endpoint for: ${username || fid}`);
-    
-    // Check cache first
-    const cacheKey = username || `fid-${fid}`;
-    const cachedProfile = CACHE.get('profiles', cacheKey);
-    if (cachedProfile) {
-      return res.status(200).json(cachedProfile);
-    }
-    
-    // Build the GraphQL query based on what was provided
-    const query = `
-      query GetFarcasterProfile(${fid ? '$fid: Int' : '$username: String'}) {
-        farcasterProfile(${fid ? 'fid: $fid' : 'username: $username'}) {
-          username
-          fid
-          metadata {
-            displayName
-            description
-            imageUrl
-            warpcast
-          }
-          custodyAddress
-          connectedAddresses
-        }
-      }
-    `;
-
-    // Build variables based on what was provided
-    const variables = fid ? { fid: parseInt(fid, 10) } : { username };
-
-    // Set up headers with API key according to documentation
-    const headers = {
-      'Content-Type': 'application/json',
-      'x-zapper-api-key': apiKey
-    };
-    
-    // Make the GraphQL request to Zapper with better error handling
-    const response = await axios({
-      method: 'post',
-      url: ZAPPER_API_URL,
-      headers: headers,
-      data: {
-        query,
-        variables
-      },
-      timeout: 15000 // Extended to 15 second timeout for better reliability
-    });
-    
-    // Check for GraphQL errors
-    if (response.data?.errors) {
-      console.log('GraphQL errors received:', JSON.stringify(response.data.errors));
-      return res.status(400).json({
-        error: 'GraphQL Error',
-        message: response.data.errors[0]?.message || 'Unknown GraphQL error',
-        details: response.data.errors
-      });
-    }
-    
-    // Return the profile data
-    if (response.data?.data?.farcasterProfile) {
-      // Cache the profile
-      CACHE.set('profiles', cacheKey, response.data.data.farcasterProfile, 600000); // 10 minute TTL
-      
-      return res.status(200).json(response.data.data.farcasterProfile);
-    } else {
-      return res.status(404).json({
-        error: 'Profile Not Found',
-        message: `No Farcaster profile found for ${username || fid}`
-      });
-    }
-    
-  } catch (error) {
-    console.error('Error fetching Farcaster profile:', error.message);
-    
-    // Return an appropriate error response
-    return res.status(error.response?.status || 500).json({
-      error: 'Error fetching Farcaster profile',
-      message: error.message,
-      details: error.response?.data
-    });
-  }
 }
 
 // -----------------------------------------------------------------------
