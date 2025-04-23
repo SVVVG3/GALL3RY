@@ -373,21 +373,25 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       setIsSearching(true);
       console.log(`Searching for Farcaster user: ${query}`);
       
-      // First try Zapper API for profile data (more complete wallet address data)
-      let profile = null;
-      
-      try {
-        profile = await zapperService.getFarcasterProfile(query);
-        console.log('Zapper API returned profile:', profile);
-      } catch (zapperError) {
-        console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
-        // Fallback to farcasterService if Zapper fails
-        profile = await farcasterService.getProfile({ username: query });
+      // Check if we already have this profile cached
+      let profile = userProfile;
+      if (!profile || profile.username !== query) {
+        try {
+          profile = await zapperService.getFarcasterProfile(query);
+          console.log('Zapper API returned profile:', profile);
+        } catch (zapperError) {
+          console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
+          // Fallback to farcasterService if Zapper fails
+          profile = await farcasterService.getProfile({ username: query });
+        }
       }
       
       if (profile) {
-        setUserProfile(profile);
-        handleUserProfileFound(profile);
+        // Only proceed with NFT fetching if this is a new profile or forced refresh
+        if (!userProfile || userProfile.username !== profile.username) {
+          setUserProfile(profile);
+          await handleUserProfileFound(profile);
+        }
       } else {
         // Provide a more detailed error message, especially for .eth addresses
         if (query.includes('.eth')) {
@@ -412,7 +416,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     } finally {
       setIsSearching(false);
     }
-  }, [formSearchQuery]);
+  }, [formSearchQuery, userProfile]);
 
   /**
    * Effect for initial search if username is provided
