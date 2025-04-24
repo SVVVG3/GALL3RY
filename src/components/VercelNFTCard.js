@@ -251,8 +251,15 @@ const VercelNFTCard = ({ nft }) => {
   
   // Log value data for debugging (only in dev and only for first few NFTs)
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' && (title.includes('#1') || title.includes('#2'))) {
-      console.log(`Value data for ${title}:`, {
+    // Debug more NFTs to see what's happening
+    if (nft?.contract?.address === "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d" || // BAYC
+        nft?.contract?.address === "0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d" || // Azuki
+        nft?.collection?.name?.includes("AlfaFrens") || 
+        nft?.collection?.name?.includes("AlienFrens") || 
+        title.includes('#1') || 
+        title.includes('#2')) {
+      console.log(`Full NFT data for ${title}:`, {
+        nft,
         valueUsd,
         valueEth,
         formattedValue,
@@ -262,6 +269,7 @@ const VercelNFTCard = ({ nft }) => {
         },
         rawCollection: nft?.collection,
         contract: nft?.contract,
+        floorPriceExists: !!formattedValue,
         paths: {
           collectionFloorPriceUsd: nft?.collection?.floorPrice?.valueUsd,
           directFloorPriceUsd: nft?.floorPrice?.valueUsd,
