@@ -170,6 +170,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                         (a.contractMetadata?.openSea?.floorPrice || 0) ||
                         // Additional paths for Alchemy v3 API response format
                         (a.contract?.openSeaMetadata?.floorPrice || 0) ||
+                        // Direct floor price values
+                        (typeof a.collection?.floorPrice === 'number' ? a.collection.floorPrice : 0) ||
+                        (typeof a.floorPrice === 'number' ? a.floorPrice : 0) ||
                         0;
                         
           const valueB = b.collection?.floorPrice?.valueUsd || 
@@ -179,6 +182,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                         (b.contractMetadata?.openSea?.floorPrice || 0) ||
                         // Additional paths for Alchemy v3 API response format
                         (b.contract?.openSeaMetadata?.floorPrice || 0) ||
+                        // Direct floor price values
+                        (typeof b.collection?.floorPrice === 'number' ? b.collection.floorPrice : 0) ||
+                        (typeof b.floorPrice === 'number' ? b.floorPrice : 0) ||
                         0;
           
           // Debug log for troubleshooting (only for first few NFTs)
@@ -192,7 +198,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 floorPriceEth: a.collection?.floorPrice?.value,
                 floorPriceEthDirect: a.floorPrice?.value,
                 openSea: a.contractMetadata?.openSea?.floorPrice,
-                openSeaV3: a.contract?.openSeaMetadata?.floorPrice
+                openSeaV3: a.contract?.openSeaMetadata?.floorPrice,
+                directCollectionFloorPrice: typeof a.collection?.floorPrice === 'number' ? a.collection.floorPrice : null,
+                directFloorPrice: typeof a.floorPrice === 'number' ? a.floorPrice : null
               }
             });
           }

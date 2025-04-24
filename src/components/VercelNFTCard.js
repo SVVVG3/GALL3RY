@@ -217,36 +217,58 @@ const VercelNFTCard = ({ nft }) => {
                    nft?.floorPrice?.valueUsd || 
                    nft?.contractMetadata?.openSea?.floorPrice || 
                    nft?.contract?.openSeaMetadata?.floorPrice || 
+                   // Handle direct floorPrice values from Alchemy API v3
+                   nft?.collection?.floorPrice || 
+                   // Handle possible root level floorPrice
+                   nft?.floorPrice || 
                    null;
   const valueEth = floorPrice?.value || 
                    nft?.floorPrice?.value || 
-                   (valueUsd ? (valueUsd / 2000) : null); // Rough ETH conversion if only USD is available
+                   // If we have a direct numeric floor price value
+                   (typeof valueUsd === 'number' ? valueUsd : null) ||
+                   // Rough ETH conversion if only USD is available
+                   (valueUsd && typeof valueUsd !== 'number' ? (valueUsd / 2000) : null);
   
   // Format the value for display - show USD values in ETH format with 4 decimal places
   const formattedValue = useMemo(() => {
-    if (valueUsd) {
-      // For all values, use fixed format with 4 decimal places
-      // Don't convert, just display as ETH (this is what the user wants)
-      return `${parseFloat(valueUsd).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
-    } else if (valueEth) {
-      // If we actually have ETH values, use those directly
-      return `${parseFloat(valueEth).toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+    // Handle different types of floor price data
+    if (valueUsd !== null && valueUsd !== undefined) {
+      const numericValue = typeof valueUsd === 'number' ? valueUsd : parseFloat(valueUsd);
+      if (!isNaN(numericValue)) {
+        return `${numericValue.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+      }
+    } 
+    
+    if (valueEth !== null && valueEth !== undefined) {
+      const numericValue = typeof valueEth === 'number' ? valueEth : parseFloat(valueEth);
+      if (!isNaN(numericValue)) {
+        return `${numericValue.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 4 })} ETH`;
+      }
     }
+    
     return null;
   }, [valueUsd, valueEth]);
   
   // Log value data for debugging (only in dev and only for first few NFTs)
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production' && title.includes('NFT #1') || title.includes('NFT #2')) {
+    if (process.env.NODE_ENV !== 'production' && (title.includes('#1') || title.includes('#2'))) {
       console.log(`Value data for ${title}:`, {
         valueUsd,
         valueEth,
         formattedValue,
+        type: {
+          valueUsd: typeof valueUsd,
+          valueEth: typeof valueEth,
+        },
+        rawCollection: nft?.collection,
+        contract: nft?.contract,
         paths: {
           collectionFloorPriceUsd: nft?.collection?.floorPrice?.valueUsd,
           directFloorPriceUsd: nft?.floorPrice?.valueUsd,
           openSeaFloorPrice: nft?.contractMetadata?.openSea?.floorPrice,
           openSeaMetadataFloorPrice: nft?.contract?.openSeaMetadata?.floorPrice,
+          directCollectionFloorPrice: nft?.collection?.floorPrice,
+          directNftFloorPrice: nft?.floorPrice,
           collectionFloorPriceEth: nft?.collection?.floorPrice?.value,
           directFloorPriceEth: nft?.floorPrice?.value
         }
