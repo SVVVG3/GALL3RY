@@ -86,8 +86,6 @@ import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './contexts/AuthContext';
 import { WalletProvider } from './contexts/WalletContext';
 import { ProfileProvider } from './contexts/ProfileContext';
-import { Provider as ReduxProvider } from 'react-redux';
-import store from './redux/store';
 
 // Error Boundary Component to catch errors
 class ErrorBoundary extends React.Component {
@@ -162,15 +160,13 @@ try {
   root.render(
     <React.StrictMode>
       <ErrorBoundary>
-        <ReduxProvider store={store}>
-          <AuthProvider>
-            <ProfileProvider>
-              <WalletProvider>
-                <App />
-              </WalletProvider>
-            </ProfileProvider>
-          </AuthProvider>
-        </ReduxProvider>
+        <AuthProvider>
+          <ProfileProvider>
+            <WalletProvider>
+              <App />
+            </WalletProvider>
+          </ProfileProvider>
+        </AuthProvider>
       </ErrorBoundary>
     </React.StrictMode>
   );

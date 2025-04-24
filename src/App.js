@@ -5,6 +5,9 @@ import { ToastContainer } from 'react-toastify';
 import { ErrorBoundary } from 'react-error-boundary';
 // Import Privy Provider
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
+// Import Redux Provider
+import { Provider as ReduxProvider } from 'react-redux';
+import store from './redux/store';
 
 // Add a try-catch for styles import to prevent build failures
 try {
@@ -27,6 +30,7 @@ import { NFTProvider } from './contexts/NFTContext';
 import PrivyFarcasterAuth from './components/PrivyFarcasterAuth';
 import Navigation from './components/Navigation';
 import AddAppPrompt from './components/AddAppPrompt';
+import FarcasterDataLoader from './components/FarcasterDataLoader';
 
 // Import page components
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -431,29 +435,33 @@ function AppContent() {
 
 function App() {
   return (
-    <PrivyProvider
-      appId={PRIVY_APP_ID}
-      config={{
-        loginMethods: ['farcaster'],
-        appearance: {
-          theme: 'light',
-          accentColor: '#6d28d9' // Purple color to match your existing UI
-        }
-      }}
-    >
-      <AuthProvider>
-        <WalletProvider>
-          <Router>
-            <Suspense fallback={<LoadingScreen />}>
-              <CustomErrorBoundary>
-                <AppContent />
-              </CustomErrorBoundary>
-            </Suspense>
-          </Router>
-          <ToastContainer position="bottom-right" />
-        </WalletProvider>
-      </AuthProvider>
-    </PrivyProvider>
+    <ReduxProvider store={store}>
+      <PrivyProvider
+        appId={PRIVY_APP_ID}
+        config={{
+          loginMethods: ['farcaster'],
+          appearance: {
+            theme: 'light',
+            accentColor: '#6d28d9' // Purple color to match your existing UI
+          }
+        }}
+      >
+        <AuthProvider>
+          <WalletProvider>
+            <Router>
+              <Suspense fallback={<LoadingScreen />}>
+                <CustomErrorBoundary>
+                  {/* Add FarcasterDataLoader here to pre-fetch data on login */}
+                  <FarcasterDataLoader />
+                  <AppContent />
+                </CustomErrorBoundary>
+              </Suspense>
+            </Router>
+            <ToastContainer position="bottom-right" />
+          </WalletProvider>
+        </AuthProvider>
+      </PrivyProvider>
+    </ReduxProvider>
   );
 }
 

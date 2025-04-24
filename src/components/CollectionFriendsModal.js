@@ -2,9 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { usePrivy } from '@privy-io/react-auth';
-import farcasterService, { fetchAllFollowing } from '../services/farcasterService';
+import farcasterService from '../services/farcasterService';
 import alchemyService from '../services/alchemyService';
 import '../styles/CollectionFriendsModal.css';
+import { useSelector } from 'react-redux';
+import farcasterStateService from '../services/farcasterStateService';
+import { selectFollowing } from '../redux/farcasterSlice';
 
 /**
  * Modal component that displays which Farcaster friends own NFTs from the same collection
@@ -20,11 +23,15 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   
   const [friends, setFriends] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchingFollowing, setFetchingFollowing] = useState(false);
   const [error, setError] = useState(null);
   const [usingMockData, setUsingMockData] = useState(false);
   const [totalFriends, setTotalFriends] = useState(0);
   const [debugInfo, setDebugInfo] = useState({});
   const [timeMarkers, setTimeMarkers] = useState({});
+
+  // Get following data from Redux store
+  const followingState = useSelector(selectFollowing);
 
   // Helper function to normalize contract addresses
   const normalizeContractAddress = (address) => {
@@ -46,61 +53,18 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     return address;
   };
 
-  // Reset state when modal opens
+  // Initialize following data when user is authenticated
   useEffect(() => {
-    if (isOpen) {
-      // Reset all state when modal opens
-      setLoading(true);
-      setError(null);
-      setFriends([]);
-      setUsingMockData(false);
-      setTotalFriends(0);
-      setDebugInfo({});
-      setTimeMarkers({
-        start: new Date().toISOString()
-      });
+    if (isUserAuthenticated && privyUser?.farcaster?.fid) {
+      const fid = privyUser.farcaster.fid;
       
-      console.log('🔄 MODAL OPENED: Resetting state');
-      // Add detailed debug information about the collection
-      console.log('COLLECTION DEBUG:', {
-        collectionAddress,
-        collectionName,
-        collectionAddressType: typeof collectionAddress,
-        isEmpty: !collectionAddress,
-        length: collectionAddress?.length
-      });
-    }
-  }, [isOpen, collectionAddress, collectionName]);
-  
-  // Debug authentication states
-  useEffect(() => {
-    if (isOpen) {
-      console.log('🔐 Modal Authentication Status:', { 
-        authContext: isAuthenticated, 
-        privyAuthenticated, 
-        isUserAuthenticated,
-        authUser: user ? 'User exists' : 'No auth user',
-        privyUser: privyUser ? 'Privy user exists' : 'No privy user'
-      });
-      
-      console.log('📋 Collection Data:', {
-        address: collectionAddress || 'No address provided',
-        name: collectionName || 'No name provided'
-      });
-      
-      if (privyUser?.farcaster) {
-        console.log('🎭 Farcaster Data:', {
-          fid: privyUser.farcaster.fid,
-          username: privyUser.farcaster.username,
-          displayName: privyUser.farcaster.displayName,
-          hasConnectedAddresses: Array.isArray(privyUser.farcaster.addresses) && 
-                                 privyUser.farcaster.addresses.length > 0
-        });
-      } else {
-        console.log('⚠️ No Farcaster data found in Privy user');
+      // Pre-fetch following data if not already in store
+      if (!followingState.users.length || followingState.fid !== fid) {
+        console.log(`Pre-fetching following list for FID ${fid}`);
+        farcasterStateService.getFollowing({ fid });
       }
     }
-  }, [isOpen, isAuthenticated, privyAuthenticated, isUserAuthenticated, user, privyUser, collectionAddress, collectionName]);
+  }, [isUserAuthenticated, privyUser]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -167,328 +131,345 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             }
           }));
           
-          // 1. Get following users from Farcaster
+          // 1. Get following users from Farcaster (using Redux store or API)
+          let following;
+          const followingStartTime = Date.now();
+          
           try {
-            console.log('🌐 Starting Neynar API call to get all following users...');
-            console.log('API Parameters:', { fid });
+            // Set following loading state
+            setFetchingFollowing(true);
             
-            const followingStartTime = Date.now();
-            // Add try/catch to explicitly log any errors during API call
+            // Check if we have valid following data in Redux
+            if (
+              followingState.users.length > 0 && 
+              followingState.fid === fid &&
+              followingState.lastFetched && 
+              !followingState.isFetching
+            ) {
+              console.log(`Using following list from Redux store: ${followingState.users.length} users`);
+              following = { 
+                users: followingState.users,
+                success: true,
+                fromCache: true 
+              };
+            } else {
+              // Fetch following users if not in Redux or data is stale
+              console.log('Following not in Redux or stale, fetching from API...');
+              following = await farcasterStateService.getFollowing({ fid });
+              following = { 
+                users: following,
+                success: true,
+                fromCache: false 
+              };
+            }
+            
+            // Clear following loading state
+            setFetchingFollowing(false);
+            
+            const followingEndTime = Date.now();
+            
+            // Check if following is valid
+            if (!following || !following.users || !Array.isArray(following.users)) {
+              throw new Error('Invalid following data: missing or invalid users array');
+            }
+            
+            console.log(`✅ Found ${following.users.length} following users - Retrieval took ${followingEndTime - followingStartTime}ms`);
+            
+            // Log a sample of the following users for debugging
+            if (following.users.length > 0) {
+              console.log('📊 Sample of following users:', following.users.slice(0, 3).map(u => ({
+                username: u.username,
+                fid: u.fid,
+                hasAddresses: Array.isArray(u.addresses) && u.addresses.length > 0,
+                addressCount: u.addresses ? u.addresses.length : 0
+              })));
+            }
+            
+            debug.following = {
+              count: following.users.length,
+              success: following.success,
+              responseTime: followingEndTime - followingStartTime,
+              hasUsers: following.users.length > 0,
+              fromCache: following.fromCache
+            };
+            
+            setDebugInfo(prevDebug => ({ 
+              ...prevDebug, 
+              ...debug, 
+              status: 'Processing following users...',
+              timestamps: {
+                ...prevDebug.timestamps,
+                afterFollowingFetch: new Date().toISOString()
+              }
+            }));
+            
+            if (following.users.length === 0) {
+              console.warn('⚠️ No following users found, falling back to mock data');
+              debug.followingEmpty = true;
+              setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
+              
+              const mockFriends = getMockFriends();
+              setFriends(mockFriends);
+              setUsingMockData(true);
+              setLoading(false);
+              return;
+            }
+            
+            // Count how many users have associated addresses
+            const usersWithAddresses = following.users.filter(user => 
+              Array.isArray(user.addresses) && user.addresses.length > 0
+            ).length;
+            
+            console.log(`👥 Users with connected addresses: ${usersWithAddresses}/${following.users.length}`);
+            
+            // Get a sample of addresses for debugging
+            const sampleAddresses = following.users.slice(0, 3).map(user => ({
+              username: user.username,
+              addresses: user.addresses || []
+            }));
+            debug.sampleFollowing = sampleAddresses;
+            debug.usersWithAddresses = usersWithAddresses;
+            
+            setDebugInfo(prevDebug => ({ 
+              ...prevDebug, 
+              ...debug, 
+              status: 'Fetching collection owners...',
+              timestamps: {
+                ...prevDebug.timestamps,
+                beforeOwnersCall: new Date().toISOString()
+              }
+            }));
+            
+            // 2. Get all owners of the collection
+            console.log(`🖼️ Starting Alchemy API call for contract: ${collectionAddress}`);
+            console.log('API Parameters:', { collectionAddress });
+            
             try {
-              // Use fetchAllFollowing instead of getUserFollowing to get all following users
-              const following = await fetchAllFollowing(fid);
-              const followingEndTime = Date.now();
+              const ownersStartTime = Date.now();
+              console.log('TRYING TO FETCH OWNERS:', {
+                time: new Date().toISOString(),
+                collectionAddress,
+                alchemyServiceReady: !!alchemyService?.getOwnersForContract
+              });
               
-              // Check if following is valid and has users array
-              if (!following || !following.users) {
-                throw new Error('Invalid response from fetchAllFollowing: missing users array');
+              // Normalize the contract address before calling the API
+              const normalizedAddress = normalizeContractAddress(collectionAddress);
+              console.log(`Using normalized contract address: ${normalizedAddress}`);
+              
+              const owners = await alchemyService.getOwnersForContract(normalizedAddress);
+              const ownersEndTime = Date.now();
+              
+              console.log(`✅ Found ${owners.length} collection owners - API call took ${ownersEndTime - ownersStartTime}ms`);
+              
+              if (owners.length > 0) {
+                console.log('📊 Sample of owner addresses:', owners.slice(0, 5));
               }
               
-              console.log(`✅ Found ${following.users.length} following users - API call took ${followingEndTime - followingStartTime}ms`);
-              
-              // Log a sample of the following users for debugging
-              if (following.users.length > 0) {
-                console.log('📊 Sample of following users:', following.users.slice(0, 3).map(u => ({
-                  username: u.username,
-                  fid: u.fid,
-                  hasAddresses: Array.isArray(u.addresses) && u.addresses.length > 0,
-                  addressCount: u.addresses ? u.addresses.length : 0
-                })));
-              }
-              
-              debug.following = {
-                count: following.users.length,
-                success: following.success,
-                pagesRetrieved: following.pagesRetrieved,
-                responseTime: followingEndTime - followingStartTime,
-                hasUsers: following.users.length > 0,
-                fromCache: following.fromCache
+              debug.owners = {
+                count: owners.length,
+                success: true,
+                responseTime: ownersEndTime - ownersStartTime,
+                sample: owners.slice(0, 5)
               };
               
               setDebugInfo(prevDebug => ({ 
                 ...prevDebug, 
                 ...debug, 
-                status: 'Processing following users...',
+                status: 'Processing collection owners...',
                 timestamps: {
                   ...prevDebug.timestamps,
-                  afterFollowingFetch: new Date().toISOString()
+                  afterOwnersCall: new Date().toISOString()
                 }
               }));
               
-              if (following.users.length === 0) {
-                console.warn('⚠️ No following users found, falling back to mock data');
-                debug.followingEmpty = true;
+              if (owners.length === 0) {
+                console.warn('⚠️ No collection owners found - showing empty state');
+                debug.ownersEmpty = true;
                 setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
                 
-                const mockFriends = getMockFriends();
-                setFriends(mockFriends);
-                setUsingMockData(true);
+                // Return empty data instead of mock data
+                setFriends([]);
+                setTotalFriends(0);
+                setUsingMockData(false);
                 setLoading(false);
                 return;
               }
               
-              // Count how many users have associated addresses
-              const usersWithAddresses = following.users.filter(user => 
-                Array.isArray(user.addresses) && user.addresses.length > 0
-              ).length;
+              // 3. Create a set of owner addresses (lowercase) for faster lookup
+              const ownerAddresses = new Set(owners.map(addr => addr.toLowerCase()));
+              debug.ownersSet = Array.from(ownerAddresses).slice(0, 5);
               
-              console.log(`👥 Users with connected addresses: ${usersWithAddresses}/${following.users.length}`);
+              // 4. Filter following users who own the collection
+              console.log('🔄 Checking for intersection between following users and collection owners...');
               
-              // Get a sample of addresses for debugging
-              const sampleAddresses = following.users.slice(0, 3).map(user => ({
-                username: user.username,
-                addresses: user.addresses || []
-              }));
-              debug.sampleFollowing = sampleAddresses;
-              debug.usersWithAddresses = usersWithAddresses;
+              const startIntersection = Date.now();
+              
+              const friendsWithCollection = following.users.filter(followingUser => {
+                if (!followingUser.addresses || followingUser.addresses.length === 0) {
+                  return false;
+                }
+                
+                const hasMatch = followingUser.addresses.some(address => {
+                  const normalizedAddress = address.toLowerCase();
+                  const isOwner = ownerAddresses.has(normalizedAddress);
+                  if (isOwner) {
+                    console.log(`✅ Match found: ${followingUser.username} (${normalizedAddress}) owns the collection`);
+                  }
+                  return isOwner;
+                });
+                
+                return hasMatch;
+              });
+              
+              const endIntersection = Date.now();
+              
+              console.log(`✨ Found ${friendsWithCollection.length} friends who own the collection - Took ${endIntersection - startIntersection}ms`);
+              if (friendsWithCollection.length > 0) {
+                console.log('📊 Matched friends:', friendsWithCollection.map(f => f.username));
+              }
+              
+              debug.matchesFound = friendsWithCollection.length;
+              debug.matches = friendsWithCollection.map(f => f.username);
+              debug.intersectionTime = endIntersection - startIntersection;
               
               setDebugInfo(prevDebug => ({ 
                 ...prevDebug, 
                 ...debug, 
-                status: 'Fetching collection owners...',
+                status: 'Formatting results...',
                 timestamps: {
                   ...prevDebug.timestamps,
-                  beforeOwnersCall: new Date().toISOString()
+                  afterIntersection: new Date().toISOString()
                 }
               }));
               
-              // 2. Get all owners of the collection
-              console.log(`🖼️ Starting Alchemy API call for contract: ${collectionAddress}`);
-              console.log('API Parameters:', { collectionAddress });
+              // 5. Format for display
+              const formattedFriends = friendsWithCollection.map(friend => ({
+                id: friend.fid.toString(),
+                name: friend.displayName || friend.username,
+                username: friend.username,
+                avatar: friend.imageUrl,
+                addresses: friend.addresses
+              }));
               
-              try {
-                const ownersStartTime = Date.now();
-                console.log('TRYING TO FETCH OWNERS:', {
-                  time: new Date().toISOString(),
-                  collectionAddress,
-                  alchemyServiceReady: !!alchemyService?.getOwnersForContract
-                });
-                
-                // Normalize the contract address before calling the API
-                const normalizedAddress = normalizeContractAddress(collectionAddress);
-                console.log(`Using normalized contract address: ${normalizedAddress}`);
-                
-                const owners = await alchemyService.getOwnersForContract(normalizedAddress);
-                const ownersEndTime = Date.now();
-                
-                console.log(`✅ Found ${owners.length} collection owners - API call took ${ownersEndTime - ownersStartTime}ms`);
-                
-                if (owners.length > 0) {
-                  console.log('📊 Sample of owner addresses:', owners.slice(0, 5));
-                }
-                
-                debug.owners = {
-                  count: owners.length,
-                  success: true,
-                  responseTime: ownersEndTime - ownersStartTime,
-                  sample: owners.slice(0, 5)
-                };
-                
-                setDebugInfo(prevDebug => ({ 
-                  ...prevDebug, 
-                  ...debug, 
-                  status: 'Processing collection owners...',
-                  timestamps: {
-                    ...prevDebug.timestamps,
-                    afterOwnersCall: new Date().toISOString()
-                  }
-                }));
-                
-                if (owners.length === 0) {
-                  console.warn('⚠️ No collection owners found - showing empty state');
-                  debug.ownersEmpty = true;
-                  setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
-                  
-                  // Return empty data instead of mock data
-                  setFriends([]);
-                  setTotalFriends(0);
-                  setUsingMockData(false);
-                  setLoading(false);
-                  return;
-                }
-                
-                // 3. Create a set of owner addresses (lowercase) for faster lookup
-                const ownerAddresses = new Set(owners.map(addr => addr.toLowerCase()));
-                debug.ownersSet = Array.from(ownerAddresses).slice(0, 5);
-                
-                // 4. Filter following users who own the collection
-                console.log('🔄 Checking for intersection between following users and collection owners...');
-                
-                const startIntersection = Date.now();
-                
-                const friendsWithCollection = following.users.filter(followingUser => {
-                  if (!followingUser.addresses || followingUser.addresses.length === 0) {
-                    return false;
-                  }
-                  
-                  const hasMatch = followingUser.addresses.some(address => {
-                    const normalizedAddress = address.toLowerCase();
-                    const isOwner = ownerAddresses.has(normalizedAddress);
-                    if (isOwner) {
-                      console.log(`✅ Match found: ${followingUser.username} (${normalizedAddress}) owns the collection`);
-                    }
-                    return isOwner;
-                  });
-                  
-                  return hasMatch;
-                });
-                
-                const endIntersection = Date.now();
-                
-                console.log(`✨ Found ${friendsWithCollection.length} friends who own the collection - Took ${endIntersection - startIntersection}ms`);
-                if (friendsWithCollection.length > 0) {
-                  console.log('📊 Matched friends:', friendsWithCollection.map(f => f.username));
-                }
-                
-                debug.matchesFound = friendsWithCollection.length;
-                debug.matches = friendsWithCollection.map(f => f.username);
-                debug.intersectionTime = endIntersection - startIntersection;
-                
-                setDebugInfo(prevDebug => ({ 
-                  ...prevDebug, 
-                  ...debug, 
-                  status: 'Formatting results...',
-                  timestamps: {
-                    ...prevDebug.timestamps,
-                    afterIntersection: new Date().toISOString()
-                  }
-                }));
-                
-                // 5. Format for display
-                const formattedFriends = friendsWithCollection.map(friend => ({
-                  id: friend.fid.toString(),
-                  name: friend.displayName || friend.username,
-                  username: friend.username,
-                  avatar: friend.imageUrl,
-                  addresses: friend.addresses
-                }));
-                
-                if (formattedFriends.length > 0) {
-                  setFriends(formattedFriends);
-                  setTotalFriends(formattedFriends.length);
-                  setUsingMockData(false);
-                  debug.finalResult = 'Real friends found!';
-                } else {
-                  // No friends found, but we tried with real data
-                  setFriends([]);
-                  setTotalFriends(0);
-                  setUsingMockData(false);
-                  debug.finalResult = 'No friends found with real data';
-                }
-                
-                setDebugInfo(prevDebug => ({ 
-                  ...prevDebug, 
-                  ...debug, 
-                  status: 'Complete!',
-                  timestamps: {
-                    ...prevDebug.timestamps,
-                    complete: new Date().toISOString()
-                  }
-                }));
-              } catch (ownersError) {
-                console.error('❌ Error fetching collection owners:', ownersError);
-                console.error('ERROR DETAILS:', {
-                  message: ownersError.message,
-                  stack: ownersError.stack?.substring(0, 200),
-                  responseStatus: ownersError.response?.status,
-                  responseData: ownersError.response?.data
-                });
-                
-                debug.ownersError = ownersError.message;
-                debug.ownersSuccess = false;
-                setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
-                
-                // Try with the correct format if the contract address includes a network prefix
-                if (collectionAddress.includes(':') || !collectionAddress.startsWith('0x')) {
-                  // Use our existing normalize function
-                  const cleanAddress = normalizeContractAddress(collectionAddress);
-                  console.log(`🔄 Trying with normalized address: ${cleanAddress}`);
-                  try {
-                    const cleanedStartTime = Date.now();
-                    const owners = await alchemyService.getOwnersForContract(cleanAddress);
-                    const cleanedEndTime = Date.now();
-                    
-                    console.log(`✅ Found ${owners.length} collection owners with cleaned address - API call took ${cleanedEndTime - cleanedStartTime}ms`);
-                    
-                    debug.cleanedAddressOwners = {
-                      count: owners.length,
-                      success: true,
-                      responseTime: cleanedEndTime - cleanedStartTime,
-                      sample: owners.slice(0, 5)
-                    };
-                    
-                    // Continue with the same logic...
-                    if (owners.length > 0) {
-                      const ownerAddresses = new Set(owners.map(addr => addr.toLowerCase()));
-                      const friendsWithCollection = following.users.filter(followingUser => {
-                        return followingUser.addresses && followingUser.addresses.some(address => 
-                          ownerAddresses.has(address.toLowerCase())
-                        );
-                      });
-                      
-                      console.log(`✨ Found ${friendsWithCollection.length} friends with cleaned address`);
-                      
-                      const formattedFriends = friendsWithCollection.map(friend => ({
-                        id: friend.fid.toString(),
-                        name: friend.displayName || friend.username,
-                        username: friend.username,
-                        avatar: friend.imageUrl,
-                        addresses: friend.addresses
-                      }));
-                      
-                      if (formattedFriends.length > 0) {
-                        setFriends(formattedFriends);
-                        setTotalFriends(formattedFriends.length);
-                        setUsingMockData(false);
-                        debug.finalResult = 'Real friends found with cleaned address!';
-                        setDebugInfo(prevDebug => ({ 
-                          ...prevDebug, 
-                          ...debug, 
-                          status: 'Complete with cleaned address!',
-                          timestamps: {
-                            ...prevDebug.timestamps,
-                            completeWithCleanedAddress: new Date().toISOString()
-                          }
-                        }));
-                        setLoading(false);
-                        return;
-                      }
-                    }
-                  } catch (cleanedError) {
-                    console.error('❌ Error with cleaned address:', cleanedError);
-                    debug.cleanedAddressError = cleanedError.message;
-                  }
-                }
-                
-                // Return empty data instead of using mock data
-                console.log('No collection owners found or error occurred - showing empty state');
+              if (formattedFriends.length > 0) {
+                setFriends(formattedFriends);
+                setTotalFriends(formattedFriends.length);
+                setUsingMockData(false);
+                debug.finalResult = 'Real friends found!';
+              } else {
+                // No friends found, but we tried with real data
                 setFriends([]);
                 setTotalFriends(0);
                 setUsingMockData(false);
-                debug.finalResult = 'No data available';
-                setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
+                debug.finalResult = 'No friends found with real data';
               }
-            } catch (apiCallError) {
-              console.error('❌ ERROR IN FOLLOWING USERS API CALL:', apiCallError);
-              console.error('API CALL ERROR DETAILS:', {
-                message: apiCallError.message,
-                stack: apiCallError.stack?.substring(0, 200),
-                responseStatus: apiCallError.response?.status,
-                responseData: apiCallError.response?.data
+              
+              setDebugInfo(prevDebug => ({ 
+                ...prevDebug, 
+                ...debug, 
+                status: 'Complete!',
+                timestamps: {
+                  ...prevDebug.timestamps,
+                  complete: new Date().toISOString()
+                }
+              }));
+            } catch (ownersError) {
+              console.error('❌ Error fetching collection owners:', ownersError);
+              console.error('ERROR DETAILS:', {
+                message: ownersError.message,
+                stack: ownersError.stack?.substring(0, 200),
+                responseStatus: ownersError.response?.status,
+                responseData: ownersError.response?.data
               });
-              throw apiCallError; // rethrow to be caught by the outer try/catch
+              
+              debug.ownersError = ownersError.message;
+              debug.ownersSuccess = false;
+              setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
+              
+              // Try with the correct format if the contract address includes a network prefix
+              if (collectionAddress.includes(':') || !collectionAddress.startsWith('0x')) {
+                // Use our existing normalize function
+                const cleanAddress = normalizeContractAddress(collectionAddress);
+                console.log(`🔄 Trying with normalized address: ${cleanAddress}`);
+                try {
+                  const cleanedStartTime = Date.now();
+                  const owners = await alchemyService.getOwnersForContract(cleanAddress);
+                  const cleanedEndTime = Date.now();
+                  
+                  console.log(`✅ Found ${owners.length} collection owners with cleaned address - API call took ${cleanedEndTime - cleanedStartTime}ms`);
+                  
+                  debug.cleanedAddressOwners = {
+                    count: owners.length,
+                    success: true,
+                    responseTime: cleanedEndTime - cleanedStartTime,
+                    sample: owners.slice(0, 5)
+                  };
+                  
+                  // Continue with the same logic...
+                  if (owners.length > 0) {
+                    const ownerAddresses = new Set(owners.map(addr => addr.toLowerCase()));
+                    const friendsWithCollection = following.users.filter(followingUser => {
+                      return followingUser.addresses && followingUser.addresses.some(address => 
+                        ownerAddresses.has(address.toLowerCase())
+                      );
+                    });
+                    
+                    console.log(`✨ Found ${friendsWithCollection.length} friends with cleaned address`);
+                    
+                    const formattedFriends = friendsWithCollection.map(friend => ({
+                      id: friend.fid.toString(),
+                      name: friend.displayName || friend.username,
+                      username: friend.username,
+                      avatar: friend.imageUrl,
+                      addresses: friend.addresses
+                    }));
+                    
+                    if (formattedFriends.length > 0) {
+                      setFriends(formattedFriends);
+                      setTotalFriends(formattedFriends.length);
+                      setUsingMockData(false);
+                      debug.finalResult = 'Real friends found with cleaned address!';
+                      setDebugInfo(prevDebug => ({ 
+                        ...prevDebug, 
+                        ...debug, 
+                        status: 'Complete with cleaned address!',
+                        timestamps: {
+                          ...prevDebug.timestamps,
+                          completeWithCleanedAddress: new Date().toISOString()
+                        }
+                      }));
+                      setLoading(false);
+                      return;
+                    }
+                  }
+                } catch (cleanedError) {
+                  console.error('❌ Error with cleaned address:', cleanedError);
+                  debug.cleanedAddressError = cleanedError.message;
+                }
+              }
+              
+              // Return empty data instead of using mock data
+              console.log('No collection owners found or error occurred - showing empty state');
+              setFriends([]);
+              setTotalFriends(0);
+              setUsingMockData(false);
+              debug.finalResult = 'No data available';
+              setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
             }
           } catch (followingError) {
-            console.error('❌ Error fetching following users:', followingError);
+            console.error('Error fetching following users:', followingError);
             debug.followingError = followingError.message;
-            debug.followingSuccess = false;
             setDebugInfo(prevDebug => ({ ...prevDebug, ...debug }));
             
-            // Return empty data instead of mock data
-            console.log('Unable to fetch following users - showing empty state');
-            setFriends([]);
-            setTotalFriends(0);
-            setUsingMockData(false);
+            // Make sure to clear the following loading state
+            setFetchingFollowing(false);
+            
+            // Fall back to mock data
+            const mockFriends = getMockFriends();
+            setFriends(mockFriends);
+            setUsingMockData(true);
+            setLoading(false);
+            return;
           }
         } else {
           // Not authenticated or no collection address
@@ -520,12 +501,15 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           }
         }));
         
+        // Make sure all loading states are cleared
+        setFetchingFollowing(false);
+        setLoading(false);
+        
         // Return empty data instead of using mock data
         console.log('No collection owners found or error occurred - showing empty state');
         setFriends([]);
         setTotalFriends(0);
         setUsingMockData(false);
-        setLoading(false);
       }
     };
     
@@ -632,7 +616,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           <div className="modal-content">
             <div className="modal-loading">
               <div className="spinner"></div>
-              <p>Loading friends...</p>
+              <p>{fetchingFollowing ? 'Loading your Farcaster following...' : 'Checking for friends who own this collection...'}</p>
             </div>
           </div>
         ) : error ? (
