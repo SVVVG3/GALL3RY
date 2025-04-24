@@ -53,6 +53,30 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     return address;
   };
 
+  // Helper function to extract chain from address with prefix
+  const extractChainFromAddress = (address) => {
+    if (!address || !address.includes(':')) return 'eth'; // Default to Ethereum
+    
+    const [network, _] = address.split(':');
+    // Map common network abbreviations to Alchemy network identifiers
+    const networkMappings = {
+      'eth': 'eth',
+      'ethereum': 'eth',
+      'polygon': 'polygon',
+      'matic': 'polygon',
+      'optimism': 'opt',
+      'opt': 'opt',
+      'arbitrum': 'arb',
+      'arb': 'arb',
+      'base': 'base',
+      'zora': 'zora'
+    };
+    
+    // Return mapped network or default to 'eth' if unknown
+    console.log(`Extracted network ${network} from address: ${address}`);
+    return networkMappings[network.toLowerCase()] || 'eth';
+  };
+
   // Initialize following data when user is authenticated
   useEffect(() => {
     if (isUserAuthenticated && privyUser?.farcaster?.fid) {
@@ -256,7 +280,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               const normalizedAddress = normalizeContractAddress(collectionAddress);
               console.log(`Using normalized contract address: ${normalizedAddress}`);
               
-              const owners = await alchemyService.getOwnersForContract(normalizedAddress);
+              // Extract network/chain information from the address if available
+              const network = extractChainFromAddress(collectionAddress);
+              console.log(`Using network ${network} for collection ${normalizedAddress}`);
+              
+              // Call getOwnersForContract with both contractAddress and network parameters
+              const owners = await alchemyService.getOwnersForContract(normalizedAddress, network);
               const ownersEndTime = Date.now();
               
               console.log(`✅ Found ${owners.length} collection owners - API call took ${ownersEndTime - ownersStartTime}ms`);
@@ -393,7 +422,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 console.log(`🔄 Trying with normalized address: ${cleanAddress}`);
                 try {
                   const cleanedStartTime = Date.now();
-                  const owners = await alchemyService.getOwnersForContract(cleanAddress);
+                  // Extract network/chain information from the address if available
+                  const network = extractChainFromAddress(collectionAddress);
+                  console.log(`Using network ${network} for cleaned address ${cleanAddress}`);
+                  
+                  // Call getOwnersForContract with both contractAddress and network parameters
+                  const owners = await alchemyService.getOwnersForContract(cleanAddress, network);
                   const cleanedEndTime = Date.now();
                   
                   console.log(`✅ Found ${owners.length} collection owners with cleaned address - API call took ${cleanedEndTime - cleanedStartTime}ms`);

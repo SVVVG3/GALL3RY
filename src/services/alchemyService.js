@@ -844,10 +844,10 @@ class AlchemyService {
   }
   
   /**
-   * Gets all wallet addresses that own a specific NFT contract
-   * @param {string} contractAddress - The NFT contract address
-   * @param {string} [network='eth'] - Blockchain network (eth, polygon, etc.)
-   * @returns {Promise<string[]>} Array of wallet addresses
+   * Gets all owners for a specific contract
+   * @param {string} contractAddress - The contract address
+   * @param {string} network - The blockchain network (eth, polygon, opt, arb, base, etc)
+   * @returns {Promise<string[]>} - Array of owner addresses
    */
   async getOwnersForContract(contractAddress, network = 'eth') {
     // Make sure API key is initialized
@@ -859,22 +859,47 @@ class AlchemyService {
         throw new Error('Contract address is required');
       }
       
+      // Process contract address to extract network if in format 'network:address'
+      let resolvedNetwork = network;
+      let resolvedContractAddress = contractAddress;
+      
+      // Check if contract address includes network prefix like "base:0x123..."
+      if (contractAddress.includes(':')) {
+        const parts = contractAddress.split(':');
+        if (parts.length >= 2) {
+          const possibleNetwork = parts[0].toLowerCase();
+          const possibleAddress = parts[1];
+          
+          // Verify if it's a valid network and address format
+          if (possibleAddress && possibleAddress.startsWith('0x') && possibleAddress.length >= 42) {
+            resolvedContractAddress = possibleAddress;
+            // Only update network if it's a recognized network
+            const validNetworks = ['eth', 'polygon', 'opt', 'arb', 'base', 'zora'];
+            if (validNetworks.includes(possibleNetwork)) {
+              resolvedNetwork = possibleNetwork;
+              console.log(`Extracted network ${resolvedNetwork} from contract address ${contractAddress}`);
+            }
+          }
+        }
+      }
+      
+      console.log(`Fetching owners for contract ${resolvedContractAddress} on ${resolvedNetwork}`);
+      
       // Create a cache key based on contract address and network
-      const cacheKey = `owners_${contractAddress.toLowerCase()}_${network.toLowerCase()}`;
+      const cacheKey = `owners_${resolvedContractAddress.toLowerCase()}_${resolvedNetwork.toLowerCase()}`;
       
       // Check if we have a valid cached response
       const cachedResponse = await this.getCachedResponse(cacheKey);
       if (cachedResponse) {
-        console.log(`Using cached owners for contract ${contractAddress} on ${network} (${cachedResponse.length} owners)`);
+        console.log(`Using cached owners for contract ${resolvedContractAddress} on ${resolvedNetwork} (${cachedResponse.length} owners)`);
         return cachedResponse;
       }
 
-      console.log(`Fetching owners for contract ${contractAddress} on ${network}`);
-      console.log('DEBUG - getOwnersForContract call details:', {
-        contractAddress,
-        contractAddressType: typeof contractAddress,
-        contractAddressLength: contractAddress?.length,
-        network,
+      console.log(`DEBUG - getOwnersForContract call details:`, {
+        originalContractAddress: contractAddress,
+        resolvedContractAddress,
+        originalNetwork: network,
+        resolvedNetwork,
         alchemyEndpoint: ALCHEMY_ENDPOINT,
         serverUrl: SERVER_URL,
         timestamp: new Date().toISOString()
@@ -892,8 +917,8 @@ class AlchemyService {
         // Build the API request params for our proxy
         const params = {
           endpoint: 'getOwnersForContract',
-          network,
-          contractAddress // Make sure this parameter name matches what Alchemy expects
+          network: resolvedNetwork,
+          contractAddress: resolvedContractAddress
         };
         
         console.log('Making proxy Alchemy API request with params:', params);
@@ -906,7 +931,7 @@ class AlchemyService {
         
         console.log('Proxy API responded with status:', response.status);
       } catch (proxyError) {
-        console.error(`❌ Proxy API failed for getOwnersForContract for ${contractAddress}:`, proxyError.message);
+        console.error(`❌ Proxy API failed for getOwnersForContract for ${resolvedContractAddress} on ${resolvedNetwork}:`, proxyError.message);
         
         // Try direct Alchemy API as a fallback
         try {
@@ -919,7 +944,7 @@ class AlchemyService {
           
           // Map the network to the appropriate endpoint prefix
           // Get the base API URL using our helper
-          const baseUrl = await this.getAlchemyUrl(network, 'nft');
+          const baseUrl = await this.getAlchemyUrl(resolvedNetwork, 'nft');
           
           // Build the direct API URL as per the docs
           // Alchemy docs format: https://{network}.g.alchemy.com/nft/v3/{apiKey}/getOwnersForContract
@@ -930,7 +955,7 @@ class AlchemyService {
           // NOTE: According to Alchemy docs, the contractAddress should be passed as a query parameter
           response = await axios.get(directUrl, {
             params: {
-              contractAddress,
+              contractAddress: resolvedContractAddress,
               withTokenBalances: false // Don't need token balances, just owners
             },
             timeout: 20000
@@ -944,7 +969,7 @@ class AlchemyService {
             ownersCount: response.data?.owners?.length || 0
           });
         } catch (directApiError) {
-          console.error('❌ Direct Alchemy API call failed:', directApiError.message);
+          console.error(`❌ Direct Alchemy API call failed on ${resolvedNetwork}:`, directApiError.message);
           if (directApiError.response) {
             console.error('Error response data:', directApiError.response.data);
             console.error('Error response status:', directApiError.response.status);
@@ -959,19 +984,14 @@ class AlchemyService {
         hasData: !!response.data,
         dataKeys: response.data ? Object.keys(response.data) : [],
         hasOwners: Array.isArray(response.data?.owners),
-        ownersCount: response.data?.owners?.length || 0
+        ownersCount: response.data?.owners?.length || 0,
+        network: resolvedNetwork
       });
 
       // Extract owners from the response according to the API documentation
       const owners = response.data?.owners || [];
 
-      console.log(`Found ${owners.length} owners for contract ${contractAddress}`);
-      
-      if (owners.length > 0) {
-        console.log('Sample of owner addresses:', owners.slice(0, 5));
-      } else {
-        console.warn(`No owners found for contract ${contractAddress}. This could be an issue with the contract address or API.`);
-      }
+      console.log(`Found ${owners.length} owners for contract ${resolvedContractAddress} on ${resolvedNetwork}`);
       
       // Convert all addresses to lowercase for consistency
       const normalizedOwners = owners.map(owner => owner.toLowerCase());
@@ -992,28 +1012,6 @@ class AlchemyService {
         data: error.response?.data || error.message,
         stack: error.stack?.substring(0, 200)
       });
-      
-      // Network-specific error handling
-      if (network === 'base') {
-        console.warn(`Base network may be experiencing issues. Returning empty result for ${contractAddress}.`);
-        // For Base network specifically, log more diagnostics but don't break the app
-        if (error.code === 'ECONNABORTED') {
-          console.warn('Request to Base network timed out. This is a common issue that will be handled gracefully.');
-        }
-      }
-      
-      // Check for specific error types to provide better diagnostics
-      if (error.code === 'ECONNREFUSED') {
-        console.error('Connection refused. API server might be down or unreachable.');
-      } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
-        console.error('Request timed out. API server might be overloaded or unreachable.');
-      } else if (error.response?.status === 404) {
-        console.error('API endpoint not found. Check the API URL configuration.');
-      } else if (error.response?.status === 401 || error.response?.status === 403) {
-        console.error('Authentication error. Check API key.');
-      } else if (error.response?.status === 500) {
-        console.error('Server error. The API server encountered an error processing the request.');
-      }
       
       // Always return an empty array instead of failing completely
       return [];
