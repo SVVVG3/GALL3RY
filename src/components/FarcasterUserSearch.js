@@ -468,6 +468,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
       
+      // Update user profile and wallet addresses immediately
+      setUserProfile(profile);
+      setWalletAddresses(walletAddresses);
+      
       if (walletAddresses.length === 0) {
         throw new Error('No valid wallet addresses found');
       }
@@ -499,10 +503,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Log stats without additional deduplication
       console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
       
-      // Update state and Redux store
+      // Update NFTs state and Redux store
       setUserNfts(formattedNfts);
-      setWalletAddresses(walletAddresses);
-      setUserProfile(profile);
       dispatch(setNftList(formattedNfts));
 
     } catch (error) {
@@ -662,7 +664,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 
                 {/* NFT count between username and wallets */}
                 <div className="nft-total-count">
-                  <p>🖼️ Found {userNfts.length} NFTs</p>
+                  {isSearching ? (
+                    <p className="loading-nft-count">
+                      <span className="spinner-small"></span> Loading NFTs...
+                    </p>
+                  ) : (
+                    <p>🖼️ Found {userNfts.length} NFTs</p>
+                  )}
                 </div>
               </div>
               <div className="wallet-info">
@@ -710,13 +718,12 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             </div>
             
             {/* Use the existing NFTGallery component to display NFTs */}
-            {isNftLoading ? (
-              <div className="loading-spinner"></div>
-            ) : (
-              <div className="nft-section nft-display">
-                <NFTGrid nfts={filteredAndSortedNfts()} isLoading={isSearching && userNfts.length === 0} />
-              </div>
-            )}
+            <div className="nft-section nft-display">
+              <NFTGrid 
+                nfts={filteredAndSortedNfts()} 
+                isLoading={isSearching} 
+              />
+            </div>
           </div>
         </div>
       )}

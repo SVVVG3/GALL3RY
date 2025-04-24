@@ -1515,24 +1515,45 @@
 
 /* NFT total count styling - centered between username and wallet toggle */
 .nft-total-count {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin: 2px auto 2px;
-  padding: 4px 10px;
-  background-color: #f5f7fa;
-  border-radius: 8px;
-  color: #333;
-  font-size: 14px;
-  font-weight: 500;
+  text-align: center;
+  margin: 10px 0;
+  font-size: 16px;
+  color: #444;
 }
 
 .nft-total-count p {
   margin: 0;
-  padding: 0;
-  display: flex;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background-color: #f4f4f8;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+/* New styles for loading NFT count */
+.loading-nft-count {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: #666;
+  font-weight: 500;
+}
+
+.spinner-small {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-top: 2px solid #8b5cf6;
+  border-radius: 50%;
+  animation: spin-small 1s linear infinite;
+}
+
+@keyframes spin-small {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* NFT filter input styling - in the header section */
