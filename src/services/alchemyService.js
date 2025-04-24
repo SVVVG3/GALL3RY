@@ -245,7 +245,8 @@ class AlchemyService {
         network: chain, // IMPORTANT: Use 'network' param for consistent handling
         owner,
         withMetadata: options.withMetadata !== false ? 'true' : 'false',
-        pageSize: options.pageSize || '100'
+        pageSize: options.pageSize || '100',
+        withFloorPrice: options.withFloorPrice !== false ? 'true' : 'false'
       });
 
       // Handle excludeFilters array properly according to Alchemy API v3 docs
@@ -294,15 +295,15 @@ class AlchemyService {
           'accept': 'application/json'
         }
       });
-
-      if (!response.ok) {
+        
+        if (!response.ok) {
         const errorText = await response.text();
         console.error(`Failed to fetch NFTs on ${chain}:`, errorText);
         throw new Error(`Failed to fetch NFTs on ${chain}: ${errorText}`);
-      }
+        }
 
-      const data = await response.json();
-      
+        const data = await response.json();
+        
       // Verify chain info is included in the response; if not, add it
       if (data.ownedNfts) {
         data.ownedNfts = data.ownedNfts.map(nft => {
@@ -390,7 +391,8 @@ class AlchemyService {
         ...options,
         withMetadata: options.withMetadata !== false,
         pageSize: options.pageSize || '100',
-        fetchAll: options.fetchAll !== false
+        fetchAll: options.fetchAll !== false,
+        withFloorPrice: options.withFloorPrice !== false
       };
       
       // Handle filters - only add filters supported by Alchemy API
@@ -506,12 +508,12 @@ class AlchemyService {
    */
   async fetchNftsForMultipleAddresses(addresses, options = {}) {
     try {
-      // Filter valid addresses
+    // Filter valid addresses
       const validAddresses = (addresses || [])
         .filter(address => address && typeof address === 'string' && address.trim() !== '')
         .map(address => address.toLowerCase());
       
-      if (validAddresses.length === 0) {
+    if (validAddresses.length === 0) {
         console.log('No valid addresses provided for fetchNftsForMultipleAddresses');
         return { uniqueNfts: [], errors: ['No valid addresses provided'] };
       }
@@ -524,7 +526,7 @@ class AlchemyService {
       }
       
       // Set up fetch options with defaults
-      const fetchOptions = {
+          const fetchOptions = {
         ...options,
         withMetadata: options.withMetadata !== false,
         pageSize: options.pageSize || '100'
@@ -620,8 +622,8 @@ class AlchemyService {
                 });
               }
             });
-          }
-        } else {
+            }
+          } else {
           errors.push(`Error fetching for ${address} on ${chain}: ${result.reason}`);
         }
       });
@@ -634,7 +636,7 @@ class AlchemyService {
       });
       
       // Convert the Map to an array for the final result
-      const uniqueNfts = Array.from(uniqueNftsMap.values());
+    const uniqueNfts = Array.from(uniqueNftsMap.values());
       console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets`);
       
       return {
@@ -646,7 +648,7 @@ class AlchemyService {
       
     } catch (error) {
       console.error('Error in fetchNftsForMultipleAddresses:', error);
-      return { 
+    return {
         uniqueNfts: [], 
         error: error.message 
       };
@@ -784,7 +786,7 @@ class AlchemyService {
         if (gatewayUrl) imageUrl = gatewayUrl;
         
         if (!imageUrl) {
-          const rawUrl = metadata.media[0].raw;
+        const rawUrl = metadata.media[0].raw;
           if (rawUrl) imageUrl = rawUrl;
         }
       }
@@ -879,7 +881,7 @@ class AlchemyService {
         console.error('Contract address is missing or empty');
         throw new Error('Contract address is required');
       }
-      
+
       // Process contract address to extract network if in format 'network:address'
       let resolvedNetwork = network;
       let resolvedContractAddress = contractAddress;
@@ -1208,8 +1210,8 @@ class AlchemyService {
       const validAddresses = (addresses || [])
         .filter(address => address && typeof address === 'string' && address.trim() !== '')
         .map(address => address.toLowerCase().trim());
-      
-      if (validAddresses.length === 0) {
+    
+    if (validAddresses.length === 0) {
         console.log('No valid addresses provided');
         return { nfts: [], errors: ['No valid addresses provided'] };
       }
@@ -1224,7 +1226,8 @@ class AlchemyService {
       const fetchOptions = {
         withMetadata: true,
         pageSize: options.pageSize || '100',
-        fetchAll: true // CRITICAL: Enable pagination to get all NFTs
+        fetchAll: true, // CRITICAL: Enable pagination to get all NFTs
+        withFloorPrice: true // Enable floor price data for sorting by value
       };
       
       // Handle filters - use the standard excludeFilters array format expected by Alchemy
@@ -1273,7 +1276,7 @@ class AlchemyService {
                   chainId: chain
                 });
                 
-                return {
+      return { 
                   ...nft,
                   chain: chain,
                   chainId: chain,
@@ -1327,14 +1330,14 @@ class AlchemyService {
       // Convert the unique NFTs map to an array
       const uniqueNfts = Array.from(uniqueNftsMap.values());
       console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets (removed ${duplicatesRemoved} duplicates)`);
-      
-      return {
+    
+    return {
         nfts: uniqueNfts,
         totalFound: uniqueNfts.length,
         walletNftCounts,
         errors: errors.length > 0 ? errors : undefined
-      };
-    } catch (error) {
+    };
+  } catch (error) {
       console.error('Error in fetchNftsForFarcaster:', error);
       return { nfts: [], error: error.message };
     }
@@ -1554,8 +1557,8 @@ class AlchemyService {
       const uniqueNfts = Array.from(uniqueNftsMap.values());
       
       console.log(`[fetchNftsSimple] Found ${uniqueNfts.length} unique NFTs from ${totalCount} total`);
-      
-      return {
+    
+    return { 
         nfts: uniqueNfts,
         totalFound: uniqueNfts.length,
         totalProcessed: totalCount,
@@ -1592,5 +1595,5 @@ export const fetchNftsSimple = (addresses, options) =>
 
 export const fetchNftsForFarcaster = (addresses, options) =>
   alchemyService.fetchNftsForFarcaster(addresses, options);
-  
-export default alchemyService;
+
+export default alchemyService; 
