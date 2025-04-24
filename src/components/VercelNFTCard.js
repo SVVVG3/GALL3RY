@@ -32,36 +32,175 @@ const VercelNFTCard = ({ nft }) => {
   // EMERGENCY FIX: Global override for Alien Frens images
   useEffect(() => {
     // Only run this once when component mounts
-    const originalImageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
-
-    // Override the src setter
-    Object.defineProperty(HTMLImageElement.prototype, 'src', {
-      get: originalImageSrc.get,
-      set: function(url) {
-        // Check if this is an alienfrens.mypinata.cloud URL
-        if (typeof url === 'string' && url.includes('alienfrens.mypinata.cloud/ipfs/')) {
-          console.log('GLOBAL FIX: Intercepted Alien Frens URL', url);
+    // Create a more comprehensive global fix for all images
+    const fixAlienFrensImages = () => {
+      console.log('Applying comprehensive Alien Frens image fix');
+      
+      // 1. Override the Image.prototype.src setter
+      const originalImageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+      
+      Object.defineProperty(HTMLImageElement.prototype, 'src', {
+        get: originalImageSrc.get,
+        set: function(url) {
+          // Check if this is an alienfrens.mypinata.cloud URL
+          if (typeof url === 'string' && url.includes('alienfrens.mypinata.cloud/ipfs/')) {
+            console.log('GLOBAL FIX: Intercepted Alien Frens URL', url);
+            
+            // Extract the IPFS hash
+            const ipfsMatch = url.match(/\/ipfs\/([^/?#]+)/);
+            if (ipfsMatch && ipfsMatch[1]) {
+              const ipfsHash = ipfsMatch[1];
+              // Try multiple alternative gateways
+              // Use direct gateway rather than proxy to bypass any issues with the proxy
+              const fixedUrl = `https://dweb.link/ipfs/${ipfsHash}`;
+              console.log('GLOBAL FIX: Redirecting to', fixedUrl);
+              
+              // Apply the fixed URL
+              originalImageSrc.set.call(this, fixedUrl);
+              return;
+            }
+          }
           
-          // Extract the IPFS hash
-          const ipfsMatch = url.match(/\/ipfs\/([^/?#]+)/);
+          // Default behavior for other URLs
+          originalImageSrc.set.call(this, url);
+        }
+      });
+      
+      // 2. Find and fix any already created images with Alien Frens URLs
+      setTimeout(() => {
+        try {
+          const allImages = document.querySelectorAll('img');
+          let fixedCount = 0;
+          
+          allImages.forEach(img => {
+            const currentSrc = img.getAttribute('src');
+            if (currentSrc && currentSrc.includes('alienfrens.mypinata.cloud/ipfs/')) {
+              const ipfsMatch = currentSrc.match(/\/ipfs\/([^/?#]+)/);
+              if (ipfsMatch && ipfsMatch[1]) {
+                const ipfsHash = ipfsMatch[1];
+                // Try multiple alternative gateways
+                const newSrc = `https://dweb.link/ipfs/${ipfsHash}`;
+                console.log(`DIRECT FIX: Replacing existing image src from ${currentSrc} to ${newSrc}`);
+                
+                // Create a replacement image
+                const newImg = new Image();
+                newImg.onload = function() {
+                  console.log('Replacement image loaded successfully:', newSrc);
+                  img.src = newSrc;  // This will use our overridden setter
+                  fixedCount++;
+                };
+                newImg.onerror = function() {
+                  console.error('Replacement image failed to load:', newSrc);
+                  // Try an alternative gateway as fallback
+                  const fallbackSrc = `https://ipfs.io/ipfs/${ipfsHash}`;
+                  console.log('Trying fallback source:', fallbackSrc);
+                  img.src = fallbackSrc;
+                };
+                
+                // Start loading the replacement image
+                newImg.src = newSrc;
+              }
+            }
+          });
+          
+          if (fixedCount > 0) {
+            console.log(`Fixed ${fixedCount} existing Alien Frens images on the page`);
+          }
+        } catch (e) {
+          console.error('Error while fixing existing images:', e);
+        }
+      }, 1000); // Wait for 1 second to allow the DOM to stabilize
+      
+      // 3. Add a MutationObserver to catch dynamically added images
+      try {
+        const observer = new MutationObserver((mutations) => {
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+              mutation.addedNodes.forEach((node) => {
+                // Check if the added node is an image
+                if (node.nodeName === 'IMG') {
+                  const src = node.getAttribute('src');
+                  if (src && src.includes('alienfrens.mypinata.cloud/ipfs/')) {
+                    const ipfsMatch = src.match(/\/ipfs\/([^/?#]+)/);
+                    if (ipfsMatch && ipfsMatch[1]) {
+                      const ipfsHash = ipfsMatch[1];
+                      const newSrc = `https://dweb.link/ipfs/${ipfsHash}`;
+                      console.log(`OBSERVER FIX: Setting new image src to ${newSrc}`);
+                      node.src = newSrc; // This will use our overridden setter
+                    }
+                  }
+                }
+                
+                // Also check child nodes for images
+                if (node.querySelectorAll) {
+                  const images = node.querySelectorAll('img');
+                  images.forEach(img => {
+                    const src = img.getAttribute('src');
+                    if (src && src.includes('alienfrens.mypinata.cloud/ipfs/')) {
+                      const ipfsMatch = src.match(/\/ipfs\/([^/?#]+)/);
+                      if (ipfsMatch && ipfsMatch[1]) {
+                        const ipfsHash = ipfsMatch[1];
+                        const newSrc = `https://dweb.link/ipfs/${ipfsHash}`;
+                        console.log(`OBSERVER FIX: Setting child image src to ${newSrc}`);
+                        img.src = newSrc; // This will use our overridden setter
+                      }
+                    }
+                  });
+                }
+              });
+            }
+          });
+        });
+        
+        // Start observing
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+        
+        console.log('Image mutation observer started to catch dynamic Alien Frens images');
+      } catch (e) {
+        console.error('Error setting up mutation observer:', e);
+      }
+    };
+    
+    // Apply the fix
+    fixAlienFrensImages();
+    
+    // Also add a debug function to the window object for manual fixing
+    window.fixAlienFrensImages = () => {
+      console.log('Manually triggered Alien Frens fix');
+      
+      // Find all images that might be problematic
+      const images = document.querySelectorAll('img');
+      let count = 0;
+      
+      images.forEach(img => {
+        // Check for error state or src containing alienfrens.mypinata.cloud
+        if (img.src && img.src.includes('alienfrens.mypinata.cloud/ipfs/')) {
+          const ipfsMatch = img.src.match(/\/ipfs\/([^/?#]+)/);
           if (ipfsMatch && ipfsMatch[1]) {
             const ipfsHash = ipfsMatch[1];
-            // Use our proxy to fix the URL
-            const fixedUrl = `/api/image-proxy?url=${encodeURIComponent(`https://dweb.link/ipfs/${ipfsHash}`)}`;
-            console.log('GLOBAL FIX: Redirecting to', fixedUrl);
-            originalImageSrc.set.call(this, fixedUrl);
-            return;
+            // Try a different gateway directly
+            const newSrc = `https://nftstorage.link/ipfs/${ipfsHash}`;
+            console.log(`MANUAL FIX: Changing image from ${img.src} to ${newSrc}`);
+            img.src = newSrc;
+            count++;
           }
         }
-        
-        // Default behavior for other URLs
-        originalImageSrc.set.call(this, url);
-      }
-    });
+      });
+      
+      return `Fixed ${count} images`;
+    };
 
     // Cleanup: restore original behavior when component unmounts
     return () => {
-      Object.defineProperty(HTMLImageElement.prototype, 'src', originalImageSrc);
+      // Restore original Image.prototype.src
+      try {
+        Object.defineProperty(HTMLImageElement.prototype, 'src', originalImageSrc);
+      } catch (e) {
+        console.error('Error in cleanup:', e);
+      }
     };
   }, []);
 
