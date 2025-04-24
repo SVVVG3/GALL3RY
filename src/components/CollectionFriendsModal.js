@@ -649,50 +649,69 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
   }, [isOpen]);
 
-  // Debug scrolling issues
+  // Debug scrolling issues - with direct DOM fixes
   useEffect(() => {
     if (isOpen && friends.length > 0 && !loading) {
-      console.log('Debugging scrolling issues:');
+      console.log('Applying direct DOM fixes for scrolling:');
       
+      // Apply immediate fixes
+      if (modalRef.current) {
+        const modalEl = modalRef.current;
+        const modalContent = modalEl.querySelector('.modal-content');
+        const friendsList = modalEl.querySelector('.friends-list');
+        
+        // Apply immediate fixes to modal content
+        if (modalContent) {
+          // Force scrollable styles
+          Object.assign(modalContent.style, {
+            overflowY: 'auto !important',
+            maxHeight: 'calc(80vh - 64px) !important', 
+            display: 'block !important',
+            position: 'relative !important',
+            flex: '1 !important'
+          });
+        }
+        
+        // Force scrollable styles on the friends list
+        if (friendsList) {
+          Object.assign(friendsList.style, {
+            overflowY: 'auto !important',
+            maxHeight: 'calc(80vh - 80px) !important',
+            display: 'block !important',
+            width: '100% !important',
+            padding: '0 !important',
+            margin: '0 !important'
+          });
+          
+          // Make each friend item non-scrollable
+          const friendItems = friendsList.querySelectorAll('.friend-item');
+          friendItems.forEach(item => {
+            Object.assign(item.style, {
+              overflow: 'hidden !important',
+              flexShrink: '0 !important'
+            });
+          });
+        }
+      }
+      
+      // Log debug info after timeout to capture post-render state
       setTimeout(() => {
         if (modalRef.current) {
           const modalEl = modalRef.current;
           const modalContent = modalEl.querySelector('.modal-content');
           const friendsList = modalEl.querySelector('.friends-list');
           
-          console.log('Modal container:', {
-            offsetHeight: modalEl.offsetHeight,
-            clientHeight: modalEl.clientHeight,
-            scrollHeight: modalEl.scrollHeight,
-            style: window.getComputedStyle(modalEl).maxHeight
+          console.log('Modal dimensions after fixes:', {
+            modalHeight: modalEl.offsetHeight,
+            contentHeight: modalContent?.offsetHeight,
+            listHeight: friendsList?.offsetHeight,
+            listScrollHeight: friendsList?.scrollHeight,
+            listChildCount: friendsList?.children.length,
+            contentOverflow: modalContent ? window.getComputedStyle(modalContent).overflowY : 'none',
+            listOverflow: friendsList ? window.getComputedStyle(friendsList).overflowY : 'none'
           });
-          
-          if (modalContent) {
-            console.log('Modal content:', {
-              offsetHeight: modalContent.offsetHeight,
-              clientHeight: modalContent.clientHeight,
-              scrollHeight: modalContent.scrollHeight,
-              overflowY: window.getComputedStyle(modalContent).overflowY,
-              maxHeight: window.getComputedStyle(modalContent).maxHeight
-            });
-          }
-          
-          if (friendsList) {
-            console.log('Friends list:', {
-              offsetHeight: friendsList.offsetHeight,
-              clientHeight: friendsList.clientHeight,
-              scrollHeight: friendsList.scrollHeight,
-              childCount: friendsList.children.length,
-              overflowY: window.getComputedStyle(friendsList).overflowY
-            });
-            
-            // Force scrollable styles
-            modalContent.style.overflowY = 'auto';
-            modalContent.style.maxHeight = 'calc(90vh - 64px)';
-            modalContent.style.display = 'block';
-          }
         }
-      }, 500);
+      }, 100);
     }
   }, [isOpen, friends.length, loading]);
 
@@ -700,62 +719,256 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={handleOverlayClick}>
-      <div className="modal-container" ref={modalRef} onClick={handleModalClick}>
-        <div className="modal-header">
-          <h3>Friends owning {collectionName}</h3>
-          <button className="modal-close-button" onClick={onClose}>×</button>
+    <div 
+      className="modal-overlay" 
+      onClick={handleOverlayClick}
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 9999
+      }}
+    >
+      <div 
+        className="modal-container" 
+        ref={modalRef} 
+        onClick={handleModalClick}
+        style={{
+          backgroundColor: 'white',
+          borderRadius: '12px',
+          width: '90%',
+          maxWidth: '500px',
+          maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        <div 
+          className="modal-header"
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '16px',
+            borderBottom: '1px solid #eee',
+            backgroundColor: 'white',
+            flexShrink: 0
+          }}
+        >
+          <h3 style={{ margin: 0 }}>Friends owning {collectionName}</h3>
+          <button 
+            className="modal-close-button" 
+            onClick={onClose}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: '24px',
+              cursor: 'pointer',
+              color: '#777'
+            }}
+          >
+            ×
+          </button>
         </div>
         
         {loading ? (
-          <div className="modal-content">
+          <div 
+            className="modal-content"
+            style={{
+              padding: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              minHeight: '200px'
+            }}
+          >
             <div className="modal-loading">
-              <div className="spinner"></div>
+              <div 
+                className="spinner"
+                style={{
+                  border: '4px solid #f3f3f3',
+                  borderTop: '4px solid #8b5cf6',
+                  borderRadius: '50%',
+                  width: '40px',
+                  height: '40px',
+                  animation: 'spin 2s linear infinite',
+                  marginBottom: '16px'
+                }}
+              ></div>
               <p>{fetchingFollowing ? 'Loading your Farcaster following...' : 'Checking for friends who own this collection...'}</p>
             </div>
           </div>
         ) : error ? (
-          <div className="modal-content">
+          <div 
+            className="modal-content"
+            style={{
+              padding: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              minHeight: '200px'
+            }}
+          >
             <div className="modal-error">
               <p>{error}</p>
               <button className="modal-close-btn" onClick={onClose}>Close</button>
             </div>
           </div>
         ) : !isUserAuthenticated ? (
-          <div className="modal-content">
+          <div 
+            className="modal-content"
+            style={{
+              padding: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              minHeight: '200px'
+            }}
+          >
             <div className="modal-auth-required">
               <p>Please connect with Farcaster to see friends who own this collection.</p>
               <button className="modal-close-btn" onClick={onClose}>Close</button>
             </div>
           </div>
         ) : friends.length === 0 ? (
-          <div className="modal-content">
+          <div 
+            className="modal-content"
+            style={{
+              padding: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              minHeight: '200px'
+            }}
+          >
             <div className="modal-no-friends">
               <p>No Collection Data Can Be Found For This Collection</p>
             </div>
           </div>
         ) : (
-          <div className="modal-content">
+          <div 
+            className="modal-content"
+            style={{
+              overflowY: 'auto',
+              flex: 1,
+              padding: 0,
+              maxHeight: 'calc(80vh - 64px)',
+              WebkitOverflowScrolling: 'touch' // For momentum scrolling on iOS
+            }}
+          >
             {usingMockData && (
-              <div className="mock-data-disclaimer">
+              <div 
+                className="mock-data-disclaimer"
+                style={{
+                  backgroundColor: '#fff3cd',
+                  color: '#856404',
+                  padding: '8px 16px',
+                  borderBottom: '1px solid #f5c6cb',
+                  fontSize: '14px',
+                  textAlign: 'center',
+                  width: '100%'
+                }}
+              >
                 Using sample data for demonstration purposes
               </div>
             )}
-            <ul className="friends-list">
+            <ul 
+              className="friends-list"
+              style={{
+                listStyle: 'none',
+                margin: 0,
+                padding: 0,
+                width: '100%',
+                overflowY: 'auto'
+              }}
+            >
               {friends.map((friend) => (
-                <li key={friend.id} className="friend-item">
-                  <div className="friend-avatar">
+                <li 
+                  key={friend.id} 
+                  className="friend-item"
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '48px 1fr',
+                    gap: '12px',
+                    alignItems: 'center',
+                    padding: '12px 16px',
+                    borderBottom: '1px solid #eee',
+                    backgroundColor: 'white'
+                  }}
+                >
+                  <div 
+                    className="friend-avatar"
+                    style={{
+                      width: '48px',
+                      height: '48px',
+                      borderRadius: '50%',
+                      overflow: 'hidden'
+                    }}
+                  >
                     {friend.avatar ? (
-                      <img src={friend.avatar} alt={friend.name} />
+                      <img 
+                        src={friend.avatar} 
+                        alt={friend.name}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover'
+                        }}
+                      />
                     ) : (
-                      <div className="default-avatar">
+                      <div 
+                        className="default-avatar"
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          backgroundColor: '#6c757d',
+                          color: 'white',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '24px',
+                          fontWeight: 'bold'
+                        }}
+                      >
                         {friend.name.charAt(0)}
                       </div>
                     )}
                   </div>
-                  <div className="friend-info">
-                    <h4>{friend.name}</h4>
-                    <p>@{friend.username}</p>
+                  <div 
+                    className="friend-info"
+                    style={{
+                      overflow: 'hidden',
+                      minWidth: 0
+                    }}
+                  >
+                    <h4 style={{
+                      margin: '0 0 4px 0',
+                      fontSize: '16px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>{friend.name}</h4>
+                    <p style={{
+                      margin: 0,
+                      fontSize: '14px',
+                      color: '#6c757d',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}>@{friend.username}</p>
                   </div>
                 </li>
               ))}
