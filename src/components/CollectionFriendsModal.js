@@ -27,15 +27,30 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         return false;
       };
       
+      // Store original body style
+      const originalOverflow = document.body.style.overflow;
+      const originalPosition = document.body.style.position;
+      
       // Add these classes to fix modal interactions
       document.body.classList.add('modal-open');
+      document.body.style.overflow = 'hidden';
       
       // Prevent wheel events from propagating to background
       document.addEventListener('wheel', preventBackgroundScrolling, { passive: false });
       
       return () => {
+        // Restore original body styles
         document.body.classList.remove('modal-open');
+        document.body.style.overflow = originalOverflow || 'auto';
+        document.body.style.position = originalPosition || 'static';
         document.removeEventListener('wheel', preventBackgroundScrolling);
+        
+        // Additional cleanup to ensure scrolling works
+        setTimeout(() => {
+          document.body.style.overflow = 'auto';
+          document.body.style.position = 'static';
+          window.scrollTo(window.scrollX, window.scrollY);
+        }, 100);
       };
     }
   }, [isOpen]);
@@ -845,26 +860,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             whiteSpace: 'nowrap'
           }}>Friends owning {collectionName}</h3>
           
-          <a
-            href="#"
-            onClick={(e) => {
-              e.preventDefault();
-              console.log('Direct close attempt');
-              if (typeof onClose === 'function') {
-                onClose();
-              }
-            }}
-            style={{
-              fontSize: '24px',
-              textDecoration: 'none',
-              color: 'black',
-              fontWeight: 'bold',
-              padding: '0 10px',
-              lineHeight: '1'
-            }}
-          >
-            X
-          </a>
+          {/* Close button removed - now handled by parent component */}
         </div>
         
         {loading ? (

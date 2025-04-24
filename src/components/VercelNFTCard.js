@@ -372,7 +372,19 @@ const VercelNFTCard = ({ nft }) => {
     // Force immediate update to ensure the modal closes
     setShowFriendsModal(false);
     console.log('Modal state after close:', false);
-    document.body.style.overflow = 'auto'; // Ensure body scrolling is restored
+    
+    // Make sure we restore body scrolling
+    document.body.style.overflow = 'auto';
+    document.body.style.position = 'static';
+    document.body.classList.remove('modal-open');
+    
+    // Delay to ensure DOM updates fully processed
+    setTimeout(() => {
+      console.log('Restoring scrolling via setTimeout');
+      document.body.style.overflow = 'auto';
+      document.body.style.position = 'static';
+      window.scrollTo(window.scrollX, window.scrollY); // Trigger reflow
+    }, 100);
   };
   
   // Close modal when user hits escape key
@@ -671,6 +683,7 @@ const VercelNFTCard = ({ nft }) => {
             alignItems: 'center',
             justifyContent: 'center'
           }}
+          onClick={() => handleCloseFriendsModal()}
         >
           <div
             style={{
@@ -682,21 +695,26 @@ const VercelNFTCard = ({ nft }) => {
               maxHeight: '90%',
               overflow: 'auto'
             }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <button
-              onClick={handleCloseFriendsModal}
-              style={{
-                position: 'absolute',
-                top: '10px',
-                right: '10px',
-                background: 'none',
-                border: 'none',
-                fontSize: '20px',
-                cursor: 'pointer'
-              }}
+            <div style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              width: '30px',
+              height: '30px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              zIndex: 10010,
+              background: '#f1f1f1',
+              borderRadius: '50%'
+            }}
+            onClick={handleCloseFriendsModal}
             >
-              X
-            </button>
+              <span style={{ fontSize: '20px' }}>✕</span>
+            </div>
             <CollectionFriendsModal
               isOpen={showFriendsModal}
               onClose={handleCloseFriendsModal}
