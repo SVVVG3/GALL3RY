@@ -299,19 +299,19 @@ async function handleAlchemyRequest(req, res) {
     
     // Standard chain mapping function for all endpoints
     const getChainUrl = (chain = 'eth') => {
-      // Map chain IDs to their correct Alchemy URL formats
-      const chainUrlMap = {
-        'eth': 'eth-mainnet',
-        'ethereum': 'eth-mainnet',
-        'polygon': 'polygon-mainnet',
-        'arbitrum': 'arb-mainnet',
+        // Map chain IDs to their correct Alchemy URL formats
+        const chainUrlMap = {
+          'eth': 'eth-mainnet',
+          'ethereum': 'eth-mainnet',
+          'polygon': 'polygon-mainnet',
+          'arbitrum': 'arb-mainnet',
         'arb': 'arb-mainnet',
-        'optimism': 'opt-mainnet',
+          'optimism': 'opt-mainnet',
         'opt': 'opt-mainnet',
-        'base': 'base-mainnet',
-        'zora': 'zora-mainnet'
-      };
-      
+          'base': 'base-mainnet',
+          'zora': 'zora-mainnet'
+        };
+        
       return chainUrlMap[chain.toLowerCase()] || 'eth-mainnet';
     };
     
@@ -365,7 +365,7 @@ async function handleAlchemyRequest(req, res) {
           return `${baseUrl}${apiKey}/${endpoint}`;
         } else {
           // Default to Core API
-          return `https://${chainUrl}.g.alchemy.com/v2/${apiKey}`;
+        return `https://${chainUrl}.g.alchemy.com/v2/${apiKey}`;
         }
       }
     };
@@ -583,40 +583,40 @@ async function handleAlchemyRequest(req, res) {
           chainId: network
         }));
         
-        // Try to get cached transfer data to enhance the NFTs with timestamps
+      // Try to get cached transfer data to enhance the NFTs with timestamps
         if (requestParams.owner) {
-          const ownerAddress = requestParams.owner.toLowerCase();
+      const ownerAddress = requestParams.owner.toLowerCase();
           const transferCacheKey = `${network}_${ownerAddress}`;
-          const cachedTransfers = CACHE.get('transfers', transferCacheKey);
-          
-          // Enhanced NFTs with better field normalization and timestamps if available
-          response.data.ownedNfts = response.data.ownedNfts.map(nft => {
-            // Get the contract address in lowercase
-            const contractAddress = (nft.contract?.address || '').toLowerCase();
-            const tokenId = nft.tokenId || '';
-            const key = `${contractAddress}:${tokenId}`;
-            
-            // Start with basic owner info
-            const enhancedNft = {
-              ...nft,
-              ownerAddress,
-              // Normalize important fields that might be differently named
-              name: nft.name || nft.title || `#${nft.tokenId || '0'}`,
-              collection: {
-                name: nft.contract?.name || 
-                      nft.collection?.name || 
-                      nft.contractMetadata?.name || 
-                      `Contract ${contractAddress.substring(0, 6)}...`
-              }
-            };
-            
-            // Add transfer timestamp if we have it in our cache
-            if (cachedTransfers && cachedTransfers.transferMap && cachedTransfers.transferMap[key]) {
-              enhancedNft.transferTimestamp = cachedTransfers.transferMap[key].timestamp;
-            }
-            
-            return enhancedNft;
-          });
+      const cachedTransfers = CACHE.get('transfers', transferCacheKey);
+      
+      // Enhanced NFTs with better field normalization and timestamps if available
+      response.data.ownedNfts = response.data.ownedNfts.map(nft => {
+        // Get the contract address in lowercase
+        const contractAddress = (nft.contract?.address || '').toLowerCase();
+        const tokenId = nft.tokenId || '';
+        const key = `${contractAddress}:${tokenId}`;
+        
+        // Start with basic owner info
+        const enhancedNft = {
+          ...nft,
+          ownerAddress,
+          // Normalize important fields that might be differently named
+          name: nft.name || nft.title || `#${nft.tokenId || '0'}`,
+          collection: {
+            name: nft.contract?.name || 
+                  nft.collection?.name || 
+                  nft.contractMetadata?.name || 
+                  `Contract ${contractAddress.substring(0, 6)}...`
+          }
+        };
+        
+        // Add transfer timestamp if we have it in our cache
+        if (cachedTransfers && cachedTransfers.transferMap && cachedTransfers.transferMap[key]) {
+          enhancedNft.transferTimestamp = cachedTransfers.transferMap[key].timestamp;
+        }
+        
+        return enhancedNft;
+      });
         }
       }
       
@@ -1006,11 +1006,65 @@ async function handleImageProxyRequest(req, res) {
     
     // Special handling for IPFS URLs
     if (proxyUrl.startsWith('ipfs://')) {
-      proxyUrl = proxyUrl.replace('ipfs://', 'https://cloudflare-ipfs.com/ipfs/');
+      // Use an array of IPFS gateways to try instead of just one
+      const ipfsGateways = [
+        'https://cloudflare-ipfs.com/ipfs/',
+        'https://ipfs.io/ipfs/',
+        'https://gateway.pinata.cloud/ipfs/',
+        'https://dweb.link/ipfs/',
+        'https://ipfs.infura.io/ipfs/'
+      ];
+      
+      // Store the original IPFS hash
+      const ipfsHash = proxyUrl.replace('ipfs://', '');
+      
+      // Use the first gateway by default, we'll try others if this fails
+      proxyUrl = `${ipfsGateways[0]}${ipfsHash}`;
+      
+      // Track that this is an IPFS URL for potential fallback
+      req.ipfsData = {
+        isIpfs: true,
+        hash: ipfsHash,
+        gateways: ipfsGateways,
+        currentGatewayIndex: 0
+      };
+      
+      customHeaders = {
+        ...customHeaders,
+        'Origin': null
+      };
     }
     
     // Handle ipfs links that aren't using the ipfs:// protocol
     if (proxyUrl.includes('/ipfs/')) {
+      // Extract the IPFS hash for potential fallback
+      try {
+        const ipfsMatch = proxyUrl.match(/\/ipfs\/([^/?#]+)/);
+        if (ipfsMatch && ipfsMatch[1]) {
+          const ipfsHash = ipfsMatch[1];
+          
+          // Track Pinata-specific URLs for special handling
+          const isPinata = proxyUrl.includes('pinata.cloud');
+          
+          // Setup IPFS fallback data
+          req.ipfsData = {
+            isIpfs: true,
+            hash: ipfsHash,
+            gateways: [
+              'https://cloudflare-ipfs.com/ipfs/',
+              'https://ipfs.io/ipfs/',
+              'https://gateway.pinata.cloud/ipfs/',
+              'https://dweb.link/ipfs/',
+              'https://ipfs.infura.io/ipfs/'
+            ],
+            currentGatewayIndex: isPinata ? 1 : 0, // Skip Pinata gateway if URL is already from Pinata
+            isPinata: isPinata
+          };
+        }
+      } catch (error) {
+        console.warn('Error parsing IPFS URL:', error);
+      }
+      
       // Just keep the URL as is, but add special headers
       customHeaders = {
         ...customHeaders,
@@ -1026,7 +1080,7 @@ async function handleImageProxyRequest(req, res) {
     // Fetch the image with retries
     let response;
     let retries = 0;
-    const maxRetries = 2;
+    const maxRetries = 3; // Increased from 2 to 3 for more fallback attempts
     
     while (retries <= maxRetries) {
       try {
@@ -1045,6 +1099,22 @@ async function handleImageProxyRequest(req, res) {
           break;
         }
         
+        // Handle IPFS gateway fallbacks for 403/404 errors
+        if (req.ipfsData && req.ipfsData.isIpfs && (response.status === 403 || response.status === 404)) {
+          req.ipfsData.currentGatewayIndex++;
+          
+          // Try the next gateway if available
+          if (req.ipfsData.currentGatewayIndex < req.ipfsData.gateways.length) {
+            const nextGateway = req.ipfsData.gateways[req.ipfsData.currentGatewayIndex];
+            const ipfsHash = req.ipfsData.hash;
+            
+            console.log(`IPFS gateway failed with status ${response.status}. Trying next gateway: ${nextGateway}`);
+            proxyUrl = `${nextGateway}${ipfsHash}`;
+            retries++;
+            continue;
+          }
+        }
+        
         // If this is Alchemy CDN and we got an error, try an alternative URL format
         if (proxyUrl.includes('nft-cdn.alchemy.com') && retries === 0) {
           // Try removing any query parameters that might be causing issues
@@ -1058,6 +1128,21 @@ async function handleImageProxyRequest(req, res) {
         
         retries++;
       } catch (retryError) {
+        // Special handling for IPFS URLs - try next gateway if available
+        if (req.ipfsData && req.ipfsData.isIpfs) {
+          req.ipfsData.currentGatewayIndex++;
+          
+          if (req.ipfsData.currentGatewayIndex < req.ipfsData.gateways.length) {
+            const nextGateway = req.ipfsData.gateways[req.ipfsData.currentGatewayIndex];
+            const ipfsHash = req.ipfsData.hash;
+            
+            console.log(`IPFS gateway request failed. Trying next gateway: ${nextGateway}`);
+            proxyUrl = `${nextGateway}${ipfsHash}`;
+            retries++;
+            continue;
+          }
+        }
+        
         retries++;
         
         // If we've exhausted retries, propagate the error

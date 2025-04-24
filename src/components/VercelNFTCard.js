@@ -251,6 +251,43 @@ const VercelNFTCard = ({ nft }) => {
     console.log(`Media load error: ${mediaUrl}`);
     setMediaError(true);
     setMediaLoaded(true); // Consider it "loaded" but with error
+    
+    // Check if this is an IPFS URL that we can try to fix
+    const ipfsPatterns = [
+      { pattern: /ipfs:\/\/([^/]+)/, replacement: 'https://cloudflare-ipfs.com/ipfs/$1' },
+      { pattern: /https:\/\/[^/]+\.mypinata\.cloud\/ipfs\/([^/]+)/, replacement: 'https://ipfs.io/ipfs/$1' },
+      { pattern: /https:\/\/gateway\.pinata\.cloud\/ipfs\/([^/]+)/, replacement: 'https://ipfs.io/ipfs/$1' },
+      { pattern: /https:\/\/cloudflare-ipfs\.com\/ipfs\/([^/]+)/, replacement: 'https://ipfs.io/ipfs/$1' },
+      { pattern: /https:\/\/ipfs\.io\/ipfs\/([^/]+)/, replacement: 'https://dweb.link/ipfs/$1' }
+    ];
+    
+    // Try to find a pattern match to create an alternative URL
+    for (const { pattern, replacement } of ipfsPatterns) {
+      if (debugMediaUrl && pattern.test(debugMediaUrl)) {
+        const newUrl = debugMediaUrl.replace(pattern, replacement);
+        console.log(`Attempting fallback for IPFS media: ${newUrl}`);
+        
+        // Update the media URL to the new fallback
+        setDebugMediaUrl(newUrl);
+        
+        // Use API proxy for the new URL
+        const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(newUrl)}`;
+        setMediaUrl(proxiedUrl);
+        
+        // Reset error state to trigger a new load attempt
+        setMediaError(false);
+        return;
+      }
+    }
+    
+    // Check if this is a regular URL with a 403/404 error - if so, try our proxy
+    if (debugMediaUrl && debugMediaUrl.startsWith('http') && !mediaUrl.includes('/api/image-proxy')) {
+      console.log('Attempting to use image proxy as fallback');
+      const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(debugMediaUrl)}`;
+      setMediaUrl(proxiedUrl);
+      setMediaError(false);
+      return;
+    }
   };
   
   // New useEffect to debug the DOM and fix rendering issues
