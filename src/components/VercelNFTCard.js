@@ -371,6 +371,8 @@ const VercelNFTCard = ({ nft }) => {
     console.log('Closing modal...');
     // Force immediate update to ensure the modal closes
     setShowFriendsModal(false);
+    console.log('Modal state after close:', false);
+    document.body.style.overflow = 'auto'; // Ensure body scrolling is restored
   };
   
   // Close modal when user hits escape key
@@ -656,13 +658,54 @@ const VercelNFTCard = ({ nft }) => {
       
       {/* Render modal outside the NFT card container */}
       {showFriendsModal && createPortal(
-        <CollectionFriendsModal
-          isOpen={showFriendsModal}
-          onClose={handleCloseFriendsModal}
-          collectionAddress={modalContractAddress || contractAddress}
-          collectionName={collection || 'NFT Collection'}
-          network={modalNetwork}
-        />,
+        <div
+          style={{
+            position: 'fixed',
+            zIndex: 9999,
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              backgroundColor: 'white',
+              padding: '20px',
+              borderRadius: '8px',
+              maxWidth: '90%',
+              maxHeight: '90%',
+              overflow: 'auto'
+            }}
+          >
+            <button
+              onClick={handleCloseFriendsModal}
+              style={{
+                position: 'absolute',
+                top: '10px',
+                right: '10px',
+                background: 'none',
+                border: 'none',
+                fontSize: '20px',
+                cursor: 'pointer'
+              }}
+            >
+              X
+            </button>
+            <CollectionFriendsModal
+              isOpen={showFriendsModal}
+              onClose={handleCloseFriendsModal}
+              collectionAddress={modalContractAddress || contractAddress}
+              collectionName={collection || 'NFT Collection'}
+              network={modalNetwork}
+            />
+          </div>
+        </div>,
         document.body
       )}
     </div>

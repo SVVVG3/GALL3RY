@@ -845,31 +845,26 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             whiteSpace: 'nowrap'
           }}>Friends owning {collectionName}</h3>
           
-          {/* Simplified Close Button */}
-          <button 
-            type="button"
-            onClick={() => onClose()}
-            style={{
-              appearance: 'none',
-              background: 'none',
-              border: '1px solid #ddd',
-              borderRadius: '50%',
-              width: '32px',
-              height: '32px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '18px',
-              cursor: 'pointer',
-              padding: 0,
-              lineHeight: 1,
-              fontFamily: 'Arial, sans-serif',
-              color: '#666'
+          <a
+            href="#"
+            onClick={(e) => {
+              e.preventDefault();
+              console.log('Direct close attempt');
+              if (typeof onClose === 'function') {
+                onClose();
+              }
             }}
-            aria-label="Close"
+            style={{
+              fontSize: '24px',
+              textDecoration: 'none',
+              color: 'black',
+              fontWeight: 'bold',
+              padding: '0 10px',
+              lineHeight: '1'
+            }}
           >
-            ✕
-          </button>
+            X
+          </a>
         </div>
         
         {loading ? (
