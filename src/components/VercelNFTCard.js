@@ -368,6 +368,8 @@ const VercelNFTCard = ({ nft }) => {
   };
   
   const handleCloseFriendsModal = () => {
+    console.log('Closing modal...');
+    // Force immediate update to ensure the modal closes
     setShowFriendsModal(false);
   };
   
