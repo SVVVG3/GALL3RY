@@ -844,31 +844,56 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap'
           }}>Friends owning {collectionName}</h3>
-          <button 
-            className="modal-close-button" 
+          <div 
+            className="modal-close-wrapper"
+            style={{
+              position: 'relative',
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 10020
+            }}
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              console.log('Close button clicked');
+              console.log('Close wrapper clicked');
               onClose();
             }}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '24px',
-              cursor: 'pointer',
-              color: '#777',
-              padding: '4px 8px',
-              lineHeight: 1,
-              marginLeft: '8px',
-              borderRadius: '4px',
-              zIndex: 10010,
-              position: 'relative'
-            }}
-            aria-label="Close modal"
           >
-            ×
-          </button>
+            <button 
+              className="modal-close-button" 
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                console.log('Close button clicked');
+                onClose();
+              }}
+              style={{
+                background: 'none',
+                border: 'none',
+                fontSize: '24px',
+                cursor: 'pointer',
+                color: '#777',
+                padding: '8px 12px',
+                lineHeight: 1,
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                zIndex: 10020,
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '100%',
+                height: '100%'
+              }}
+              aria-label="Close modal"
+            >
+              ×
+            </button>
+          </div>
         </div>
         
         {loading ? (
