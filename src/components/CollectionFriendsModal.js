@@ -18,6 +18,10 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   useEffect(() => {
     if (isOpen) {
       const preventBackgroundScrolling = (e) => {
+        // Don't prevent scrolling inside the modal content
+        if (modalRef.current && modalRef.current.contains(e.target)) {
+          return true; // Allow scrolling inside the modal
+        }
         e.preventDefault();
         e.stopPropagation();
         return false;
@@ -836,7 +840,10 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           <h3 style={{ margin: 0 }}>Friends owning {collectionName}</h3>
           <button 
             className="modal-close-button" 
-            onClick={onClose}
+            onClick={(e) => {
+              e.stopPropagation();
+              onClose();
+            }}
             style={{
               background: 'none',
               border: 'none',
@@ -941,8 +948,10 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               maxHeight: 'calc(80vh - 64px)',
               WebkitOverflowScrolling: 'touch', // For momentum scrolling on iOS
               zIndex: 10002,
-              pointerEvents: 'auto'
+              pointerEvents: 'auto',
+              overflowX: 'hidden'
             }}
+            onWheel={(e) => e.stopPropagation()}
           >
             {usingMockData && (
               <div 
