@@ -4,17 +4,28 @@
   --scrollbar-compensation: 0px !important;
 }
 
-/* Collection Friends Modal Styles - Simplified for maximum reliability */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: grid;
-  place-items: center;
-  z-index: 1000;
+/* Global body style when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+  position: relative !important;
 }
 
+/* Force highest z-index for modals */
+.modal-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 100000 !important;
+  background-color: rgba(0, 0, 0, 0.5) !important;
+  display: grid !important;
+  place-items: center !important;
+  pointer-events: auto !important;
+}
+
+/* Ensure the modal container is on top of everything */
 .modal-container {
+  z-index: 100001 !important;
+  pointer-events: auto !important;
+  touch-action: auto !important;
   background-color: white;
   border-radius: 12px;
   width: 90%;

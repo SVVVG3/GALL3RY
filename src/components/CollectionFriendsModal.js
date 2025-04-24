@@ -14,6 +14,28 @@ import { selectFollowing } from '../redux/farcasterSlice';
  * Uses React Portal to render outside the normal DOM hierarchy
  */
 const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collectionName, network }) => {
+  // Fix for modals in React
+  useEffect(() => {
+    if (isOpen) {
+      const preventBackgroundScrolling = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      };
+      
+      // Add these classes to fix modal interactions
+      document.body.classList.add('modal-open');
+      
+      // Prevent wheel events from propagating to background
+      document.addEventListener('wheel', preventBackgroundScrolling, { passive: false });
+      
+      return () => {
+        document.body.classList.remove('modal-open');
+        document.removeEventListener('wheel', preventBackgroundScrolling);
+      };
+    }
+  }, [isOpen]);
+  
   const modalRef = useRef(null);
   const { user, isAuthenticated } = useAuth();
   const { authenticated: privyAuthenticated, user: privyUser } = usePrivy();
@@ -580,16 +602,25 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     ];
   };
   
-  // Close modal when clicking outside but prevent interfering with scroll events
+  // Properly handle clicks on the modal itself to prevent closing
   const handleModalClick = (e) => {
+    // Stop propagation to prevent the overlay's onClick from firing
     e.stopPropagation();
+    // Prevent any default behaviors
+    e.preventDefault();
+    // Log for debugging
+    console.log('Modal container clicked, prevented close');
   };
 
   // Handle click on the overlay
   const handleOverlayClick = (e) => {
-    // Only close if the click is directly on the overlay, not on its children
+    // Only close if the click is directly on the overlay element itself
     if (e.target === e.currentTarget) {
+      console.log('Overlay clicked, closing modal');
       onClose();
+    } else {
+      console.log('Click on modal child, not closing');
+      e.stopPropagation();
     }
   };
 
@@ -715,6 +746,41 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
   }, [isOpen, friends.length, loading]);
 
+  // Fix any global event issues that might be interfering with the modal
+  useEffect(() => {
+    if (isOpen) {
+      // Log that modal is open
+      console.log('Modal is opened - applying global fixes');
+      
+      // Fix for body scrolling while modal is open
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      
+      // Capture events on document to ensure modal stays interactive
+      const handleDocumentClick = (e) => {
+        // Check if the click is within our modal
+        if (modalRef.current && !modalRef.current.contains(e.target)) {
+          console.log('Document click outside modal detected');
+        } else {
+          console.log('Document click inside modal detected');
+          // Allow the event to continue for modal contents
+          e.stopPropagation();
+        }
+      };
+      
+      // Add debug listener to document
+      document.addEventListener('click', handleDocumentClick, true);
+      
+      return () => {
+        // Restore original body style
+        document.body.style.overflow = originalStyle;
+        // Remove the debug listener
+        document.removeEventListener('click', handleDocumentClick, true);
+        console.log('Modal is closed - cleaning up global fixes');
+      };
+    }
+  }, [isOpen]);
+
   // Only render if modal is open
   if (!isOpen) return null;
 
@@ -732,7 +798,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        zIndex: 9999
+        zIndex: 10000,
+        pointerEvents: 'auto'
       }}
     >
       <div 
@@ -747,9 +814,11 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
           maxHeight: '80vh',
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
           overflow: 'hidden',
-          position: 'relative'
+          position: 'relative',
+          zIndex: 10001,
+          pointerEvents: 'auto'
         }}
       >
         <div 
@@ -861,12 +930,18 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         ) : (
           <div 
             className="modal-content"
+            onClick={(e) => {
+              e.stopPropagation();
+              console.log('Content area clicked, preventing close');
+            }}
             style={{
               overflowY: 'auto',
               flex: 1,
               padding: 0,
               maxHeight: 'calc(80vh - 64px)',
-              WebkitOverflowScrolling: 'touch' // For momentum scrolling on iOS
+              WebkitOverflowScrolling: 'touch', // For momentum scrolling on iOS
+              zIndex: 10002,
+              pointerEvents: 'auto'
             }}
           >
             {usingMockData && (
@@ -887,18 +962,28 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             )}
             <ul 
               className="friends-list"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('Friends list clicked, preventing close');
+              }}
               style={{
                 listStyle: 'none',
                 margin: 0,
                 padding: 0,
                 width: '100%',
-                overflowY: 'auto'
+                overflowY: 'auto',
+                zIndex: 10003,
+                pointerEvents: 'auto'
               }}
             >
               {friends.map((friend) => (
                 <li 
                   key={friend.id} 
                   className="friend-item"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    console.log(`Friend ${friend.username} clicked, preventing close`);
+                  }}
                   style={{
                     display: 'grid',
                     gridTemplateColumns: '48px 1fr',
@@ -906,7 +991,9 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                     alignItems: 'center',
                     padding: '12px 16px',
                     borderBottom: '1px solid #eee',
-                    backgroundColor: 'white'
+                    backgroundColor: 'white',
+                    pointerEvents: 'auto',
+                    cursor: 'default'
                   }}
                 >
                   <div 
