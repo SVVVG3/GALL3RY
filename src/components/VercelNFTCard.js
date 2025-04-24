@@ -27,6 +27,7 @@ const VercelNFTCard = ({ nft }) => {
   const [mediaType, setMediaType] = useState('image'); // 'image', 'video', or 'unsupported'
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [modalContractAddress, setModalContractAddress] = useState(null);
+  const [modalNetwork, setModalNetwork] = useState('eth'); // Add state for network
   
   // Extract NFT details with fallbacks
   const rawTitle = nft?.metadata?.name || nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
@@ -300,6 +301,9 @@ const VercelNFTCard = ({ nft }) => {
     // Extract network/chain information from NFT data
     const network = nft?.chain || nft?.network || nft?.chainId || 
                    (nft?.id && nft.id.includes(':') ? nft.id.split(':')[0] : null) || 'eth';
+    
+    // Set the network in state
+    setModalNetwork(network);
     
     // Add debug logging to see the NFT data structure
     console.log('DEBUG NFT DATA BEFORE OPENING MODAL:', {
@@ -657,7 +661,7 @@ const VercelNFTCard = ({ nft }) => {
               onClose={handleCloseFriendsModal}
               collectionAddress={modalContractAddress || contractAddress}
               collectionName={collection || 'NFT Collection'}
-              network={network}
+              network={modalNetwork}
             />
           </div>
         </div>,
