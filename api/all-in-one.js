@@ -546,6 +546,23 @@ async function handleAlchemyRequest(req, res) {
       requestParams.pageSize = parseInt(requestParams.pageSize || '100', 10);
       requestParams.includeMedia = true;
     }
+
+    // Special handling for getOwnersForContract endpoint
+    if (normalizedEndpoint === 'getownersforcontract') {
+      // Ensure contractAddress is properly set
+      if (!requestParams.contractAddress) {
+        console.error('Missing contractAddress parameter for getOwnersForContract');
+        return res.status(400).json({ error: 'Missing contractAddress parameter' });
+      }
+      
+      console.log(`Processing getOwnersForContract for address: ${requestParams.contractAddress} on ${network}`);
+      
+      // Normalize address to ensure proper format (lowercase)
+      requestParams.contractAddress = requestParams.contractAddress.toLowerCase();
+      
+      // Set additional parameters according to Alchemy docs
+      requestParams.withTokenBalances = requestParams.withTokenBalances === 'true';
+    }
     
     // Make the API request
     console.log(`Making Alchemy API request to ${normalizedEndpoint} for chain ${network}`);

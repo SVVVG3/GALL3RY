@@ -844,9 +844,7 @@ class AlchemyService {
   }
   
   /**
-   * Get wallet addresses that own NFTs from a specified contract
-   * Updated to match the Alchemy NFT API v3 documentation
-   * 
+   * Gets all wallet addresses that own a specific NFT contract
    * @param {string} contractAddress - The NFT contract address
    * @param {string} [network='eth'] - Blockchain network (eth, polygon, etc.)
    * @returns {Promise<string[]>} Array of wallet addresses
@@ -894,8 +892,8 @@ class AlchemyService {
         // Build the API request params for our proxy
         const params = {
           endpoint: 'getOwnersForContract',
-          contractAddress,
-          network
+          network,
+          contractAddress // Make sure this parameter name matches what Alchemy expects
         };
         
         console.log('Making proxy Alchemy API request with params:', params);
@@ -924,10 +922,12 @@ class AlchemyService {
           const baseUrl = await this.getAlchemyUrl(network, 'nft');
           
           // Build the direct API URL as per the docs
+          // Alchemy docs format: https://{network}.g.alchemy.com/nft/v3/{apiKey}/getOwnersForContract
           const directUrl = `${baseUrl}/getOwnersForContract`;
           
           console.log(`Direct API call to Alchemy URL: ${directUrl}`);
           
+          // NOTE: According to Alchemy docs, the contractAddress should be passed as a query parameter
           response = await axios.get(directUrl, {
             params: {
               contractAddress,
