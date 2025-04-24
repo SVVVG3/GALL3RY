@@ -28,8 +28,8 @@ export const NFTProvider = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   
   // Sort states
-  const [sortBy, setSortBy] = useState('recent'); // Options: 'recent', 'name', 'collection', 'value'
-  const [sortOrder, setSortOrder] = useState('desc'); // Options: 'asc', 'desc'
+  const [sortBy, setSortBy] = useState('name'); // Options: 'recent', 'name', 'collection', 'value'
+  const [sortOrder, setSortOrder] = useState('asc'); // Options: 'asc', 'desc'
   
   // Reset state
   const resetState = useCallback(() => {
