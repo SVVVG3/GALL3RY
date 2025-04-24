@@ -4,6 +4,7 @@ import { useProfile } from '@farcaster/auth-kit';
 import '../styles/modal.css';
 import '../styles/CollectionFriendsModal.css';
 import CollectionFriendsModal from './CollectionFriendsModal';
+import { createPortal } from 'react-dom';
 
 // Define keyframes for spinner animation
 const spinKeyframes = `
@@ -296,18 +297,24 @@ const VercelNFTCard = ({ nft }) => {
     e.preventDefault(); // Prevent link navigation
     e.stopPropagation(); // Prevent event bubbling
     
+    // Extract network/chain information from NFT data
+    const network = nft?.chain || nft?.network || nft?.chainId || 
+                   (nft?.id && nft.id.includes(':') ? nft.id.split(':')[0] : null) || 'eth';
+    
     // Add debug logging to see the NFT data structure
     console.log('DEBUG NFT DATA BEFORE OPENING MODAL:', {
       nft,
       collectionName: collection,
       contractAddress,
+      network,
       hasContractAddress: !!contractAddress,
       contractPaths: {
         'nft?.contract?.address': nft?.contract?.address,
         'nft?.contractAddress': nft?.contractAddress,
         'nft?.contract_address': nft?.contract_address,
         'nft?.id?.split': nft?.id ? nft.id.split(':') : null,
-        'raw id': nft?.id
+        'raw id': nft?.id,
+        'chain/network info': `${nft?.chain || 'undefined'}/${nft?.network || 'undefined'}/${nft?.chainId || 'undefined'}`
       }
     });
     
@@ -641,14 +648,20 @@ const VercelNFTCard = ({ nft }) => {
         </div>
       </div>
       
-      {/* Use the standalone CollectionFriendsModal component instead of inline implementation */}
-      {showFriendsModal && (
-        <CollectionFriendsModal
-          isOpen={showFriendsModal}
-          onClose={handleCloseFriendsModal}
-          collectionAddress={modalContractAddress || contractAddress}
-          collectionName={collection}
-        />
+      {/* Render modal outside the NFT card container */}
+      {showFriendsModal && createPortal(
+        <div className="modal-overlay" onClick={handleCloseFriendsModal}>
+          <div className="modal-content" onClick={handleModalClick}>
+            <CollectionFriendsModal
+              isOpen={showFriendsModal}
+              onClose={handleCloseFriendsModal}
+              collectionAddress={modalContractAddress || contractAddress}
+              collectionName={collection || 'NFT Collection'}
+              network={network}
+            />
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

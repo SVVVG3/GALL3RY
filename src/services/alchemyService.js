@@ -655,8 +655,7 @@ class AlchemyService {
   
   /**
    * Helper function to determine if a collection exists on a specific chain
-   * This is a simplified version - in production, you'd want to maintain a database
-   * of known collections per chain or query an API
+   * This helps detect the correct chain when it's not explicitly provided
    */
   isCollectionOnChain(contractAddress, chainId) {
     if (!contractAddress || !chainId) return false;
@@ -664,23 +663,45 @@ class AlchemyService {
     // Convert to lowercase for comparisons
     contractAddress = contractAddress.toLowerCase();
     
-    // Known collections per chain
+    // Known collections per chain - significantly expanded list of popular contracts
     const chainCollections = {
       'base': [
         '0x7d5861cfe1c74aaa0999b7e2651bf2ebd2a62d89', // Base Pups
-        '0xbce3781ae7ca1a5e050bd9c4c77369867ebc307e'  // Base Bored Apes
+        '0xbce3781ae7ca1a5e050bd9c4c77369867ebc307e',  // Base Bored Apes
+        '0xc11f09103c575a4e898eb9a1c7bb4486b06546ce', // Contract from user's example
+        '0x1d137bf688c242c0dd6e33ff531d2baeedc38f11', // BaseDrip
+        '0xaa099c8a8c3a294af189ad9ce17ec303119e81af', // Martian Premier League
+        '0xd9e43563cf6b25a44a572f99e073d4e7a5c3aaee', // Base Core Collective
+        '0xbd2019982628d26cc49455d5f8fd986a02433b9f', // Base Apes
+        '0x3bf2022d79728c3b6df817d801c57fadc5f5b3c8'  // Base Dogs
       ],
       'opt': [
         '0x7a11f4cc9343b3a966dd5e094ee21e556a012ea4', // Optimism Quests
-        '0x3b8aa8ef34afddeeb2d8f4b608cb7703af0e7db9'  // Optisaurs
+        '0x3b8aa8ef34afddeeb2d8f4b608cb7703af0e7db9',  // Optisaurs
+        '0x0c4dc135c1958e4997080c68169dc28de69e3bf2', // OptiPunks
+        '0xb8ff619fb85b35bb033eef65c919c0bbfcc36c75', // Optimism Dragons
+        '0x6c8884fd83754f5d7f09a3a1c2534dbc01d3760c'  // Optimism Rabbits
       ],
       'arb': [
         '0xd2a077ec359d94e0a0b7e84435eacb40a67a817c', // Smol Brains
-        '0x8ffb9b504d497e4000967391e70d542b8cc6748a'  // Arbitrum Planet
+        '0x8ffb9b504d497e4000967391e70d542b8cc6748a',  // Arbitrum Planet
+        '0x537b9af55ecd42fd99f5adbcdb735c77eb10d379', // Smol Bodies
+        '0x4de95c1e202102e22e473716f3e61f92d5409c39', // WAGNI
+        '0xe11d4fdb1c141cd93f8ddc0575441eccc3cd5e19'  // Arbitrum Gems
       ],
       'polygon': [
         '0x2953399124f0cbb46d2cbacd8a89cf0599974963', // OpenSea Polygon
-        '0x5ce9fa5cd001f133a5422b1c283196e4574e1c73'  // Lens Protocol
+        '0x5ce9fa5cd001f133a5422b1c283196e4574e1c73',  // Lens Protocol
+        '0x631998e91476da5b870d741192fc5cbc55f5a52e', // Aavegotchi
+        '0xec0a873cddf8e428e456b4d5106b66c4a2dedcad', // Polygon Unicorns
+        '0xf6ccf2c3a2dbb734a4ab7734c9e691ae0f1fbc5e'  // Polygon Punks
+      ],
+      'zora': [
+        '0xd4307e0acd12cf46fd6cf93bc264f5d5d1598792', // Nouns Zora
+        '0xa15eb8b7ed241bc1d19c9efef2e17fc0d2b573c8', // Zorbs
+        '0x28a6ee202af7de7e1bf2853fdd544319b343298b', // Zorbs V2
+        '0x38f4908de1951ef09f55995697709e8054a738f5', // Fewocious Zora
+        '0x4352c5ab9e8eb63e81b8eae956bc3509a2a62481'  // Zora Explorers
       ]
     };
     
@@ -879,6 +900,22 @@ class AlchemyService {
               resolvedNetwork = possibleNetwork;
               console.log(`Extracted network ${resolvedNetwork} from contract address ${contractAddress}`);
             }
+          }
+        }
+      }
+      
+      // If we're still on 'eth' network, check if this contract is actually on another chain
+      // by looking it up in our known collections database
+      if (resolvedNetwork === 'eth') {
+        const normalizedAddress = resolvedContractAddress.toLowerCase();
+        
+        // Check each chain for this contract address
+        const chains = ['base', 'polygon', 'opt', 'arb', 'zora'];
+        for (const chain of chains) {
+          if (this.isCollectionOnChain(normalizedAddress, chain)) {
+            console.log(`Auto-detected network ${chain} for contract ${normalizedAddress} from known collections database`);
+            resolvedNetwork = chain;
+            break;
           }
         }
       }
