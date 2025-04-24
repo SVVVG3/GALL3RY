@@ -352,18 +352,24 @@ const NFTCard = ({ nft }) => {
     e.preventDefault(); // Prevent link navigation
     e.stopPropagation(); // Prevent event bubbling
     
+    // Extract network/chain information from NFT data
+    const network = nft?.chain || nft?.network || nft?.chainId || 
+                    (nft?.id && nft.id.includes(':') ? nft.id.split(':')[0] : null) || 'eth';
+    
     // Add debug logging to see the NFT data structure
     console.log('DEBUG NFT DATA BEFORE OPENING MODAL:', {
       nft,
       collectionName: collection,
       contractAddress,
+      network,
       hasContractAddress: !!contractAddress,
       contractPaths: {
         'nft?.contract?.address': nft?.contract?.address,
         'nft?.contractAddress': nft?.contractAddress,
         'nft?.contract_address': nft?.contract_address,
         'nft?.id?.split': nft?.id ? nft.id.split(':') : null,
-        'raw id': nft?.id
+        'raw id': nft?.id,
+        'chain/network info': `${nft?.chain || 'undefined'}/${nft?.network || 'undefined'}/${nft?.chainId || 'undefined'}`
       }
     });
     
@@ -535,6 +541,8 @@ const NFTCard = ({ nft }) => {
           onClose={handleCloseFriendsModal}
           collectionAddress={modalContractAddress || contractAddress}
           collectionName={collection}
+          network={nft?.chain || nft?.network || nft?.chainId || 
+                  (nft?.id && nft.id.includes(':') ? nft.id.split(':')[0] : 'eth')}
         />
       )}
     </>

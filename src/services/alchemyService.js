@@ -874,13 +874,25 @@ class AlchemyService {
           if (possibleAddress && possibleAddress.startsWith('0x') && possibleAddress.length >= 42) {
             resolvedContractAddress = possibleAddress;
             // Only update network if it's a recognized network
-            const validNetworks = ['eth', 'polygon', 'opt', 'arb', 'base', 'zora'];
+            const validNetworks = ['eth', 'ethereum', 'polygon', 'opt', 'optimism', 'arb', 'arbitrum', 'base', 'zora'];
             if (validNetworks.includes(possibleNetwork)) {
               resolvedNetwork = possibleNetwork;
               console.log(`Extracted network ${resolvedNetwork} from contract address ${contractAddress}`);
             }
           }
         }
+      }
+      
+      // Normalize network names to Alchemy's expected values
+      const networkMapping = {
+        'ethereum': 'eth',
+        'optimism': 'opt',
+        'arbitrum': 'arb',
+      };
+      
+      // Apply mapping if the network is in our mapping
+      if (networkMapping[resolvedNetwork]) {
+        resolvedNetwork = networkMapping[resolvedNetwork];
       }
       
       console.log(`Fetching owners for contract ${resolvedContractAddress} on ${resolvedNetwork}`);
@@ -942,15 +954,35 @@ class AlchemyService {
             throw new Error('Alchemy API key not available');
           }
           
-          // Map the network to the appropriate endpoint prefix
-          // Get the base API URL using our helper
-          const baseUrl = await this.getAlchemyUrl(resolvedNetwork, 'nft');
+          // Create network-specific URL as per Alchemy docs
+          // Format: https://{network}-mainnet.g.alchemy.com/nft/v3/{apiKey}/getOwnersForContract
+          let networkPrefix;
+          switch (resolvedNetwork.toLowerCase()) {
+            case 'polygon':
+              networkPrefix = 'polygon';
+              break;
+            case 'opt':
+            case 'optimism':
+              networkPrefix = 'opt';
+              break;
+            case 'arb':
+            case 'arbitrum':
+              networkPrefix = 'arb';
+              break;
+            case 'base':
+              networkPrefix = 'base';
+              break;
+            case 'zora':
+              networkPrefix = 'zora';
+              break;
+            default:
+              networkPrefix = 'eth';
+          }
           
-          // Build the direct API URL as per the docs
-          // Alchemy docs format: https://{network}.g.alchemy.com/nft/v3/{apiKey}/getOwnersForContract
-          const directUrl = `${baseUrl}/getOwnersForContract`;
+          // Construct the URL explicitly
+          const directUrl = `https://${networkPrefix}-mainnet.g.alchemy.com/nft/v3/${this.apiKey}/getOwnersForContract`;
           
-          console.log(`Direct API call to Alchemy URL: ${directUrl}`);
+          console.log(`Direct API call to Alchemy URL: ${directUrl} for network ${resolvedNetwork}`);
           
           // NOTE: According to Alchemy docs, the contractAddress should be passed as a query parameter
           response = await axios.get(directUrl, {

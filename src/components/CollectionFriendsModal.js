@@ -13,7 +13,7 @@ import { selectFollowing } from '../redux/farcasterSlice';
  * Modal component that displays which Farcaster friends own NFTs from the same collection
  * Uses React Portal to render outside the normal DOM hierarchy
  */
-const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collectionName }) => {
+const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collectionName, network }) => {
   const modalRef = useRef(null);
   const { user, isAuthenticated } = useAuth();
   const { authenticated: privyAuthenticated, user: privyUser } = usePrivy();
@@ -39,9 +39,12 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     
     // Remove any network prefix (e.g., "eth:" or "polygon:")
     if (address.includes(':')) {
-      const [_, cleanAddress] = address.split(':');
-      console.log(`Normalized contract address from ${address} to ${cleanAddress}`);
-      return cleanAddress;
+      const parts = address.split(':');
+      if (parts.length >= 2) {
+        const cleanAddress = parts[parts.length - 2].startsWith('0x') ? parts[parts.length - 2] : parts[parts.length - 1];
+        console.log(`Normalized contract address from ${address} to ${cleanAddress}`);
+        return cleanAddress;
+      }
     }
     
     // Ensure the address starts with 0x
@@ -280,12 +283,13 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               const normalizedAddress = normalizeContractAddress(collectionAddress);
               console.log(`Using normalized contract address: ${normalizedAddress}`);
               
-              // Extract network/chain information from the address if available
-              const network = extractChainFromAddress(collectionAddress);
-              console.log(`Using network ${network} for collection ${normalizedAddress}`);
+              // Extract network/chain information from the address if available,
+              // but prefer the network parameter if it was passed in
+              const resolvedNetwork = network || extractChainFromAddress(collectionAddress);
+              console.log(`Using network ${resolvedNetwork} for collection ${normalizedAddress}`);
               
               // Call getOwnersForContract with both contractAddress and network parameters
-              const owners = await alchemyService.getOwnersForContract(normalizedAddress, network);
+              const owners = await alchemyService.getOwnersForContract(normalizedAddress, resolvedNetwork);
               const ownersEndTime = Date.now();
               
               console.log(`✅ Found ${owners.length} collection owners - API call took ${ownersEndTime - ownersStartTime}ms`);
@@ -298,7 +302,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 count: owners.length,
                 success: true,
                 responseTime: ownersEndTime - ownersStartTime,
-                sample: owners.slice(0, 5)
+                sample: owners.slice(0, 5),
+                network: resolvedNetwork
               };
               
               setDebugInfo(prevDebug => ({ 
@@ -421,13 +426,14 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 const cleanAddress = normalizeContractAddress(collectionAddress);
                 console.log(`🔄 Trying with normalized address: ${cleanAddress}`);
                 try {
-                  const cleanedStartTime = Date.now();
-                  // Extract network/chain information from the address if available
-                  const network = extractChainFromAddress(collectionAddress);
-                  console.log(`Using network ${network} for cleaned address ${cleanAddress}`);
+                  // Extract network/chain information from the address if available,
+                  // but prefer the network parameter if it was passed in
+                  const resolvedNetwork = network || extractChainFromAddress(collectionAddress);
+                  console.log(`Using network ${resolvedNetwork} for cleaned address ${cleanAddress}`);
                   
+                  const cleanedStartTime = Date.now();
                   // Call getOwnersForContract with both contractAddress and network parameters
-                  const owners = await alchemyService.getOwnersForContract(cleanAddress, network);
+                  const owners = await alchemyService.getOwnersForContract(cleanAddress, resolvedNetwork);
                   const cleanedEndTime = Date.now();
                   
                   console.log(`✅ Found ${owners.length} collection owners with cleaned address - API call took ${cleanedEndTime - cleanedStartTime}ms`);
