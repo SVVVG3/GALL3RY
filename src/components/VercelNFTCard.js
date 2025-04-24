@@ -29,6 +29,42 @@ const VercelNFTCard = ({ nft }) => {
   const [modalContractAddress, setModalContractAddress] = useState(null);
   const [modalNetwork, setModalNetwork] = useState('eth'); // Add state for network
   
+  // EMERGENCY FIX: Global override for Alien Frens images
+  useEffect(() => {
+    // Only run this once when component mounts
+    const originalImageSrc = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'src');
+
+    // Override the src setter
+    Object.defineProperty(HTMLImageElement.prototype, 'src', {
+      get: originalImageSrc.get,
+      set: function(url) {
+        // Check if this is an alienfrens.mypinata.cloud URL
+        if (typeof url === 'string' && url.includes('alienfrens.mypinata.cloud/ipfs/')) {
+          console.log('GLOBAL FIX: Intercepted Alien Frens URL', url);
+          
+          // Extract the IPFS hash
+          const ipfsMatch = url.match(/\/ipfs\/([^/?#]+)/);
+          if (ipfsMatch && ipfsMatch[1]) {
+            const ipfsHash = ipfsMatch[1];
+            // Use our proxy to fix the URL
+            const fixedUrl = `/api/image-proxy?url=${encodeURIComponent(`https://dweb.link/ipfs/${ipfsHash}`)}`;
+            console.log('GLOBAL FIX: Redirecting to', fixedUrl);
+            originalImageSrc.set.call(this, fixedUrl);
+            return;
+          }
+        }
+        
+        // Default behavior for other URLs
+        originalImageSrc.set.call(this, url);
+      }
+    });
+
+    // Cleanup: restore original behavior when component unmounts
+    return () => {
+      Object.defineProperty(HTMLImageElement.prototype, 'src', originalImageSrc);
+    };
+  }, []);
+
   // Extract NFT details with fallbacks
   const rawTitle = nft?.metadata?.name || nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
   
@@ -182,6 +218,23 @@ const VercelNFTCard = ({ nft }) => {
       }
       
       console.log(`Media URL found from ${source}: ${foundUrl}`);
+      
+      // Special case handling for problematic IPFS URLs
+      // Check for known problematic domains like alienfrens.mypinata.cloud
+      if (foundUrl && foundUrl.includes('alienfrens.mypinata.cloud/ipfs/')) {
+        console.log('Found alienfrens.mypinata.cloud URL, applying special fix');
+        
+        // Extract the IPFS hash
+        const ipfsMatch = foundUrl.match(/\/ipfs\/([^/?#]+)/);
+        if (ipfsMatch && ipfsMatch[1]) {
+          const ipfsHash = ipfsMatch[1];
+          // Use a different gateway that has better access
+          foundUrl = `https://ipfs.io/ipfs/${ipfsHash}`;
+          source = "alienfrens-fix";
+          console.log(`Converted problematic URL to: ${foundUrl}`);
+        }
+      }
+      
       return { url: foundUrl, source };
     };
 
@@ -251,6 +304,23 @@ const VercelNFTCard = ({ nft }) => {
     console.log(`Media load error: ${mediaUrl}`);
     setMediaError(true);
     setMediaLoaded(true); // Consider it "loaded" but with error
+    
+    // Special case for Alien Frens (high priority fix)
+    if (debugMediaUrl && debugMediaUrl.includes('alienfrens.mypinata.cloud/ipfs/')) {
+      console.log('Detected failing Alien Frens URL, applying emergency fix');
+      const ipfsMatch = debugMediaUrl.match(/\/ipfs\/([^/?#]+)/);
+      if (ipfsMatch && ipfsMatch[1]) {
+        const ipfsHash = ipfsMatch[1];
+        // Try multiple alternative gateways in order of reliability
+        const newUrl = `https://dweb.link/ipfs/${ipfsHash}`;
+        console.log(`Applying Alien Frens emergency fix, using: ${newUrl}`);
+        setDebugMediaUrl(newUrl);
+        const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(newUrl)}`;
+        setMediaUrl(proxiedUrl);
+        setMediaError(false);
+        return;
+      }
+    }
     
     // Check if this is an IPFS URL that we can try to fix
     const ipfsPatterns = [
