@@ -813,8 +813,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         style={{
           backgroundColor: 'white',
           borderRadius: '12px',
-          width: '90%',
-          maxWidth: '500px',
+          width: '95%',
+          maxWidth: '550px',
           maxHeight: '80vh',
           display: 'flex',
           flexDirection: 'column',
@@ -837,11 +837,19 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
             flexShrink: 0
           }}
         >
-          <h3 style={{ margin: 0 }}>Friends owning {collectionName}</h3>
+          <h3 style={{ 
+            margin: 0,
+            maxWidth: 'calc(100% - 40px)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>Friends owning {collectionName}</h3>
           <button 
             className="modal-close-button" 
             onClick={(e) => {
               e.stopPropagation();
+              e.preventDefault();
+              console.log('Close button clicked');
               onClose();
             }}
             style={{
@@ -849,8 +857,15 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               border: 'none',
               fontSize: '24px',
               cursor: 'pointer',
-              color: '#777'
+              color: '#777',
+              padding: '4px 8px',
+              lineHeight: 1,
+              marginLeft: '8px',
+              borderRadius: '4px',
+              zIndex: 10010,
+              position: 'relative'
             }}
+            aria-label="Close modal"
           >
             ×
           </button>
