@@ -20,10 +20,11 @@
   width: 90%;
   max-width: 500px;
   max-height: 90vh;
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  position: relative;
 }
 
 .modal-header {
@@ -59,16 +60,30 @@
 }
 
 .modal-content {
-  overflow: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  display: grid;
-  max-height: calc(90vh - 64px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch; /* For momentum scrolling on iOS */
+  scrollbar-width: thin;
+  -ms-overflow-style: -ms-autohiding-scrollbar;
+  padding: 0;
+  margin: 0;
+  max-height: calc(90vh - 64px); /* Subtract header height */
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
 .modal-content::-webkit-scrollbar {
-  display: none;
-  width: 0;
+  width: 5px;
+  height: 5px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
 }
 
 .modal-loading, 
@@ -127,6 +142,9 @@
   margin: 0;
   padding: 0;
   width: 100%;
+  overflow-y: auto;
+  flex: 1;
+  box-sizing: border-box;
 }
 
 .friend-item {

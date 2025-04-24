@@ -580,9 +580,17 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     ];
   };
   
-  // Close modal when clicking outside
+  // Close modal when clicking outside but prevent interfering with scroll events
   const handleModalClick = (e) => {
     e.stopPropagation();
+  };
+
+  // Handle click on the overlay
+  const handleOverlayClick = (e) => {
+    // Only close if the click is directly on the overlay, not on its children
+    if (e.target === e.currentTarget) {
+      onClose();
+    }
   };
 
   // Handle escape key press
@@ -641,11 +649,58 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
   }, [isOpen]);
 
+  // Debug scrolling issues
+  useEffect(() => {
+    if (isOpen && friends.length > 0 && !loading) {
+      console.log('Debugging scrolling issues:');
+      
+      setTimeout(() => {
+        if (modalRef.current) {
+          const modalEl = modalRef.current;
+          const modalContent = modalEl.querySelector('.modal-content');
+          const friendsList = modalEl.querySelector('.friends-list');
+          
+          console.log('Modal container:', {
+            offsetHeight: modalEl.offsetHeight,
+            clientHeight: modalEl.clientHeight,
+            scrollHeight: modalEl.scrollHeight,
+            style: window.getComputedStyle(modalEl).maxHeight
+          });
+          
+          if (modalContent) {
+            console.log('Modal content:', {
+              offsetHeight: modalContent.offsetHeight,
+              clientHeight: modalContent.clientHeight,
+              scrollHeight: modalContent.scrollHeight,
+              overflowY: window.getComputedStyle(modalContent).overflowY,
+              maxHeight: window.getComputedStyle(modalContent).maxHeight
+            });
+          }
+          
+          if (friendsList) {
+            console.log('Friends list:', {
+              offsetHeight: friendsList.offsetHeight,
+              clientHeight: friendsList.clientHeight,
+              scrollHeight: friendsList.scrollHeight,
+              childCount: friendsList.children.length,
+              overflowY: window.getComputedStyle(friendsList).overflowY
+            });
+            
+            // Force scrollable styles
+            modalContent.style.overflowY = 'auto';
+            modalContent.style.maxHeight = 'calc(90vh - 64px)';
+            modalContent.style.display = 'block';
+          }
+        }
+      }, 500);
+    }
+  }, [isOpen, friends.length, loading]);
+
   // Only render if modal is open
   if (!isOpen) return null;
 
   return createPortal(
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay" onClick={handleOverlayClick}>
       <div className="modal-container" ref={modalRef} onClick={handleModalClick}>
         <div className="modal-header">
           <h3>Friends owning {collectionName}</h3>
@@ -686,7 +741,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 Using sample data for demonstration purposes
               </div>
             )}
-            <ul className="friends-list" style={{ listStyleType: 'none' }}>
+            <ul className="friends-list">
               {friends.map((friend) => (
                 <li key={friend.id} className="friend-item">
                   <div className="friend-avatar">
