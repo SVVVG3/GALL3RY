@@ -654,17 +654,13 @@ const VercelNFTCard = ({ nft }) => {
       
       {/* Render modal outside the NFT card container */}
       {showFriendsModal && createPortal(
-        <div className="modal-overlay" onClick={handleCloseFriendsModal}>
-          <div className="modal-content" onClick={handleModalClick}>
-            <CollectionFriendsModal
-              isOpen={showFriendsModal}
-              onClose={handleCloseFriendsModal}
-              collectionAddress={modalContractAddress || contractAddress}
-              collectionName={collection || 'NFT Collection'}
-              network={modalNetwork}
-            />
-          </div>
-        </div>,
+        <CollectionFriendsModal
+          isOpen={showFriendsModal}
+          onClose={handleCloseFriendsModal}
+          collectionAddress={modalContractAddress || contractAddress}
+          collectionName={collection || 'NFT Collection'}
+          network={modalNetwork}
+        />,
         document.body
       )}
     </div>
