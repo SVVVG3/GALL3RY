@@ -371,6 +371,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     
     try {
       setIsSearching(true);
+      setSearchError(null);
+      
+      // Clear previous user data to prevent lingering display
+      if (userProfile && userProfile.username !== query) {
+        setUserNfts([]);
+        setWalletAddresses([]);
+      }
+      
       console.log(`Searching for Farcaster user: ${query}`);
       
       // Check if we already have this profile cached
