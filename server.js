@@ -590,7 +590,6 @@ apiRouter.all('/farcaster-profile', async (req, res) => {
 });
 
 // ALCHEMY API - Used for all NFT data
-/*
 apiRouter.all('/alchemy', async (req, res) => {
   // CORS headers for local development
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -671,14 +670,23 @@ apiRouter.all('/alchemy', async (req, res) => {
       }
       
       // Make sure boolean parameters are correctly set
-      const boolParams = ['withMetadata', 'includeContract', 'includePrice', 'floorPrice'];
+      const boolParams = ['withMetadata', 'includeContract', 'includePrice', 'floorPrice', 'withFloorPrice'];
       boolParams.forEach(param => {
         if (param in requestParams) {
           requestParams[param] = requestParams[param] === 'true';
         }
       });
       
-      console.log(`Enhanced getNFTsForOwner parameters:`, requestParams);
+      // Ensure withFloorPrice is set to true if not explicitly set to false
+      if (endpoint === 'getNFTsForOwner' && requestParams.withFloorPrice !== false) {
+        requestParams.withFloorPrice = true;
+        console.log('Setting withFloorPrice=true for NFT request to enable Value sorting');
+      }
+      
+      console.log(`Enhanced getNFTsForOwner parameters:`, {
+        ...requestParams,
+        withFloorPrice: requestParams.withFloorPrice,
+      });
     }
     
     // Regular GET request with timeout
@@ -718,7 +726,6 @@ apiRouter.all('/alchemy', async (req, res) => {
     });
   }
 });
-*/
 
 // IMAGE PROXY API - Used for loading NFT images across different providers
 app.get('/image-proxy', async (req, res) => {
