@@ -203,6 +203,7 @@ button {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  z-index: 2; /* Ensure media appears above backgrounds */
 }
 
 .nft-info {
@@ -320,10 +321,12 @@ button {
   align-items: center;
   justify-content: center;
   background-color: var(--hover-color);
+  z-index: 1; /* Lower z-index so media can be seen above it */
 }
 
 .nft-media-error {
   color: var(--secondary-text);
+  z-index: 3; /* Error should be on top */
 }
 
 .nft-media-error svg {

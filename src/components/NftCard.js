@@ -160,19 +160,19 @@ const NFTCard = ({ nft }) => {
   
   // Render the media content based on type
   const renderMedia = () => {
-    // Always show the loading spinner initially
-    if (!mediaLoaded && !mediaError) {
-      return (
-        <div className="nft-media-loader">
-          <div className="loading-spinner"></div>
-        </div>
-      );
-    }
+    // FIXED: Modified the media rendering to ensure proper z-index and visibility
+    
+    // Always show the loading spinner initially (but positioned behind the media)
+    const loadingSpinner = !mediaLoaded && !mediaError ? (
+      <div className="nft-media-loader" style={{ zIndex: 1 }}>
+        <div className="loading-spinner"></div>
+      </div>
+    ) : null;
     
     // Show error state if media failed to load
     if (mediaError) {
       return (
-        <div className="nft-media-error">
+        <div className="nft-media-error" style={{ zIndex: 2 }}>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
@@ -183,10 +183,11 @@ const NFTCard = ({ nft }) => {
       );
     }
     
-    // Render appropriate media type if loaded
+    // Render appropriate media type
+    let mediaElement;
     switch (mediaType) {
       case 'video':
-        return (
+        mediaElement = (
           <video
             src={imageUrl}
             className="nft-media nft-video"
@@ -195,12 +196,14 @@ const NFTCard = ({ nft }) => {
             muted
             onLoadedData={handleMediaLoad}
             onError={handleMediaError}
+            style={{ position: 'absolute', zIndex: 2 }}
           />
         );
+        break;
         
       case 'audio':
-        return (
-          <div className="nft-audio-container">
+        mediaElement = (
+          <div className="nft-audio-container" style={{ zIndex: 2 }}>
             <div className="nft-audio-icon">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 6v12M6 12h12" />
@@ -215,22 +218,33 @@ const NFTCard = ({ nft }) => {
             />
           </div>
         );
+        break;
         
       case 'image':
       default:
-        return (
+        mediaElement = (
           <img
             src={imageUrl}
             alt={name}
             className="nft-media nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
+            style={{ position: 'absolute', zIndex: 2 }}
           />
         );
+        break;
     }
+    
+    // Return both the loading spinner and the media element
+    return (
+      <>
+        {loadingSpinner}
+        {mediaElement}
+      </>
+    );
   };
   
-  // Add a useEffect to initiate loading for the image URL
+  // For images, preload to check if they work
   useEffect(() => {
     // Reset the media state when imageUrl changes
     setMediaLoaded(false);
@@ -249,27 +263,42 @@ const NFTCard = ({ nft }) => {
       img.onerror = handleMediaError;
       img.src = imageUrl;
     }
-    
-    // For video and audio, the onLoad handlers are on the elements themselves
   }, [imageUrl, mediaType]);
   
   return (
     <div className="nft-card">
-      <div className="nft-media-container">
+      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden' }}>
         {renderMedia()}
+        
+        {/* Collection friends button (for Farcaster users) */}
+        {isAuthenticated && profile && (
+          <button
+            className="collection-friends-button"
+            onClick={handleShowFriends}
+            aria-label="View collection friends"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </button>
+        )}
       </div>
       
       <div className="nft-info">
         <div className="nft-info-header">
-          <h3 className="nft-name">{name}</h3>
+          <h3 className="nft-name" title={name}>{name}</h3>
           
-          {(isAuthenticated || profile || authProfile) && (
-            <button 
+          {/* Inline collection friends button (alternative placement) */}
+          {isAuthenticated && profile && collection && (
+            <button
               className="collection-friends-button-inline"
-              aria-label="Show friends who own this collection"
               onClick={handleShowFriends}
+              aria-label="View collection friends"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
                 <circle cx="9" cy="7" r="4"></circle>
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -279,19 +308,20 @@ const NFTCard = ({ nft }) => {
           )}
         </div>
         
-        <p className="nft-collection">{collection}</p>
+        {collection && <p className="nft-collection" title={collection}>{collection}</p>}
         
         {floorPrice && (
           <div className="nft-price">
-            <span>Floor: {floorPrice} ETH</span>
+            Floor: {floorPrice} ETH
           </div>
         )}
       </div>
       
+      {/* Collection friends modal */}
       {showFriendsModal && (
         <CollectionFriendsModal
-          friends={nft.collection_friends}
-          collectionName={collection}
+          collection={collection}
+          contractAddress={nft?.contract?.address || nft?.contractAddress}
           onClose={handleCloseModal}
         />
       )}
