@@ -467,12 +467,25 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
     setMediaLoaded(true);
     setMediaError(false);
     
-    // Force a repaint to ensure the image is visible
+    // Debug - check to make sure our card element exists
     if (cardRef.current) {
+      console.log("Card element exists, applying visibility fix");
+      // Force element repaint and ensure visibility
       cardRef.current.style.opacity = '0.99';
+      cardRef.current.style.display = 'block';
+      // Force image to be visible directly
+      const imgElement = cardRef.current.querySelector('.nft-image, .nft-video');
+      if (imgElement) {
+        imgElement.style.opacity = '1';
+        imgElement.style.visibility = 'visible';
+        console.log("Applied direct visibility fix to media element");
+      }
+      // Final repaint trigger
       setTimeout(() => {
         if (cardRef.current) cardRef.current.style.opacity = '1';
       }, 10);
+    } else {
+      console.warn("Card ref is null, couldn't apply visibility fix");
     }
   };
   
@@ -739,7 +752,16 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
             className={`nft-image ${mediaLoaded ? 'loaded' : ''}`}
             onLoad={handleMediaLoad}
             onError={handleMediaError}
-            style={{ opacity: mediaLoaded ? '1' : '0' }}
+            style={{ 
+              opacity: mediaLoaded ? '1' : '0',
+              visibility: mediaLoaded ? 'visible' : 'hidden',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
           />
         )}
         
@@ -753,7 +775,16 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
             loop
             muted
             playsInline
-            style={{ opacity: mediaLoaded ? '1' : '0' }}
+            style={{ 
+              opacity: mediaLoaded ? '1' : '0',
+              visibility: mediaLoaded ? 'visible' : 'hidden',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
           />
         )}
         

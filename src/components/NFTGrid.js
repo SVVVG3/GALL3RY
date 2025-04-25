@@ -122,12 +122,21 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
       padding: 8,
       boxSizing: 'border-box',
       height: style.height,
-      width: style.width
+      width: style.width,
+      position: 'absolute',
+      left: style.left,
+      top: style.top,
+      display: 'block' // Force display
     };
     
     return (
-      <div style={cellStyle} key={nftKey}>
-        <div className="nft-cell-inner">
+      <div style={cellStyle} key={nftKey} className="nft-grid-cell">
+        <div className="nft-cell-inner" style={{ 
+          height: '100%', 
+          display: 'flex', 
+          flexDirection: 'column',
+          position: 'relative'
+        }}>
           <CardComponent 
             nft={nftCopy}
             virtualized={true} // Tell the card it's in a virtualized environment
@@ -158,7 +167,13 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
 
   // Render the virtualized grid
   return (
-    <div className="nft-grid-container virtualized-grid-container">
+    <div className="nft-grid-container virtualized-grid-container" style={{ 
+      minHeight: '500px', 
+      display: 'flex', 
+      flexDirection: 'column',
+      width: '100%',
+      position: 'relative'
+    }}>
       <AutoSizer>
         {({ height, width }) => {
           // Calculate responsive column and row settings
@@ -170,7 +185,12 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
           // Use height or default to 600px if not provided
           const gridHeight = height || 600;
           
-          console.log(`Rendering grid with dimensions: ${width}x${gridHeight}, columns: ${columnCount}, rows: ${rowCount}`);
+          console.log(`Rendering grid with dimensions: ${width}x${gridHeight}, columns: ${columnCount}, rows: ${rowCount}, ${nftsToRender.length} NFTs to render`);
+          
+          // Debug - log some NFT samples to verify data
+          if (nftsToRender.length > 0) {
+            console.log(`Sample NFT data for debugging:`, nftsToRender[0]);
+          }
           
           return (
             <FixedSizeGrid
@@ -186,11 +206,15 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
                 columnCount,
                 CardComponent
               }}
-              overscanRowCount={3} // Render additional rows for smoother scrolling
-              overscanColumnCount={2}
+              overscanRowCount={5} // Increased for smoother scrolling
+              overscanColumnCount={3}
               style={{
                 overflowX: 'hidden',
-                overflowY: 'auto'
+                overflowY: 'auto',
+                display: 'block', // Force display
+                height: `${gridHeight}px`, // Explicit height
+                width: `${width}px`, // Explicit width
+                position: 'relative'
               }}
             >
               {MemoizedCell}
