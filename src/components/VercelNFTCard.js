@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
-import '../styles/modal.css';
-import '../styles/CollectionFriendsModal.css';
+import '../styles/nft-components.css';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import { createPortal } from 'react-dom';
 
@@ -17,7 +16,7 @@ const spinKeyframes = `
  * VercelNFTCard - Production-optimized NFT card component
  * Specifically designed for Vercel deployment to solve image loading issues
  */
-const VercelNFTCard = ({ nft }) => {
+const VercelNFTCard = ({ nft, virtualized = false }) => {
   const { isAuthenticated } = useAuth();
   const { profile } = useProfile();
   const [mediaLoaded, setMediaLoaded] = useState(false);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import NFTGrid from './NFTGrid';
-import '../styles/NFTGallery.css';
+import '../styles/nft-components.css';
 
 /**
  * NFT Gallery Component

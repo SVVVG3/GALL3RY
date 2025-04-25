@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { FixedSizeGrid } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-import '../styles/NFTGrid.css';
+import '../styles/nft-components.css';
 import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
 import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized component
 import { createConsistentUniqueId } from '../services/alchemyService';
@@ -140,11 +140,19 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Memoize the Cell component to prevent unnecessary rerenders
   const MemoizedCell = React.memo(Cell, (prevProps, nextProps) => {
     // Only re-render if the data or position changed
+    // Safety check to prevent undefined access
+    const prevIndex = prevProps.rowIndex * prevProps.data.columnCount + prevProps.columnIndex;
+    const nextIndex = nextProps.rowIndex * nextProps.data.columnCount + nextProps.columnIndex;
+    
+    const prevNft = prevIndex < prevProps.data.nfts.length ? prevProps.data.nfts[prevIndex] : null;
+    const nextNft = nextIndex < nextProps.data.nfts.length ? nextProps.data.nfts[nextIndex] : null;
+    
+    if (!prevNft || !nextNft) return prevIndex === nextIndex;
+    
     return (
       prevProps.columnIndex === nextProps.columnIndex &&
       prevProps.rowIndex === nextProps.rowIndex &&
-      prevProps.data.nfts[prevProps.rowIndex * prevProps.data.columnCount + prevProps.columnIndex]?.uniqueId ===
-        nextProps.data.nfts[nextProps.rowIndex * nextProps.data.columnCount + nextProps.columnIndex]?.uniqueId
+      prevNft.uniqueId === nextNft.uniqueId
     );
   });
 
@@ -159,11 +167,16 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
           const itemSize = Math.max(itemWidth, 200); // Minimum size of 200px
           const rowCount = Math.ceil(nftsToRender.length / columnCount);
           
+          // If height is not provided, use a fixed height
+          const gridHeight = height || 600;
+          
+          console.log(`Rendering grid with dimensions: ${width}x${gridHeight}, columns: ${columnCount}, rows: ${rowCount}`);
+          
           return (
             <FixedSizeGrid
               className="virtualized-grid"
               width={width}
-              height={height || 800} // Default height if not provided
+              height={gridHeight}
               columnCount={columnCount}
               columnWidth={itemWidth}
               rowCount={rowCount}
