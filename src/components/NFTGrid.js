@@ -77,8 +77,8 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Loading state
   if (isLoading && (!nftsToRender || nftsToRender.length === 0)) {
     return (
-      <div className="nft-grid-loader">
-        <div className="loader"></div>
+      <div className="nft-grid-loading">
+        <div className="loading-spinner"></div>
         <p>Loading NFTs...</p>
       </div>
     );
@@ -88,7 +88,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   if (!nftsToRender || nftsToRender.length === 0) {
     return (
       <div className="nft-grid-empty">
-        <p className="nft-grid-no-results">{emptyMessage}</p>
+        <p className="nft-grid-empty-message">{emptyMessage}</p>
       </div>
     );
   }
