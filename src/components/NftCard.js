@@ -41,30 +41,38 @@ const NFTCard = ({ nft }) => {
   
   // Find the best image URL from different possible locations
   const getImageUrl = () => {
-    // Check for media array first
-    if (nft?.media && nft.media.length > 0) {
-      const mediaItem = nft.media[0];
-      // Return gateway URL if available, otherwise raw URL
-      return mediaItem.gateway || mediaItem.raw;
+    try {
+      // Check for media array first
+      if (nft?.media && nft.media.length > 0) {
+        const mediaItem = nft.media[0];
+        // Return gateway URL if available, otherwise raw URL
+        return mediaItem.gateway || mediaItem.raw || '';
+      }
+      
+      // Check for cached images from Alchemy
+      if (nft?.image?.cachedUrl) {
+        return nft.image.cachedUrl;
+      }
+      
+      // Try various image properties
+      if (nft?.image?.uri || nft?.image?.url || nft?.image) {
+        const imageValue = nft.image.uri || nft.image.url || nft.image;
+        // Make sure we return a string
+        return typeof imageValue === 'string' ? imageValue : '';
+      }
+      
+      // Check metadata
+      if (nft?.metadata?.image) {
+        const metadataImage = nft.metadata.image;
+        return typeof metadataImage === 'string' ? metadataImage : '';
+      }
+      
+      // Default placeholder
+      return '';
+    } catch (error) {
+      console.warn('Error getting image URL:', error);
+      return '';
     }
-    
-    // Check for cached images from Alchemy
-    if (nft?.image?.cachedUrl) {
-      return nft.image.cachedUrl;
-    }
-    
-    // Try various image properties
-    if (nft?.image?.uri || nft?.image?.url || nft?.image) {
-      return nft.image.uri || nft.image.url || nft.image;
-    }
-    
-    // Check metadata
-    if (nft?.metadata?.image) {
-      return nft.metadata.image;
-    }
-    
-    // Default placeholder
-    return '';
   };
   
   // Determine media type based on URL or metadata
@@ -72,12 +80,18 @@ const NFTCard = ({ nft }) => {
     const url = getImageUrl();
     if (!url) return;
     
-    // Check URL file extension
-    if (url.match(/\.(mp4|webm|mov)($|\?)/i)) {
-      setMediaType('video');
-    } else if (url.match(/\.(mp3|wav|ogg)($|\?)/i)) {
-      setMediaType('audio');
+    // Check if url is a string before using match
+    if (typeof url === 'string') {
+      // Check URL file extension
+      if (url.match(/\.(mp4|webm|mov)($|\?)/i)) {
+        setMediaType('video');
+      } else if (url.match(/\.(mp3|wav|ogg)($|\?)/i)) {
+        setMediaType('audio');
+      } else {
+        setMediaType('image');
+      }
     } else {
+      // Default to image if url is not a string
       setMediaType('image');
     }
     
