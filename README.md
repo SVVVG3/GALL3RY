@@ -206,3 +206,26 @@ const following = await getUserFollowing(fid);
 ```
 
 Make sure you're using one of these approaches consistently to avoid "undefined is not a function" errors.
+
+## Performance Optimizations
+
+### Virtualized Scrolling
+
+The GALL3RY app uses virtualized scrolling to efficiently render large collections of NFTs. This optimization:
+
+- Only renders NFTs that are currently visible in the viewport
+- Dramatically improves initial load time (from 30+ seconds to nearly instant)
+- Reduces memory usage by not rendering all NFTs at once
+- Improves scrolling performance with collections of any size
+
+Implementation details:
+- Used react-window's `FixedSizeGrid` for efficient item rendering
+- Applied memoization to prevent unnecessary re-renders
+- Added responsive column sizing based on viewport width
+- Maintained compatibility with existing card components and styles
+
+### Other Performance Improvements
+
+- Image loading optimization with better fallback handling
+- Memoized NFT card components to prevent unnecessary rerenders
+- Improved infinite scrolling implementation

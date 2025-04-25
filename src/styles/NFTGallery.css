@@ -296,11 +296,18 @@
 }
 
 .load-more {
-  text-align: center;
-  padding: 20px;
+  position: relative;
+  width: 100%;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
   margin-top: 20px;
-  color: #666;
-  font-style: italic;
+  padding: 10px;
+  background-color: rgba(255,255,255,0.8);
+  border-radius: 8px;
+  border: 1px solid #eee;
 }
 
 /* Loading spinner animation */
@@ -355,4 +362,52 @@
 .error-help ol {
   margin-top: 10px;
   padding-left: 20px;
+}
+
+/* Grid wrapper to properly contain the virtualized grid */
+.nft-grid-wrapper {
+  width: 100%;
+  height: 70vh; /* 70% of viewport height */
+  min-height: 500px;
+  position: relative;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+/* Ensure the virtualized grid container doesn't interfere with other elements */
+.nft-grid-wrapper .virtualized-grid-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100% !important;
+}
+
+/* Make sure we have enough space to scroll to trigger the infinite loader */
+@media (max-height: 800px) {
+  .nft-grid-wrapper {
+    height: 60vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .nft-grid-wrapper {
+    height: 65vh;
+  }
+}
+
+/* Performance notice */
+.performance-notice {
+  background-color: rgba(52, 152, 219, 0.1);
+  border-left: 3px solid #3498db;
+  padding: 8px 12px;
+  margin-top: 10px;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #3498db;
+}
+
+.performance-notice p {
+  margin: 0;
 } 

@@ -1,15 +1,18 @@
-import React from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
+import { FixedSizeGrid } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import '../styles/NFTGrid.css';
 import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
 import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized component
 import { createConsistentUniqueId } from '../services/alchemyService';
 
 /**
- * NFT Grid component 
+ * NFT Grid component with virtualized scrolling
  * Primary component for displaying NFTs in a grid layout
  * 
  * Features:
- * - Displays a grid of NFT cards with images and metadata
+ * - Uses react-window for efficient virtualized rendering
+ * - Only renders NFTs that are visible in the viewport
  * - Handles loading states and empty states
  * - Supports various NFT data formats from different sources
  * - Automatically extracts collection names and other metadata
@@ -21,6 +24,15 @@ import { createConsistentUniqueId } from '../services/alchemyService';
  */
 const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
   console.log(`NFTGrid rendering ${nfts.length} NFTs, isLoading: ${isLoading}`);
+  
+  // Calculate responsive column count based on container width
+  const getColumnCount = (width) => {
+    if (width <= 480) return 1; // Mobile - single column
+    if (width <= 768) return 2; // Tablet - 2 columns
+    if (width <= 1024) return 3; // Small desktop - 3 columns
+    if (width <= 1440) return 4; // Medium desktop - 4 columns
+    return 5; // Large desktop - 5 columns
+  };
   
   // Deduplicate NFTs by uniqueId or contract+tokenId+network for safety
   const uniqueNfts = removeDuplicateNfts(nfts);
@@ -62,6 +74,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   // Choose the appropriate NFT card component based on environment
   const CardComponent = isProduction ? VercelNFTCard : NFTCard;
   
+  // Loading state
   if (isLoading && (!nftsToRender || nftsToRender.length === 0)) {
     return (
       <div className="nft-grid-loader">
@@ -71,6 +84,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     );
   }
 
+  // Empty state
   if (!nftsToRender || nftsToRender.length === 0) {
     return (
       <div className="nft-grid-empty">
@@ -79,29 +93,94 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     );
   }
 
+  // Render a grid cell with the NFT card
+  const Cell = ({ columnIndex, rowIndex, style, data }) => {
+    const { nfts, columnCount, CardComponent } = data;
+    const index = rowIndex * columnCount + columnIndex;
+    
+    // Don't render if index is out of bounds
+    if (index >= nfts.length) {
+      return null;
+    }
+    
+    const nft = nfts[index];
+    
+    // Create a copy of the NFT object to avoid modifying non-extensible objects
+    const nftCopy = {...nft};
+    
+    // Ensure collection_name is set on the copy of the nft object
+    if (!nftCopy.collection_name) {
+      nftCopy.collection_name = getCollectionName(nft);
+    }
+    
+    // Use uniqueId if available, otherwise generate a key
+    const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
+    
+    // Apply padding within the cell, not affecting the grid layout
+    const cellStyle = {
+      ...style,
+      padding: 8,
+      boxSizing: 'border-box',
+      height: style.height,
+      width: style.width
+    };
+    
+    return (
+      <div style={cellStyle} key={nftKey}>
+        <div className="nft-cell-inner">
+          <CardComponent 
+            nft={nftCopy}
+            virtualized={true} // Tell the card it's in a virtualized environment
+          />
+        </div>
+      </div>
+    );
+  };
+
+  // Memoize the Cell component to prevent unnecessary rerenders
+  const MemoizedCell = React.memo(Cell, (prevProps, nextProps) => {
+    // Only re-render if the data or position changed
+    return (
+      prevProps.columnIndex === nextProps.columnIndex &&
+      prevProps.rowIndex === nextProps.rowIndex &&
+      prevProps.data.nfts[prevProps.rowIndex * prevProps.data.columnCount + prevProps.columnIndex]?.uniqueId ===
+        nextProps.data.nfts[nextProps.rowIndex * nextProps.data.columnCount + nextProps.columnIndex]?.uniqueId
+    );
+  });
+
+  // Render the virtualized grid
   return (
-    <div className="nft-grid-container">
-      <div className="nft-grid">
-        {nftsToRender.map((nft, index) => {
-          // Create a copy of the NFT object to avoid modifying non-extensible objects
-          const nftCopy = {...nft};
-          
-          // Ensure collection_name is set on the copy of the nft object
-          if (!nftCopy.collection_name) {
-            nftCopy.collection_name = getCollectionName(nft);
-          }
-          
-          // Use uniqueId if available, otherwise generate a key
-          const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
+    <div className="nft-grid-container virtualized-grid-container">
+      <AutoSizer>
+        {({ height, width }) => {
+          // Calculate responsive column and row settings
+          const columnCount = getColumnCount(width);
+          const itemWidth = width / columnCount;
+          const itemSize = Math.max(itemWidth, 200); // Minimum size of 200px
+          const rowCount = Math.ceil(nftsToRender.length / columnCount);
           
           return (
-            <CardComponent 
-              key={nftKey} 
-              nft={nftCopy}
-            />
+            <FixedSizeGrid
+              className="virtualized-grid"
+              width={width}
+              height={height || 800} // Default height if not provided
+              columnCount={columnCount}
+              columnWidth={itemWidth}
+              rowCount={rowCount}
+              rowHeight={itemSize + 80} // Add extra space for NFT title and collection
+              itemData={{
+                nfts: nftsToRender,
+                columnCount,
+                CardComponent
+              }}
+              overscanRowCount={3} // Render additional rows for smoother scrolling
+              overscanColumnCount={2}
+            >
+              {MemoizedCell}
+            </FixedSizeGrid>
           );
-        })}
-      </div>
+        }}
+      </AutoSizer>
     </div>
   );
 };

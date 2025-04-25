@@ -1006,4 +1006,9 @@ const VercelNFTCard = ({ nft }) => {
   );
 };
 
-export default VercelNFTCard; 
+// Optimize VercelNFTCard with React.memo to prevent unnecessary rerenders in virtualized list
+export default React.memo(VercelNFTCard, (prevProps, nextProps) => {
+  // Only rerender if the NFT has changed
+  // This significantly improves performance in virtualized lists
+  return prevProps.nft?.uniqueId === nextProps.nft?.uniqueId;
+}); 

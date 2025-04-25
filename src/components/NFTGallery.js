@@ -94,7 +94,7 @@ const NFTGallery = () => {
   useEffect(() => {
     const observer = new IntersectionObserver(observerCallback, {
       root: null,
-      rootMargin: '0px',
+      rootMargin: '100px', // Load more NFTs when we're 100px from the bottom
       threshold: 0.1,
     });
     
@@ -171,9 +171,16 @@ const NFTGallery = () => {
       
       <div className="nft-count">
         <p>{nfts.length} NFTs found</p>
+        {nfts.length > 100 && (
+          <div className="performance-notice">
+            <p>Using virtualized scrolling for better performance with large collections</p>
+          </div>
+        )}
       </div>
       
-      <NFTGrid nfts={nfts} isLoading={isLoading && nfts.length === 0} />
+      <div className="nft-grid-wrapper">
+        <NFTGrid nfts={nfts} isLoading={isLoading && nfts.length === 0} />
+      </div>
       
       {isLoading && nfts.length > 0 && (
         <div className="loading-indicator">

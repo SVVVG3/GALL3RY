@@ -549,4 +549,9 @@ const NFTCard = ({ nft }) => {
   );
 };
 
-export default NFTCard; 
+// Optimize NFTCard with React.memo to prevent unnecessary rerenders in virtualized list
+export default React.memo(NFTCard, (prevProps, nextProps) => {
+  // Only rerender if the NFT has changed
+  // This significantly improves performance in virtualized lists
+  return prevProps.nft?.uniqueId === nextProps.nft?.uniqueId;
+}); 
