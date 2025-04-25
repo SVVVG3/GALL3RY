@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import '../styles/nft-components.css';
@@ -27,6 +27,7 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [modalContractAddress, setModalContractAddress] = useState(null);
   const [modalNetwork, setModalNetwork] = useState('eth'); // Add state for network
+  const cardRef = useRef(null);
   
   // EMERGENCY FIX: Global override for Alien Frens images
   useEffect(() => {
@@ -465,6 +466,14 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
     console.log(`Media loaded successfully: ${mediaUrl}`);
     setMediaLoaded(true);
     setMediaError(false);
+    
+    // Force a repaint to ensure the image is visible
+    if (cardRef.current) {
+      cardRef.current.style.opacity = '0.99';
+      setTimeout(() => {
+        if (cardRef.current) cardRef.current.style.opacity = '1';
+      }, 10);
+    }
   };
   
   // Handle media load error
@@ -695,8 +704,12 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
   };
   
   return (
-    <div className="vercel-nft-card" onClick={handleCardClick}>
-      {/* NFT Media Container */}
+    <div 
+      className="vercel-nft-card" 
+      onClick={handleCardClick}
+      data-testid="nft-card"
+      ref={cardRef}
+    >
       <div className="nft-media-container">
         {/* Debug info - remove in production */}
         {process.env.NODE_ENV !== 'production' && (
@@ -723,48 +736,35 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
           <img
             src={mediaUrl}
             alt={title}
-            className="nft-image"
+            className={`nft-image ${mediaLoaded ? 'loaded' : ''}`}
             onLoad={handleMediaLoad}
             onError={handleMediaError}
+            style={{ opacity: mediaLoaded ? '1' : '0' }}
           />
         )}
         
         {mediaType === 'video' && (
           <video
             src={mediaUrl}
-            className="nft-video-content"
+            className="nft-video"
             onLoadedData={handleMediaLoad}
             onError={handleMediaError}
             autoPlay
             loop
             muted
             playsInline
+            style={{ opacity: mediaLoaded ? '1' : '0' }}
           />
         )}
         
         {mediaType === 'audio' && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f0f0f0',
-            zIndex: 5
-          }}>
+          <div className="nft-audio-container" style={{ opacity: mediaLoaded ? '1' : '0.5' }}>
             <audio
               src={mediaUrl}
-              className="nft-audio-content"
+              className="nft-audio"
               onLoadedData={handleMediaLoad}
               onError={handleMediaError}
               controls
-              style={{
-                width: '90%',
-                maxWidth: '250px'
-              }}
             />
           </div>
         )}
@@ -779,26 +779,11 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
         
         {/* Error fallback - only shown on error */}
         {mediaError && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f5f5f5',
-            zIndex: 6
-          }}>
+          <div className="nft-media-error">
             <img 
               src={placeholderUrl}
               alt={`${title} (unavailable)`}
-              style={{
-                width: '80%',
-                height: '80%',
-                objectFit: 'contain'
-              }}
+              className="nft-placeholder-image"
             />
           </div>
         )}
@@ -819,19 +804,14 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
           className="collection-friends-button" 
           onClick={handleShowFriends}
           title="Show friends who own this collection"
+          aria-label="Show friends who own this collection"
         >
           <svg 
             width="18" 
             height="18" 
             viewBox="0 0 24 24" 
             xmlns="http://www.w3.org/2000/svg"
-            style={{
-              fill: 'none',
-              stroke: '#444',
-              strokeWidth: 2,
-              strokeLinecap: 'round',
-              strokeLinejoin: 'round'
-            }}
+            className="friends-icon"
           >
             <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" />
             <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" />

@@ -31,6 +31,7 @@ import PrivyFarcasterAuth from './components/PrivyFarcasterAuth';
 import Navigation from './components/Navigation';
 import AddAppPrompt from './components/AddAppPrompt';
 import FarcasterDataLoader from './components/FarcasterDataLoader';
+import DebugImageLoader from './components/DebugImageLoader'; // Import our debug component
 
 // Import page components
 const HomePage = lazy(() => import('./pages/HomePage'));
@@ -408,16 +409,31 @@ function AppContent() {
         </div>
       </header>
       
-      <main className={isInMiniApp ? 'mini-app-main' : 'app-main'}>
+      {/* Navigation component at the top (except on NFT detail page) */}
+      {!location.pathname.startsWith('/nft/') && (
+        <Navigation isInMiniApp={isInMiniApp} />
+      )}
+      
+      {/* Show add app prompt in Mini App environment on supported pages */}
+      {isInMiniApp && !hasPromptedAddApp.current && (
+        <AddAppPrompt />
+      )}
+      
+      {/* Main content area with route handling */}
+      <main className="app-content">
         <AnimatePresence mode="wait">
-          <Routes location={location} key={location.pathname}>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/explore" element={<ExplorePage />} />
-            <Route path="/about" element={<AboutPage />} />
-            <Route path="/profile/:fid" element={<ProfilePage />} />
-            <Route path="/nft/:contractAddress/:tokenId" element={<NFTDetailPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<LoadingScreen />}>
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/explore" element={<ExplorePage />} />
+              <Route path="/profile/:username" element={<ProfilePage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/nft/:contractAddress/:tokenId" element={<NFTDetailPage />} />
+              {/* Add debug routes */}
+              <Route path="/debug/image-loader" element={<DebugImageLoader />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </AnimatePresence>
       </main>
       
@@ -429,6 +445,19 @@ function AppContent() {
           </div>
         </footer>
       )}
+      
+      {/* Toast notifications container */}
+      <ToastContainer 
+        position="bottom-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </>
   );
 }
@@ -457,7 +486,6 @@ function App() {
                 </CustomErrorBoundary>
               </Suspense>
             </Router>
-            <ToastContainer position="bottom-right" />
           </WalletProvider>
         </AuthProvider>
       </PrivyProvider>
