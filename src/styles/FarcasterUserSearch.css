@@ -420,12 +420,11 @@
   text-decoration: underline;
 }
 
-/* NFT display area - IMPORTANT: Let nft-components.css handle the actual grid */
+/* NFT display area - IMPORTANT: Let nft-unified.css handle the actual grid */
 .nft-display {
   width: 100%;
-  margin: 0 auto;
-  position: relative;
-  overflow: visible;
+  height: 100%;
+  overflow: auto;
 }
 
 .loading-spinner {
@@ -1708,11 +1707,11 @@
   gap: 10px;
 }
 
-/* NFT display area - IMPORTANT: Let nft-components.css handle the actual grid */
+/* NFT display area - IMPORTANT: Let nft-unified.css handle the actual grid */
 .nft-display {
   width: 100%;
-  margin: 0 auto;
-  padding: 0;
+  height: 100%;
+  overflow: auto;
 }
 
 /* Specific NFT Sort Controls */

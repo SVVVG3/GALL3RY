@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNFT } from '../contexts/NFTContext';
-import '../styles/NFTFilters.css';
+import '../styles/nft-unified.css';
 
 const NFTFilters = ({ wallets = [] }) => {
   const {

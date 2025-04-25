@@ -8,8 +8,6 @@ import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
 // Import Redux Provider
 import { Provider as ReduxProvider } from 'react-redux';
 import store from './redux/store';
-// Import StyleProvider
-import { StyleProvider } from './contexts/StyleContext';
 
 // Add a try-catch for styles import to prevent build failures
 try {
@@ -411,11 +409,6 @@ function AppContent() {
         </div>
       </header>
       
-      {/* Navigation component at the top (except on NFT detail page) */}
-      {!location.pathname.startsWith('/nft/') && (
-        <Navigation isInMiniApp={isInMiniApp} />
-      )}
-      
       {/* Show add app prompt in Mini App environment on supported pages */}
       {isInMiniApp && !hasPromptedAddApp.current && (
         <AddAppPrompt />
@@ -478,19 +471,17 @@ function App() {
             }
           }}
         >
-          <StyleProvider>
-            <AuthProvider>
-              <WalletProvider>
-                <NFTProvider>
-                  <Router>
-                    <Suspense fallback={<LoadingScreen />}>
-                      <AppContent />
-                    </Suspense>
-                  </Router>
-                </NFTProvider>
-              </WalletProvider>
-            </AuthProvider>
-          </StyleProvider>
+          <AuthProvider>
+            <WalletProvider>
+              <NFTProvider>
+                <Router>
+                  <Suspense fallback={<LoadingScreen />}>
+                    <AppContent />
+                  </Suspense>
+                </Router>
+              </NFTProvider>
+            </WalletProvider>
+          </AuthProvider>
         </PrivyProvider>
       </CustomErrorBoundary>
     </ReduxProvider>

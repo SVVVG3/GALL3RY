@@ -1,28 +1,16 @@
 # CSS Organization for GALL3RY NFT App
 
-This directory contains the CSS files for the GALL3RY NFT application. We maintain two approaches to CSS:
+This directory contains the CSS files for the GALL3RY NFT application.
 
-## Legacy CSS Files
-- `nft-components.css`: The original CSS that contains styles for NFT components including NFTGrid, NFTGallery, and NftCard
+## CSS Files
+- `nft-unified.css`: The primary CSS file that contains all NFT-related styles
 - `app.css`: Global application styles
 - `folder.css`: Styles for folder-related components
 - `errors.css`: Styles for error states and components
 
-## Unified CSS Approach
-- `nft-unified.css`: A comprehensive CSS file that consolidates all NFT-related styles from the individual component CSS files
-
-## Feature Toggle
-The application includes a style toggle feature that allows users to switch between:
-- The legacy CSS approach (individual files)
-- The unified CSS approach (consolidated file)
-
-This toggle is implemented via the `StyleContext` and persists the user's preference in local storage.
-
-## Best Practices
-When adding new styles:
-1. Add them to both the unified CSS file and the appropriate legacy file
-2. Follow the section organization in the unified CSS
-3. Ensure styles work correctly in both modes
+## Historical Organization
+Previous versions of the application used separate CSS files for each component type.
+These have now been consolidated into `nft-unified.css` for better maintainability.
 
 ## CSS Structure in nft-unified.css
 The unified CSS is organized into logical sections:
@@ -41,16 +29,15 @@ The unified CSS is organized into logical sections:
 - Placeholders
 - Responsive Styles
 
-## When to Use Each Approach
-- For new components: Use the unified CSS approach for simplicity
-- For maintaining backward compatibility: Ensure both approaches work correctly
-- For performance testing: Use the toggle to compare the approaches
+## Best Practices
+When adding new styles:
+1. Add them to the unified CSS file (`nft-unified.css`)
+2. Follow the section organization pattern
+3. Ensure styles work correctly across all components
 
-# CSS Structure
+## NFT Component Styles
 
-## Consolidated NFT Component Styles
-
-The NFT component styles have been consolidated into a single file `nft-components.css`. This file contains all the necessary styles for:
+The unified CSS file `nft-unified.css` contains all the necessary styles for:
 
 - NFT Gallery container and layout
 - NFT Grid with virtualized support
@@ -58,13 +45,6 @@ The NFT component styles have been consolidated into a single file `nft-componen
 - Loading states and animations
 - Modal and overlay styles for collection friends
 - Responsive design for all viewport sizes
-
-### Previously Separate Files (Now Consolidated)
-
-The following files have been consolidated into `nft-components.css`:
-- `NFTGrid.css`
-- `NFTGallery.css`
-- `NFTCard.css`
 
 ### Key Style Classes
 
@@ -102,4 +82,7 @@ The CSS includes responsive breakpoints for:
 
 ## Adding New Styles
 
-When adding new styles related to NFT components, please add them to `nft-components.css` and follow the existing organization pattern. 
+When adding new styles related to NFT components, please add them to `nft-unified.css` and follow the existing organization pattern.
+
+## Implementation
+The GALL3RY NFT application uses a unified CSS approach. All NFT component styles are contained in the `nft-unified.css` file, providing a consistent user experience across the application. 

@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import PrivyFarcasterButton from './PrivyFarcasterButton';
 import { usePrivy } from '@privy-io/react-auth';
 import { isMiniAppEnvironment } from '../utils/miniAppUtils';
-import StyleToggle from './StyleToggle';
 import '../styles/Navigation.css';
 
 /**
  * Navigation Component
- * Updated to provide cleaner UI with GALL3RY logo, style toggle, and sign-in button
+ * Updated to provide cleaner UI with GALL3RY logo and sign-in button
  */
 const Navigation = () => {
   const { ready, authenticated, user } = usePrivy();
@@ -30,8 +29,6 @@ const Navigation = () => {
       </div>
       
       <div className="nav-controls">
-        <StyleToggle />
-        
         <div className="nav-auth">
           {authenticated && user ? (
             <div className="user-info">
