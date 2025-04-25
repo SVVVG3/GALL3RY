@@ -5,6 +5,34 @@ import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import '../styles/nft-unified.css';
 
+// IPFS gateway URLs in order of preference
+const IPFS_GATEWAYS = [
+  'https://cf-ipfs.com/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+  'https://ipfs.io/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/'
+];
+
+/**
+ * Helper to transform IPFS URLs to more reliable gateways
+ */
+const getReliableIpfsUrl = (url) => {
+  if (!url) return url;
+
+  // Handle ipfs:// protocol
+  if (url.startsWith('ipfs://')) {
+    return IPFS_GATEWAYS[0] + url.substring(7);
+  }
+
+  // Handle ipfs hash formats: ipfs/QmHash or /ipfs/QmHash
+  const ipfsHashMatch = url.match(/(?:\/ipfs\/|ipfs\/)([a-zA-Z0-9]+.*)/);
+  if (ipfsHashMatch) {
+    return IPFS_GATEWAYS[0] + ipfsHashMatch[1];
+  }
+
+  return url;
+};
+
 /**
  * Simple NFT Card component
  * 
@@ -17,6 +45,7 @@ const NFTCard = ({ nft }) => {
   const [mediaError, setMediaError] = useState(false);
   const [mediaType, setMediaType] = useState('image');
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [currentGatewayIndex, setCurrentGatewayIndex] = useState(0);
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
   
@@ -107,7 +136,8 @@ const NFTCard = ({ nft }) => {
       // Add debug log to show the exact image URL being used
       console.log('Using image URL:', imageUrl);
       
-      return imageUrl || '';
+      // Apply IPFS gateway transformation
+      return getReliableIpfsUrl(imageUrl) || '';
     } catch (error) {
       console.warn('Error getting image URL:', error);
       return '';
@@ -152,7 +182,13 @@ const NFTCard = ({ nft }) => {
   
   // Handle media load error
   const handleMediaError = () => {
-    setMediaError(true);
+    // If we have more gateways to try and this is an IPFS URL, try the next gateway
+    if (currentGatewayIndex < IPFS_GATEWAYS.length - 1 && getImageUrl().includes('/ipfs/')) {
+      console.log(`Gateway ${currentGatewayIndex} failed, trying next gateway...`);
+      setCurrentGatewayIndex(currentGatewayIndex + 1);
+    } else {
+      setMediaError(true);
+    }
   };
   
   // Handle showing the friends modal
@@ -166,8 +202,17 @@ const NFTCard = ({ nft }) => {
     setShowFriendsModal(false);
   };
   
-  // Get image URL
-  const imageUrl = getImageUrl();
+  // Get base image URL
+  let imageUrl = getImageUrl();
+  
+  // If it's an IPFS URL and we're trying a backup gateway, replace the gateway
+  if (currentGatewayIndex > 0 && imageUrl && imageUrl.includes('/ipfs/')) {
+    const ipfsHashMatch = imageUrl.match(/(?:\/ipfs\/|ipfs\/)([a-zA-Z0-9]+.*)/);
+    if (ipfsHashMatch) {
+      imageUrl = IPFS_GATEWAYS[currentGatewayIndex] + ipfsHashMatch[1];
+      console.log(`Trying fallback gateway ${currentGatewayIndex}:`, imageUrl);
+    }
+  }
   
   // Render the media content based on type
   const renderMedia = () => {
@@ -222,6 +267,7 @@ const NFTCard = ({ nft }) => {
             onLoadedData={handleMediaLoad}
             onError={handleMediaError}
             style={{ position: 'absolute', zIndex: 2, width: '100%', height: '100%', objectFit: 'cover' }}
+            crossOrigin="anonymous"
           />
         );
         break;
@@ -240,6 +286,7 @@ const NFTCard = ({ nft }) => {
               controls
               onLoadedData={handleMediaLoad}
               onError={handleMediaError}
+              crossOrigin="anonymous"
             />
           </div>
         );
@@ -255,6 +302,7 @@ const NFTCard = ({ nft }) => {
             onLoad={handleMediaLoad}
             onError={handleMediaError}
             style={{ position: 'absolute', zIndex: 2, width: '100%', height: '100%', objectFit: 'cover' }}
+            crossOrigin="anonymous"
           />
         );
         break;
@@ -284,11 +332,12 @@ const NFTCard = ({ nft }) => {
     // For images, preload to check if they work
     if (mediaType === 'image') {
       const img = new Image();
+      img.crossOrigin = "anonymous";
       img.onload = handleMediaLoad;
       img.onerror = handleMediaError;
       img.src = imageUrl;
     }
-  }, [imageUrl, mediaType]);
+  }, [imageUrl, mediaType, currentGatewayIndex]);
   
   return (
     <div className="nft-card">
