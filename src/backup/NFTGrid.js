@@ -7,12 +7,12 @@ import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized compo
 import { createConsistentUniqueId } from '../services/alchemyService';
 
 /**
- * NFT Grid component with virtualized scrolling
+ * NFT Grid component with smart rendering options
  * Primary component for displaying NFTs in a grid layout
  * 
  * Features:
- * - Uses react-window for efficient virtualized rendering
- * - Only renders NFTs that are visible in the viewport
+ * - Uses react-window for efficient virtualized rendering for large collections
+ * - Uses standard grid layout for smaller collections (better for pagination)
  * - Handles loading states and empty states
  * - Supports various NFT data formats from different sources
  * - Automatically extracts collection names and other metadata
@@ -93,7 +93,41 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     );
   }
 
-  // Render a grid cell with the NFT card
+  // Use virtualization only for large collections (> 50 NFTs)
+  const useVirtualization = nftsToRender.length > 50;
+
+  if (!useVirtualization) {
+    // Render a standard grid layout for smaller collections
+    return (
+      <div className="nft-grid-container standard-grid">
+        {nftsToRender.map((nft, index) => {
+          if (!nft) return null;
+          
+          // Create a copy of the NFT object to avoid modifying non-extensible objects
+          const nftCopy = {...nft};
+          
+          // Ensure collection_name is set on the copy of the nft object
+          if (!nftCopy.collection_name) {
+            nftCopy.collection_name = getCollectionName(nft);
+          }
+          
+          // Use uniqueId if available, otherwise generate a key
+          const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
+          
+          return (
+            <div className="nft-grid-item" key={nftKey}>
+              <CardComponent 
+                nft={nftCopy}
+                virtualized={false}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Render a grid cell with the NFT card (for virtualized grid)
   const Cell = ({ columnIndex, rowIndex, style, data }) => {
     const { nfts, columnCount, CardComponent } = data;
     const index = rowIndex * columnCount + columnIndex;
@@ -116,21 +150,6 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     // Use uniqueId if available, otherwise generate a key
     const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
     
-    // IMPORTANT DEBUGGING: Log the specific NFT that might be causing problems
-    if (index < 5) {
-      console.log(`Rendering NFT at index ${index}:`, {
-        name: nft.name || nft.title || 'Unknown',
-        id: nftKey,
-        hasImage: Boolean(nft.image || nft.imageUrl || nft.media),
-        imageDetails: nft.image 
-          ? (typeof nft.image === 'string' ? nft.image.substring(0, 50) : 'image object')
-          : 'no image property'
-      });
-    }
-    
-    // Add debug info for development troubleshooting
-    const DEBUG_MODE = process.env.NODE_ENV !== 'production';
-    
     // Apply padding within the cell, not affecting the grid layout
     const cellStyle = {
       ...style,
@@ -142,7 +161,6 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
       left: style.left,
       top: style.top,
       display: 'block', // Force display
-      border: DEBUG_MODE ? '1px solid #ddd' : undefined, // Visual debugging aid
       transition: 'background-color 0.3s ease', // Smooth transition for hover effects
       borderRadius: '8px',
       overflow: 'hidden', // Keep child content within the borders
@@ -150,22 +168,6 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     
     return (
       <div style={cellStyle} key={nftKey} className="nft-grid-cell">
-        {DEBUG_MODE && (
-          <div className="debug-overlay" style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            padding: '2px 5px',
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            color: 'white',
-            zIndex: 100,
-            fontSize: '10px',
-            pointerEvents: 'none',
-          }}>
-            NFT #{index}: {nft.name || nft.title || `#${nft.tokenId}`}
-          </div>
-        )}
         <div className="nft-cell-inner" style={{ 
           height: '100%', 
           display: 'flex', 
@@ -182,23 +184,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
   };
 
   // Memoize the Cell component to prevent unnecessary rerenders
-  const MemoizedCell = React.memo(Cell, (prevProps, nextProps) => {
-    // Only re-render if the data or position changed
-    // Safety check to prevent undefined access
-    const prevIndex = prevProps.rowIndex * prevProps.data.columnCount + prevProps.columnIndex;
-    const nextIndex = nextProps.rowIndex * nextProps.data.columnCount + nextProps.columnIndex;
-    
-    const prevNft = prevIndex < prevProps.data.nfts.length ? prevProps.data.nfts[prevIndex] : null;
-    const nextNft = nextIndex < nextProps.data.nfts.length ? nextProps.data.nfts[nextIndex] : null;
-    
-    if (!prevNft || !nextNft) return prevIndex === nextIndex;
-    
-    return (
-      prevProps.columnIndex === nextProps.columnIndex &&
-      prevProps.rowIndex === nextProps.rowIndex &&
-      prevNft.uniqueId === nextNft.uniqueId
-    );
-  });
+  const MemoizedCell = React.memo(Cell);
 
   // Render the virtualized grid
   return (
@@ -222,11 +208,6 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
           
           console.log(`Rendering grid with dimensions: ${width}x${gridHeight}, columns: ${columnCount}, rows: ${rowCount}, ${nftsToRender.length} NFTs to render`);
           
-          // Debug - log some NFT samples to verify data
-          if (nftsToRender.length > 0) {
-            console.log(`Sample NFT data for debugging:`, nftsToRender[0]);
-          }
-          
           return (
             <FixedSizeGrid
               className="virtualized-grid"
@@ -241,14 +222,14 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
                 columnCount,
                 CardComponent
               }}
-              overscanRowCount={5} // Increased for smoother scrolling
-              overscanColumnCount={3}
+              overscanRowCount={2}
+              overscanColumnCount={1}
               style={{
                 overflowX: 'hidden',
                 overflowY: 'auto',
-                display: 'block', // Force display
-                height: `${gridHeight}px`, // Explicit height
-                width: `${width}px`, // Explicit width
+                display: 'block',
+                height: `${gridHeight}px`,
+                width: `${width}px`,
                 position: 'relative'
               }}
             >
@@ -295,13 +276,6 @@ function removeDuplicateNfts(nfts) {
   // Log if duplicates were found and removed with details
   if (uniqueNfts.length < nfts.length) {
     console.log(`Removed ${nfts.length - uniqueNfts.length} duplicate NFTs in NFTGrid`);
-    
-    // Log a sample of duplicates for debugging
-    if (duplicatesFound.length > 0) {
-      console.log(`Sample of removed duplicates:`, 
-        duplicatesFound.slice(0, Math.min(5, duplicatesFound.length))
-      );
-    }
   }
   
   return uniqueNfts;

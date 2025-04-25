@@ -1,35 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useNFT } from '../contexts/NFTContext';
-import NFTGrid from './NFTGrid';
+import NFTCard from './NftCard';
+import { FixedSizeGrid } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
 import '../styles/nft-unified.css';
 
 /**
- * NFT Gallery Component
+ * Simplified NFT Gallery Component with Virtualized Scrolling
  * 
- * Displays a collection of NFTs from multiple Ethereum wallet addresses.
- * Features:
- * - Add/remove wallet addresses
- * - Search NFTs by name or collection
- * - Infinite scrolling for loading more NFTs
- * - Error handling for API issues
- * 
- * Uses NFTGrid component to render the actual grid of NFTs.
+ * Displays NFTs in a clean grid layout with:
+ * - Wallet input for fetching NFTs
+ * - Simple search functionality
+ * - Loading and error states
+ * - Virtualized grid layout for performance
  */
 const NFTGallery = () => {
-  const {
-    nfts,
-    isLoading,
-    error,
-    hasMore,
-    searchQuery,
-    setSearchQuery,
-    fetchNFTsForMultipleAddresses,
-    loadMoreNFTs,
-  } = useNFT();
-  
+  const { nfts, isLoading, error, searchQuery, setSearchQuery, fetchNFTs } = useNFT();
   const [walletInput, setWalletInput] = useState('');
   const [walletAddresses, setWalletAddresses] = useState([]);
-  const loaderRef = useRef(null);
   
   // Handle wallet input change
   const handleWalletInputChange = (e) => {
@@ -57,7 +45,7 @@ const NFTGallery = () => {
     if (!walletAddresses.includes(normalizedAddress)) {
       const newAddresses = [...walletAddresses, normalizedAddress];
       setWalletAddresses(newAddresses);
-      fetchNFTsForMultipleAddresses(newAddresses);
+      fetchNFTs(newAddresses);
     }
     
     setWalletInput('');
@@ -69,10 +57,10 @@ const NFTGallery = () => {
     setWalletAddresses(newAddresses);
     
     if (newAddresses.length > 0) {
-      fetchNFTsForMultipleAddresses(newAddresses);
+      fetchNFTs(newAddresses);
     } else {
       // Clear NFTs if no wallets are selected
-      fetchNFTsForMultipleAddresses([]);
+      fetchNFTs([]);
     }
   };
   
@@ -81,33 +69,26 @@ const NFTGallery = () => {
     e.preventDefault();
     addWalletAddress();
   };
-  
-  // Intersection Observer for infinite scrolling
-  const observerCallback = useCallback((entries) => {
-    const [entry] = entries;
-    if (entry.isIntersecting && hasMore && !isLoading) {
-      loadMoreNFTs();
-    }
-  }, [hasMore, isLoading, loadMoreNFTs]);
-  
-  // Set up the Intersection Observer
-  useEffect(() => {
-    const observer = new IntersectionObserver(observerCallback, {
-      root: null,
-      rootMargin: '100px', // Load more NFTs when we're 100px from the bottom
-      threshold: 0.1,
-    });
+
+  // Grid cell renderer
+  const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
+    const index = rowIndex * data.columnCount + columnIndex;
     
-    if (loaderRef.current) {
-      observer.observe(loaderRef.current);
+    if (index >= data.nfts.length) {
+      return null;
     }
     
-    return () => {
-      if (loaderRef.current) {
-        observer.unobserve(loaderRef.current);
-      }
-    };
-  }, [observerCallback]);
+    const nft = data.nfts[index];
+    
+    return (
+      <div style={{
+        ...style,
+        padding: '10px',
+      }}>
+        <NFTCard key={`nft-${index}-${nft.tokenId || nft.token_id || index}`} nft={nft} />
+      </div>
+    );
+  }, []);
   
   return (
     <div className="nft-gallery-container">
@@ -143,15 +124,17 @@ const NFTGallery = () => {
         </div>
       )}
       
-      <div className="search-section">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={handleSearchChange}
-          placeholder="Search NFTs by name or collection..."
-          className="search-input"
-        />
-      </div>
+      {walletAddresses.length > 0 && (
+        <div className="search-section">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={handleSearchChange}
+            placeholder="Search NFTs by name or collection..."
+            className="search-input"
+          />
+        </div>
+      )}
       
       {error && (
         <div className="error-message">
@@ -169,30 +152,52 @@ const NFTGallery = () => {
         </div>
       )}
       
-      <div className="nft-count">
-        <p>{nfts.length} NFTs found</p>
-        {nfts.length > 100 && (
-          <div className="performance-notice">
-            <p>Using virtualized scrolling for better performance with large collections</p>
-          </div>
-        )}
-      </div>
-      
-      <div className="nft-grid-wrapper" style={{ height: nfts.length > 0 ? '700px' : '400px' }}>
-        <NFTGrid nfts={nfts} isLoading={isLoading && nfts.length === 0} />
-      </div>
-      
-      {isLoading && nfts.length > 0 && (
-        <div className="loading-indicator">
+      {isLoading ? (
+        <div className="nft-loading">
           <div className="loading-spinner"></div>
-          <p>Loading more NFTs... This may take a moment</p>
-          <p className="loading-tip">Using a real Alchemy API key will improve performance</p>
+          <p>Loading NFTs...</p>
         </div>
-      )}
-      
-      {hasMore && (
-        <div ref={loaderRef} className="load-more">
-          <p>Scroll for more NFTs</p>
+      ) : nfts.length > 0 ? (
+        <>
+          <div className="nft-count">
+            <p>{nfts.length} NFTs found</p>
+          </div>
+          
+          <div className="virtualized-grid-container">
+            <AutoSizer>
+              {({ height, width }) => {
+                // Calculate number of columns based on width
+                // Minimum card width is 250px with 20px gap
+                const columnWidth = 270;
+                const columnCount = Math.max(1, Math.floor(width / columnWidth));
+                const rowCount = Math.ceil(nfts.length / columnCount);
+                
+                return (
+                  <FixedSizeGrid
+                    className="virtualized-grid"
+                    columnCount={columnCount}
+                    columnWidth={width / columnCount}
+                    height={Math.min(800, rowCount * 320)} // Set a reasonable max height, but allow smaller if fewer items
+                    rowCount={rowCount}
+                    rowHeight={320} // Approximate height for an NFT card
+                    width={width}
+                    itemData={{ nfts, columnCount }}
+                  >
+                    {Cell}
+                  </FixedSizeGrid>
+                );
+              }}
+            </AutoSizer>
+          </div>
+        </>
+      ) : walletAddresses.length > 0 ? (
+        <div className="nft-empty">
+          <p>No NFTs found for the selected wallets</p>
+          {searchQuery && <p>Try adjusting your search or adding more wallets</p>}
+        </div>
+      ) : (
+        <div className="nft-empty">
+          <p>Add a wallet address to view NFTs</p>
         </div>
       )}
     </div>

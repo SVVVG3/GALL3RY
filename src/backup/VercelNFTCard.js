@@ -266,9 +266,9 @@ const VercelNFTCard = (props) => {
               <NFTImage 
                 nft={nft}
                 src={media.src}
-                alt={title}
+            alt={title}
                 className="nft-media"
-                onLoad={handleMediaLoad}
+            onLoad={handleMediaLoad}
                 handleMediaError={handleMediaError}
               />
             ) : (
@@ -280,10 +280,10 @@ const VercelNFTCard = (props) => {
                 ID: {nft.debugId}
                 <br/>
                 {collection}
-              </div>
-            )}
           </div>
-          
+        )}
+      </div>
+      
           <div className="nft-info">
             <div className="nft-title" title={title}>
               {title}
@@ -324,7 +324,7 @@ const VercelNFTCard = (props) => {
       </div>
       
       {showFriendsModal && (
-        <CollectionFriendsModal
+            <CollectionFriendsModal
           friends={nft.collection_friends}
           collectionName={collection}
           onClose={() => setShowFriendsModal(false)}

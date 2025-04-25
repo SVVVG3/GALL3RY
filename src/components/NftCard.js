@@ -1,161 +1,198 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
-import '../styles/nft-unified.css';
 import CollectionFriendsModal from './CollectionFriendsModal';
-import NFTImage from './NFTImage';
+import '../styles/nft-unified.css';
 
 /**
- * Enhanced NFT Card component with better image loading and error handling
+ * Simple NFT Card component
  * 
- * Features:
- * - Robust fallback system for image loading
- * - Better error handling
- * - Comprehensive URL detection from various NFT sources
- * - Support for image and video content
- * - Collection friends button for Farcaster users
+ * Displays an NFT with image, name, collection name, and optional price
+ * Supports various media types (image, video, audio)
+ * Includes collection friends button for Farcaster users
  */
-const NFTCard = (props) => {
-  const { nft, showFriends = false, interactive = true, onSelect, onDoubleClick, enableGalleryView, selected } = props;
+const NFTCard = ({ nft }) => {
+  const [mediaLoaded, setMediaLoaded] = useState(false);
+  const [mediaError, setMediaError] = useState(false);
+  const [mediaType, setMediaType] = useState('image');
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
-  const [showFriendsModal, setShowFriendsModal] = useState(false);
-  const [modalContractAddress, setModalContractAddress] = useState(null);
-  const [mediaError, setMediaError] = useState(false);
-  const mountedRef = useRef(true);
-
-  // Extract NFT details
-  const title = nft?.metadata?.name || nft?.name || nft?.title || `NFT #${nft?.tokenId || nft?.token_id || ''}`;
-  const collection = nft?.collection?.name || nft?.collection_name || nft?.contractMetadata?.name || '';
   
-  // Get contract address from various possible locations
-  const contractAddress = 
-    nft?.contract?.address || 
-    nft?.contractAddress || 
-    nft?.contract_address || 
-    (nft?.id?.split && nft?.id?.includes(':') ? nft?.id?.split(':')[2] : '');
+  // Extract essential NFT data
+  const name = nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
   
-  // Get token id from various possible locations
-  const tokenId = 
-    nft?.tokenId || 
-    nft?.token_id || 
-    (nft?.id?.split && nft?.id?.includes(':') ? nft?.id?.split(':')[3] : '');
+  // Get collection name from various possible locations
+  let collection = '';
+  if (nft?.collection?.name) {
+    collection = nft?.collection.name;
+  } else if (nft?.contract?.name) {
+    collection = nft.contract.name;
+  } else if (nft?.contractMetadata?.name) {
+    collection = nft.contractMetadata.name;
+  }
   
-  // Find the best image URL from the NFT object
-  const findBestImageUrl = (nft) => {
-    if (!nft) return null;
-    
-    // Try media array first (Alchemy v3 API format)
-    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+  // Get floor price if available
+  let floorPrice = null;
+  if (nft?.collection?.floorPrice?.value || nft?.floorPrice?.value) {
+    floorPrice = nft?.collection?.floorPrice?.value || nft?.floorPrice?.value;
+  }
+  
+  // Find the best image URL from different possible locations
+  const getImageUrl = () => {
+    // Check for media array first
+    if (nft?.media && nft.media.length > 0) {
       const mediaItem = nft.media[0];
-      if (mediaItem.gateway) return mediaItem.gateway;
-      if (mediaItem.raw) return mediaItem.raw;
-      if (mediaItem.thumbnail) return mediaItem.thumbnail;
+      // Return gateway URL if available, otherwise raw URL
+      return mediaItem.gateway || mediaItem.raw;
     }
     
-    // Try direct image URLs (most common format)
-    if (nft.image_url) return nft.image_url;
-    if (typeof nft.image === 'string') return nft.image;
-    
-    // Try image object (Alchemy structured response)
-    if (nft.image && typeof nft.image === 'object') {
-      if (nft.image.cachedUrl) return nft.image.cachedUrl;
-      if (nft.image.originalUrl) return nft.image.originalUrl;
-      if (nft.image.pngUrl) return nft.image.pngUrl;
-      if (nft.image.thumbnailUrl) return nft.image.thumbnailUrl;
-      if (nft.image.gateway) return nft.image.gateway;
+    // Check for cached images from Alchemy
+    if (nft?.image?.cachedUrl) {
+      return nft.image.cachedUrl;
     }
     
-    // Check animation URLs for videos
-    if (nft.animation_url) return nft.animation_url;
-    if (nft.animation && typeof nft.animation === 'object' && nft.animation.cachedUrl) {
-      return nft.animation.cachedUrl;
-    } else if (nft.animation && typeof nft.animation === 'string') {
-      return nft.animation;
+    // Try various image properties
+    if (nft?.image?.uri || nft?.image?.url || nft?.image) {
+      return nft.image.uri || nft.image.url || nft.image;
     }
     
-    // Check metadata locations
-    if (nft.metadata) {
-      if (nft.metadata.image) return nft.metadata.image;
-      if (nft.metadata.image_url) return nft.metadata.image_url;
-      if (nft.metadata.animation_url) return nft.metadata.animation_url;
+    // Check metadata
+    if (nft?.metadata?.image) {
+      return nft.metadata.image;
     }
     
-    // Check raw metadata
-    if (nft.raw && nft.raw.metadata) {
-      if (nft.raw.metadata.image) return nft.raw.metadata.image;
-      if (nft.raw.metadata.image_url) return nft.raw.metadata.image_url;
-    }
-    
-    // Check other common locations
-    if (nft.rawMetadata) {
-      if (nft.rawMetadata.image) return nft.rawMetadata.image;
-      if (nft.rawMetadata.image_url) return nft.rawMetadata.image_url;
-    }
-    
-    if (nft.thumbnail) return nft.thumbnail;
-    
-    // Check token URIs - they might contain image data
-    if (nft.tokenUri && nft.tokenUri.gateway) return nft.tokenUri.gateway;
-    
-    // If all else fails, try to generate an Alchemy NFT CDN URL if we have contract and token ID
-    if (contractAddress && tokenId) {
-      return `https://nft-cdn.alchemy.com/eth-mainnet/${contractAddress}/${tokenId}`;
-    }
-    
-    return null;
+    // Default placeholder
+    return '';
   };
   
-  const imageUrl = findBestImageUrl(nft);
+  // Determine media type based on URL or metadata
+  useEffect(() => {
+    const url = getImageUrl();
+    if (!url) return;
+    
+    // Check URL file extension
+    if (url.match(/\.(mp4|webm|mov)($|\?)/i)) {
+      setMediaType('video');
+    } else if (url.match(/\.(mp3|wav|ogg)($|\?)/i)) {
+      setMediaType('audio');
+    } else {
+      setMediaType('image');
+    }
+    
+    // Also check explicit metadata
+    if (nft?.media && nft.media[0]?.format) {
+      const format = nft.media[0].format.toLowerCase();
+      if (format.includes('video')) {
+        setMediaType('video');
+      } else if (format.includes('audio')) {
+        setMediaType('audio');
+      }
+    }
+  }, [nft]);
   
+  // Handle media load success
+  const handleMediaLoad = () => {
+    setMediaLoaded(true);
+  };
+  
+  // Handle media load error
   const handleMediaError = () => {
     setMediaError(true);
   };
   
+  // Handle showing the friends modal
   const handleShowFriends = (e) => {
-    e.preventDefault();
     e.stopPropagation();
-    
-    if (!showFriends || !isAuthenticated) return;
-    
-    setModalContractAddress(contractAddress);
     setShowFriendsModal(true);
   };
   
-  const handleCloseFriendsModal = () => {
+  // Close the friends modal
+  const handleCloseModal = () => {
     setShowFriendsModal(false);
   };
-
-  const handleCardClick = () => {
-    if (onSelect) {
-      onSelect(nft);
+  
+  // Get image URL
+  const imageUrl = getImageUrl();
+  
+  // Render the media content based on type
+  const renderMedia = () => {
+    if (mediaError) {
+      return (
+        <div className="nft-media-error">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>Failed to load</span>
+        </div>
+      );
     }
-  };
-
-  const handleCardDoubleClick = () => {
-    if (onDoubleClick) {
-      onDoubleClick(nft);
+    
+    if (!mediaLoaded) {
+      return (
+        <div className="nft-media-loader">
+          <div className="loading-spinner"></div>
+        </div>
+      );
     }
-  };
-
-  return (
-    <div 
-      className={`nft-card-container ${selected ? 'selected' : ''} ${interactive ? 'interactive' : ''}`}
-      onClick={handleCardClick}
-      onDoubleClick={handleCardDoubleClick}
-    >
-      <div className="nft-image-container">
-        <NFTImage
-          nft={nft}
-          src={imageUrl}
-          alt={title}
-          className="nft-image"
-          handleMediaError={handleMediaError}
-          noHoverEffect={!interactive}
-        />
+    
+    switch (mediaType) {
+      case 'video':
+        return (
+          <video
+            src={imageUrl}
+            className="nft-media nft-video"
+            controls
+            loop
+            muted
+            onLoadedData={handleMediaLoad}
+            onError={handleMediaError}
+            style={{ display: mediaLoaded ? 'block' : 'none' }}
+          />
+        );
         
-        {showFriends && isAuthenticated && (profile || authProfile) && (
+      case 'audio':
+        return (
+          <div className="nft-audio-container">
+            <div className="nft-audio-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 6v12M6 12h12" />
+              </svg>
+            </div>
+            <audio
+              src={imageUrl}
+              className="nft-audio"
+              controls
+              onLoadedData={handleMediaLoad}
+              onError={handleMediaError}
+            />
+          </div>
+        );
+        
+      case 'image':
+      default:
+        return (
+          <img
+            src={imageUrl}
+            alt={name}
+            className="nft-media nft-image"
+            onLoad={handleMediaLoad}
+            onError={handleMediaError}
+            style={{ display: mediaLoaded ? 'block' : 'none' }}
+          />
+        );
+    }
+  };
+  
+  return (
+    <div className="nft-card">
+      <div className="nft-media-container">
+        {renderMedia()}
+        
+        {(isAuthenticated || profile || authProfile) && (
           <button 
             className="collection-friends-button"
             aria-label="Show friends who own this collection"
@@ -169,32 +206,24 @@ const NFTCard = (props) => {
             </svg>
           </button>
         )}
-        
-        {enableGalleryView && (
-          <Link
-            className="view-gallery-link"
-            to={`/nft/${contractAddress}/${tokenId}`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="8" x2="12" y2="16"></line>
-              <line x1="8" y1="12" x2="16" y2="12"></line>
-            </svg>
-          </Link>
-        )}
       </div>
       
-      <div className="nft-details">
-        <h3 className="nft-title">{title}</h3>
-        {collection && <p className="nft-collection">{collection}</p>}
+      <div className="nft-info">
+        <h3 className="nft-name">{name}</h3>
+        <p className="nft-collection">{collection}</p>
+        
+        {floorPrice && (
+          <div className="nft-price">
+            <span>Floor: {floorPrice} ETH</span>
+          </div>
+        )}
       </div>
       
       {showFriendsModal && (
         <CollectionFriendsModal
-          contractAddress={modalContractAddress}
-          onClose={handleCloseFriendsModal}
+          friends={nft.collection_friends}
           collectionName={collection}
+          onClose={handleCloseModal}
         />
       )}
     </div>
