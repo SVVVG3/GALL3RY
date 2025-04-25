@@ -20,6 +20,8 @@ export const NFTProvider = ({ children }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState('collection'); // Default sort by collection
+  const [sortOrder, setSortOrder] = useState('asc'); // Default ascending order
   
   // Fetch NFTs for wallet addresses
   const fetchNFTs = useCallback(async (addresses) => {
@@ -98,6 +100,102 @@ export const NFTProvider = ({ children }) => {
     });
   }, [nfts, searchQuery]);
   
+  // Get sorted and filtered NFTs
+  const getSortedAndFilteredNFTs = useCallback(() => {
+    // First filter NFTs
+    const filteredNfts = getFilteredNFTs();
+    
+    // If no NFTs, return empty array
+    if (!filteredNfts.length) return [];
+    
+    // Clone the array to avoid mutating the original
+    const sortedNfts = [...filteredNfts];
+    
+    // Sort based on sortBy and sortOrder
+    return sortedNfts.sort((a, b) => {
+      // Helper function to get safely get string values
+      const safeString = (value) => 
+        typeof value === 'string' ? value.toLowerCase() : '';
+        
+      // Helper function to safely get number values
+      const safeNumber = (value) => 
+        typeof value === 'number' ? value : 
+        typeof value === 'string' ? parseFloat(value) || 0 : 0;
+      
+      try {
+        // Sort by name
+        if (sortBy === 'name') {
+          // Get names, with fallbacks
+          const nameA = safeString(a.name || a.title || `#${a.tokenId || a.token_id || ''}`);
+          const nameB = safeString(b.name || b.title || `#${b.tokenId || b.token_id || ''}`);
+          
+          const result = nameA.localeCompare(nameB, undefined, { numeric: true });
+          return sortOrder === 'asc' ? result : -result;
+        }
+        
+        // Sort by collection
+        if (sortBy === 'collection') {
+          // Get collections, with fallbacks
+          const collectionA = safeString(
+            a.collection?.name || a.contract?.name || a.contractMetadata?.name || ''
+          );
+          const collectionB = safeString(
+            b.collection?.name || b.contract?.name || b.contractMetadata?.name || ''
+          );
+          
+          const result = collectionA.localeCompare(collectionB, undefined, { numeric: true });
+          return sortOrder === 'asc' ? result : -result;
+        }
+        
+        // Sort by value
+        if (sortBy === 'value') {
+          // Get floor prices, with fallbacks
+          const valueA = safeNumber(
+            a.collection?.floorPrice?.value || 
+            a.floorPrice?.value || 
+            a.collection?.floorPrice?.valueUsd || 
+            a.floorPrice?.valueUsd || 
+            0
+          );
+          const valueB = safeNumber(
+            b.collection?.floorPrice?.value || 
+            b.floorPrice?.value ||
+            b.collection?.floorPrice?.valueUsd || 
+            b.floorPrice?.valueUsd || 
+            0
+          );
+          
+          return sortOrder === 'asc' ? valueA - valueB : valueB - valueA;
+        }
+        
+        // Sort by recent (timestamps)
+        if (sortBy === 'recent') {
+          // Try to get timestamps, with fallbacks
+          const timeA = a.transferTimestamp || a.lastActivityTimestamp || a.acquiredAt || 0;
+          const timeB = b.transferTimestamp || b.lastActivityTimestamp || b.acquiredAt || 0;
+          
+          // If both values are valid dates
+          if (timeA && timeB) {
+            const dateA = new Date(timeA);
+            const dateB = new Date(timeB);
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+          }
+          
+          // If values aren't valid dates, fall back to token IDs
+          const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
+          const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
+          return sortOrder === 'asc' ? idA - idB : idB - idA;
+        }
+        
+        // Default to no sorting (return original order)
+        return 0;
+      } catch (err) {
+        console.warn('Error during sort:', err);
+        return 0; // In case of error, don't change order
+      }
+    });
+  }, [getFilteredNFTs, sortBy, sortOrder]);
+  
   // Clear all NFTs and reset state
   const clearNFTs = useCallback(() => {
     setNfts([]);
@@ -107,13 +205,17 @@ export const NFTProvider = ({ children }) => {
   
   // Context value
   const value = {
-    nfts: getFilteredNFTs(),
+    nfts: getSortedAndFilteredNFTs(),
     isLoading,
     error,
     searchQuery,
     setSearchQuery,
     fetchNFTs,
-    clearNFTs
+    clearNFTs,
+    sortBy,
+    setSortBy,
+    sortOrder,
+    setSortOrder
   };
   
   return (
