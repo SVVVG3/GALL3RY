@@ -352,8 +352,28 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Apply filter to sorted NFTs
   const filteredAndSortedNfts = useCallback(() => {
-    return filterNftsBySearch(sortedNfts());
-  }, [filterNftsBySearch, sortedNfts]);
+    // Add debug logging
+    console.log('filteredAndSortedNfts called, userNfts length:', userNfts.length);
+    
+    try {
+      const result = filterNftsBySearch(sortedNfts());
+      console.log('Returning filtered and sorted NFTs:', {
+        count: result.length,
+        sample: result.length > 0 ? result[0] : null
+      });
+      
+      // Ensure result is not null/undefined and is an array
+      if (!result || !Array.isArray(result)) {
+        console.warn('filteredAndSortedNfts returned non-array result:', result);
+        return [];
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('Error in filteredAndSortedNfts:', error);
+      return [];
+    }
+  }, [filterNftsBySearch, sortedNfts, userNfts.length]);
   
   /**
    * Handle search for Farcaster user and their NFTs

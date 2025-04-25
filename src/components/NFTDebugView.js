@@ -56,15 +56,24 @@ const NFTDebugView = ({ nfts = [], isLoading = false }) => {
                   {nft.collection?.name || nft.contract?.name || nft.contractMetadata?.name || ''}
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  {(nft.image || 
+                  {typeof (nft.image || 
                     nft.imageUrl || 
                     nft.media?.[0]?.gateway || 
                     nft.rawMetadata?.image || 
-                    ''
-                  ).substring(0, 30)}...
+                    '') === 'string' 
+                    ? (nft.image || 
+                      nft.imageUrl || 
+                      nft.media?.[0]?.gateway || 
+                      nft.rawMetadata?.image || 
+                      '').substring(0, 30) + '...'
+                    : 'Non-string image value'
+                  }
                 </td>
                 <td style={{ border: '1px solid #ddd', padding: '8px' }}>
-                  {(nft.contractAddress || nft.contract?.address || '').substring(0, 10)}...
+                  {typeof (nft.contractAddress || nft.contract?.address || '') === 'string'
+                    ? (nft.contractAddress || nft.contract?.address || '').substring(0, 10) + '...'
+                    : 'Non-string contract value'
+                  }
                 </td>
               </tr>
             ))}

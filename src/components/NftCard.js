@@ -21,32 +21,67 @@ const NFTCard = ({ nft }) => {
   const { profile } = useProfile();
   
   // Extract essential NFT data
-  const name = nft?.name || nft?.title || `#${nft?.tokenId || nft?.token_id || ''}`;
+  const name = nft?.name || nft?.title || nft?.rawMetadata?.name || `#${nft?.tokenId || nft?.token_id || ''}`;
   
   // Get collection name from various possible locations
   let collection = '';
-  if (nft?.collection?.name) {
-    collection = nft?.collection.name;
-  } else if (nft?.contract?.name) {
-    collection = nft.contract.name;
-  } else if (nft?.contractMetadata?.name) {
-    collection = nft.contractMetadata.name;
+  try {
+    // Log the collection related fields for debugging
+    console.log('Collection related fields:', {
+      collectionName: nft?.collectionName,
+      collectionFromObj: nft?.collection?.name,
+      contractName: nft?.contract?.name,
+      contractMetadataName: nft?.contractMetadata?.name
+    });
+
+    if (nft?.collectionName) {
+      collection = nft.collectionName;
+    } else if (nft?.collection_name) {
+      collection = nft.collection_name;
+    } else if (nft?.collection?.name) {
+      collection = nft.collection.name;
+    } else if (nft?.contract?.name) {
+      collection = nft.contract.name;
+    } else if (nft?.contractMetadata?.name) {
+      collection = nft.contractMetadata.name;
+    } else if (nft?.contractName) {
+      collection = nft.contractName;
+    } else if (nft?.rawMetadata?.collection?.name) {
+      collection = nft.rawMetadata.collection.name;
+    }
+  } catch (error) {
+    console.warn('Error extracting collection name:', error);
   }
   
   // Get floor price if available
   let floorPrice = null;
-  if (nft?.collection?.floorPrice?.value || nft?.floorPrice?.value) {
-    floorPrice = nft?.collection?.floorPrice?.value || nft?.floorPrice?.value;
+  try {
+    if (nft?.collection?.floorPrice?.value || nft?.floorPrice?.value) {
+      floorPrice = nft?.collection?.floorPrice?.value || nft?.floorPrice?.value;
+    } else if (nft?.floorPrice && typeof nft.floorPrice === 'number') {
+      floorPrice = nft.floorPrice;
+    }
+  } catch (error) {
+    console.warn('Error extracting floor price:', error);
   }
   
   // Find the best image URL from different possible locations
   const getImageUrl = () => {
     try {
+      // Add direct console logging of the NFT object
+      console.log('NFT object in getImageUrl:', nft);
+
+      // Raw metadata check (higher priority)
+      if (nft?.rawMetadata?.image) {
+        const imageValue = nft.rawMetadata.image;
+        return typeof imageValue === 'string' ? imageValue : '';
+      }
+      
       // Check for media array first
-      if (nft?.media && nft.media.length > 0) {
+      if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
         const mediaItem = nft.media[0];
         // Return gateway URL if available, otherwise raw URL
-        return mediaItem.gateway || mediaItem.raw || '';
+        return (mediaItem.gateway || mediaItem.raw || '');
       }
       
       // Check for cached images from Alchemy
@@ -55,10 +90,18 @@ const NFTCard = ({ nft }) => {
       }
       
       // Try various image properties
-      if (nft?.image?.uri || nft?.image?.url || nft?.image) {
-        const imageValue = nft.image.uri || nft.image.url || nft.image;
-        // Make sure we return a string
-        return typeof imageValue === 'string' ? imageValue : '';
+      if (nft?.image) {
+        if (typeof nft.image === 'string') {
+          return nft.image;
+        }
+        if (nft.image.uri || nft.image.url) {
+          return nft.image.uri || nft.image.url;
+        }
+      }
+      
+      // Check for imageUrl property
+      if (nft?.imageUrl && typeof nft.imageUrl === 'string') {
+        return nft.imageUrl;
       }
       
       // Check metadata
@@ -132,6 +175,16 @@ const NFTCard = ({ nft }) => {
   
   // Render the media content based on type
   const renderMedia = () => {
+    // Always show the loading spinner initially
+    if (!mediaLoaded && !mediaError) {
+      return (
+        <div className="nft-media-loader">
+          <div className="loading-spinner"></div>
+        </div>
+      );
+    }
+    
+    // Show error state if media failed to load
     if (mediaError) {
       return (
         <div className="nft-media-error">
@@ -145,14 +198,7 @@ const NFTCard = ({ nft }) => {
       );
     }
     
-    if (!mediaLoaded) {
-      return (
-        <div className="nft-media-loader">
-          <div className="loading-spinner"></div>
-        </div>
-      );
-    }
-    
+    // Render appropriate media type if loaded
     switch (mediaType) {
       case 'video':
         return (
@@ -164,7 +210,6 @@ const NFTCard = ({ nft }) => {
             muted
             onLoadedData={handleMediaLoad}
             onError={handleMediaError}
-            style={{ display: mediaLoaded ? 'block' : 'none' }}
           />
         );
         
@@ -195,11 +240,33 @@ const NFTCard = ({ nft }) => {
             className="nft-media nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
-            style={{ display: mediaLoaded ? 'block' : 'none' }}
           />
         );
     }
   };
+  
+  // Add a useEffect to initiate loading for the image URL
+  useEffect(() => {
+    // Reset the media state when imageUrl changes
+    setMediaLoaded(false);
+    setMediaError(false);
+    
+    // If no image URL, show error state
+    if (!imageUrl) {
+      setMediaError(true);
+      return;
+    }
+    
+    // For images, preload to check if they work
+    if (mediaType === 'image') {
+      const img = new Image();
+      img.onload = handleMediaLoad;
+      img.onerror = handleMediaError;
+      img.src = imageUrl;
+    }
+    
+    // For video and audio, the onLoad handlers are on the elements themselves
+  }, [imageUrl, mediaType]);
   
   return (
     <div className="nft-card">

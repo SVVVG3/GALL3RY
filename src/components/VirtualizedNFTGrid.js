@@ -34,12 +34,24 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
     
     const nft = data.nfts[index];
     
+    // Skip rendering if NFT object is null or empty
+    if (!nft) {
+      console.warn(`Empty NFT object at index ${index}`);
+      return null;
+    }
+    
+    // Generate a stable key for the NFT card
+    const nftKey = nft.uniqueId || 
+                 `nft-${index}-${nft.tokenId || nft.token_id || nft.id || index}`;
+    
     return (
       <div style={{
         ...style,
         padding: '10px',
       }}>
-        <NFTCard key={`nft-${index}-${nft.tokenId || nft.token_id || index}`} nft={nft} />
+        <div style={{ height: '100%' }}>
+          <NFTCard key={nftKey} nft={nft} />
+        </div>
       </div>
     );
   }, []);
