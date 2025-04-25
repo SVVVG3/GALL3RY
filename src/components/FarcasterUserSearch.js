@@ -15,6 +15,7 @@ import { formatNFTsForDisplay, removeDuplicates } from '../utils/nftUtils';
 import alchemyService, { fetchNftsForAddresses, fetchNftsSimple, fetchNftsForFarcaster } from '../services/alchemyService';
 import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
+import NFTDebugView from './NFTDebugView';
 
 // Validates if a string is a valid Ethereum address
 const isValidAddress = (address) => {
@@ -733,7 +734,15 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               )}
             </div>
             
-            {/* Use the existing NFTGallery component to display NFTs */}
+            {/* Debug view for NFT data */}
+            {userNfts.length > 0 && (
+              <NFTDebugView 
+                nfts={userNfts.slice(0, 5)} 
+                isLoading={isSearching} 
+              />
+            )}
+            
+            {/* Use the virtualized grid to display NFTs */}
             <div className="nft-section nft-display">
               <VirtualizedNFTGrid 
                 nfts={filteredAndSortedNfts()} 

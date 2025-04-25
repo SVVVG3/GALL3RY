@@ -15,6 +15,15 @@ import '../styles/nft-unified.css';
  * @param {string} emptyMessage - Message to display when no NFTs are found
  */
 const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
+  // Add debug logging
+  React.useEffect(() => {
+    console.log('VirtualizedNFTGrid received nfts:', {
+      count: nfts?.length || 0,
+      sample: nfts?.length > 0 ? nfts[0] : null,
+      isLoading
+    });
+  }, [nfts, isLoading]);
+
   // Grid cell renderer
   const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
     const index = rowIndex * data.columnCount + columnIndex;
