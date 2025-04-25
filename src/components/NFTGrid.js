@@ -128,6 +128,9 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
       });
     }
     
+    // Add debug info for development troubleshooting
+    const DEBUG_MODE = process.env.NODE_ENV !== 'production';
+    
     // Apply padding within the cell, not affecting the grid layout
     const cellStyle = {
       ...style,
@@ -144,9 +147,6 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
       borderRadius: '8px',
       overflow: 'hidden', // Keep child content within the borders
     };
-    
-    // Add debug info for development troubleshooting
-    const DEBUG_MODE = process.env.NODE_ENV !== 'production';
     
     return (
       <div style={cellStyle} key={nftKey} className="nft-grid-cell">
