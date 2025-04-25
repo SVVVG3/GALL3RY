@@ -979,24 +979,48 @@ async function handleImageProxyRequest(req, res) {
   // Get image URL from query parameter
   const { url } = req.query;
   
+  // Add request debugging to track which URLs are problematic
+  console.log(`[IMAGE-PROXY] Received request for: ${url}`);
+  
   if (!url) {
+    console.warn("[IMAGE-PROXY] Missing URL parameter");
     return res.status(400).json({ error: 'Missing url parameter' });
   }
   
   try {
     // Always decode the URL to handle any encoded characters
     let proxyUrl = decodeURIComponent(url);
+    console.log(`[IMAGE-PROXY] Decoded URL: ${proxyUrl}`);
     
     // Default headers for most requests
     let customHeaders = {
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36',
       'Referer': 'https://gall3ry.vercel.app/',
       'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
-      'Accept-Encoding': 'gzip, deflate, br'
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Cache-Control': 'no-cache', // Force fresh content
+      'Pragma': 'no-cache' // For HTTP 1.0 compatibility
     };
     
-    // Handle Alchemy CDN URLs specifically
+    // Handle Alchemy CDN URLs specifically - special handling for their unique format
     if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+      console.log(`[IMAGE-PROXY] Handling Alchemy CDN URL: ${proxyUrl}`);
+      
+      // Check if URL has format specifier (/original or /thumb)
+      // If not, add it - /original for better quality
+      if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb')) {
+        proxyUrl = `${proxyUrl}/original`;
+        console.log(`[IMAGE-PROXY] Added format specifier to Alchemy URL: ${proxyUrl}`);
+      }
+      
+      // Add API key if available
+      const apiKey = process.env.ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
+      if (!proxyUrl.includes('apiKey=') && apiKey) {
+        proxyUrl = `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
+        console.log(`[IMAGE-PROXY] Added API key to Alchemy URL`);
+      }
+      
+      // Use specific headers for Alchemy
       customHeaders = {
         ...customHeaders,
         'Cache-Control': 'no-cache',
@@ -1017,9 +1041,11 @@ async function handleImageProxyRequest(req, res) {
       
       // Store the original IPFS hash
       const ipfsHash = proxyUrl.replace('ipfs://', '');
+      console.log(`[IMAGE-PROXY] Processing IPFS URL, hash: ${ipfsHash}`);
       
       // Use the first gateway by default, we'll try others if this fails
       proxyUrl = `${ipfsGateways[0]}${ipfsHash}`;
+      console.log(`[IMAGE-PROXY] Converted to gateway URL: ${proxyUrl}`);
       
       // Track that this is an IPFS URL for potential fallback
       req.ipfsData = {
@@ -1037,11 +1063,13 @@ async function handleImageProxyRequest(req, res) {
     
     // Handle ipfs links that aren't using the ipfs:// protocol
     if (proxyUrl.includes('/ipfs/')) {
+      console.log(`[IMAGE-PROXY] Detected standard IPFS gateway URL: ${proxyUrl}`);
       // Extract the IPFS hash for potential fallback
       try {
         const ipfsMatch = proxyUrl.match(/\/ipfs\/([^/?#]+)/);
         if (ipfsMatch && ipfsMatch[1]) {
           const ipfsHash = ipfsMatch[1];
+          console.log(`[IMAGE-PROXY] Extracted IPFS hash: ${ipfsHash}`);
           
           // Track Pinata-specific URLs for special handling
           const isPinata = proxyUrl.includes('pinata.cloud');
@@ -1062,7 +1090,7 @@ async function handleImageProxyRequest(req, res) {
           };
         }
       } catch (error) {
-        console.warn('Error parsing IPFS URL:', error);
+        console.warn('[IMAGE-PROXY] Error parsing IPFS URL:', error);
       }
       
       // Just keep the URL as is, but add special headers
@@ -1074,7 +1102,10 @@ async function handleImageProxyRequest(req, res) {
     
     // Special handling for Arweave URLs
     if (proxyUrl.startsWith('ar://')) {
-      proxyUrl = proxyUrl.replace('ar://', 'https://arweave.net/');
+      const arweaveId = proxyUrl.replace('ar://', '');
+      console.log(`[IMAGE-PROXY] Processing Arweave URL, ID: ${arweaveId}`);
+      proxyUrl = `https://arweave.net/${arweaveId}`;
+      console.log(`[IMAGE-PROXY] Converted to Arweave gateway: ${proxyUrl}`);
     }
     
     // Fetch the image with retries
@@ -1084,6 +1115,8 @@ async function handleImageProxyRequest(req, res) {
     
     while (retries <= maxRetries) {
       try {
+        console.log(`[IMAGE-PROXY] Attempt ${retries + 1} for: ${proxyUrl}`);
+        
         response = await axios({
           method: 'get',
           url: proxyUrl,
@@ -1093,6 +1126,8 @@ async function handleImageProxyRequest(req, res) {
           // Allow non-2xx status codes to handle them manually
           validateStatus: null
         });
+        
+        console.log(`[IMAGE-PROXY] Response status: ${response.status} for ${proxyUrl}`);
         
         // If successful, break out of retry loop
         if (response.status >= 200 && response.status < 300) {
@@ -1108,7 +1143,7 @@ async function handleImageProxyRequest(req, res) {
             const nextGateway = req.ipfsData.gateways[req.ipfsData.currentGatewayIndex];
             const ipfsHash = req.ipfsData.hash;
             
-            console.log(`IPFS gateway failed with status ${response.status}. Trying next gateway: ${nextGateway}`);
+            console.log(`[IMAGE-PROXY] IPFS gateway failed with status ${response.status}. Trying next gateway: ${nextGateway}`);
             proxyUrl = `${nextGateway}${ipfsHash}`;
             retries++;
             continue;
@@ -1117,9 +1152,25 @@ async function handleImageProxyRequest(req, res) {
         
         // If this is Alchemy CDN and we got an error, try an alternative URL format
         if (proxyUrl.includes('nft-cdn.alchemy.com') && retries === 0) {
+          console.log(`[IMAGE-PROXY] Alchemy URL failed with status ${response.status}. Trying alternative format.`);
+          
+          // Try switching format specifier
+          if (proxyUrl.includes('/original')) {
+            proxyUrl = proxyUrl.replace('/original', '/thumb');
+            console.log(`[IMAGE-PROXY] Switching to thumbnail format: ${proxyUrl}`);
+            retries++;
+            continue;
+          } else if (proxyUrl.includes('/thumb')) {
+            proxyUrl = proxyUrl.replace('/thumb', '/original');
+            console.log(`[IMAGE-PROXY] Switching to original format: ${proxyUrl}`);
+            retries++;
+            continue;
+          }
+          
           // Try removing any query parameters that might be causing issues
           const urlWithoutParams = proxyUrl.split('?')[0];
           if (urlWithoutParams !== proxyUrl) {
+            console.log(`[IMAGE-PROXY] Removing query parameters: ${urlWithoutParams}`);
             proxyUrl = urlWithoutParams;
             retries++;
             continue;
@@ -1128,6 +1179,8 @@ async function handleImageProxyRequest(req, res) {
         
         retries++;
       } catch (retryError) {
+        console.error(`[IMAGE-PROXY] Request error: ${retryError.message} for ${proxyUrl}`);
+        
         // Special handling for IPFS URLs - try next gateway if available
         if (req.ipfsData && req.ipfsData.isIpfs) {
           req.ipfsData.currentGatewayIndex++;
@@ -1136,7 +1189,7 @@ async function handleImageProxyRequest(req, res) {
             const nextGateway = req.ipfsData.gateways[req.ipfsData.currentGatewayIndex];
             const ipfsHash = req.ipfsData.hash;
             
-            console.log(`IPFS gateway request failed. Trying next gateway: ${nextGateway}`);
+            console.log(`[IMAGE-PROXY] IPFS gateway request failed. Trying next gateway: ${nextGateway}`);
             proxyUrl = `${nextGateway}${ipfsHash}`;
             retries++;
             continue;
@@ -1154,11 +1207,17 @@ async function handleImageProxyRequest(req, res) {
     
     // Check for non-successful status after all retries
     if (!response || response.status >= 400) {
-      // Create a simple SVG placeholder instead of returning JSON
+      console.log(`[IMAGE-PROXY] Failed to retrieve image after ${retries} attempts. Returning placeholder SVG.`);
+      
+      // Create a more detailed SVG placeholder with the original URL for debugging
+      const svgText = url.length > 30 ? `${url.substring(0, 30)}...` : url;
       const placeholderSvg = Buffer.from(`<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
-        <rect width="400" height="400" fill="#cccccc"/>
-        <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#666666">
+        <rect width="400" height="400" fill="#f0f0f0"/>
+        <text x="50%" y="40%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#666666">
           Image Not Available
+        </text>
+        <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="12px" fill="#999999">
+          ${svgText}
         </text>
       </svg>`, 'utf-8');
       
@@ -1166,13 +1225,29 @@ async function handleImageProxyRequest(req, res) {
       return res.status(200).send(placeholderSvg);
     }
     
-    // Forward the image response
+    // Forward the image response with proper content type and caching headers
     res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.setHeader('X-GALL3RY-Source', url.substring(0, 100)); // Debugging header
+    console.log(`[IMAGE-PROXY] Successfully proxied image: ${url.substring(0, 100)}...`);
+    
     return res.status(200).send(response.data);
   } catch (error) {
-    console.error(`Error proxying image: ${error.message}`);
-    return res.status(500).json({ error: 'Failed to proxy image' });
+    console.error(`[IMAGE-PROXY] Fatal error proxying image: ${error.message}`);
+    
+    // Return a placeholder SVG instead of JSON error
+    const placeholderSvg = Buffer.from(`<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+      <rect width="400" height="400" fill="#ffeeee"/>
+      <text x="50%" y="40%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#cc5555">
+        Image Proxy Error
+      </text>
+      <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="12px" fill="#cc5555">
+        ${error.message.substring(0, 50)}
+      </text>
+    </svg>`, 'utf-8');
+    
+    res.setHeader('Content-Type', 'image/svg+xml');
+    return res.status(200).send(placeholderSvg);
   }
 }
 

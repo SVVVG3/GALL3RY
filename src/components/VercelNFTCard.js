@@ -414,14 +414,29 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
         return "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
       }
       
-      // Special case for Alchemy CDN URLs - use direct URL with API key
+      // Special case for Alchemy CDN URLs - ensure proper format and add API key
       if (url.includes('nft-cdn.alchemy.com')) {
-        const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
-        if (!url.includes('apiKey=') && apiKey) {
-          const urlWithKey = `${url}${url.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
-          console.log("Using direct Alchemy URL with API key");
-          return urlWithKey;
+        // Check if URL already has /original or /thumb format
+        const needsFormat = !url.includes('/original') && !url.includes('/thumb');
+        let formattedUrl = url;
+        
+        if (needsFormat) {
+          // Add /original for better image quality
+          formattedUrl = `${url}/original`;
+          console.log(`Added format specifier to Alchemy URL: ${formattedUrl}`);
         }
+        
+        // Add API key if not present
+        const apiKey = process.env.REACT_APP_ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
+        if (!formattedUrl.includes('apiKey=') && apiKey) {
+          formattedUrl = `${formattedUrl}${formattedUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
+          console.log("Added API key to Alchemy URL");
+        }
+        
+        // Important change: For Alchemy URLs, always use the image proxy to avoid CORS issues
+        const proxyUrl = `/api/image-proxy?url=${encodeURIComponent(formattedUrl)}`;
+        console.log(`Proxying Alchemy URL through: ${proxyUrl}`);
+        return proxyUrl;
       }
       
       // Always use API proxy for external images
@@ -455,11 +470,13 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
   // Safety fallback for placeholders
   const placeholderUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='14' text-anchor='middle' alignment-baseline='middle' fill='%23999999'%3ENFT%3C/text%3E%3C/svg%3E";
   
-  // Log the final URL being used
+  // Log more detailed debugging info including NFT collection & ID
   useEffect(() => {
-    console.log(`NFT ${title}: Using final media URL: ${mediaUrl} (type: ${mediaType})`);
+    console.log(`NFT ${title} (${nft?.collection_name || 'Unknown Collection'}) ID: ${nft?.tokenId || nft?.token_id || 'Unknown'}`);
+    console.log(`Using media URL: ${mediaUrl} (type: ${mediaType})`);
+    console.log(`Original URL: ${debugMediaUrl}`);
     console.log(`Loading state: ${mediaLoaded ? 'Loaded' : 'Loading'}, Error state: ${mediaError ? 'Error' : 'No Error'}`);
-  }, [mediaUrl, mediaLoaded, mediaError, title, mediaType]);
+  }, [mediaUrl, mediaLoaded, mediaError, title, mediaType, debugMediaUrl, nft]);
   
   // Handle media load success
   const handleMediaLoad = () => {
@@ -716,51 +733,42 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
     // Card click handling - can be expanded later if needed
   };
   
+  // Render the NFT card
   return (
     <div 
+      ref={cardRef}
       className="vercel-nft-card" 
       onClick={handleCardClick}
-      data-testid="nft-card"
-      ref={cardRef}
+      style={{ 
+        position: 'relative',
+        opacity: 1, // Force opacity
+        visibility: 'visible', // Force visibility
+        display: 'flex',
+        flexDirection: 'column',
+        border: mediaError ? '1px solid #ffcccc' : undefined // Highlight cards with errors
+      }}
     >
-      <div className="nft-media-container">
-        {/* Debug info - remove in production */}
-        {process.env.NODE_ENV !== 'production' && (
-          <div style={{
-            position: 'absolute',
-            bottom: '0',
-            left: '0',
-            right: '0',
-            backgroundColor: 'rgba(0,0,0,0.7)',
-            color: 'white',
-            fontSize: '9px',
-            padding: '2px 4px',
-            zIndex: 6,
-            overflow: 'hidden',
-            whiteSpace: 'nowrap',
-            textOverflow: 'ellipsis'
-          }}>
-            Debug URL: {debugMediaUrl} (Type: {mediaType})
-          </div>
-        )}
-        
-        {/* Render appropriate media type based on content */}
+      {/* Media container */}
+      <div className="nft-media-container" style={{ opacity: 1, visibility: 'visible' }}>
+        {/* Always render the media element regardless of loading state for better UX */}
         {mediaType === 'image' && (
           <img
-            src={mediaUrl}
-            alt={title}
-            className={`nft-image ${mediaLoaded ? 'loaded' : ''}`}
+            src={mediaUrl || placeholderUrl}
+            alt={title || 'NFT'}
+            className="nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
             style={{ 
-              opacity: mediaLoaded ? '1' : '0',
-              visibility: mediaLoaded ? 'visible' : 'hidden',
-              position: 'absolute',
-              top: 0,
-              left: 0,
+              display: 'block',
+              objectFit: 'cover',
               width: '100%',
               height: '100%',
-              objectFit: 'cover'
+              opacity: mediaLoaded && !mediaError ? 1 : 0,
+              visibility: mediaLoaded && !mediaError ? 'visible' : 'hidden',
+              transition: 'opacity 0.3s ease-in',
+              position: 'absolute',
+              top: 0,
+              left: 0
             }}
           />
         )}
@@ -769,104 +777,98 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
           <video
             src={mediaUrl}
             className="nft-video"
-            onLoadedData={handleMediaLoad}
-            onError={handleMediaError}
-            autoPlay
+            autoPlay={false}
             loop
             muted
             playsInline
+            controls={false}
+            onLoadedData={handleMediaLoad}
+            onError={handleMediaError}
             style={{ 
-              opacity: mediaLoaded ? '1' : '0',
-              visibility: mediaLoaded ? 'visible' : 'hidden',
-              position: 'absolute',
-              top: 0,
-              left: 0,
+              display: 'block',
+              objectFit: 'cover',
               width: '100%',
               height: '100%',
-              objectFit: 'cover'
+              opacity: mediaLoaded && !mediaError ? 1 : 0,
+              visibility: mediaLoaded && !mediaError ? 'visible' : 'hidden'
             }}
           />
         )}
         
-        {mediaType === 'audio' && (
-          <div className="nft-audio-container" style={{ opacity: mediaLoaded ? '1' : '0.5' }}>
-            <audio
-              src={mediaUrl}
-              className="nft-audio"
-              onLoadedData={handleMediaLoad}
-              onError={handleMediaError}
-              controls
-            />
+        {/* Loading indicator - show when not loaded and no error */}
+        {(!mediaLoaded && !mediaError) && (
+          <div className="nft-media-loader" style={{ 
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f5f5f5',
+            zIndex: 2
+          }}>
+            <div className="loading-indicator" style={{
+              width: '30px',
+              height: '30px',
+              border: '3px solid rgba(0, 0, 0, 0.1)',
+              borderTopColor: '#7c3aed',
+              borderRadius: '50%',
+              animation: 'spin 1s linear infinite'
+            }}></div>
+            <style>{spinKeyframes}</style>
           </div>
         )}
         
-        {/* Loading indicator - only shown while loading */}
-        {!mediaLoaded && !mediaError && (
-          <div className="loading-indicator">
-            <div className="loading-spinner"></div>
-            <style dangerouslySetInnerHTML={{ __html: spinKeyframes }} />
-          </div>
-        )}
-        
-        {/* Error fallback - only shown on error */}
+        {/* Error state - show placeholder when there's an error */}
         {mediaError && (
-          <div className="nft-media-error">
-            <img 
-              src={placeholderUrl}
-              alt={`${title} (unavailable)`}
-              className="nft-placeholder-image"
-            />
+          <div className="nft-media-error" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f8fafc',
+            zIndex: 2,
+            flexDirection: 'column',
+            padding: '10px',
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: '24px', marginBottom: '8px', color: '#aaa' }}>🖼️</div>
+            <div style={{ fontSize: '14px', color: '#888' }}>Image unavailable</div>
           </div>
         )}
       </div>
       
       {/* NFT Info */}
       <div className="nft-info-container">
-        <div className="nft-details">
-          <h3 className="nft-name">{title}</h3>
-          {collection && <p className="nft-collection">{collection}</p>}
-          {formattedValue && <p className="nft-price">{formattedValue}</p>}
-        </div>
+        <p className="nft-name">{title || 'Unnamed NFT'}</p>
+        <p className="nft-collection">
+          {collection || nft?.collection_name || 'Unknown Collection'}
+        </p>
+        
+        {/* Show the Collection Friends button if user is authenticated with Farcaster */}
+        {(isAuthenticated || profile?.fid) && contractAddress && (
+          <div className="collection-friends-button" onClick={handleShowFriends}>
+            <svg className="friends-icon" viewBox="0 0 24 24" fill="#6c5ce7">
+              <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+            </svg>
+          </div>
+        )}
       </div>
       
-      {/* Collection Friends button */}
-      {showFriendsButton && (
-        <button 
-          className="collection-friends-button" 
-          onClick={handleShowFriends}
-          title="Show friends who own this collection"
-          aria-label="Show friends who own this collection"
-        >
-          <svg 
-            width="18" 
-            height="18" 
-            viewBox="0 0 24 24" 
-            xmlns="http://www.w3.org/2000/svg"
-            className="friends-icon"
-          >
-            <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" />
-            <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" />
-            <path d="M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13" />
-            <path d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88" />
-          </svg>
-        </button>
-      )}
-      
-      {/* Collection Friends Modal Portal */}
-      {showFriendsModal && createPortal(
-        <div 
-          className="modal-overlay" 
-          onClick={handleModalClick}
-          onKeyDown={handleEscKey}
-          tabIndex="-1"
-        >
-          <div className="modal-container">
-            <CollectionFriendsModal
-              isOpen={showFriendsModal}
-              onClose={handleCloseFriendsModal}
-              collectionAddress={modalContractAddress || contractAddress}
-              collectionName={collection}
+      {/* Collection Friends Modal */}
+      {showFriendsModal && modalContractAddress && createPortal(
+        <div className="modal-overlay" onClick={handleModalClick}>
+          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+            <CollectionFriendsModal 
+              contractAddress={modalContractAddress}
               network={modalNetwork}
+              onClose={handleCloseFriendsModal} 
             />
           </div>
         </div>,
