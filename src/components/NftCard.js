@@ -175,7 +175,7 @@ const NFTCard = ({ nft }) => {
     
     // Always show the loading spinner initially (but positioned behind the media)
     const loadingSpinner = !mediaLoaded && !mediaError ? (
-      <div className="nft-media-loader" style={{ zIndex: 1 }}>
+      <div className="nft-media-loader" style={{ zIndex: 1, backgroundColor: 'transparent' }}>
         <div className="loading-spinner"></div>
       </div>
     ) : null;
@@ -221,7 +221,7 @@ const NFTCard = ({ nft }) => {
             muted
             onLoadedData={handleMediaLoad}
             onError={handleMediaError}
-            style={{ position: 'absolute', zIndex: 2 }}
+            style={{ position: 'absolute', zIndex: 2, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         );
         break;
@@ -254,7 +254,7 @@ const NFTCard = ({ nft }) => {
             className="nft-media nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
-            style={{ position: 'absolute', zIndex: 2 }}
+            style={{ position: 'absolute', zIndex: 2, width: '100%', height: '100%', objectFit: 'cover' }}
           />
         );
         break;
@@ -292,7 +292,7 @@ const NFTCard = ({ nft }) => {
   
   return (
     <div className="nft-card">
-      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'var(--hover-color)' }}>
+      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'transparent' }}>
         {renderMedia()}
         
         {/* Collection friends button (for Farcaster users) */}
