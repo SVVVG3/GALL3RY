@@ -68,50 +68,35 @@ const NFTCard = ({ nft }) => {
   // Find the best image URL from different possible locations
   const getImageUrl = () => {
     try {
-      // Add direct console logging of the NFT object
+      // Log the NFT object for debugging
       console.log('NFT object in getImageUrl:', nft);
 
-      // Raw metadata check (higher priority)
-      if (nft?.rawMetadata?.image) {
-        const imageValue = nft.rawMetadata.image;
-        return typeof imageValue === 'string' ? imageValue : '';
-      }
+      // Check all possible locations for image URL
+      const imageSources = [
+        // Object with cachedUrl (Alchemy format)
+        nft?.image?.cachedUrl,
+        // Image URL object with cachedUrl
+        nft?.imageUrl?.cachedUrl,
+        // Raw metadata image - handle both string and object
+        typeof nft?.rawMetadata?.image === 'string' ? nft.rawMetadata.image : null,
+        // Media objects with gateway URLs (priority)
+        nft?.media?.[0]?.gateway,
+        nft?.media?.[0]?.raw,
+        // Direct image string
+        typeof nft?.image === 'string' ? nft.image : null,
+        // Image URL string
+        typeof nft?.imageUrl === 'string' ? nft.imageUrl : null,
+        // Object with URI or URL properties
+        nft?.image?.uri,
+        nft?.image?.url,
+        // Metadata image
+        typeof nft?.metadata?.image === 'string' ? nft.metadata.image : null
+      ];
       
-      // Check for media array first
-      if (nft?.media && Array.isArray(nft.media) && nft.media.length > 0) {
-        const mediaItem = nft.media[0];
-        // Return gateway URL if available, otherwise raw URL
-        return (mediaItem.gateway || mediaItem.raw || '');
-      }
+      // Find the first valid URL (non-null, non-undefined)
+      const imageUrl = imageSources.find(src => src !== undefined && src !== null);
       
-      // Check for cached images from Alchemy
-      if (nft?.image?.cachedUrl) {
-        return nft.image.cachedUrl;
-      }
-      
-      // Try various image properties
-      if (nft?.image) {
-        if (typeof nft.image === 'string') {
-          return nft.image;
-        }
-        if (nft.image.uri || nft.image.url) {
-          return nft.image.uri || nft.image.url;
-        }
-      }
-      
-      // Check for imageUrl property
-      if (nft?.imageUrl && typeof nft.imageUrl === 'string') {
-        return nft.imageUrl;
-      }
-      
-      // Check metadata
-      if (nft?.metadata?.image) {
-        const metadataImage = nft.metadata.image;
-        return typeof metadataImage === 'string' ? metadataImage : '';
-      }
-      
-      // Default placeholder
-      return '';
+      return imageUrl || '';
     } catch (error) {
       console.warn('Error getting image URL:', error);
       return '';
