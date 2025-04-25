@@ -1006,14 +1006,8 @@ async function handleImageProxyRequest(req, res) {
     if (proxyUrl.includes('nft-cdn.alchemy.com')) {
       console.log(`[IMAGE-PROXY] Handling Alchemy CDN URL: ${proxyUrl}`);
       
-      // Check if URL has format specifier (/original or /thumb)
-      // If not, add it - /original for better quality
-      if (!proxyUrl.includes('/original') && !proxyUrl.includes('/thumb')) {
-        proxyUrl = `${proxyUrl}/original`;
-        console.log(`[IMAGE-PROXY] Added format specifier to Alchemy URL: ${proxyUrl}`);
-      }
-      
-      // Add API key if available
+      // Don't modify the URL format as it might break things
+      // Just add API key if available and not already present
       const apiKey = process.env.ALCHEMY_API_KEY || '-DhGb2lvitCWrrAmLnF5TZLl-N6l8Lak';
       if (!proxyUrl.includes('apiKey=') && apiKey) {
         proxyUrl = `${proxyUrl}${proxyUrl.includes('?') ? '&' : '?'}apiKey=${apiKey}`;
@@ -1152,20 +1146,7 @@ async function handleImageProxyRequest(req, res) {
         
         // If this is Alchemy CDN and we got an error, try an alternative URL format
         if (proxyUrl.includes('nft-cdn.alchemy.com') && retries === 0) {
-          console.log(`[IMAGE-PROXY] Alchemy URL failed with status ${response.status}. Trying alternative format.`);
-          
-          // Try switching format specifier
-          if (proxyUrl.includes('/original')) {
-            proxyUrl = proxyUrl.replace('/original', '/thumb');
-            console.log(`[IMAGE-PROXY] Switching to thumbnail format: ${proxyUrl}`);
-            retries++;
-            continue;
-          } else if (proxyUrl.includes('/thumb')) {
-            proxyUrl = proxyUrl.replace('/thumb', '/original');
-            console.log(`[IMAGE-PROXY] Switching to original format: ${proxyUrl}`);
-            retries++;
-            continue;
-          }
+          console.log(`[IMAGE-PROXY] Alchemy URL failed with status ${response.status}. Trying with different approach.`);
           
           // Try removing any query parameters that might be causing issues
           const urlWithoutParams = proxyUrl.split('?')[0];
@@ -1175,6 +1156,9 @@ async function handleImageProxyRequest(req, res) {
             retries++;
             continue;
           }
+          
+          // Don't try to modify URL structure as it may break things
+          retries++;
         }
         
         retries++;
