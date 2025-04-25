@@ -73,28 +73,39 @@ const NFTCard = ({ nft }) => {
 
       // Check all possible locations for image URL
       const imageSources = [
+        // Direct handling of image object (which might be a non-string value)
+        nft?.media?.[0]?.gateway,
+        nft?.media?.[0]?.raw,
+        nft?.media?.[0]?.uri,
+        nft?.media?.[0]?.url,
+        
         // Object with cachedUrl (Alchemy format)
         nft?.image?.cachedUrl,
         // Image URL object with cachedUrl
         nft?.imageUrl?.cachedUrl,
+        
         // Raw metadata image - handle both string and object
         typeof nft?.rawMetadata?.image === 'string' ? nft.rawMetadata.image : null,
-        // Media objects with gateway URLs (priority)
-        nft?.media?.[0]?.gateway,
-        nft?.media?.[0]?.raw,
+        typeof nft?.rawMetadata?.image === 'object' ? nft.rawMetadata.image.url || nft.rawMetadata.image.uri : null,
+        
         // Direct image string
         typeof nft?.image === 'string' ? nft.image : null,
         // Image URL string
         typeof nft?.imageUrl === 'string' ? nft.imageUrl : null,
+        
         // Object with URI or URL properties
         nft?.image?.uri,
         nft?.image?.url,
+        
         // Metadata image
         typeof nft?.metadata?.image === 'string' ? nft.metadata.image : null
       ];
       
       // Find the first valid URL (non-null, non-undefined)
       const imageUrl = imageSources.find(src => src !== undefined && src !== null);
+      
+      // Add debug log to show the exact image URL being used
+      console.log('Using image URL:', imageUrl);
       
       return imageUrl || '';
     } catch (error) {
@@ -172,13 +183,27 @@ const NFTCard = ({ nft }) => {
     // Show error state if media failed to load
     if (mediaError) {
       return (
-        <div className="nft-media-error" style={{ zIndex: 2 }}>
+        <div className="nft-media-error" style={{ zIndex: 3 }}>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>Failed to load</span>
+        </div>
+      );
+    }
+    
+    // Check if we have a valid URL
+    if (!imageUrl) {
+      return (
+        <div className="nft-media-error" style={{ zIndex: 3 }}>
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>No media available</span>
         </div>
       );
     }
@@ -267,7 +292,7 @@ const NFTCard = ({ nft }) => {
   
   return (
     <div className="nft-card">
-      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden' }}>
+      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'var(--hover-color)' }}>
         {renderMedia()}
         
         {/* Collection friends button (for Farcaster users) */}
@@ -276,6 +301,7 @@ const NFTCard = ({ nft }) => {
             className="collection-friends-button"
             onClick={handleShowFriends}
             aria-label="View collection friends"
+            style={{ zIndex: 10 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
