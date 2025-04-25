@@ -14,6 +14,150 @@ const spinKeyframes = `
 `;
 
 /**
+ * Function to find the best image URL from an NFT object
+ * Searches through various metadata locations to find a suitable image
+ */
+const findBestImageUrl = (nft) => {
+  if (!nft) return null;
+  
+  // Try media array first (Alchemy v3 API format)
+  if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+    const mediaItem = nft.media[0];
+    if (mediaItem.gateway) return mediaItem.gateway;
+    if (mediaItem.raw) return mediaItem.raw;
+    if (mediaItem.thumbnail) return mediaItem.thumbnail;
+  }
+  
+  // Try direct image URLs (most common format)
+  if (nft.image_url) return nft.image_url;
+  if (typeof nft.image === 'string') return nft.image;
+  
+  // Try image object (Alchemy structured response)
+  if (nft.image && typeof nft.image === 'object') {
+    if (nft.image.cachedUrl) return nft.image.cachedUrl;
+    if (nft.image.originalUrl) return nft.image.originalUrl;
+    if (nft.image.pngUrl) return nft.image.pngUrl;
+    if (nft.image.thumbnailUrl) return nft.image.thumbnailUrl;
+    if (nft.image.gateway) return nft.image.gateway;
+  }
+  
+  // Check animation URLs for videos
+  if (nft.animation_url) return nft.animation_url;
+  if (nft.animation && typeof nft.animation === 'object' && nft.animation.cachedUrl) {
+    return nft.animation.cachedUrl;
+  } else if (nft.animation && typeof nft.animation === 'string') {
+    return nft.animation;
+  }
+  
+  // Check metadata locations
+  if (nft.metadata) {
+    if (nft.metadata.image) return nft.metadata.image;
+    if (nft.metadata.image_url) return nft.metadata.image_url;
+    if (nft.metadata.animation_url) return nft.metadata.animation_url;
+  }
+  
+  // Check raw metadata
+  if (nft.raw && nft.raw.metadata) {
+    if (nft.raw.metadata.image) return nft.raw.metadata.image;
+    if (nft.raw.metadata.image_url) return nft.raw.metadata.image_url;
+  }
+  
+  // Check other common locations
+  if (nft.rawMetadata) {
+    if (nft.rawMetadata.image) return nft.rawMetadata.image;
+    if (nft.rawMetadata.image_url) return nft.rawMetadata.image_url;
+  }
+  
+  if (nft.thumbnail) return nft.thumbnail;
+  
+  // Check token URIs - they might contain image data
+  if (nft.tokenUri && nft.tokenUri.gateway) return nft.tokenUri.gateway;
+  
+  // If all else fails, return null (will show placeholder)
+  return null;
+};
+
+/**
+ * Find an alternative image URL when the primary one fails
+ */
+const findAlternativeImageUrl = (nft, attemptedUrls) => {
+  if (!nft) return null;
+  
+  // Sources to try in order of preference
+  const possibleSources = [
+    // Direct sources
+    nft.image_url,
+    typeof nft.image === 'string' ? nft.image : null,
+    
+    // Object sources - extract potential URLs
+    nft.image?.cachedUrl,
+    nft.image?.originalUrl,
+    nft.image?.pngUrl,
+    nft.image?.thumbnailUrl,
+    nft.image?.gateway,
+    
+    // Media array sources
+    ...(nft.media && Array.isArray(nft.media) ? 
+      nft.media.flatMap(m => [m.gateway, m.raw, m.thumbnail]) : []),
+    
+    // Animation sources
+    nft.animation_url,
+    nft.animation?.cachedUrl,
+    typeof nft.animation === 'string' ? nft.animation : null,
+    
+    // Metadata sources
+    nft.metadata?.image,
+    nft.metadata?.image_url,
+    nft.metadata?.animation_url,
+    
+    // Token URI source
+    nft.tokenUri?.gateway,
+    
+    // Other sources
+    nft.thumbnail,
+    nft.raw?.metadata?.image,
+    nft.raw?.metadata?.image_url,
+    nft.rawMetadata?.image,
+    nft.rawMetadata?.image_url
+  ];
+  
+  // Filter out null/undefined values and URLs already attempted
+  return possibleSources
+    .filter(url => url && !attemptedUrls.includes(url))
+    .find(url => url); // Return the first valid URL
+};
+
+/**
+ * Extract collection name from NFT metadata
+ */
+const getNftCollectionName = (nft) => {
+  if (!nft) return '';
+  
+  // Try various possible collection name locations in NFT metadata
+  if (nft.contract && nft.contract.name) {
+    return nft.contract.name;
+  }
+  
+  if (nft.collection && nft.collection.name) {
+    return nft.collection.name;
+  }
+  
+  if (nft.contractMetadata && nft.contractMetadata.name) {
+    return nft.contractMetadata.name;
+  }
+  
+  if (nft.contract_name) {
+    return nft.contract_name;
+  }
+  
+  if (nft.contractName) {
+    return nft.contractName;
+  }
+  
+  return '';
+};
+
+/**
  * VercelNFTCard - Production-optimized NFT card component
  * Specifically designed for Vercel deployment to solve image loading issues
  */
@@ -180,7 +324,7 @@ const VercelNFTCard = (props) => {
       </div>
       
       {showFriendsModal && (
-        <FriendsModal
+        <CollectionFriendsModal
           friends={nft.collection_friends}
           collectionName={collection}
           onClose={() => setShowFriendsModal(false)}
