@@ -8,6 +8,8 @@ import { PrivyProvider, usePrivy } from '@privy-io/react-auth';
 // Import Redux Provider
 import { Provider as ReduxProvider } from 'react-redux';
 import store from './redux/store';
+// Import StyleProvider
+import { StyleProvider } from './contexts/StyleContext';
 
 // Add a try-catch for styles import to prevent build failures
 try {
@@ -465,30 +467,32 @@ function AppContent() {
 function App() {
   return (
     <ReduxProvider store={store}>
-      <PrivyProvider
-        appId={PRIVY_APP_ID}
-        config={{
-          loginMethods: ['farcaster'],
-          appearance: {
-            theme: 'light',
-            accentColor: '#6d28d9' // Purple color to match your existing UI
-          }
-        }}
-      >
-        <AuthProvider>
-          <WalletProvider>
-            <Router>
-              <Suspense fallback={<LoadingScreen />}>
-                <CustomErrorBoundary>
-                  {/* Add FarcasterDataLoader here to pre-fetch data on login */}
-                  <FarcasterDataLoader />
-                  <AppContent />
-                </CustomErrorBoundary>
-              </Suspense>
-            </Router>
-          </WalletProvider>
-        </AuthProvider>
-      </PrivyProvider>
+      <CustomErrorBoundary>
+        <PrivyProvider
+          appId={PRIVY_APP_ID}
+          config={{
+            loginMethods: ['wallet', 'farcaster'],
+            appearance: {
+              theme: 'light',
+              accentColor: '#7000FF'
+            }
+          }}
+        >
+          <StyleProvider>
+            <AuthProvider>
+              <WalletProvider>
+                <NFTProvider>
+                  <Router>
+                    <Suspense fallback={<LoadingScreen />}>
+                      <AppContent />
+                    </Suspense>
+                  </Router>
+                </NFTProvider>
+              </WalletProvider>
+            </AuthProvider>
+          </StyleProvider>
+        </PrivyProvider>
+      </CustomErrorBoundary>
     </ReduxProvider>
   );
 }

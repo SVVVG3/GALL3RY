@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
-import '../styles/nft-components.css';
+import '../styles/nft-unified.css';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import { createPortal } from 'react-dom';
 

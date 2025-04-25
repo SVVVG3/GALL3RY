@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useEffect } from 'react';
 import { FixedSizeGrid } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-import '../styles/nft-components.css';
+import '../styles/nft-unified.css';
 import NFTCard from './NftCard.js'; // Explicit extension to ensure correct file is loaded
 import VercelNFTCard from './VercelNFTCard.js'; // Import Vercel-optimized component
 import { createConsistentUniqueId } from '../services/alchemyService';

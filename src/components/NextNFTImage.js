@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import '../styles/NFTImage.css';
+import '../styles/nft-unified.css';
 
 /**
  * Vercel-optimized NFT image component

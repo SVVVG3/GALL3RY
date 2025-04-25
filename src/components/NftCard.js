@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
-import '../styles/nft-components.css';
+import '../styles/nft-unified.css';
 import CollectionFriendsModal from './CollectionFriendsModal';
 
 /**

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import './NFTImage.css';
+import '../styles/nft-unified.css';
 import Spinner from './Spinner';
 
 /**
