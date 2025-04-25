@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import { getFarcasterProfile } from '../services/zapperService';
-import NFTGrid from './NFTGrid';
+import VirtualizedNFTGrid from './VirtualizedNFTGrid';
 import { FaSort, FaTimes } from 'react-icons/fa';
 import '../styles/FarcasterUserSearch.css';
 import '../styles/FarcasterProfile.css';
@@ -735,7 +735,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             
             {/* Use the existing NFTGallery component to display NFTs */}
             <div className="nft-section nft-display">
-              <NFTGrid 
+              <VirtualizedNFTGrid 
                 nfts={filteredAndSortedNfts()} 
                 isLoading={isSearching} 
               />

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { useAuth } from '../contexts/AuthContext';
 import folderService from '../services/folderService';
-import NFTGrid from './NFTGrid';
+import VirtualizedNFTGrid from './VirtualizedNFTGrid';
 import config from '../config';
 import '../styles/folder.css';
 
@@ -291,7 +291,7 @@ const FolderDetail = ({
                 </select>
               </div>
             </div>
-            <NFTGrid nfts={sortedNfts} />
+            <VirtualizedNFTGrid nfts={sortedNfts} />
           </>
         ) : (
           <div className="empty-folder">

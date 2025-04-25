@@ -1,0 +1,85 @@
+import React, { useCallback } from 'react';
+import { FixedSizeGrid } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
+import NFTCard from './NftCard';
+import '../styles/nft-unified.css';
+
+/**
+ * VirtualizedNFTGrid Component
+ * 
+ * A drop-in replacement for the old NFTGrid component that uses virtualization
+ * for better performance with large collections of NFTs.
+ * 
+ * @param {Array} nfts - Array of NFT objects to display
+ * @param {boolean} isLoading - Whether NFTs are currently being loaded
+ * @param {string} emptyMessage - Message to display when no NFTs are found
+ */
+const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" }) => {
+  // Grid cell renderer
+  const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
+    const index = rowIndex * data.columnCount + columnIndex;
+    
+    if (index >= data.nfts.length) {
+      return null;
+    }
+    
+    const nft = data.nfts[index];
+    
+    return (
+      <div style={{
+        ...style,
+        padding: '10px',
+      }}>
+        <NFTCard key={`nft-${index}-${nft.tokenId || nft.token_id || index}`} nft={nft} />
+      </div>
+    );
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="nft-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading NFTs...</p>
+      </div>
+    );
+  }
+
+  if (!nfts || nfts.length === 0) {
+    return (
+      <div className="nft-empty">
+        <p>{emptyMessage}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="virtualized-grid-container">
+      <AutoSizer>
+        {({ height, width }) => {
+          // Calculate number of columns based on width
+          // Minimum card width is 250px with 20px gap
+          const columnWidth = 270;
+          const columnCount = Math.max(1, Math.floor(width / columnWidth));
+          const rowCount = Math.ceil(nfts.length / columnCount);
+          
+          return (
+            <FixedSizeGrid
+              className="virtualized-grid"
+              columnCount={columnCount}
+              columnWidth={width / columnCount}
+              height={Math.min(800, rowCount * 320)} // Set a reasonable max height, but allow smaller if fewer items
+              rowCount={rowCount}
+              rowHeight={320} // Approximate height for an NFT card
+              width={width}
+              itemData={{ nfts, columnCount }}
+            >
+              {Cell}
+            </FixedSizeGrid>
+          );
+        }}
+      </AutoSizer>
+    </div>
+  );
+};
+
+export default VirtualizedNFTGrid; 
