@@ -420,7 +420,7 @@
   text-decoration: underline;
 }
 
-/* NFT display area */
+/* NFT display area - IMPORTANT: Let nft-components.css handle the actual grid */
 .nft-display {
   width: 100%;
   margin: 0 auto;
@@ -779,14 +779,6 @@
   max-width: 100%;
   margin-top: 20px;
   padding: 0 5px;
-}
-
-/* IMPORTANT: All NFT grid layout styles have been moved to NFTGrid.css.
-   Only container width settings remain here. */
-
-.nft-grid-wrapper {
-  width: 100%;
-  margin-top: 10px;
 }
 
 /* NFT Count Info */
@@ -1716,7 +1708,7 @@
   gap: 10px;
 }
 
-/* NFT display area - IMPORTANT: Let NFTGrid.css handle the actual grid */
+/* NFT display area - IMPORTANT: Let nft-components.css handle the actual grid */
 .nft-display {
   width: 100%;
   margin: 0 auto;

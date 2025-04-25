@@ -452,7 +452,7 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
   }, [nft, contractAddress, tokenId, getMediaType]); // Added getMediaType to dependency array
   
   // Safety fallback for placeholders
-  const placeholderUrl = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIiB2aWV3Qm94PSIwIDAgMzAwIDMwMCI+PHJlY3Qgd2lkdGg9IjMwMCIgaGVpZ2h0PSIzMDAiIGZpbGw9IiNmMGYwZjAiLz48dGV4dCB4PSI1MCUiIHk9IjUwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBmaWxsPSIjNjY2Ij5JbWFnZSB1bmF2YWlsYWJsZTwvdGV4dD48L3N2Zz4=";
+  const placeholderUrl = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' fill='%23f0f0f0'/%3E%3Ctext x='50' y='50' font-family='Arial' font-size='14' text-anchor='middle' alignment-baseline='middle' fill='%23999999'%3ENFT%3C/text%3E%3C/svg%3E";
   
   // Log the final URL being used
   useEffect(() => {
@@ -695,65 +695,37 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
   };
   
   return (
-    <div 
-      className="nft-card vercel-nft-card" 
-      onClick={handleCardClick} 
-      style={{ 
-        position: 'relative',
-        isolation: 'isolate' // Create a stacking context
-      }}
-    >
-      {/* NFT Media Container - OUTSIDE the Link to prevent click capturing */}
-      <div className="nft-media-container" style={{ 
-        position: 'relative', 
-        width: '100%',
-        paddingBottom: '100%', // 1:1 aspect ratio
-        backgroundColor: '#f5f5f5',
-        flexShrink: 0,
-        zIndex: 5 // Ensure media is above other elements
-      }}>
+    <div className="vercel-nft-card" onClick={handleCardClick}>
+      {/* NFT Media Container */}
+      <div className="nft-media-container">
         {/* Debug info - remove in production */}
-        <div style={{
-          position: 'absolute',
-          bottom: '0',
-          left: '0',
-          right: '0',
-          backgroundColor: 'rgba(0,0,0,0.7)',
-          color: 'white',
-          fontSize: '9px',
-          padding: '2px 4px',
-          zIndex: 6, // Above the media
-          overflow: 'hidden',
-          whiteSpace: 'nowrap',
-          textOverflow: 'ellipsis'
-        }}>
-          Debug URL: {debugMediaUrl} (Type: {mediaType})
-        </div>
+        {process.env.NODE_ENV !== 'production' && (
+          <div style={{
+            position: 'absolute',
+            bottom: '0',
+            left: '0',
+            right: '0',
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            color: 'white',
+            fontSize: '9px',
+            padding: '2px 4px',
+            zIndex: 6,
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis'
+          }}>
+            Debug URL: {debugMediaUrl} (Type: {mediaType})
+          </div>
+        )}
         
         {/* Render appropriate media type based on content */}
         {mediaType === 'image' && (
           <img
             src={mediaUrl}
             alt={title}
-            className="nft-image-content"
+            className="nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              visibility: 'visible',
-              opacity: 1,
-              zIndex: 5, // Ensure it's visible
-              margin: 0,
-              padding: 0,
-              border: 'none',
-              fontFamily: 'inherit'
-            }}
           />
         )}
         
@@ -767,21 +739,6 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
             loop
             muted
             playsInline
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-              visibility: 'visible',
-              opacity: 1,
-              zIndex: 5, // Ensure it's visible
-              margin: 0,
-              padding: 0,
-              border: 'none'
-            }}
           />
         )}
         
@@ -796,7 +753,7 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#f0f0f0',
-            zIndex: 5 // Ensure it's visible
+            zIndex: 5
           }}>
             <audio
               src={mediaUrl}
@@ -806,8 +763,7 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
               controls
               style={{
                 width: '90%',
-                maxWidth: '250px',
-                zIndex: 5 // Ensure it's visible
+                maxWidth: '250px'
               }}
             />
           </div>
@@ -815,26 +771,8 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
         
         {/* Loading indicator - only shown while loading */}
         {!mediaLoaded && !mediaError && (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f5f5f5',
-            zIndex: mediaLoaded ? 0 : 6 // Above the media while loading
-          }}>
-            <div style={{
-              width: '30px',
-              height: '30px',
-              border: '3px solid rgba(0, 0, 0, 0.1)',
-              borderTopColor: '#7c3aed',
-              borderRadius: '50%',
-              animation: 'spin 1s linear infinite'
-            }}></div>
+          <div className="loading-indicator">
+            <div className="loading-spinner"></div>
             <style dangerouslySetInnerHTML={{ __html: spinKeyframes }} />
           </div>
         )}
@@ -851,7 +789,7 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#f5f5f5',
-            zIndex: 6 // Above everything
+            zIndex: 6
           }}>
             <img 
               src={placeholderUrl}
@@ -866,135 +804,57 @@ const VercelNFTCard = ({ nft, virtualized = false }) => {
         )}
       </div>
       
-      {/* NFT Info - Replaced Link with a regular div */}
-      <div className="nft-info-container" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        flex: 1,
-        color: 'inherit',
-        zIndex: 4, // Below the media
-        position: 'relative' // Add position relative for friends button positioning
-      }}>
-        <div className="nft-details" style={{ padding: '12px', zIndex: 4 }}>
-          <div className="nft-info">
-            <h3 style={{ 
-              margin: '0 0 4px 0',
-              fontSize: '16px',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              fontFamily: 'Arial, sans-serif'
-            }}>{title}</h3>
-            {collection && (
-              <p style={{
-                margin: 0,
-                marginBottom: formattedValue ? '2px' : '0',
-                fontSize: '14px',
-                color: '#666',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontFamily: 'Arial, sans-serif'
-              }}>{collection}</p>
-            )}
-            {formattedValue && (
-              <p style={{
-                margin: 0,
-                fontSize: '14px',
-                color: '#4CAF50', // Green color for value
-                fontWeight: 500,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                fontFamily: 'Arial, sans-serif'
-              }}>
-                {formattedValue}
-              </p>
-            )}
-          </div>
-          
-          {/* Add Collection Friends button for Farcaster users */}
-          {showFriendsButton && (
-            <button 
-              className="collection-friends-button" 
-              onClick={handleShowFriends}
-              title="Show friends who own this collection"
-            >
-              <svg 
-                width="16" 
-                height="16" 
-                viewBox="0 0 24 24" 
-                fill="none" 
-                xmlns="http://www.w3.org/2000/svg"
-                style={{
-                  display: 'block',
-                  fill: 'none',
-                  stroke: 'currentColor'
-                }}
-              >
-                <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{fill: 'none', strokeWidth: 2}}/>
-                <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{fill: 'none', strokeWidth: 2}}/>
-                <path d="M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{fill: 'none', strokeWidth: 2}}/>
-                <path d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{fill: 'none', strokeWidth: 2}}/>
-              </svg>
-            </button>
-          )}
+      {/* NFT Info */}
+      <div className="nft-info-container">
+        <div className="nft-details">
+          <h3 className="nft-name">{title}</h3>
+          {collection && <p className="nft-collection">{collection}</p>}
+          {formattedValue && <p className="nft-price">{formattedValue}</p>}
         </div>
       </div>
       
-      {/* Render modal outside the NFT card container */}
-      {showFriendsModal && createPortal(
-        <div
-          style={{
-            position: 'fixed',
-            zIndex: 9999,
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          onClick={() => handleCloseFriendsModal()}
+      {/* Collection Friends button */}
+      {showFriendsButton && (
+        <button 
+          className="collection-friends-button" 
+          onClick={handleShowFriends}
+          title="Show friends who own this collection"
         >
-          <div
+          <svg 
+            width="18" 
+            height="18" 
+            viewBox="0 0 24 24" 
+            xmlns="http://www.w3.org/2000/svg"
             style={{
-              position: 'relative',
-              backgroundColor: 'white',
-              padding: '20px',
-              borderRadius: '8px',
-              maxWidth: '90%',
-              maxHeight: '90%',
-              overflow: 'auto'
+              fill: 'none',
+              stroke: '#444',
+              strokeWidth: 2,
+              strokeLinecap: 'round',
+              strokeLinejoin: 'round'
             }}
-            onClick={(e) => e.stopPropagation()}
           >
-            <div style={{
-              position: 'absolute',
-              top: '10px',
-              right: '10px',
-              width: '30px',
-              height: '30px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              zIndex: 10010,
-              background: '#f1f1f1',
-              borderRadius: '50%'
-            }}
-            onClick={handleCloseFriendsModal}
-            >
-              <span style={{ fontSize: '20px' }}>✕</span>
-            </div>
+            <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21" />
+            <path d="M9 11C11.2091 11 13 9.20914 13 7C13 4.79086 11.2091 3 9 3C6.79086 3 5 4.79086 5 7C5 9.20914 6.79086 11 9 11Z" />
+            <path d="M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13" />
+            <path d="M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88" />
+          </svg>
+        </button>
+      )}
+      
+      {/* Collection Friends Modal Portal */}
+      {showFriendsModal && createPortal(
+        <div 
+          className="modal-overlay" 
+          onClick={handleModalClick}
+          onKeyDown={handleEscKey}
+          tabIndex="-1"
+        >
+          <div className="modal-container">
             <CollectionFriendsModal
               isOpen={showFriendsModal}
               onClose={handleCloseFriendsModal}
               collectionAddress={modalContractAddress || contractAddress}
-              collectionName={collection || 'NFT Collection'}
+              collectionName={collection}
               network={modalNetwork}
             />
           </div>
