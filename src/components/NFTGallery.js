@@ -178,7 +178,7 @@ const NFTGallery = () => {
         )}
       </div>
       
-      <div className="nft-grid-wrapper">
+      <div className="nft-grid-wrapper" style={{ height: nfts.length > 0 ? '700px' : '400px' }}>
         <NFTGrid nfts={nfts} isLoading={isLoading && nfts.length === 0} />
       </div>
       

@@ -167,7 +167,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
           const itemSize = Math.max(itemWidth, 200); // Minimum size of 200px
           const rowCount = Math.ceil(nftsToRender.length / columnCount);
           
-          // If height is not provided, use a fixed height
+          // Use height or default to 600px if not provided
           const gridHeight = height || 600;
           
           console.log(`Rendering grid with dimensions: ${width}x${gridHeight}, columns: ${columnCount}, rows: ${rowCount}`);
@@ -180,7 +180,7 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
               columnCount={columnCount}
               columnWidth={itemWidth}
               rowCount={rowCount}
-              rowHeight={itemSize + 80} // Add extra space for NFT title and collection
+              rowHeight={itemSize + 100} // Increased space for NFT title and collection
               itemData={{
                 nfts: nftsToRender,
                 columnCount,
@@ -188,6 +188,10 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
               }}
               overscanRowCount={3} // Render additional rows for smoother scrolling
               overscanColumnCount={2}
+              style={{
+                overflowX: 'hidden',
+                overflowY: 'auto'
+              }}
             >
               {MemoizedCell}
             </FixedSizeGrid>
