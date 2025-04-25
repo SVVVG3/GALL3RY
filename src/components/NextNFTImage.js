@@ -1,66 +1,59 @@
 import React, { useState } from 'react';
+import NFTImage from './NFTImage';
 import '../styles/nft-unified.css';
 
 /**
- * Vercel-optimized NFT image component
- * Uses direct <img> tag rather than Next Image for better compatibility
- * with the image proxy
+ * Optimized NFT image component specifically for Next.js and Vercel deployments
+ * Uses a more reliable approach for loading images through an image proxy
  */
-const NextNFTImage = ({ src, alt = 'NFT', className = '' }) => {
-  const [error, setError] = useState(false);
-  const [loaded, setLoaded] = useState(false);
+const NextNFTImage = ({ nft, alt, className, style, onClick, onLoad, handleMediaError, noHoverEffect = false, prioritized = false }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
 
-  // Use proxy for all external images
-  const processUrl = (url) => {
-    if (!url) return `${window.location.origin}/assets/placeholder-nft.svg`;
+  // Find the best URL from the NFT metadata
+  const findBestImageUrl = (nft) => {
+    if (!nft) return null;
     
-    // If already proxied or local asset, use as is
-    if (url.startsWith('/api/image-proxy') || url.startsWith('/assets/')) return url;
+    // Try standard image sources
+    if (nft.image) {
+      return typeof nft.image === 'string' ? nft.image : nft.image.url || nft.image.gateway || nft.image.cachedUrl;
+    }
     
-    // Otherwise, proxy the image
-    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    // Try Alchemy media format
+    if (nft.media && Array.isArray(nft.media) && nft.media.length > 0) {
+      return nft.media[0].gateway || nft.media[0].raw;
+    }
+    
+    // Try other common properties
+    return nft.image_url || nft.metadata?.image || nft.tokenUri;
   };
+
+  const imageUrl = findBestImageUrl(nft);
   
-  const imageUrl = processUrl(src);
-  
+  const handleLoadingComplete = () => {
+    setIsLoading(false);
+    if (onLoad) onLoad();
+  };
+
+  const handleImageError = () => {
+    setHasError(true);
+    setIsLoading(false);
+    if (handleMediaError) handleMediaError();
+  };
+
   return (
-    <div className="next-nft-image-container">
-      {!loaded && !error && (
-        <div className="next-nft-loading">
-          <div className="loading-spinner"></div>
-        </div>
-      )}
-      
-      <img
-        src={imageUrl}
-        alt={alt}
-        className={`next-nft-image ${loaded ? 'loaded' : ''} ${error ? 'error' : ''}`}
-        onLoad={() => setLoaded(true)}
-        onError={() => {
-          setError(true);
-          setLoaded(true);
-        }}
-        style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          visibility: 'visible',
-          opacity: loaded ? 1 : 0,
-          transition: 'opacity 0.3s ease'
-        }}
-      />
-      
-      {error && (
-        <div className="next-nft-error">
-          <img 
-            src={`${window.location.origin}/assets/placeholder-nft.svg`}
-            alt={`${alt} (unavailable)`}
-            className="next-nft-placeholder"
-          />
-        </div>
-      )}
-    </div>
+    <NFTImage
+      nft={nft}
+      src={imageUrl}
+      alt={alt || nft?.name || nft?.title || 'NFT'}
+      className={className}
+      style={style}
+      onClick={onClick}
+      onLoad={handleLoadingComplete}
+      handleMediaError={handleImageError}
+      noHoverEffect={noHoverEffect}
+      prioritized={prioritized}
+    />
   );
 };
 

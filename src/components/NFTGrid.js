@@ -116,6 +116,18 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
     // Use uniqueId if available, otherwise generate a key
     const nftKey = nft.uniqueId || getNftKey(nft) || `nft-${index}`;
     
+    // IMPORTANT DEBUGGING: Log the specific NFT that might be causing problems
+    if (index < 5) {
+      console.log(`Rendering NFT at index ${index}:`, {
+        name: nft.name || nft.title || 'Unknown',
+        id: nftKey,
+        hasImage: Boolean(nft.image || nft.imageUrl || nft.media),
+        imageDetails: nft.image 
+          ? (typeof nft.image === 'string' ? nft.image.substring(0, 50) : 'image object')
+          : 'no image property'
+      });
+    }
+    
     // Apply padding within the cell, not affecting the grid layout
     const cellStyle = {
       ...style,
@@ -126,11 +138,34 @@ const NFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No NFTs found" 
       position: 'absolute',
       left: style.left,
       top: style.top,
-      display: 'block' // Force display
+      display: 'block', // Force display
+      border: DEBUG_MODE ? '1px solid #ddd' : undefined, // Visual debugging aid
+      transition: 'background-color 0.3s ease', // Smooth transition for hover effects
+      borderRadius: '8px',
+      overflow: 'hidden', // Keep child content within the borders
     };
+    
+    // Add debug info for development troubleshooting
+    const DEBUG_MODE = process.env.NODE_ENV !== 'production';
     
     return (
       <div style={cellStyle} key={nftKey} className="nft-grid-cell">
+        {DEBUG_MODE && (
+          <div className="debug-overlay" style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            padding: '2px 5px',
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            color: 'white',
+            zIndex: 100,
+            fontSize: '10px',
+            pointerEvents: 'none',
+          }}>
+            NFT #{index}: {nft.name || nft.title || `#${nft.tokenId}`}
+          </div>
+        )}
         <div className="nft-cell-inner" style={{ 
           height: '100%', 
           display: 'flex', 
