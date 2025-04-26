@@ -167,11 +167,11 @@ button {
 /* =================== NFT GRID =================== */
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 24px;
   width: 100%;
   padding: 20px;
-  background-color: var(--bg-color);
+  background-color: #f9f9f9; /* Light gray background */
 }
 
 /* =================== NFT CARD =================== */
@@ -185,9 +185,8 @@ button {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
-  height: 100%;
+  height: auto; /* Allow natural height */
   width: 100%;
-  min-height: 300px;
   cursor: pointer;
 }
 
@@ -380,8 +379,12 @@ button {
 
 /* Dark mode support */
 @media (prefers-color-scheme: dark) {
+  .nft-grid {
+    background-color: #1a1a1a;
+  }
+  
   .nft-card {
-    background-color: #1e1e1e;
+    background-color: #222;
     border-color: #333;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
@@ -390,28 +393,41 @@ button {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
   
+  /* Image section */
   .nft-card .media-container {
+    background-color: #292929;
+    border-bottom-color: #333;
+  }
+  
+  /* Media types */
+  .nft-card img,
+  .nft-card video,
+  .nft-card object {
     background-color: #292929;
   }
   
-  .nft-card .media-image,
+  /* Loading and error states */
   .nft-card .media-loading,
   .nft-card .no-media {
     background-color: #292929;
-  }
-  
-  .nft-card .nft-info {
-    background-color: #1e1e1e;
-  }
-  
-  .nft-card .nft-name {
-    color: #e0e0e0;
-  }
-  
-  .nft-card .nft-collection {
     color: #aaa;
   }
   
+  /* Text section */
+  .nft-card .nft-info {
+    background-color: #222;
+  }
+  
+  /* Text colors */
+  .nft-card h3 {
+    color: #e0e0e0;
+  }
+  
+  .nft-card p {
+    color: #aaa;
+  }
+  
+  /* Floor price */
   .nft-card .nft-floor-price {
     color: #aaa;
   }
@@ -420,12 +436,14 @@ button {
     color: #ccc;
   }
   
+  /* Address */
   .nft-card .nft-address {
     color: #777;
   }
   
+  /* Friends button */
   .nft-card .collection-friends-button {
-    background: #333;
+    background-color: #333;
     color: #ccc;
   }
   
@@ -654,9 +672,9 @@ button {
   }
   
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
     gap: 16px;
-    padding: 12px;
+    padding: 16px;
   }
   
   .wallet-input-section form {
@@ -696,7 +714,7 @@ button {
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 12px;
-    padding: 8px;
+    padding: 12px;
   }
   
   .nft-info {

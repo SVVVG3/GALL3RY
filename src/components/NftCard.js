@@ -364,7 +364,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
         display: 'flex',
         flexDirection: 'column',
-        height: '100%',
+        height: 'auto',
+        width: '100%',
         position: 'relative',
         cursor: onSelect ? 'pointer' : 'default'
       }}
@@ -422,7 +423,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         paddingTop: '100%', /* 1:1 Aspect ratio */
         overflow: 'hidden',
         backgroundColor: '#f8f8f8',
-        flexShrink: 0
+        flexShrink: 0,
+        borderBottom: '1px solid #f0f0f0'
       }}>
         {/* Render appropriate media type */}
         {mediaError || !imageUrl ? (
@@ -550,18 +552,19 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           
       {/* NFT info section */}
       <div style={{ 
-        padding: '12px',
+        padding: '12px 16px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
-        flexGrow: 1,
-        minHeight: '80px'
+        minHeight: '85px',
+        width: '100%'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          marginBottom: '4px'
+          marginBottom: '4px',
+          width: '100%'
         }}>
           <h3 style={{
             fontSize: '15px',
@@ -583,8 +586,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginTop: '4px',
-            minHeight: '20px'
+            marginTop: '6px',
+            width: '100%'
           }}>
             <p style={{
               margin: 0,
