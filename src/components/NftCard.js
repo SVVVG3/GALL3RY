@@ -1,9 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import '../styles/nft-unified.css';
+import dynamic from 'next/dynamic';
+import NextImage from 'next/image';
+
+// Dynamic imports
+const Modal = dynamic(() => import('./Modal'));
+const NFTImage = dynamic(() => import('./NFTImage'));
 
 // IPFS gateway URLs in order of preference
 const IPFS_GATEWAYS = [
@@ -34,28 +40,102 @@ const getReliableIpfsUrl = (url) => {
 };
 
 /**
- * Process URL through our server's image proxy to avoid CORS issues
- * Especially effective for Alchemy CDN URLs
+ * Get a proxied URL to avoid CORS issues when loading external images
+ * @param {string} url - The original image URL
+ * @return {string} The proxied URL or original if it's already proxied/local
  */
 const getProxiedUrl = (url) => {
-  if (!url) return url;
+  // For debugging
+  console.log('Proxying URL:', url);
   
   // Skip proxying for data URLs
-  if (url.startsWith('data:')) return url;
-  
-  // Skip for relative URLs
-  if (url.startsWith('/')) return url;
-  
-  // Encode the URL properly
-  const encodedUrl = encodeURIComponent(url);
-  
-  // For development (local)
-  if (window.location.hostname === 'localhost') {
-    return `http://localhost:3001/api/image-proxy?url=${encodedUrl}`;
+  if (url?.startsWith('data:')) {
+    console.log('Skipping proxy for data URL');
+    return url;
   }
   
-  // For production deployment
-  return `/api/image-proxy?url=${encodedUrl}`;
+  // Skip proxying for relative URLs
+  if (url?.startsWith('/') && !url.startsWith('//')) {
+    console.log('Skipping proxy for local URL:', url);
+    return url;
+  }
+  
+  // Skip if already proxied
+  if (url?.includes('/api/proxy?url=')) {
+    console.log('URL is already proxied:', url);
+    return url;
+  }
+  
+  try {
+    // Validate URL format
+    if (!url) return '';
+    new URL(url);
+    
+    // Determine if we're in local dev or production and construct proxy URL
+    const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+    const baseUrl = isLocal ? 'http://localhost:3000' : '';
+    const proxiedUrl = `${baseUrl}/api/proxy?url=${encodeURIComponent(url)}`;
+    
+    console.log('Proxied URL:', proxiedUrl);
+    return proxiedUrl;
+  } catch (error) {
+    console.error('Invalid URL format:', url, error);
+    return url || ''; // Return original if invalid
+  }
+};
+
+/**
+ * Find the best image URL from NFT metadata
+ * Handles multiple potential locations based on marketplace and standard
+ */
+const findBestImageUrl = (nft) => {
+  // For debugging
+  console.log('Finding image URL for NFT:', nft?.title || nft?.name);
+  
+  if (!nft) return '';
+  
+  // Try multiple possible image sources in order of preference
+  const possibleSources = [
+    // Direct image property
+    nft.image,
+    // Metadata image
+    nft.metadata?.image,
+    // OpenSea style media
+    nft.metadata?.image_url,
+    // Animation URL (sometimes contains image)
+    nft.metadata?.animation_url,
+    // Alchemy specific paths
+    nft.media?.[0]?.gateway,
+    nft.media?.[0]?.raw,
+    nft.media?.[0]?.thumbnail,
+    // NFTPort style
+    nft.file_url,
+    nft.cached_file_url,
+    // Contract metadata
+    nft.contract?.openSea?.imageUrl,
+    // Raw metadata paths (deeper traversal)
+    nft.rawMetadata?.image,
+    nft.rawMetadata?.image_url,
+    // Nested media in rawMetadata
+    nft.rawMetadata?.media?.[0]?.gateway,
+    nft.rawMetadata?.media?.[0]?.raw,
+    // Token URI as last resort
+    nft.tokenUri?.gateway,
+    nft.tokenUri?.raw
+  ];
+  
+  // Find first non-empty string URL
+  const imageUrl = possibleSources.find(source => 
+    typeof source === 'string' && source.trim() !== ''
+  );
+  
+  if (imageUrl) {
+    console.log('Found image URL:', imageUrl);
+    return imageUrl;
+  }
+  
+  console.warn('No valid image URL found for NFT:', nft);
+  return ''; // Return empty string if no valid URL found
 };
 
 /**
@@ -65,12 +145,13 @@ const getProxiedUrl = (url) => {
  * Supports various media types (image, video, audio)
  * Includes collection friends button for Farcaster users
  */
-const NFTCard = ({ nft }) => {
+const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = true }) => {
   const [mediaLoaded, setMediaLoaded] = useState(false);
   const [mediaError, setMediaError] = useState(false);
   const [mediaType, setMediaType] = useState('image');
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [currentGatewayIndex, setCurrentGatewayIndex] = useState(0);
+  const [imageUrl, setImageUrl] = useState('');
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
   
@@ -119,76 +200,32 @@ const NFTCard = ({ nft }) => {
     console.warn('Error extracting floor price:', error);
   }
   
-  // Find the best image URL from different possible locations
-  const getImageUrl = () => {
-    try {
-      // Log the NFT object for debugging
-      console.log('NFT object in getImageUrl:', nft);
-
-      // Check all possible locations for image URL
-      const imageSources = [
-        // Direct handling of image object (which might be a non-string value)
-        nft?.media?.[0]?.gateway,
-        nft?.media?.[0]?.raw,
-        nft?.media?.[0]?.uri,
-        nft?.media?.[0]?.url,
-        
-        // Object with cachedUrl (Alchemy format)
-        nft?.image?.cachedUrl,
-        // Image URL object with cachedUrl
-        nft?.imageUrl?.cachedUrl,
-        
-        // Raw metadata image - handle both string and object
-        typeof nft?.rawMetadata?.image === 'string' ? nft.rawMetadata.image : null,
-        typeof nft?.rawMetadata?.image === 'object' ? nft.rawMetadata.image.url || nft.rawMetadata.image.uri : null,
-        
-        // Direct image string
-        typeof nft?.image === 'string' ? nft.image : null,
-        // Image URL string
-        typeof nft?.imageUrl === 'string' ? nft.imageUrl : null,
-        
-        // Object with URI or URL properties
-        nft?.image?.uri,
-        nft?.image?.url,
-        
-        // Metadata image
-        typeof nft?.metadata?.image === 'string' ? nft.metadata.image : null
-      ];
-      
-      // Find the first valid URL (non-null, non-undefined)
-      const imageUrl = imageSources.find(src => src !== undefined && src !== null);
-      
-      // Add debug log to show the exact image URL being used
-      console.log('Using image URL:', imageUrl);
-      
-      // Apply IPFS gateway transformation first
-      const reliableUrl = getReliableIpfsUrl(imageUrl) || '';
-      
-      // For Alchemy CDN URLs or other external URLs, use our proxy
-      if (reliableUrl.includes('nft-cdn.alchemy.com') || !reliableUrl.startsWith('data:')) {
-        const proxiedUrl = getProxiedUrl(reliableUrl);
-        console.log('Using proxied URL to avoid CORS:', proxiedUrl);
-        return proxiedUrl;
-      }
-      
-      return reliableUrl;
-    } catch (error) {
-      console.warn('Error getting image URL:', error);
-      return '';
+  // Extract and process image URL on mount
+  useEffect(() => {
+    console.log('Processing NFT image for:', name);
+    const url = findBestImageUrl(nft);
+    if (url) {
+      const processedUrl = getProxiedUrl(url);
+      setImageUrl(processedUrl);
+      console.log('Set processed URL:', processedUrl);
+    } else {
+      console.warn('No URL found for NFT:', name);
+      setMediaError(true);
     }
-  };
+  }, [nft, name]);
   
   // Determine media type based on URL or metadata
   useEffect(() => {
-    const url = getImageUrl();
-    if (!url) return;
+    if (!imageUrl) return;
+    
+    console.log('Determining media type for URL:', imageUrl);
     
     // Check if url is a string before using match
-    if (typeof url === 'string') {
+    if (typeof imageUrl === 'string') {
       // Check URL file extension
-      if (url.match(/\.(mp4|webm|mov)($|\?)/i)) {
+      if (imageUrl.match(/\.(mp4|webm|mov)($|\?)/i)) {
         setMediaType('video');
-      } else if (url.match(/\.(mp3|wav|ogg)($|\?)/i)) {
+      } else if (imageUrl.match(/\.(mp3|wav|ogg)($|\?)/i)) {
         setMediaType('audio');
       } else {
         setMediaType('image');
@@ -207,19 +244,31 @@ const NFTCard = ({ nft }) => {
         setMediaType('audio');
       }
     }
-  }, [nft]);
+  }, [imageUrl, nft]);
   
   // Handle media load success
   const handleMediaLoad = () => {
+    console.log('Media loaded successfully:', imageUrl);
     setMediaLoaded(true);
+    setMediaError(false);
   };
   
   // Handle media load error
   const handleMediaError = () => {
+    console.error('Media error for URL:', imageUrl);
+    
     // If we have more gateways to try and this is an IPFS URL, try the next gateway
-    if (currentGatewayIndex < IPFS_GATEWAYS.length - 1 && getImageUrl().includes('/ipfs/')) {
+    if (currentGatewayIndex < IPFS_GATEWAYS.length - 1 && imageUrl.includes('/ipfs/')) {
       console.log(`Gateway ${currentGatewayIndex} failed, trying next gateway...`);
       setCurrentGatewayIndex(currentGatewayIndex + 1);
+      
+      // Update URL with new gateway
+      const ipfsHashMatch = imageUrl.match(/(?:\/ipfs\/|ipfs\/)([a-zA-Z0-9]+.*)/);
+      if (ipfsHashMatch) {
+        const newUrl = IPFS_GATEWAYS[currentGatewayIndex + 1] + ipfsHashMatch[1];
+        console.log('Trying new gateway URL:', newUrl);
+        setImageUrl(newUrl);
+      }
     } else {
       setMediaError(true);
     }
@@ -236,21 +285,10 @@ const NFTCard = ({ nft }) => {
     setShowFriendsModal(false);
   };
   
-  // Get base image URL
-  let imageUrl = getImageUrl();
-  
-  // If it's an IPFS URL and we're trying a backup gateway, replace the gateway
-  if (currentGatewayIndex > 0 && imageUrl && imageUrl.includes('/ipfs/')) {
-    const ipfsHashMatch = imageUrl.match(/(?:\/ipfs\/|ipfs\/)([a-zA-Z0-9]+.*)/);
-    if (ipfsHashMatch) {
-      imageUrl = IPFS_GATEWAYS[currentGatewayIndex] + ipfsHashMatch[1];
-      console.log(`Trying fallback gateway ${currentGatewayIndex}:`, imageUrl);
-    }
-  }
-  
   // Render the media content based on type
   const renderMedia = () => {
-    // FIXED: Modified the media rendering to ensure proper z-index and visibility
+    // Debug the current image URL being used
+    console.log('Rendering media with URL:', imageUrl);
     
     // Always show the loading spinner initially (but positioned behind the media)
     const loadingSpinner = !mediaLoaded && !mediaError ? (
@@ -261,6 +299,7 @@ const NFTCard = ({ nft }) => {
     
     // Show error state if media failed to load
     if (mediaError) {
+      console.error('Media error for URL:', imageUrl);
       return (
         <div className="nft-media-error" style={{ zIndex: 3 }}>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -269,12 +308,16 @@ const NFTCard = ({ nft }) => {
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>Failed to load</span>
+          <small style={{ fontSize: '9px', opacity: 0.7, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {imageUrl?.substring(0, 30)}...
+          </small>
         </div>
       );
     }
     
     // Check if we have a valid URL
     if (!imageUrl) {
+      console.warn('No image URL found for NFT:', name);
       return (
         <div className="nft-media-error" style={{ zIndex: 3 }}>
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -293,6 +336,7 @@ const NFTCard = ({ nft }) => {
       case 'video':
         mediaElement = (
           <video
+            key={`video-${imageUrl}`}
             src={imageUrl}
             className="nft-media nft-video"
             controls
@@ -315,6 +359,7 @@ const NFTCard = ({ nft }) => {
               </svg>
             </div>
             <audio
+              key={`audio-${imageUrl}`}
               src={imageUrl}
               className="nft-audio"
               controls
@@ -330,12 +375,20 @@ const NFTCard = ({ nft }) => {
       default:
         mediaElement = (
           <img
+            key={`img-${imageUrl}`}
             src={imageUrl}
             alt={name}
             className="nft-media nft-image"
             onLoad={handleMediaLoad}
             onError={handleMediaError}
-            style={{ position: 'absolute', zIndex: 2, width: '100%', height: '100%', objectFit: 'cover' }}
+            style={{ 
+              position: 'absolute',
+              zIndex: 2, 
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              visibility: mediaLoaded ? 'visible' : 'hidden' // Hide until loaded to prevent FOUC
+            }}
             crossOrigin="anonymous"
           />
         );
@@ -355,7 +408,6 @@ const NFTCard = ({ nft }) => {
   useEffect(() => {
     // Reset the media state when imageUrl changes
     setMediaLoaded(false);
-    setMediaError(false);
     
     // If no image URL, show error state
     if (!imageUrl) {
@@ -365,44 +417,43 @@ const NFTCard = ({ nft }) => {
     
     // For images, preload to check if they work
     if (mediaType === 'image') {
+      console.log('Preloading image:', imageUrl);
       const img = new Image();
       img.crossOrigin = "anonymous";
       img.onload = handleMediaLoad;
       img.onerror = handleMediaError;
       img.src = imageUrl;
     }
-  }, [imageUrl, mediaType, currentGatewayIndex]);
+  }, [imageUrl, mediaType]);
   
   return (
-    <div className="nft-card">
-      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden', backgroundColor: 'transparent' }}>
+    <div 
+      className={`nft-card ${selected ? 'nft-card-selected' : ''}`} 
+      onClick={onSelect}
+      style={style}
+    >
+      <div className="nft-media-container">
         {renderMedia()}
         
-        {/* Collection friends button (for Farcaster users) */}
-        {isAuthenticated && profile && (
-          <button
-            className="collection-friends-button"
-            onClick={handleShowFriends}
-            aria-label="View collection friends"
-            style={{ zIndex: 10 }}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-          </button>
+        {showCheckbox && (
+          <div className="nft-checkbox">
+            <input 
+              type="checkbox" 
+              checked={selected} 
+              onChange={onSelect} 
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
         )}
       </div>
-      
+          
       <div className="nft-info">
         <div className="nft-info-header">
           <h3 className="nft-name" title={name}>{name}</h3>
-          
+            
           {/* Inline collection friends button (alternative placement) */}
           {isAuthenticated && profile && collection && (
-            <button
+            <button 
               className="collection-friends-button-inline"
               onClick={handleShowFriends}
               aria-label="View collection friends"
