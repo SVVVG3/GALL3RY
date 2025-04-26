@@ -239,11 +239,24 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
     
     // Check if url is a string before using match
     if (typeof imageUrl === 'string') {
+      // Special handling for data URLs
+      if (imageUrl.startsWith('data:')) {
+        if (imageUrl.includes('image/svg+xml')) {
+          setMediaType('svg');
+          return;
+        } else if (imageUrl.includes('image/')) {
+          setMediaType('image');
+          return;
+        }
+      }
+      
       // Check URL file extension
       if (imageUrl.match(/\.(mp4|webm|mov)($|\?)/i)) {
         setMediaType('video');
       } else if (imageUrl.match(/\.(mp3|wav|ogg)($|\?)/i)) {
         setMediaType('audio');
+      } else if (imageUrl.match(/\.svg($|\?)/i)) {
+        setMediaType('svg');
       } else {
         setMediaType('image');
       }
@@ -259,6 +272,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
         setMediaType('video');
       } else if (format.includes('audio')) {
         setMediaType('audio');
+      } else if (format.includes('svg')) {
+        setMediaType('svg');
       }
     }
   }, [imageUrl, nft]);
@@ -273,6 +288,22 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
   // Handle media load error
   const handleMediaError = () => {
     console.error('Media error for URL:', imageUrl);
+    
+    // Try to handle data URLs differently
+    if (imageUrl && imageUrl.startsWith('data:')) {
+      console.log('Error with data URL, trying direct display');
+      
+      // For data URLs, we'll try to display directly without any special handling
+      try {
+        if (imageUrl.includes('image/svg+xml')) {
+          setMediaType('svg');
+          setMediaLoaded(true); // Consider it loaded
+          return;
+        }
+      } catch (e) {
+        console.error('Error handling data URL:', e);
+      }
+    }
     
     // If we have more gateways to try and this is an IPFS URL, try the next gateway
     if (currentGatewayIndex < IPFS_GATEWAYS.length - 1 && imageUrl.includes('/ipfs/')) {
@@ -388,26 +419,72 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
         );
         break;
         
-      case 'image':
-      default:
+      case 'svg':
+        // Directly display SVGs (especially for data URLs)
         mediaElement = (
-          <img
-            key={`img-${imageUrl}`}
-            src={imageUrl}
-            alt={name}
-            className="nft-media nft-image"
-            onLoad={handleMediaLoad}
-            onError={handleMediaError}
+          <div 
+            className="nft-media nft-svg"
             style={{ 
               position: 'absolute',
               zIndex: 2, 
               width: '100%',
               height: '100%',
-              objectFit: 'cover'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '10px',
+              boxSizing: 'border-box'
             }}
-            crossOrigin="anonymous"
+            dangerouslySetInnerHTML={{ 
+              __html: imageUrl.startsWith('data:image/svg+xml') 
+                ? atob(imageUrl.split(',')[1]) 
+                : `<img src="${imageUrl}" style="max-width:100%; max-height:100%; object-fit:contain;" />` 
+            }}
           />
         );
+        break;
+        
+      case 'image':
+      default:
+        // Check if this is a data URL
+        if (imageUrl.startsWith('data:')) {
+          mediaElement = (
+            <img
+              key={`img-${imageUrl.substring(0, 20)}`}
+              src={imageUrl}
+              alt={name}
+              className="nft-media nft-image"
+              onLoad={handleMediaLoad}
+              onError={handleMediaError}
+              style={{ 
+                position: 'absolute',
+                zIndex: 2, 
+                width: '100%',
+                height: '100%',
+                objectFit: 'contain' // Use contain for data URLs which might be SVGs
+              }}
+            />
+          );
+        } else {
+          mediaElement = (
+            <img
+              key={`img-${imageUrl}`}
+              src={imageUrl}
+              alt={name}
+              className="nft-media nft-image"
+              onLoad={handleMediaLoad}
+              onError={handleMediaError}
+              style={{ 
+                position: 'absolute',
+                zIndex: 2, 
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover'
+              }}
+              crossOrigin="anonymous"
+            />
+          );
+        }
         break;
     }
     
@@ -424,6 +501,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
   useEffect(() => {
     // Reset the media state when imageUrl changes
     setMediaLoaded(false);
+    setMediaError(false);
     
     // If no image URL, show error state
     if (!imageUrl) {
@@ -431,7 +509,21 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
       return;
     }
     
-    // For images, preload to check if they work
+    // Special handling for data URLs - consider them loaded
+    if (imageUrl.startsWith('data:')) {
+      console.log('Data URL detected, considering loaded:', imageUrl.substring(0, 50) + '...');
+      
+      // If it's an SVG, we'll handle it specially
+      if (imageUrl.includes('image/svg+xml')) {
+        setMediaType('svg');
+      }
+      
+      // For data URLs, we can assume they're already loaded
+      setMediaLoaded(true);
+      return;
+    }
+    
+    // Special preloading for different media types
     if (mediaType === 'image') {
       console.log('Preloading image:', imageUrl);
       const img = new Image();
@@ -439,7 +531,26 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
       img.onload = handleMediaLoad;
       img.onerror = handleMediaError;
       img.src = imageUrl;
+    } else if (mediaType === 'svg') {
+      // For SVGs, we can try a fetch to see if it's valid
+      fetch(imageUrl)
+        .then(response => {
+          if (!response.ok) throw new Error('SVG fetch failed');
+          return response.text();
+        })
+        .then(svgContent => {
+          if (svgContent.includes('<svg')) {
+            handleMediaLoad();
+          } else {
+            handleMediaError();
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching SVG:', error);
+          handleMediaError();
+        });
     }
+    // Video and audio will handle their own loading via the onLoadedData event
   }, [imageUrl, mediaType]);
   
   return (

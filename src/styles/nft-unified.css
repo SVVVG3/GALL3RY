@@ -181,6 +181,7 @@ button {
   height: 100%;
   display: flex;
   flex-direction: column;
+  cursor: pointer;
 }
 
 .nft-card:hover {
@@ -192,8 +193,11 @@ button {
   position: relative;
   padding-bottom: 100%; /* 1:1 Aspect ratio */
   height: 0;
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(0, 0, 0, 0.1); /* Slightly darker for better contrast */
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nft-media {
@@ -204,6 +208,21 @@ button {
   height: 100%;
   object-fit: cover;
   z-index: 2; /* Ensure media appears above backgrounds */
+}
+
+/* Add specific styling for SVG content */
+.nft-svg {
+  background-color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nft-svg img,
+.nft-svg svg {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 .nft-info {
@@ -267,7 +286,6 @@ button {
   border-radius: 50%;
   border-top-color: var(--accent-color);
   animation: spin 1s linear infinite;
-  margin-bottom: 20px;
 }
 
 @keyframes spin {
@@ -320,7 +338,7 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background-color: transparent;
+  background-color: rgba(0, 0, 0, 0.05);
   z-index: 1; /* Lower z-index so media can be seen above it */
 }
 
@@ -328,6 +346,7 @@ button {
   color: var(--secondary-text);
   z-index: 3; /* Error should be on top */
   background-color: var(--hover-color);
+  text-align: center;
 }
 
 .nft-media-error svg {
