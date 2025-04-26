@@ -17,19 +17,6 @@
   --input-bg: #ffffff;
 }
 
-/* Dark mode variables */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #121212;
-    --card-bg: #1e1e1e;
-    --text-color: #f3f4f6;
-    --secondary-text: #9ca3af;
-    --border-color: #2d2d2d;
-    --hover-color: #2a2a2a;
-    --input-bg: #2a2a2a;
-  }
-}
-
 /* =================== GLOBAL STYLES =================== */
 body {
   background-color: var(--bg-color);
@@ -444,81 +431,6 @@ button {
   .nft-card .nft-info {
     padding: 8px;
     min-height: 60px;
-  }
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  .nft-grid {
-    background-color: #1a1a1a;
-  }
-  
-  .nft-card {
-    background-color: #222;
-    border-color: #333;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
-  
-  .nft-card:hover {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
-  
-  /* Image section */
-  .nft-card .media-container {
-    background-color: #292929;
-    border-bottom-color: #333;
-  }
-  
-  /* Media types */
-  .nft-card img,
-  .nft-card video,
-  .nft-card object {
-    background-color: #292929;
-  }
-  
-  /* Loading and error states */
-  .nft-card .media-loading,
-  .nft-card .no-media {
-    background-color: #292929;
-    color: #aaa;
-  }
-  
-  /* Text section */
-  .nft-card .nft-info {
-    background-color: #222;
-  }
-  
-  /* Text colors */
-  .nft-card h3 {
-    color: #e0e0e0;
-  }
-  
-  .nft-card p {
-    color: #aaa;
-  }
-  
-  /* Floor price */
-  .nft-card .nft-floor-price {
-    color: #aaa;
-  }
-  
-  .nft-card .nft-floor-price span:last-child {
-    color: #ccc;
-  }
-  
-  /* Address */
-  .nft-card .nft-address {
-    color: #777;
-  }
-  
-  /* Friends button */
-  .nft-card .collection-friends-button {
-    background-color: #333;
-    color: #ccc;
-  }
-  
-  .nft-card .collection-friends-button:hover {
-    background-color: #444;
   }
 }
 
