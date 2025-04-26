@@ -253,130 +253,84 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   
   // Render the media content based on type
   const renderMedia = () => {
-    // Always show the loading spinner initially (positioned behind the media)
-    const loadingSpinner = !mediaLoaded && !mediaError ? (
-      <div className="nft-loading">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" strokeDasharray="32" strokeLinecap="round" />
-        </svg>
-      </div>
-    ) : null;
-    
-    // Show error state if media failed to load
-    if (mediaError) {
-      return (
-        <div className="nft-media-error">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="15" y1="9" x2="9" y2="15"></line>
-            <line x1="9" y1="9" x2="15" y2="15"></line>
-          </svg>
-          <span>Failed to load</span>
-          <small style={{ fontSize: '9px', opacity: 0.7, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {imageUrl?.substring(0, 30)}...
-          </small>
-        </div>
-      );
-    }
-    
-    // Determine media type based on URL and metadata
-    let mediaElement;
-    let type = 'image'; // Default type
-    
+    // Direct approach - render image element with simpler structure
     if (imageUrl) {
-      // Try to determine the media type from the URL
-      if (imageUrl.match(/\.(mp4|webm|mov)($|\?)/i) || 
-          imageUrl.includes('video/') || 
-          nft.metadata?.animation_type === 'video') {
-        type = 'video';
-      } else if (imageUrl.match(/\.(mp3|wav|ogg)($|\?)/i) || 
-                 imageUrl.includes('audio/') || 
-                 nft.metadata?.animation_type === 'audio') {
-        type = 'audio';
-      } else if (imageUrl.includes('image/svg+xml') || imageUrl.match(/\.svg($|\?)/i)) {
-        type = 'svg';
-      } else {
-        type = 'image';
+      console.log('NFTCard - Rendering media for:', imageUrl);
+      
+      // Determine the media type from URL/content type
+      const isVideo = imageUrl.match(/\.(mp4|webm|mov)($|\?)/i) || 
+                     imageUrl.includes('video/') || 
+                     nft.metadata?.animation_type === 'video';
+      
+      const isAudio = imageUrl.match(/\.(mp3|wav|ogg)($|\?)/i) || 
+                     imageUrl.includes('audio/') || 
+                     nft.metadata?.animation_type === 'audio';
+      
+      const isSvg = imageUrl.includes('image/svg+xml') || imageUrl.match(/\.svg($|\?)/i);
+      
+      // Render loading spinner
+      const loadingSpinner = !mediaLoaded && !mediaError ? (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#f0f0f0',
+          zIndex: 5
+        }}>
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" xmlns="http://www.w3.org/2000/svg" 
+               style={{animation: 'spin 1s linear infinite'}}>
+            <style>{`
+              @keyframes spin {
+                100% { transform: rotate(360deg); }
+              }
+            `}</style>
+            <circle cx="12" cy="12" r="10" stroke="#ccc" strokeWidth="4" />
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="#666" strokeWidth="4" strokeLinecap="round" />
+          </svg>
+        </div>
+      ) : null;
+      
+      // Render error state if media failed to load
+      if (mediaError) {
+        return (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f8f8f8',
+            color: '#666',
+            padding: '20px',
+            textAlign: 'center'
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" 
+                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="15" y1="9" x2="9" y2="15"></line>
+              <line x1="9" y1="9" x2="15" y2="15"></line>
+            </svg>
+            <span style={{marginTop: '8px'}}>Failed to load</span>
+          </div>
+        );
       }
       
-      // Set the media type in state (for use in other parts of the component)
-      if (mediaType !== type) {
-        setMediaType(type);
-      }
-      
-      // Render based on media type
-      switch (type) {
-        case 'video':
-          mediaElement = (
-            <div className="nft-media-wrapper">
-              <video
-                className="nft-media nft-video"
-                src={imageUrl}
-                controls
-                autoPlay
-                muted
-                loop
-                playsInline
-                onLoadedData={handleMediaLoadedData}
-                onError={handleMediaError}
-              />
-              <div className="nft-media-type-icon">📹</div>
-            </div>
-          );
-          break;
-          
-        case 'audio':
-          // For audio, show an icon and the audio control
-          mediaElement = (
-            <div className="nft-media nft-audio">
-              <div className="nft-audio-icon">♪</div>
-              <audio
-                src={imageUrl}
-                controls
-                onLoadedData={handleMediaLoadedData}
-                onError={handleMediaError}
-              />
-            </div>
-          );
-          break;
-          
-        case 'svg':
-          // Directly display SVGs (especially for data URLs)
-          mediaElement = (
-            <div 
-              className="nft-media nft-svg"
-              style={{ 
-                position: 'absolute',
-                zIndex: 2, 
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <object
-                data={imageUrl}
-                type="image/svg+xml"
-                className="nft-media"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                onLoad={() => setMediaLoaded(true)}
-                onError={handleMediaError}
-              >
-                SVG not supported
-              </object>
-            </div>
-          );
-          break;
-          
-        case 'image':
-        default:
-          // Regular image display - ensure proper styling
-          mediaElement = (
-            <img
+      // Render different media types
+      if (isVideo) {
+        return (
+          <>
+            {loadingSpinner}
+            <video
               src={imageUrl}
-              alt={nft.name || 'NFT'}
-              className="nft-media"
               style={{
                 position: 'absolute',
                 top: 0,
@@ -384,25 +338,128 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                zIndex: 2
+                backgroundColor: '#000',
+                zIndex: 10
+              }}
+              controls
+              autoPlay
+              muted
+              loop
+              playsInline
+              onLoadedData={() => {
+                console.log('NFTCard - Video loaded successfully', imageUrl);
+                setMediaLoaded(true);
+              }}
+              onError={handleMediaError}
+            />
+          </>
+        );
+      } else if (isAudio) {
+        return (
+          <>
+            {loadingSpinner}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f0f0f0',
+              zIndex: 10
+            }}>
+              <div style={{fontSize: '40px', marginBottom: '10px'}}>♪</div>
+              <audio
+                src={imageUrl}
+                controls
+                onLoadedData={() => {
+                  console.log('NFTCard - Audio loaded successfully', imageUrl);
+                  setMediaLoaded(true);
+                }}
+                onError={handleMediaError}
+                style={{maxWidth: '85%'}}
+              />
+            </div>
+          </>
+        );
+      } else if (isSvg) {
+        return (
+          <>
+            {loadingSpinner}
+            <object
+              data={imageUrl}
+              type="image/svg+xml"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                backgroundColor: '#fff',
+                zIndex: 10
+              }}
+              onLoad={() => {
+                console.log('NFTCard - SVG loaded successfully', imageUrl);
+                setMediaLoaded(true);
+              }}
+              onError={handleMediaError}
+            >
+              SVG not supported
+            </object>
+          </>
+        );
+      } else {
+        // Regular image
+        return (
+          <>
+            {loadingSpinner}
+            <img
+              src={imageUrl}
+              alt={nft.name || 'NFT'}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                backgroundColor: '#fff',
+                zIndex: 10
               }}
               onLoad={() => {
                 console.log('NFTCard - Image loaded successfully', imageUrl);
                 setMediaLoaded(true);
               }}
-              onError={handleMediaError}
-              loading="lazy"
+              onError={(e) => {
+                console.error('NFTCard - Image load error:', e, imageUrl);
+                handleMediaError(e);
+              }}
             />
-          );
-          break;
+          </>
+        );
       }
     }
     
-    // Return the complete media container with proper z-index
+    // No media URL available
     return (
-      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden' }}>
-        {loadingSpinner}
-        {mediaElement}
+      <div style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#f0f0f0',
+        color: '#999',
+        fontSize: '14px'
+      }}>
+        No Media
       </div>
     );
   };
@@ -440,14 +497,29 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   };
 
   return (
-    <div className={`nft-card ${selected ? 'nft-card-selected' : ''}`} onClick={onSelect} style={style}>
+    <div 
+      className="nft-card" 
+      onClick={onSelect}
+      style={{
+        backgroundColor: 'white',
+        border: '1px solid #e0e0e0',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        cursor: onSelect ? 'pointer' : 'default'
+      }}
+    >
       {/* Debug toggle button */}
       <button 
-        onClick={toggleDebug}
+        onClick={(e) => {
+          e.stopPropagation();
+          toggleDebug();
+        }}
         style={{
           position: 'absolute',
-          top: '2px',
-          right: '2px',
+          top: '5px',
+          right: '5px',
           zIndex: 1000,
           background: 'rgba(255,0,0,0.5)',
           border: 'none',
@@ -483,30 +555,50 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           fontSize: '9px',
           overflow: 'auto'
         }}>
-          <div>
+          <div style={{ background: 'rgba(0,0,0,0.5)', padding: '5px', borderRadius: '5px' }}>
             <div>Name: {name}</div>
             <div>Image URL: {imageUrl?.substring(0, 30)}...</div>
             <div>Has Image: {Boolean(nft?.image).toString()}</div>
             <div>Image Type: {typeof nft?.image}</div>
             <div>Media Loaded: {mediaLoaded.toString()}</div>
             <div>Media Error: {mediaError.toString()}</div>
+            <div>Media Type: {mediaType}</div>
           </div>
         </div>
       )}
 
+      {/* Image/media container with aspect ratio */}
       <div style={{ 
         position: 'relative', 
         width: '100%',
-        paddingTop: '100%', 
+        paddingTop: '100%', /* 1:1 Aspect ratio */
         overflow: 'hidden',
-        borderRadius: '12px 12px 0 0'
+        backgroundColor: '#f8f8f8'
       }}>
         {renderMedia()}
       </div>
           
-      <div className="nft-info" style={{ padding: '12px' }}>
-        <div className="nft-info-header">
-          <h3 className="nft-name" title={name}>{name}</h3>
+      {/* NFT info section */}
+      <div style={{ 
+        padding: '12px',
+        backgroundColor: 'white'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start'
+        }}>
+          <h3 style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            margin: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1
+          }} title={name}>
+            {name}
+          </h3>
             
           {/* Inline collection friends button (alternative placement) */}
           {isAuthenticated && profile && collection && (
@@ -525,16 +617,35 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           )}
         </div>
         
-        {collection && <p className="nft-collection" title={collection}>{collection}</p>}
+        {collection && (
+          <p style={{
+            margin: '4px 0 0 0',
+            fontSize: '14px',
+            color: '#666',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis'
+          }} title={collection}>
+            {collection}
+          </p>
+        )}
         
         {floorPrice && (
-          <div className="nft-price">
+          <div style={{
+            marginTop: '8px',
+            fontSize: '14px',
+            color: '#666'
+          }}>
             Floor: {floorPrice} ETH
           </div>
         )}
         
         {contractAddress && (
-          <div className="nft-contract">
+          <div style={{
+            marginTop: '4px',
+            fontSize: '12px',
+            color: '#888'
+          }}>
             <span>{contractAddress}</span>
           </div>
         )}
