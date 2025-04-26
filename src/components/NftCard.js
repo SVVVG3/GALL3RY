@@ -544,7 +544,6 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
             width: '100%',
             padding: '3px 0',
             marginBottom: '3px'
@@ -556,12 +555,47 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              maxWidth: '70%'
+              maxWidth: '100%'
             }} title={collection}>
               {collection}
             </p>
+          </div>
+        )}
+        
+        {floorPrice && (
+          <div style={{
+            fontSize: '13px',
+            color: '#666',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '3px 0',
+            marginBottom: '3px'
+          }}>
+            <span style={{ fontWeight: '500' }}>Floor:</span> 
+            <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
+          </div>
+        )}
+        
+        {contractAddress && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            padding: '3px 0'
+          }}>
+            <span style={{
+              fontSize: '11px',
+              color: '#888',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '70%'
+            }}>
+              {contractAddress}
+            </span>
             
-            {/* Collection Friends Button */}
+            {/* Collection Friends Button - Moved to wallet address line */}
             {isAuthenticated && profile && collection && (
               <button 
                 className="collection-friends-button"
@@ -594,30 +628,6 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
                 Friends
               </button>
             )}
-          </div>
-        )}
-        
-        {floorPrice && (
-          <div style={{
-            fontSize: '13px',
-            color: '#666',
-            display: 'flex',
-            alignItems: 'center',
-            padding: '3px 0',
-            marginBottom: '3px'
-          }}>
-            <span style={{ fontWeight: '500' }}>Floor:</span> 
-            <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
-          </div>
-        )}
-        
-        {contractAddress && (
-          <div style={{
-            fontSize: '11px',
-            color: '#888',
-            padding: '3px 0'
-          }}>
-            <span>{contractAddress}</span>
           </div>
         )}
       </div>
