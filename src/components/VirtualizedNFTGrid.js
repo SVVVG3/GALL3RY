@@ -129,9 +129,9 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
               className="virtualized-grid"
               columnCount={columnCount}
               columnWidth={width / columnCount}
-              height={Math.min(800, rowCount * 320)} // Set a reasonable max height, but allow smaller if fewer items
+              height={Math.min(800, rowCount * 420)} // Set a reasonable max height, but allow smaller if fewer items
               rowCount={rowCount}
-              rowHeight={320} // Approximate height for an NFT card
+              rowHeight={420} // Increased height from 320px to 420px for NFT cards to prevent overlap
               width={width}
               itemData={{ nfts: nftsArray, columnCount }}
             >

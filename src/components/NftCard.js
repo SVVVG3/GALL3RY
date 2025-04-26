@@ -12,7 +12,7 @@ import { FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
  * Find the best image URL from NFT metadata
  * Handles multiple potential locations based on marketplace and standard
  */
-  const findBestImageUrl = (nft) => {
+const findBestImageUrl = (nft) => {
   if (!nft) {
     return '';
   }
@@ -126,6 +126,15 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
   const [showDebug, setShowDebug] = useState(false);
+  
+  // Handle null or invalid NFT data
+  if (!nft) {
+    console.warn('NFT Card received null or undefined NFT data');
+    return null;
+  }
+
+  // Log NFT data for debugging
+  console.log('Rendering NFT card for:', nft.name || 'Unnamed NFT');
   
   // Extract essential NFT data
   const name = nft?.name || nft?.title || nft?.rawMetadata?.name || `#${nft?.tokenId || nft?.token_id || ''}`;
@@ -529,7 +538,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
               </object>
             ) : (
               <img
-          src={imageUrl}
+                src={imageUrl}
                 alt={name || 'NFT'}
                 style={{
                   position: 'absolute',
