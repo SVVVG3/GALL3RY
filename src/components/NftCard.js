@@ -5,6 +5,8 @@ import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import { getProxiedUrl, getReliableIpfsUrl } from '../services/proxyService';
 import '../styles/nft-unified.css';
+import { formatAddress } from '../utils/formatters';
+import { FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
 
 /**
  * Find the best image URL from NFT metadata
@@ -198,6 +200,11 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           } else {
             setMediaType('image');
           }
+          
+          // For data URLs, we can immediately set them as loaded
+          if (finalUrl.startsWith('data:')) {
+            setMediaLoaded(true);
+          }
         }
       } catch (error) {
         if (isMounted) {
@@ -211,7 +218,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
     return () => {
       isMounted = false;
     };
-  }, [nft]);
+  }, [nft]); // Only depend on the NFT changing, not imageUrl or mediaType
 
   // Video/audio specific event handlers
   const handleMediaLoadedData = useCallback(() => {
@@ -441,24 +448,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       
       img.onerror = () => {
         if (isMounted) {
-          // If the proxy URL failed, try to fallback to direct URL
-          if (imageUrl.includes('proxy.gall3ry.co') && imageUrl.includes('?url=')) {
-            try {
-              // Extract the original URL from the proxy URL
-              const originalUrl = decodeURIComponent(imageUrl.split('?url=')[1]);
-              
-              // Only set the direct URL if the component is still mounted
-              if (isMounted) {
-                setImageUrl(originalUrl);
-              }
-            } catch (e) {
-              if (isMounted) {
-                setMediaError(true);
-              }
-            }
-          } else {
-            setMediaError(true);
-          }
+          // Don't try to use the direct URL as a fallback anymore
+          // Just mark as error and let the UI show the error state
+          setMediaError(true);
         }
       };
       
@@ -493,6 +485,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
     };
   }, [imageUrl, mediaType]);
   
+  // Handle contract address display
+  const contractAddress = nft?.contract?.address ? formatAddress(nft.contract.address) : '';
+
   return (
     <div className={`nft-card ${selected ? 'nft-card-selected' : ''}`} onClick={onSelect} style={style}>
       <div className="nft-media-container">
@@ -525,6 +520,12 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         {floorPrice && (
           <div className="nft-price">
             Floor: {floorPrice} ETH
+          </div>
+        )}
+        
+        {contractAddress && (
+          <div className="nft-contract">
+            <span>{contractAddress}</span>
           </div>
         )}
       </div>

@@ -88,11 +88,33 @@ export const getProxiedUrl = (url) => {
       return absoluteUrl;
     }
     
-    // Fixed proxy URL that we know works reliably
-    // Use a CORS proxy that actually works
-    const proxyUrl = 'https://images.weserv.nl/?url=';
-    return `${proxyUrl}${encodeURIComponent(absoluteUrl)}`;
+    // For Alchemy NFT CDN URLs, use a more robust approach with Cloudinary
+    if (absoluteUrl.includes('nft-cdn.alchemy.com')) {
+      // Get the path portion after the domain
+      const urlParts = absoluteUrl.split('nft-cdn.alchemy.com/');
+      if (urlParts.length === 2) {
+        // E.g., if URL is https://nft-cdn.alchemy.com/eth-mainnet/123456,
+        // we'll use the path "eth-mainnet/123456"
+        const path = urlParts[1];
+        // Use Cloudinary's fetch capabilities
+        return `https://res.cloudinary.com/demo/image/fetch/f_auto,q_auto/https://nft-cdn.alchemy.com/${path}`;
+      }
+    }
+    
+    // For IPFS URLs, try to use a reliable gateway directly
+    if (absoluteUrl.includes('ipfs') || absoluteUrl.includes('gateway.pinata') || 
+        absoluteUrl.includes('cloudflare-ipfs')) {
+      const ipfsUrl = getReliableIpfsUrl(absoluteUrl);
+      if (ipfsUrl !== absoluteUrl) {
+        return ipfsUrl; // We successfully transformed to a reliable gateway
+      }
+    }
+    
+    // For all other URLs, use images.weserv.nl with proper options
+    // See: https://images.weserv.nl/docs/
+    return `https://images.weserv.nl/?n=-1&url=${encodeURIComponent(absoluteUrl)}`;
   } catch (error) {
+    console.error('Error in getProxiedUrl:', error);
     return url;
   }
 };
