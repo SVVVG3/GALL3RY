@@ -12,7 +12,7 @@ import { FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
  * Find the best image URL from NFT metadata
  * Handles multiple potential locations based on marketplace and standard
  */
-const findBestImageUrl = (nft) => {
+  const findBestImageUrl = (nft) => {
   if (!nft) {
     return '';
   }
@@ -251,7 +251,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
     e.stopPropagation();
     setShowFriendsModal(true);
   };
-
+  
   // Handle closing modals
   const handleCloseModal = () => {
     setShowFriendsModal(false);
@@ -529,7 +529,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
               </object>
             ) : (
               <img
-                src={imageUrl}
+          src={imageUrl}
                 alt={name || 'NFT'}
                 style={{
                   position: 'absolute',
@@ -553,18 +553,20 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       {/* NFT info section */}
       <div style={{ 
         padding: '16px',
+        paddingBottom: '24px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '100px',
+        minHeight: '110px',
         width: '100%',
-        gap: '6px'
+        gap: '8px'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          width: '100%'
+          width: '100%',
+          marginBottom: '6px'
         }}>
           <h3 style={{
             fontSize: '15px',
@@ -576,7 +578,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             flex: 1,
             lineHeight: '1.3',
             color: '#333',
-            padding: '2px 0'
+            padding: '4px 0'
           }} title={name}>
             {name || "Unnamed NFT"}
           </h3>
@@ -588,7 +590,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             alignItems: 'center',
             justifyContent: 'space-between',
             width: '100%',
-            padding: '2px 0'
+            padding: '3px 0',
+            marginBottom: '3px'
           }}>
             <p style={{
               margin: 0,
@@ -644,7 +647,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             color: '#666',
             display: 'flex',
             alignItems: 'center',
-            padding: '2px 0'
+            padding: '3px 0',
+            marginBottom: '3px'
           }}>
             <span style={{ fontWeight: '500' }}>Floor:</span> 
             <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
@@ -655,7 +659,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           <div style={{
             fontSize: '11px',
             color: '#888',
-            padding: '2px 0'
+            padding: '3px 0'
           }}>
             <span>{contractAddress}</span>
           </div>
