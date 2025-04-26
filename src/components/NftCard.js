@@ -370,13 +370,25 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           
         case 'image':
         default:
-          // Regular image display
+          // Regular image display - ensure proper styling
           mediaElement = (
             <img
               src={imageUrl}
               alt={nft.name || 'NFT'}
               className="nft-media"
-              onLoad={() => setMediaLoaded(true)}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover', // Use 'cover' to fill the space
+                zIndex: 2
+              }}
+              onLoad={() => {
+                console.log('NFTCard - Image loaded successfully', imageUrl);
+                setMediaLoaded(true);
+              }}
               onError={handleMediaError}
               loading="lazy"
             />
@@ -385,8 +397,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       }
     }
     
+    // Return the complete media container with proper z-index
     return (
-      <div className="nft-media-container">
+      <div className="nft-media-container" style={{ position: 'relative', overflow: 'hidden' }}>
         {loadingSpinner}
         {mediaElement}
       </div>
@@ -421,7 +434,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
 
   return (
     <div className={`nft-card ${selected ? 'nft-card-selected' : ''}`} onClick={onSelect} style={style}>
-      <div className="nft-media-container">
+      {/* Media container with fixed aspect ratio */}
+      <div className="nft-media-outer-container" style={{ position: 'relative', paddingTop: '100%', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
         {renderMedia()}
       </div>
           
