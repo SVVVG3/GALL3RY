@@ -5,8 +5,10 @@ import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import { getProxiedUrl, getReliableIpfsUrl, getBestImageUrl } from '../services/proxyService';
 import '../styles/nft-unified.css';
-import { formatAddress } from '../utils/formatters';
+import { formatAddress, shortenAddress } from '../utils/formatters';
 import { FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
+import alchemyService from '../services/alchemyService';
+import { SUPPORTED_CHAINS } from '../services/alchemyService';
 
 /**
  * Find the best image URL from NFT metadata
@@ -118,52 +120,63 @@ const findBestImageUrl = (nft) => {
  * Includes collection friends button for Farcaster users
  */
 const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
+  const { isAuthenticated, profile } = useAuth();
+  const [imageUrl, setImageUrl] = useState('');
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [mediaLoaded, setMediaLoaded] = useState(false);
   const [mediaError, setMediaError] = useState(false);
-  const [mediaType, setMediaType] = useState('image');
-  const [showFriendsModal, setShowFriendsModal] = useState(false);
-  const [imageUrl, setImageUrl] = useState('');
-  const { isAuthenticated, profile: authProfile } = useAuth();
-  const { profile } = useProfile();
+  const [isSvg, setIsSvg] = useState(false);
+  const [videoType, setVideoType] = useState(null);
+  const [hasMedia, setHasMedia] = useState(false);
   
   // Handle null or invalid NFT data
   if (!nft) {
-    console.warn('NFT Card received null or undefined NFT data');
+    console.error('NFTCard received null or undefined NFT');
     return null;
   }
-
+  
   // Log NFT data for debugging
   console.log('Rendering NFT card for:', nft.name || 'Unnamed NFT');
   
-  // Extract essential NFT data
-  const name = nft?.name || nft?.title || nft?.rawMetadata?.name || `#${nft?.tokenId || nft?.token_id || ''}`;
+  // Extract NFT details
+  const name = nft?.title || nft?.name || nft?.tokenId && `#${nft.tokenId}` || 'Unnamed NFT';
+  const collection = nft?.collectionName || nft?.collection?.name || nft?.contract?.name || '';
+  // Don't extract floorPrice here as it's handled below
+  const contractAddress = nft?.contract?.address || '';
+  const tokenId = nft?.tokenId || nft?.token_id;
   
-  // Get collection name from various possible locations
-  let collection = '';
-  try {
-    if (nft?.collectionName) {
-      collection = nft.collectionName;
-    } else if (nft?.collection_name) {
-      collection = nft.collection_name;
-    } else if (nft?.collection?.name) {
-      collection = nft.collection.name;
-    } else if (nft?.contract?.name) {
-      collection = nft.contract.name;
-    } else if (nft?.contractMetadata?.name) {
-      collection = nft.contractMetadata.name;
-    } else if (nft?.contractName) {
-      collection = nft.contractName;
-    } else if (nft?.rawMetadata?.collection?.name) {
-      collection = nft.rawMetadata.collection.name;
-    }
-  } catch (error) {
-    // Silent error handling
+  // Determine the blockchain network from multiple possible sources
+  // Look for any properties that might indicate what chain/network the NFT is on
+  const chainId = nft?.chainId || nft?.contract?.chainId || nft?.chain;
+  let detectedNetwork = nft?.contract?.chain || nft?.network;
+  
+  // If we have a chainId but no explicit network name, try to map it
+  if (!detectedNetwork && chainId) {
+    detectedNetwork = getNetworkFromChainId(chainId);
   }
+  
+  // Default to Ethereum if we couldn't determine the network
+  const network = detectedNetwork || 'eth';
+  
+  // Debug logging for network information
+  console.log('NFTCard - Network information:', {
+    nftId: name,
+    contractAddress,
+    contractChain: nft?.contract?.chain,
+    chainId,
+    detectedNetwork,
+    resolvedNetwork: network,
+    fullContract: nft?.contract || 'No contract data'
+  });
   
   // Get floor price if available
   let floorPrice = null;
   try {
-    if (nft?.collection?.floorPrice?.value || nft?.floorPrice?.value) {
+    if (nft?.floorPrice?.formatted) {
+      floorPrice = nft.floorPrice.formatted;
+    } else if (nft?.floor_price) {
+      floorPrice = nft.floor_price;
+    } else if (nft?.collection?.floorPrice?.value || nft?.floorPrice?.value) {
       floorPrice = nft?.collection?.floorPrice?.value || nft?.floorPrice?.value;
     } else if (nft?.floorPrice && typeof nft.floorPrice === 'number') {
       floorPrice = nft.floorPrice;
@@ -206,13 +219,13 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           
           // Set media type based on URL extension
           if (bestUrl.match(/\.(mp4|webm|mov)($|\?)/i) || bestUrl.includes('video/')) {
-            setMediaType('video');
+            setVideoType('video');
           } else if (bestUrl.match(/\.(mp3|wav|ogg)($|\?)/i) || bestUrl.includes('audio/')) {
-            setMediaType('audio');
+            setVideoType('audio');
           } else if (bestUrl.match(/\.svg($|\?)/i) || bestUrl.includes('image/svg+xml')) {
-            setMediaType('svg');
+            setIsSvg(true);
           } else {
-            setMediaType('image');
+            setVideoType('image');
           }
           
           // For data URLs, we can immediately set them as loaded
@@ -271,7 +284,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         <div className="media-loading" style={{ display: mediaLoaded ? 'none' : 'flex' }}>Loading...</div>
         
         {/* Render appropriate media type */}
-        {mediaType === 'video' ? (
+        {videoType === 'video' ? (
           <video
             src={imageUrl}
             className="media-image"
@@ -284,7 +297,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             onLoadedData={() => setMediaLoaded(true)}
             onError={() => setMediaError(true)}
           />
-        ) : mediaType === 'svg' ? (
+        ) : videoType === 'svg' ? (
           <object
             data={imageUrl}
             type="image/svg+xml"
@@ -327,14 +340,11 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       
       // If it's an SVG, we'll handle it specially  
       if (imageUrl.includes('image/svg+xml')) {
-        setMediaType('svg');
+        setVideoType('svg');
       }
     }
   }, [imageUrl]);
   
-  // Handle contract address display
-  const contractAddress = nft?.contract?.address ? formatAddress(nft.contract.address) : '';
-
   // Handle image error
   const handleImageError = () => {
     console.log('Image failed to load:', imageUrl);
@@ -383,126 +393,84 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         borderBottom: '1px solid #f0f0f0'
       }}>
         {/* Render appropriate media type */}
-        {mediaError || !imageUrl ? (
-          <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: '#f0f0f0',
-            borderRadius: '0'
-          }}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-              <circle cx="8.5" cy="8.5" r="1.5"></circle>
-              <polyline points="21 15 16 10 5 21"></polyline>
-            </svg>
-            <span style={{ marginTop: '8px', fontSize: '14px', color: '#666', fontWeight: '500' }}>Media Unavailable</span>
-            {imageUrl && <span style={{ fontSize: '12px', color: '#888', maxWidth: '80%', textAlign: 'center', marginTop: '4px', wordBreak: 'break-all' }}>{imageUrl.substring(0, 50)}{imageUrl.length > 50 ? '...' : ''}</span>}
-          </div>
-        ) : (
-          <>
-            {/* Show loading indicator until image loads */}
-            <div style={{
+        {videoType === 'video' ? (
+          <video
+            src={imageUrl}
+            style={{ 
               position: 'absolute',
-              display: mediaLoaded ? 'none' : 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               top: 0,
               left: 0,
               width: '100%',
               height: '100%',
-              backgroundColor: '#f0f0f0',
-              color: '#555',
-              fontSize: '14px',
-              fontWeight: '500'
-            }}>Loading...</div>
-            
-            {mediaType === 'video' ? (
-              <video
-                src={imageUrl}
-                style={{ 
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'center',
-                  display: mediaLoaded ? 'block' : 'none',
-                  backgroundColor: '#f0f0f0'
-                }}
-                controls={false}
-                autoPlay
-                loop
-                muted
-                playsInline
-                onLoadedData={() => setMediaLoaded(true)}
-                onError={() => setMediaError(true)}
-              />
-            ) : mediaType === 'svg' ? (
-              <object
-                data={imageUrl}
-                type="image/svg+xml"
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'center',
-                  display: mediaLoaded ? 'block' : 'none',
-                  backgroundColor: '#f0f0f0'
-                }}
-                onLoad={() => setMediaLoaded(true)}
-                onError={() => setMediaError(true)}
-              >
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: '#f0f0f0'
-                }}>
-                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                    <polyline points="21 15 16 10 5 21"></polyline>
-                  </svg>
-                  <span style={{ marginTop: '8px', fontSize: '14px', color: '#666', fontWeight: '500' }}>SVG Error</span>
-                </div>
-              </object>
-            ) : (
-              <img
-                src={imageUrl}
-                alt={name || 'NFT'}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  objectPosition: 'center',
-                  display: mediaLoaded ? 'block' : 'none',
-                  backgroundColor: '#f0f0f0'
-                }}
-                onLoad={() => setMediaLoaded(true)}
-                onError={() => setMediaError(true)}
-              />
-            )}
-          </>
+              objectFit: 'contain',
+              objectPosition: 'center',
+              display: mediaLoaded ? 'block' : 'none',
+              backgroundColor: '#f0f0f0'
+            }}
+            controls={false}
+            autoPlay
+            loop
+            muted
+            playsInline
+            onLoadedData={() => setMediaLoaded(true)}
+            onError={() => setMediaError(true)}
+          />
+        ) : videoType === 'svg' ? (
+          <object
+            data={imageUrl}
+            type="image/svg+xml"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              objectPosition: 'center',
+              display: mediaLoaded ? 'block' : 'none',
+              backgroundColor: '#f0f0f0'
+            }}
+            onLoad={() => setMediaLoaded(true)}
+            onError={() => setMediaError(true)}
+          >
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: '#f0f0f0'
+            }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                <polyline points="21 15 16 10 5 21"></polyline>
+              </svg>
+              <span style={{ marginTop: '8px', fontSize: '14px', color: '#666', fontWeight: '500' }}>SVG Error</span>
+            </div>
+          </object>
+        ) : (
+          <img
+            src={imageUrl}
+            alt={name || 'NFT'}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              objectPosition: 'center',
+              display: mediaLoaded ? 'block' : 'none',
+              backgroundColor: '#f0f0f0'
+            }}
+            onLoad={() => setMediaLoaded(true)}
+            onError={() => setMediaError(true)}
+          />
         )}
       </div>
           
@@ -637,13 +605,52 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         <CollectionFriendsModal
           isOpen={showFriendsModal}
           onClose={handleCloseModal}
-          collectionAddress={nft?.contract?.address}
+          collectionAddress={contractAddress}
           collectionName={collection}
-          network={nft?.contract?.chain || 'eth'}
+          network={network}
         />
       )}
     </div>
   );
+};
+
+// Helper function to get network from chainId or other identifiers
+const getNetworkFromChainId = (chainId) => {
+  if (!chainId) return 'eth';
+  
+  // Convert numeric chainId to string
+  const chainIdStr = String(chainId).toLowerCase();
+  
+  // Map common chainIds to network names
+  const chainMap = {
+    '1': 'eth',
+    '137': 'polygon',
+    '10': 'optimism',
+    '42161': 'arbitrum',
+    '8453': 'base',
+    '7777777': 'zora'
+  };
+  
+  // Check if it's one of the numeric chain IDs
+  if (chainMap[chainIdStr]) {
+    return chainMap[chainIdStr];
+  }
+  
+  // If not numeric, check if it's already a valid network name
+  const validNetworks = ['eth', 'ethereum', 'polygon', 'matic', 'arbitrum', 'arb', 'optimism', 'opt', 'base', 'zora'];
+  if (validNetworks.includes(chainIdStr)) {
+    // Map to standardized network name
+    const networkMap = {
+      'ethereum': 'eth',
+      'matic': 'polygon',
+      'arb': 'arbitrum',
+      'opt': 'optimism'
+    };
+    return networkMap[chainIdStr] || chainIdStr;
+  }
+  
+  // Default to eth if nothing matched
+  return 'eth';
 };
 
 export default NFTCard; 
