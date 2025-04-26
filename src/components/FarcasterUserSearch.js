@@ -546,6 +546,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Log stats without additional deduplication
       console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
       
+      // After formatting the NFTs for display but before returning
+      if (formattedNfts.length > 0) {
+        console.log('Sample NFT structure:', JSON.stringify(formattedNfts[0], null, 2));
+      }
+      
       // Update NFTs state and Redux store
       setUserNfts(formattedNfts);
       dispatch(setNftList(formattedNfts));

@@ -53,6 +53,18 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
       return null;
     }
     
+    // Log info about the first few NFTs to check their properties
+    if (index < 3) {
+      console.log(`NFT at index ${index}:`, {
+        id: nft.uniqueId || nft.id,
+        name: nft.name,
+        hasImage: Boolean(nft.image),
+        imageType: typeof nft.image,
+        mediaArray: Boolean(nft.media && nft.media.length > 0),
+        tokenId: nft.tokenId || nft.token_id
+      });
+    }
+    
     // Generate a stable key for the NFT card
     const nftKey = nft.uniqueId || 
                  `nft-${index}-${nft.tokenId || nft.token_id || nft.id || index}`;

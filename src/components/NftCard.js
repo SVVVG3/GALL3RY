@@ -171,11 +171,15 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       if (!nft) return;
       
       try {
+        console.log('NFTCard - Loading image for:', nft.name || nft.tokenId || 'Unknown NFT');
+        
         // Use our helper function to find the best image URL
         const bestUrl = findBestImageUrl(nft);
+        console.log('NFTCard - Best image URL found:', bestUrl);
         
         // If no URL was found, show error state
         if (!bestUrl) {
+          console.warn('NFTCard - No image URL found for:', nft.name || nft.tokenId);
           if (isMounted) {
             setMediaError(true);
           }
@@ -184,6 +188,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
 
         // Apply proxy to the URL if needed
         const finalUrl = getBestImageUrl(bestUrl);
+        console.log('NFTCard - Final proxied URL:', finalUrl);
         
         // Set URL in state
         if (isMounted) {
@@ -223,14 +228,16 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
 
   // Video/audio specific event handlers
   const handleMediaLoadedData = useCallback(() => {
+    console.log('NFTCard - Media loaded successfully:', imageUrl);
     setMediaLoaded(true);
     setMediaError(false);
-  }, []);
+  }, [imageUrl]);
 
   const handleMediaError = useCallback(() => {
     // Simply mark as error if media failed to load
+    console.error('NFTCard - Media failed to load:', imageUrl);
     setMediaError(true);
-  }, []);
+  }, [imageUrl]);
   
   // Handle showing the friends modal
   const handleShowFriends = (e) => {
