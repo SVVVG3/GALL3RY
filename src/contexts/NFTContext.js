@@ -39,15 +39,18 @@ export const NFTProvider = ({ children }) => {
       
       const result = await fetchNftsForAddresses(normalizedAddresses, {
         excludeSpam: true,
-        excludeAirdrops: true
+        excludeAirdrops: false // Include airdrops to increase NFT visibility
       });
       
       if (result.error) {
         setError(result.error);
+        setNfts([]); // Clear NFTs on error to avoid showing stale data
+        return;
       }
       
       // Deduplicate NFTs (same contract/tokenId across different wallets)
       const uniqueNftsMap = new Map();
+      
       result.nfts.forEach(nft => {
         const contractAddress = nft.contract?.address || nft.contractAddress;
         const tokenId = nft.tokenId || nft.token_id;
@@ -66,8 +69,8 @@ export const NFTProvider = ({ children }) => {
       setNfts(uniqueNfts);
       
     } catch (err) {
-      console.error('Error fetching NFTs:', err);
-      setError(err.message || 'Failed to fetch NFTs');
+      setError('Failed to fetch NFTs. Please try again.');
+      setNfts([]);
     } finally {
       setIsLoading(false);
     }
@@ -111,18 +114,18 @@ export const NFTProvider = ({ children }) => {
     // Clone the array to avoid mutating the original
     const sortedNfts = [...filteredNfts];
     
-    // Sort based on sortBy and sortOrder
-    return sortedNfts.sort((a, b) => {
-      // Helper function to get safely get string values
-      const safeString = (value) => 
-        typeof value === 'string' ? value.toLowerCase() : '';
-        
-      // Helper function to safely get number values
-      const safeNumber = (value) => 
-        typeof value === 'number' ? value : 
-        typeof value === 'string' ? parseFloat(value) || 0 : 0;
+    try {
+      // Sort based on sortBy and sortOrder
+      return sortedNfts.sort((a, b) => {
+        // Helper function to get safely get string values
+        const safeString = (value) => 
+          typeof value === 'string' ? value.toLowerCase() : '';
+          
+        // Helper function to safely get number values
+        const safeNumber = (value) => 
+          typeof value === 'number' ? value : 
+          typeof value === 'string' ? parseFloat(value) || 0 : 0;
       
-      try {
         // Sort by name
         if (sortBy === 'name') {
           // Get names, with fallbacks
@@ -189,11 +192,11 @@ export const NFTProvider = ({ children }) => {
         
         // Default to no sorting (return original order)
         return 0;
-      } catch (err) {
-        console.warn('Error during sort:', err);
-        return 0; // In case of error, don't change order
-      }
-    });
+      });
+    } catch (err) {
+      // If sorting fails, return unsorted
+      return filteredNfts;
+    }
   }, [getFilteredNFTs, sortBy, sortOrder]);
   
   // Clear all NFTs and reset state

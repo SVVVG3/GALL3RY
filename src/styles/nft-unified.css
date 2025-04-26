@@ -316,17 +316,7 @@ button {
 }
 
 .nft-checkbox {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 50%;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: none;
 }
 
 .collection-friends-button-inline {
@@ -551,4 +541,28 @@ button {
   height: 40px;
   color: rgba(0, 0, 0, 0.2);
   animation: spin 1.5s linear infinite, pulse 2s ease-in-out infinite;
+}
+
+/* =================== LOADING & ERROR STATES =================== */
+.nft-gallery-loading, .nft-empty, .error-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  text-align: center;
+  background-color: var(--card-bg);
+  border-radius: var(--border-radius);
+  min-height: 200px;
+  width: 100%;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--accent-color);
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
 } 

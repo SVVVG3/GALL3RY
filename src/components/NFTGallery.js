@@ -153,7 +153,7 @@ const NFTGallery = () => {
       )}
       
       {isLoading ? (
-        <div className="nft-loading">
+        <div className="nft-gallery-loading">
           <div className="loading-spinner"></div>
           <p>Loading NFTs...</p>
         </div>
