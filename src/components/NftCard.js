@@ -309,7 +309,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
     
     // Always show the loading spinner initially (but positioned behind the media)
     const loadingSpinner = !mediaLoaded && !mediaError ? (
-      <div className="nft-media-loader" style={{ zIndex: 1, backgroundColor: 'transparent' }}>
+      <div className="nft-media-loader" style={{ zIndex: 1, backgroundColor: 'rgba(0, 0, 0, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }}>
         <div className="loading-spinner"></div>
       </div>
     ) : null;
@@ -403,8 +403,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style, showCheckbox = t
               zIndex: 2, 
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
-              visibility: mediaLoaded ? 'visible' : 'hidden' // Hide until loaded to prevent FOUC
+              objectFit: 'cover'
             }}
             crossOrigin="anonymous"
           />
