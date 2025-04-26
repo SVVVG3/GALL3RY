@@ -53,6 +53,7 @@ const DiagnosticPanel = () => {
     environment: false,
     events: false
   });
+  const [imageRequests, setImageRequests] = useState([]);
 
   // Log an event to the panel
   const logEvent = (event) => {
@@ -162,6 +163,37 @@ const DiagnosticPanel = () => {
       [section]: !prev[section]
     }));
   };
+
+  // Monitor network requests for images
+  useEffect(() => {
+    // Create a performance observer to monitor resource timing
+    if (window.PerformanceObserver) {
+      const observer = new PerformanceObserver((list) => {
+        list.getEntries().forEach((entry) => {
+          // Filter for image requests to our proxy endpoint
+          if (entry.name.includes('/api/image-proxy') || 
+              entry.initiatorType === 'img') {
+            setImageRequests(prev => {
+              // Only add if not already in the list (using URL as key)
+              if (!prev.some(req => req.url === entry.name)) {
+                return [...prev, {
+                  url: entry.name,
+                  status: 'unknown',
+                  duration: Math.round(entry.duration),
+                  timestamp: Date.now()
+                }].slice(-10); // Keep only most recent 10
+              }
+              return prev;
+            });
+          }
+        });
+      });
+      
+      observer.observe({entryTypes: ['resource']});
+      
+      return () => observer.disconnect();
+    }
+  }, []);
 
   return (
     <div style={{
@@ -338,6 +370,25 @@ const DiagnosticPanel = () => {
               <div style={{ fontStyle: 'italic', color: '#718096' }}>No events logged yet</div>
             )}
           </div>
+        )}
+      </div>
+
+      <div className="diagnostic-section">
+        <h3>Recent Image Requests</h3>
+        {imageRequests.length === 0 ? (
+          <p>No image requests detected</p>
+        ) : (
+          <ul className="diagnostic-list">
+            {imageRequests.map((req, index) => (
+              <li key={index} className="diagnostic-item">
+                <div className="diagnostic-url">{req.url.substring(0, 80)}...</div>
+                <div className="diagnostic-details">
+                  <span>{req.duration}ms</span>
+                  <span>{new Date(req.timestamp).toLocaleTimeString()}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>

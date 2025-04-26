@@ -18,15 +18,21 @@ const IPFS_GATEWAYS = [
 export const getReliableIpfsUrl = (url) => {
   if (!url) return '';
 
+  console.log('getReliableIpfsUrl called with:', url);
+
   // Handle ipfs:// protocol
   if (url.startsWith('ipfs://')) {
-    return IPFS_GATEWAYS[0] + url.substring(7);
+    const gatewayUrl = IPFS_GATEWAYS[0] + url.substring(7);
+    console.log('IPFS URL transformed to:', gatewayUrl);
+    return gatewayUrl;
   }
 
   // Handle ipfs hash formats: ipfs/QmHash or /ipfs/QmHash
   const ipfsHashMatch = url.match(/(?:\/ipfs\/|ipfs\/)([a-zA-Z0-9]+.*)/);
   if (ipfsHashMatch) {
-    return IPFS_GATEWAYS[0] + ipfsHashMatch[1];
+    const gatewayUrl = IPFS_GATEWAYS[0] + ipfsHashMatch[1];
+    console.log('IPFS hash URL transformed to:', gatewayUrl);
+    return gatewayUrl;
   }
 
   return url;
@@ -43,6 +49,8 @@ export const getProxiedUrl = (url) => {
   if (url.startsWith('/') && !url.startsWith('//')) return url;
   
   try {
+    console.log('getProxiedUrl called with:', url);
+    
     // For IPFS URLs, use IPFS gateway
     if (url.includes('ipfs://')) {
       return getReliableIpfsUrl(url);
@@ -54,7 +62,9 @@ export const getProxiedUrl = (url) => {
       : `https://${url.replace(/^\/\//, '')}`;
     
     // Use our own proxy endpoint instead of corsproxy.io
-    return `/api/image-proxy?url=${encodeURIComponent(absoluteUrl)}`;
+    const proxiedUrl = `/api/image-proxy?url=${encodeURIComponent(absoluteUrl)}`;
+    console.log('URL proxied to:', proxiedUrl);
+    return proxiedUrl;
   } catch (error) {
     console.error('Error creating proxy URL:', error);
     return url;
@@ -69,14 +79,24 @@ export const getProxiedUrl = (url) => {
 export const getBestImageUrl = (url) => {
   if (!url) return '';
   
+  console.log('getBestImageUrl called with:', url);
+  
   // If it's a data URL, use it directly
-  if (url.startsWith('data:')) return url;
+  if (url.startsWith('data:')) {
+    console.log('Using data URL directly');
+    return url;
+  }
   
   // If it's a local path, use it directly
-  if (url.startsWith('/') && !url.startsWith('//')) return url;
+  if (url.startsWith('/') && !url.startsWith('//')) {
+    console.log('Using local path directly:', url);
+    return url;
+  }
   
   // Otherwise, proxy the URL
-  return getProxiedUrl(url);
+  const finalUrl = getProxiedUrl(url);
+  console.log('Final best URL:', finalUrl);
+  return finalUrl;
 };
 
 export default {
