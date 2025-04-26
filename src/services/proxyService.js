@@ -33,9 +33,9 @@ export const getReliableIpfsUrl = (url) => {
 };
 
 /**
- * Simple proxy service using corsproxy.io which is free and reliable
+ * Get the URL for our internal image proxy
  * @param {string} url - URL to proxy
- * @returns {string} Proxied URL
+ * @returns {string} Proxied URL using our own proxy service
  */
 export const getProxiedUrl = (url) => {
   if (!url) return '';
@@ -53,8 +53,8 @@ export const getProxiedUrl = (url) => {
       ? url 
       : `https://${url.replace(/^\/\//, '')}`;
     
-    // Use corsproxy.io as a simple reliable proxy
-    return `https://corsproxy.io/?${encodeURIComponent(absoluteUrl)}`;
+    // Use our own proxy endpoint instead of corsproxy.io
+    return `/api/image-proxy?url=${encodeURIComponent(absoluteUrl)}`;
   } catch (error) {
     console.error('Error creating proxy URL:', error);
     return url;
