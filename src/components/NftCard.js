@@ -354,8 +354,20 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
 
   return (
     <div 
-      className="nft-card"
+      className="nft-card" 
       onClick={onSelect}
+      style={{
+        backgroundColor: 'white',
+        border: '1px solid #e0e0e0',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        position: 'relative',
+        cursor: onSelect ? 'pointer' : 'default'
+      }}
     >
       {/* Debug toggle button */}
       <button 
@@ -363,31 +375,205 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           e.stopPropagation();
           toggleDebug();
         }}
-        className="debug-button"
+        style={{
+          position: 'absolute',
+          top: '5px',
+          right: '5px',
+          zIndex: 1000,
+          background: 'rgba(255,0,0,0.5)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '16px',
+          height: '16px',
+          fontSize: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+          cursor: 'pointer'
+        }}
       >
         ?
       </button>
 
       {/* Debug overlay */}
       {showDebug && (
-        <div className="debug-overlay">
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          color: 'white',
+          padding: '12px',
+          fontSize: '12px',
+          overflow: 'auto',
+          zIndex: 200
+        }}>
           <pre>{JSON.stringify(nft, null, 2)}</pre>
         </div>
       )}
 
       {/* Image/media container with aspect ratio */}
-      <div className="media-container">
-        {renderMedia()}
+      <div style={{ 
+        position: 'relative', 
+        width: '100%',
+        paddingTop: '100%', /* 1:1 Aspect ratio */
+        overflow: 'hidden',
+        backgroundColor: '#f8f8f8',
+        flexShrink: 0
+      }}>
+        {/* Render appropriate media type */}
+        {mediaError || !imageUrl ? (
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: '#f0f0f0',
+            borderRadius: '0'
+          }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <circle cx="8.5" cy="8.5" r="1.5"></circle>
+              <polyline points="21 15 16 10 5 21"></polyline>
+            </svg>
+            <span style={{ marginTop: '8px', fontSize: '14px', color: '#666', fontWeight: '500' }}>Media Unavailable</span>
+            {imageUrl && <span style={{ fontSize: '12px', color: '#888', maxWidth: '80%', textAlign: 'center', marginTop: '4px', wordBreak: 'break-all' }}>{imageUrl.substring(0, 50)}{imageUrl.length > 50 ? '...' : ''}</span>}
+          </div>
+        ) : (
+          <>
+            {/* Show loading indicator until image loads */}
+            <div style={{
+              position: 'absolute',
+              display: mediaLoaded ? 'none' : 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              backgroundColor: '#f0f0f0',
+              color: '#555',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}>Loading...</div>
+            
+            {mediaType === 'video' ? (
+              <video
+                src={imageUrl}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  objectPosition: 'center',
+                  display: mediaLoaded ? 'block' : 'none',
+                  backgroundColor: '#f0f0f0'
+                }}
+                controls={false}
+                autoPlay
+                loop
+                muted
+                playsInline
+                onLoadedData={() => setMediaLoaded(true)}
+                onError={() => setMediaError(true)}
+              />
+            ) : mediaType === 'svg' ? (
+              <object
+                data={imageUrl}
+                type="image/svg+xml"
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  objectPosition: 'center',
+                  display: mediaLoaded ? 'block' : 'none',
+                  backgroundColor: '#f0f0f0'
+                }}
+                onLoad={() => setMediaLoaded(true)}
+                onError={() => setMediaError(true)}
+              >
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: '#f0f0f0'
+                }}>
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                    <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                    <polyline points="21 15 16 10 5 21"></polyline>
+                  </svg>
+                  <span style={{ marginTop: '8px', fontSize: '14px', color: '#666', fontWeight: '500' }}>SVG Error</span>
+                </div>
+              </object>
+            ) : (
+              <img
+                src={imageUrl}
+                alt={name || 'NFT'}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                  objectPosition: 'center',
+                  display: mediaLoaded ? 'block' : 'none',
+                  backgroundColor: '#f0f0f0'
+                }}
+                onLoad={() => setMediaLoaded(true)}
+                onError={() => setMediaError(true)}
+              />
+            )}
+          </>
+        )}
       </div>
           
       {/* NFT info section */}
-      <div className="nft-info">
+      <div style={{ 
+        padding: '12px',
+        backgroundColor: 'white',
+        display: 'flex',
+        flexDirection: 'column',
+        flexGrow: 1,
+        minHeight: '80px'
+      }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'flex-start'
+          alignItems: 'flex-start',
+          marginBottom: '4px'
         }}>
-          <h3 className="nft-name" title={name}>
+          <h3 style={{
+            fontSize: '15px',
+            fontWeight: 600,
+            margin: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            flex: 1,
+            lineHeight: '1.3',
+            color: '#333'
+          }} title={name}>
             {name || "Unnamed NFT"}
           </h3>
         </div>
@@ -396,9 +582,19 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between'
+            justifyContent: 'space-between',
+            marginTop: '4px',
+            minHeight: '20px'
           }}>
-            <p className="nft-collection" title={collection}>
+            <p style={{
+              margin: 0,
+              fontSize: '13px',
+              color: '#666',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '70%'
+            }} title={collection}>
               {collection}
             </p>
             
@@ -409,6 +605,20 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
                 onClick={(e) => {
                   e.stopPropagation();
                   handleShowFriends(e);
+                }}
+                style={{
+                  background: '#f0f0f0',
+                  border: 'none',
+                  borderRadius: '4px',
+                  padding: '3px 6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  fontSize: '11px',
+                  color: '#555',
+                  transition: 'background-color 0.2s ease',
+                  flexShrink: 0,
+                  marginLeft: '4px'
                 }}
                 aria-label="View collection friends"
               >
@@ -425,14 +635,24 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         )}
         
         {floorPrice && (
-          <div className="nft-floor-price">
+          <div style={{
+            marginTop: '6px',
+            fontSize: '13px',
+            color: '#666',
+            display: 'flex',
+            alignItems: 'center'
+          }}>
             <span style={{ fontWeight: '500' }}>Floor:</span> 
             <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
           </div>
         )}
         
         {contractAddress && (
-          <div className="nft-address">
+          <div style={{
+            marginTop: '4px',
+            fontSize: '11px',
+            color: '#888'
+          }}>
             <span>{contractAddress}</span>
           </div>
         )}

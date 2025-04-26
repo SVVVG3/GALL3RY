@@ -167,9 +167,11 @@ button {
 /* =================== NFT GRID =================== */
 .nft-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 20px;
   width: 100%;
+  padding: 20px;
+  background-color: var(--bg-color);
 }
 
 /* =================== NFT CARD =================== */
@@ -184,7 +186,9 @@ button {
   display: flex;
   flex-direction: column;
   height: 100%;
-  min-height: 240px;
+  width: 100%;
+  min-height: 300px;
+  cursor: pointer;
 }
 
 .nft-card:hover {
@@ -387,17 +391,13 @@ button {
   }
   
   .nft-card .media-container {
-    background-color: #252525;
+    background-color: #292929;
   }
   
-  .nft-card .media-image {
-    background-color: #2a2a2a;
-  }
-  
+  .nft-card .media-image,
   .nft-card .media-loading,
   .nft-card .no-media {
-    background-color: #252525;
-    color: #aaa;
+    background-color: #292929;
   }
   
   .nft-card .nft-info {
@@ -654,8 +654,9 @@ button {
   }
   
   .nft-grid {
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    gap: 15px;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+    padding: 12px;
   }
   
   .wallet-input-section form {
@@ -693,7 +694,9 @@ button {
 
 @media (max-width: 480px) {
   .nft-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+    padding: 8px;
   }
   
   .nft-info {
