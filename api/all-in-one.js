@@ -1003,7 +1003,7 @@ async function handleImageProxyRequest(req, res) {
     };
     
     // Handle Alchemy CDN URLs specifically - special handling for their unique format
-    if (proxyUrl.includes('nft-cdn.alchemy.com')) {
+    if (proxyUrl.includes('nft-cdn.alchemy.com') || proxyUrl.includes('res.cloudinary.com/alchemyapi')) {
       console.log(`[IMAGE-PROXY] Handling Alchemy CDN URL: ${proxyUrl}`);
       
       // Don't modify the URL format as it might break things
@@ -1016,9 +1016,17 @@ async function handleImageProxyRequest(req, res) {
       
       // Use specific headers for Alchemy
       customHeaders = {
-        ...customHeaders,
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Origin': 'https://dashboard.alchemy.com',
+        'Referer': 'https://dashboard.alchemy.com/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'same-site',
+        'If-None-Match': '', // Clear any conditional requests
         'Cache-Control': 'no-cache',
-        'Origin': 'https://gall3ry.vercel.app'
+        'Pragma': 'no-cache'
       };
     }
     
@@ -1102,6 +1110,25 @@ async function handleImageProxyRequest(req, res) {
       console.log(`[IMAGE-PROXY] Converted to Arweave gateway: ${proxyUrl}`);
     }
     
+    // Handle SVG data URLs (often used for onchain NFTs)
+    if (proxyUrl.startsWith('data:image/svg+xml;base64,')) {
+      console.log('[IMAGE-PROXY] Processing SVG data URL');
+      
+      try {
+        // Extract and decode the base64 content
+        const base64Content = proxyUrl.replace('data:image/svg+xml;base64,', '');
+        const svgContent = Buffer.from(base64Content, 'base64').toString('utf-8');
+        
+        // Return the SVG directly
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.status(200).send(svgContent);
+      } catch (error) {
+        console.error('[IMAGE-PROXY] Error processing SVG data URL:', error);
+        // Continue with normal processing if SVG handling fails
+      }
+    }
+    
     // Fetch the image with retries
     let response;
     let retries = 0;
@@ -1144,23 +1171,36 @@ async function handleImageProxyRequest(req, res) {
           }
         }
         
-        // If this is Alchemy CDN and we got an error, try an alternative URL format
-        if (proxyUrl.includes('nft-cdn.alchemy.com') && retries === 0) {
-          console.log(`[IMAGE-PROXY] Alchemy URL failed with status ${response.status}. Trying with different approach.`);
+        // Special handling for Alchemy CDN failures
+        if ((proxyUrl.includes('nft-cdn.alchemy.com') || proxyUrl.includes('res.cloudinary.com/alchemyapi')) && 
+            (response.status === 403 || response.status === 404)) {
           
-          // Try removing any query parameters that might be causing issues
-          const urlWithoutParams = proxyUrl.split('?')[0];
-          if (urlWithoutParams !== proxyUrl) {
-            console.log(`[IMAGE-PROXY] Removing query parameters: ${urlWithoutParams}`);
-            proxyUrl = urlWithoutParams;
-            retries++;
-            continue;
+          if (retries === 0 && proxyUrl.includes('res.cloudinary.com/alchemyapi')) {
+            // Try switching from Cloudinary to nft-cdn.alchemy.com if possible
+            const match = proxyUrl.match(/\/([^/]+)\/([^/]+)$/);
+            if (match && match[2]) {
+              const resourceId = match[2];
+              const network = proxyUrl.includes('matic-mainnet') ? 'matic-mainnet' : 
+                     proxyUrl.includes('base-mainnet') ? 'base-mainnet' : 
+                     proxyUrl.includes('opt-mainnet') ? 'opt-mainnet' : 'eth-mainnet';
+              
+              console.log(`[IMAGE-PROXY] Switching from Cloudinary to direct Alchemy CDN. Resource: ${resourceId}, Network: ${network}`);
+              proxyUrl = `https://nft-cdn.alchemy.com/${network}/${resourceId}`;
+              retries++;
+              continue;
+            }
+          } else if (retries === 1 && proxyUrl.includes('nft-cdn.alchemy.com')) {
+            // Try adding /original suffix if not already present
+            if (!proxyUrl.endsWith('/original')) {
+              console.log('[IMAGE-PROXY] Adding /original to Alchemy URL');
+              proxyUrl = `${proxyUrl}/original`;
+              retries++;
+              continue;
+            }
           }
-          
-          // Don't try to modify URL structure as it may break things
-          retries++;
         }
         
+        // General retry for non-2xx responses
         retries++;
       } catch (retryError) {
         console.error(`[IMAGE-PROXY] Request error: ${retryError.message} for ${proxyUrl}`);

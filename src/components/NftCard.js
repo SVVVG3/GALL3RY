@@ -39,9 +39,6 @@ const getReliableIpfsUrl = (url) => {
  * @return {string} The proxied URL or original if it's already proxied/local
  */
 const getProxiedUrl = (url) => {
-  // For debugging
-  console.log('Proxying URL:', url);
-  
   // Skip proxying for data URLs
   if (url?.startsWith('data:')) {
     console.log('Skipping proxy for data URL');
@@ -55,7 +52,7 @@ const getProxiedUrl = (url) => {
   }
   
   // Skip if already proxied
-  if (url?.includes('/api/proxy?url=')) {
+  if (url?.includes('/api/image-proxy') || url?.includes('/api/proxy')) {
     console.log('URL is already proxied:', url);
     return url;
   }
@@ -68,7 +65,9 @@ const getProxiedUrl = (url) => {
     // Determine if we're in local dev or production and construct proxy URL
     const isLocal = typeof window !== 'undefined' && window.location.hostname === 'localhost';
     const baseUrl = isLocal ? 'http://localhost:3000' : '';
-    const proxiedUrl = `${baseUrl}/api/proxy?url=${encodeURIComponent(url)}`;
+    
+    // Use image-proxy endpoint for better handling of NFT images
+    const proxiedUrl = `${baseUrl}/api/image-proxy?url=${encodeURIComponent(url)}`;
     
     console.log('Proxied URL:', proxiedUrl);
     return proxiedUrl;
@@ -90,6 +89,14 @@ const findBestImageUrl = (nft) => {
   
   // Try multiple possible image sources in order of preference
   const possibleSources = [
+    // Alchemy specific paths from NFTDebugView results
+    nft.image?.cachedUrl,
+    nft.image?.pngUrl, 
+    nft.image?.thumbnailUrl,
+    nft.imageUrl?.cachedUrl,
+    nft.imageUrl?.pngUrl,
+    nft.imageUrl?.thumbnailUrl,
+    
     // Direct image property
     nft.image,
     // Metadata image
@@ -126,6 +133,22 @@ const findBestImageUrl = (nft) => {
   if (imageUrl) {
     console.log('Found image URL:', imageUrl);
     return imageUrl;
+  }
+  
+  // If no URL string was found directly, but we have an image object with nested URLs
+  if (typeof nft.image === 'object' && nft.image !== null) {
+    console.log('Processing complex image object:', nft.image);
+    // Try to access any URL property within the image object
+    for (const key in nft.image) {
+      if (
+        typeof nft.image[key] === 'string' && 
+        nft.image[key].trim() !== '' &&
+        (nft.image[key].startsWith('http') || nft.image[key].startsWith('data:'))
+      ) {
+        console.log(`Found image URL in image.${key}:`, nft.image[key]);
+        return nft.image[key];
+      }
+    }
   }
   
   console.warn('No valid image URL found for NFT:', nft);
