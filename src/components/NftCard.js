@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
-import { getProxiedUrl, getReliableIpfsUrl } from '../services/proxyService';
+import { getProxiedUrl, getReliableIpfsUrl, getBestImageUrl } from '../services/proxyService';
 import '../styles/nft-unified.css';
 import { formatAddress } from '../utils/formatters';
 import { FaExternalLinkAlt, FaPlay } from 'react-icons/fa';
@@ -20,15 +20,16 @@ const findBestImageUrl = (nft) => {
   try {
     // Handle the specific structure we're seeing in the console logs first
     if (nft.image && typeof nft.image === 'object') {
-      if (nft.image.cachedUrl) return getReliableIpfsUrl(nft.image.cachedUrl);
-      if (nft.image.pngUrl) return getReliableIpfsUrl(nft.image.pngUrl);
-      if (nft.image.thumbnailUrl) return getReliableIpfsUrl(nft.image.thumbnailUrl);
+      // For Alchemy format, prefer cachedUrl
+      if (nft.image.cachedUrl) return nft.image.cachedUrl;
+      if (nft.image.pngUrl) return nft.image.pngUrl;
+      if (nft.image.thumbnailUrl) return nft.image.thumbnailUrl;
     }
     
     if (nft.imageUrl && typeof nft.imageUrl === 'object') {
-      if (nft.imageUrl.cachedUrl) return getReliableIpfsUrl(nft.imageUrl.cachedUrl);
-      if (nft.imageUrl.pngUrl) return getReliableIpfsUrl(nft.imageUrl.pngUrl);
-      if (nft.imageUrl.thumbnailUrl) return getReliableIpfsUrl(nft.imageUrl.thumbnailUrl);
+      if (nft.imageUrl.cachedUrl) return nft.imageUrl.cachedUrl;
+      if (nft.imageUrl.pngUrl) return nft.imageUrl.pngUrl;
+      if (nft.imageUrl.thumbnailUrl) return nft.imageUrl.thumbnailUrl;
     }
     
     // Try multiple possible image sources in order of preference
@@ -71,7 +72,7 @@ const findBestImageUrl = (nft) => {
     );
     
     if (imageUrl) {
-      return getReliableIpfsUrl(imageUrl);
+      return imageUrl; // Don't apply IPFS conversion here, that's done in getBestImageUrl
     }
     
     // If no URL string was found directly, but we have an image object with nested URLs
@@ -83,7 +84,7 @@ const findBestImageUrl = (nft) => {
           nft.image[key].trim() !== '' &&
           (nft.image[key].startsWith('http') || nft.image[key].startsWith('data:') || nft.image[key].startsWith('ipfs://'))
         ) {
-          return getReliableIpfsUrl(nft.image[key]);
+          return nft.image[key];
         }
       }
     }
@@ -104,6 +105,7 @@ const findBestImageUrl = (nft) => {
     
     return ''; // Return empty string if no valid URL found
   } catch (error) {
+    console.error('Error finding best image URL:', error);
     return '';
   }
 };
@@ -180,10 +182,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           return;
         }
 
-        // Apply proxy to the URL if it's not a data URL or local URL
-        const finalUrl = bestUrl.startsWith('data:') || bestUrl.startsWith('/') 
-          ? bestUrl 
-          : getProxiedUrl(bestUrl);
+        // Apply proxy to the URL if needed
+        const finalUrl = getBestImageUrl(bestUrl);
         
         // Set URL in state
         if (isMounted) {
@@ -207,6 +207,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           }
         }
       } catch (error) {
+        console.error('Error loading NFT image:', error);
         if (isMounted) {
           setMediaError(true);
         }
@@ -227,21 +228,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   }, []);
 
   const handleMediaError = useCallback(() => {
-    // If the proxy URL failed, try to fallback to direct URL
-    if (imageUrl?.includes('proxy.gall3ry.co') && imageUrl?.includes('?url=')) {
-      try {
-        // Extract the original URL from the proxy URL
-        const originalUrl = decodeURIComponent(imageUrl.split('?url=')[1]);
-        
-        // Set the direct URL
-        setImageUrl(originalUrl);
-      } catch (e) {
-        setMediaError(true);
-      }
-    } else {
-      setMediaError(true);
-    }
-  }, [imageUrl]);
+    // Simply mark as error if media failed to load
+    setMediaError(true);
+  }, []);
   
   // Handle showing the friends modal
   const handleShowFriends = (e) => {
@@ -397,93 +386,28 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
     );
   };
   
-  // For images, preload to check if they work
+  // Reset loading state when image URL changes, but don't try to preload
+  // This avoids duplicate requests as the <img> tag will handle loading
   useEffect(() => {
-    let isMounted = true;
-    
-    // Reset the media state when imageUrl changes
+    // Only reset loading state if the URL actually changed
     setMediaLoaded(false);
     setMediaError(false);
     
     // If no image URL, show error state
     if (!imageUrl) {
       setMediaError(true);
-      return;
     }
     
     // Special handling for data URLs - consider them loaded
-    if (imageUrl.startsWith('data:')) {
-      // If it's an SVG, we'll handle it specially
+    if (imageUrl?.startsWith('data:')) {
+      setMediaLoaded(true);
+      
+      // If it's an SVG, we'll handle it specially  
       if (imageUrl.includes('image/svg+xml')) {
         setMediaType('svg');
       }
-      
-      // For data URLs, we can assume they're already loaded
-      setMediaLoaded(true);
-      return;
     }
-    
-    // Detect media type from URL
-    if (imageUrl.match(/\.(mp4|webm|mov)($|\?)/i) || imageUrl.includes('video/')) {
-      setMediaType('video');
-    } else if (imageUrl.match(/\.(mp3|wav|ogg)($|\?)/i) || imageUrl.includes('audio/')) {
-      setMediaType('audio');
-    } else if (imageUrl.match(/\.svg($|\?)/i) || imageUrl.includes('image/svg+xml')) {
-      setMediaType('svg');
-    } else {
-      setMediaType('image');
-    }
-    
-    // Special preloading for different media types
-    if (mediaType === 'image') {
-      const img = new Image();
-      img.crossOrigin = "anonymous";
-      
-      img.onload = () => {
-        if (isMounted) {
-          setMediaLoaded(true);
-          setMediaError(false);
-        }
-      };
-      
-      img.onerror = () => {
-        if (isMounted) {
-          // Don't try to use the direct URL as a fallback anymore
-          // Just mark as error and let the UI show the error state
-          setMediaError(true);
-        }
-      };
-      
-      img.src = imageUrl;
-    } else if (mediaType === 'svg') {
-      // For SVGs, we can try a fetch to see if it's valid
-      fetch(imageUrl)
-        .then(response => {
-          if (!response.ok) throw new Error('SVG fetch failed with status: ' + response.status);
-          return response.text();
-        })
-        .then(svgContent => {
-          if (svgContent.includes('<svg')) {
-            if (isMounted) {
-              setMediaLoaded(true);
-              setMediaError(false);
-            }
-          } else {
-            throw new Error('Not a valid SVG content');
-          }
-        })
-        .catch(() => {
-          if (isMounted) {
-            setMediaError(true);
-          }
-        });
-    }
-    // Video and audio will handle their own loading via the onLoadedData event
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [imageUrl, mediaType]);
+  }, [imageUrl]);
   
   // Handle contract address display
   const contractAddress = nft?.contract?.address ? formatAddress(nft.contract.address) : '';
