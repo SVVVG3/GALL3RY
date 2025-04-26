@@ -365,13 +365,19 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       // Ensure result is not null/undefined and is an array
       if (!result || !Array.isArray(result)) {
         console.warn('filteredAndSortedNfts returned non-array result:', result);
-        return [];
+        return { count: 0, data: [], isLoading: false };
       }
       
-      return result;
+      // Return properly formatted data for VirtualizedNFTGrid
+      return {
+        count: result.length,
+        data: result,
+        sample: result.length > 0 ? result[0] : null,
+        isLoading: false
+      };
     } catch (error) {
       console.error('Error in filteredAndSortedNfts:', error);
-      return [];
+      return { count: 0, data: [], isLoading: false };
     }
   }, [filterNftsBySearch, sortedNfts, userNfts.length]);
   

@@ -10,7 +10,7 @@ import '../styles/nft-unified.css';
  * A drop-in replacement for the old NFTGrid component that uses virtualization
  * for better performance with large collections of NFTs.
  * 
- * @param {Array} nfts - Array of NFT objects to display
+ * @param {Array|Object} nfts - Array of NFT objects or object with count/sample properties 
  * @param {boolean} isLoading - Whether NFTs are currently being loaded
  * @param {string} emptyMessage - Message to display when no NFTs are found
  */
@@ -18,11 +18,24 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
   // Add debug logging
   React.useEffect(() => {
     console.log('VirtualizedNFTGrid received nfts:', {
-      count: nfts?.length || 0,
-      sample: nfts?.length > 0 ? nfts[0] : null,
+      count: Array.isArray(nfts) ? nfts.length : (nfts?.count || 0),
+      sample: Array.isArray(nfts) ? (nfts.length > 0 ? nfts[0] : null) : nfts?.sample || null,
       isLoading
     });
   }, [nfts, isLoading]);
+
+  // Normalize nfts to always be an array
+  const nftsArray = React.useMemo(() => {
+    if (Array.isArray(nfts)) {
+      return nfts;
+    }
+    // Handle the case where nfts is passed as {count, sample} object from FarcasterUserSearch
+    if (nfts && typeof nfts === 'object' && nfts.count >= 0 && Array.isArray(nfts.data)) {
+      return nfts.data;
+    }
+    // Return empty array as default
+    return [];
+  }, [nfts]);
 
   // Grid cell renderer
   const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
@@ -65,7 +78,7 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
     );
   }
 
-  if (!nfts || nfts.length === 0) {
+  if (!nftsArray || nftsArray.length === 0) {
     return (
       <div className="nft-empty">
         <p>{emptyMessage}</p>
@@ -81,7 +94,7 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
           // Minimum card width is 250px with 20px gap
           const columnWidth = 270;
           const columnCount = Math.max(1, Math.floor(width / columnWidth));
-          const rowCount = Math.ceil(nfts.length / columnCount);
+          const rowCount = Math.ceil(nftsArray.length / columnCount);
           
           return (
             <FixedSizeGrid
@@ -92,7 +105,7 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
               rowCount={rowCount}
               rowHeight={320} // Approximate height for an NFT card
               width={width}
-              itemData={{ nfts, columnCount }}
+              itemData={{ nfts: nftsArray, columnCount }}
             >
               {Cell}
             </FixedSizeGrid>
