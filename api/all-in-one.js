@@ -1038,7 +1038,9 @@ async function handleImageProxyRequest(req, res) {
         'https://ipfs.io/ipfs/',
         'https://gateway.pinata.cloud/ipfs/',
         'https://dweb.link/ipfs/',
-        'https://ipfs.infura.io/ipfs/'
+        'https://ipfs.infura.io/ipfs/',
+        'https://w3s.link/ipfs/', // Added new reliable gateway
+        'https://gateway.ipfs.io/ipfs/' // Added new reliable gateway
       ];
       
       // Store the original IPFS hash
@@ -1085,7 +1087,9 @@ async function handleImageProxyRequest(req, res) {
               'https://ipfs.io/ipfs/',
               'https://gateway.pinata.cloud/ipfs/',
               'https://dweb.link/ipfs/',
-              'https://ipfs.infura.io/ipfs/'
+              'https://ipfs.infura.io/ipfs/',
+              'https://w3s.link/ipfs/', // Added new reliable gateway
+              'https://gateway.ipfs.io/ipfs/' // Added new reliable gateway
             ],
             currentGatewayIndex: isPinata ? 1 : 0, // Skip Pinata gateway if URL is already from Pinata
             isPinata: isPinata
@@ -1129,10 +1133,40 @@ async function handleImageProxyRequest(req, res) {
       }
     }
     
+    // Handle other data URLs
+    if (proxyUrl.startsWith('data:')) {
+      console.log('[IMAGE-PROXY] Processing data URL');
+      
+      try {
+        // Extract the MIME type
+        const mimeMatch = proxyUrl.match(/^data:([^;,]+)/);
+        const mimeType = mimeMatch ? mimeMatch[1] : 'application/octet-stream';
+        
+        // Extract the data part
+        const isBase64 = proxyUrl.includes(';base64,');
+        const dataPart = proxyUrl.split(',')[1] || '';
+        
+        let buffer;
+        if (isBase64) {
+          buffer = Buffer.from(dataPart, 'base64');
+        } else {
+          // Handle URL encoded data
+          buffer = Buffer.from(decodeURIComponent(dataPart), 'utf-8');
+        }
+        
+        // Return the content with appropriate Content-Type
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        return res.status(200).send(buffer);
+      } catch (error) {
+        console.error('[IMAGE-PROXY] Error processing data URL:', error);
+      }
+    }
+    
     // Fetch the image with retries
     let response;
     let retries = 0;
-    const maxRetries = 3; // Increased from 2 to 3 for more fallback attempts
+    const maxRetries = 4; // Increased from 3 to 4 for more fallback attempts
     
     while (retries <= maxRetries) {
       try {
@@ -1145,7 +1179,9 @@ async function handleImageProxyRequest(req, res) {
           timeout: 10000, // 10 second timeout
           headers: customHeaders,
           // Allow non-2xx status codes to handle them manually
-          validateStatus: null
+          validateStatus: null,
+          // Set maximum size to avoid excessively large images (30MB limit)
+          maxContentLength: 30 * 1024 * 1024
         });
         
         console.log(`[IMAGE-PROXY] Response status: ${response.status} for ${proxyUrl}`);
@@ -1155,8 +1191,8 @@ async function handleImageProxyRequest(req, res) {
           break;
         }
         
-        // Handle IPFS gateway fallbacks for 403/404 errors
-        if (req.ipfsData && req.ipfsData.isIpfs && (response.status === 403 || response.status === 404)) {
+        // Handle IPFS gateway fallbacks for 403/404/500 errors
+        if (req.ipfsData && req.ipfsData.isIpfs && (response.status === 403 || response.status === 404 || response.status === 500 || response.status === 429)) {
           req.ipfsData.currentGatewayIndex++;
           
           // Try the next gateway if available
@@ -1173,7 +1209,7 @@ async function handleImageProxyRequest(req, res) {
         
         // Special handling for Alchemy CDN failures
         if ((proxyUrl.includes('nft-cdn.alchemy.com') || proxyUrl.includes('res.cloudinary.com/alchemyapi')) && 
-            (response.status === 403 || response.status === 404)) {
+            (response.status === 403 || response.status === 404 || response.status === 429)) {
           
           if (retries === 0 && proxyUrl.includes('res.cloudinary.com/alchemyapi')) {
             // Try switching from Cloudinary to nft-cdn.alchemy.com if possible
@@ -1249,8 +1285,36 @@ async function handleImageProxyRequest(req, res) {
       return res.status(200).send(placeholderSvg);
     }
     
+    // Verify that we actually got image data, not an HTML error page
+    const contentType = response.headers['content-type'] || '';
+    const isImageContent = contentType.startsWith('image/') || 
+                          contentType.includes('svg') ||
+                          contentType.includes('application/octet-stream');
+    
+    // Check if we got HTML instead of an image (error page)
+    const isHtmlContent = contentType.includes('html') || 
+                         (response.data.length > 10 && response.data.slice(0, 10).toString().includes('<!DOCTYPE'));
+    
+    if (isHtmlContent || !isImageContent) {
+      console.log(`[IMAGE-PROXY] Received HTML instead of image content. Returning placeholder.`);
+      
+      const svgText = url.length > 30 ? `${url.substring(0, 30)}...` : url;
+      const placeholderSvg = Buffer.from(`<svg width="400" height="400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="400" height="400" fill="#f0f0f0"/>
+        <text x="50%" y="40%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="24px" fill="#666666">
+          Invalid Image Format
+        </text>
+        <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="12px" fill="#999999">
+          ${svgText}
+        </text>
+      </svg>`, 'utf-8');
+      
+      res.setHeader('Content-Type', 'image/svg+xml');
+      return res.status(200).send(placeholderSvg);
+    }
+    
     // Forward the image response with proper content type and caching headers
-    res.setHeader('Content-Type', response.headers['content-type'] || 'image/jpeg');
+    res.setHeader('Content-Type', contentType || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
     res.setHeader('X-GALL3RY-Source', url.substring(0, 100)); // Debugging header
     console.log(`[IMAGE-PROXY] Successfully proxied image: ${url.substring(0, 100)}...`);
