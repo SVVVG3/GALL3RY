@@ -8,6 +8,7 @@ import '../styles/CollectionFriendsModal.css';
 import { useSelector } from 'react-redux';
 import farcasterStateService from '../services/farcasterStateService';
 import { selectFollowing } from '../redux/farcasterSlice';
+import { formatAddress } from '../utils/formatters';
 
 /**
  * Modal component that displays which Farcaster friends own NFTs from the same collection
@@ -56,7 +57,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   }, [isOpen]);
   
   const modalRef = useRef(null);
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, token } = useAuth();
   const { authenticated: privyAuthenticated, user: privyUser } = usePrivy();
   
   // Consider both authentication methods
@@ -800,7 +801,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     }
   }, [isOpen]);
 
-  // Only render if modal is open
+  // If modal is not open, don't render anything
   if (!isOpen) return null;
 
   return createPortal(
