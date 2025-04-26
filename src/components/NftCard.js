@@ -34,6 +34,31 @@ const getReliableIpfsUrl = (url) => {
 };
 
 /**
+ * Process URL through our server's image proxy to avoid CORS issues
+ * Especially effective for Alchemy CDN URLs
+ */
+const getProxiedUrl = (url) => {
+  if (!url) return url;
+  
+  // Skip proxying for data URLs
+  if (url.startsWith('data:')) return url;
+  
+  // Skip for relative URLs
+  if (url.startsWith('/')) return url;
+  
+  // Encode the URL properly
+  const encodedUrl = encodeURIComponent(url);
+  
+  // For development (local)
+  if (window.location.hostname === 'localhost') {
+    return `http://localhost:3001/api/image-proxy?url=${encodedUrl}`;
+  }
+  
+  // For production deployment
+  return `/api/image-proxy?url=${encodedUrl}`;
+};
+
+/**
  * Simple NFT Card component
  * 
  * Displays an NFT with image, name, collection name, and optional price
@@ -136,8 +161,17 @@ const NFTCard = ({ nft }) => {
       // Add debug log to show the exact image URL being used
       console.log('Using image URL:', imageUrl);
       
-      // Apply IPFS gateway transformation
-      return getReliableIpfsUrl(imageUrl) || '';
+      // Apply IPFS gateway transformation first
+      const reliableUrl = getReliableIpfsUrl(imageUrl) || '';
+      
+      // For Alchemy CDN URLs or other external URLs, use our proxy
+      if (reliableUrl.includes('nft-cdn.alchemy.com') || !reliableUrl.startsWith('data:')) {
+        const proxiedUrl = getProxiedUrl(reliableUrl);
+        console.log('Using proxied URL to avoid CORS:', proxiedUrl);
+        return proxiedUrl;
+      }
+      
+      return reliableUrl;
     } catch (error) {
       console.warn('Error getting image URL:', error);
       return '';
