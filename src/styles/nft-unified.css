@@ -54,6 +54,8 @@ button {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  min-height: 100vh; /* Ensure container takes at least full viewport height */
+  padding-bottom: 60px; /* Add extra padding at the bottom */
 }
 
 .gallery-header {
@@ -168,10 +170,19 @@ button {
 .nft-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 24px;
+  gap: 40px 24px; /* Increased row gap to 40px (row gap, column gap) */
   width: 100%;
-  padding: 20px;
-  background-color: #f9f9f9; /* Light gray background */
+  padding: 30px; /* Increased padding around the grid */
+  background-color: #f9f9f9;
+  position: relative; /* Ensure proper stacking context */
+  min-height: 200px; /* Minimum height for grid */
+  margin-bottom: 40px; /* Add bottom margin to grid */
+}
+
+/* NFT Card Container - add this new class */
+.nft-card-container {
+  width: 100%;
+  margin-bottom: 20px;
 }
 
 /* =================== NFT CARD =================== */
@@ -185,7 +196,7 @@ button {
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
-  height: auto; /* Allow natural height */
+  height: auto;
   width: 100%;
   cursor: pointer;
 }
@@ -673,8 +684,8 @@ button {
   
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
-    gap: 16px;
-    padding: 16px;
+    gap: 30px 16px;
+    padding: 24px;
   }
   
   .wallet-input-section form {
@@ -713,8 +724,8 @@ button {
 @media (max-width: 480px) {
   .nft-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 12px;
-    padding: 12px;
+    gap: 28px 12px;
+    padding: 16px;
   }
   
   .nft-info {
@@ -838,4 +849,9 @@ button {
   border-top-color: var(--accent-color);
   animation: spin 1s linear infinite;
   margin-bottom: 16px;
+}
+
+/* Add bottom spacing for the page */
+.page-container {
+  padding-bottom: 60px;
 } 

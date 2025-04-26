@@ -552,18 +552,18 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           
       {/* NFT info section */}
       <div style={{ 
-        padding: '12px 16px',
+        padding: '16px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
-        minHeight: '85px',
-        width: '100%'
+        minHeight: '100px',
+        width: '100%',
+        gap: '6px'
       }}>
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
-          marginBottom: '4px',
           width: '100%'
         }}>
           <h3 style={{
@@ -575,7 +575,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             whiteSpace: 'nowrap',
             flex: 1,
             lineHeight: '1.3',
-            color: '#333'
+            color: '#333',
+            padding: '2px 0'
           }} title={name}>
             {name || "Unnamed NFT"}
           </h3>
@@ -586,8 +587,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            marginTop: '6px',
-            width: '100%'
+            width: '100%',
+            padding: '2px 0'
           }}>
             <p style={{
               margin: 0,
@@ -639,11 +640,11 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         
         {floorPrice && (
           <div style={{
-            marginTop: '6px',
             fontSize: '13px',
             color: '#666',
             display: 'flex',
-            alignItems: 'center'
+            alignItems: 'center',
+            padding: '2px 0'
           }}>
             <span style={{ fontWeight: '500' }}>Floor:</span> 
             <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
@@ -652,9 +653,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         
         {contractAddress && (
           <div style={{
-            marginTop: '4px',
             fontSize: '11px',
-            color: '#888'
+            color: '#888',
+            padding: '2px 0'
           }}>
             <span>{contractAddress}</span>
           </div>
