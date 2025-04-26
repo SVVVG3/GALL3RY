@@ -4,11 +4,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from '@farcaster/auth-kit';
 import CollectionFriendsModal from './CollectionFriendsModal';
 import '../styles/nft-unified.css';
-import dynamic from 'next/dynamic';
-import NextImage from 'next/image';
-
-// Dynamic imports
-const Modal = dynamic(() => import('./Modal'));
 
 // IPFS gateway URLs in order of preference
 const IPFS_GATEWAYS = [
