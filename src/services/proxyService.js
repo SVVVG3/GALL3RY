@@ -43,22 +43,27 @@ export const needsProxy = (url) => {
   if (url.startsWith('data:')) return false;
   if (url.startsWith('/')) return false;
   
-  // These services typically have CORS headers set correctly
-  const knownGoodServices = [
-    'nft-cdn.alchemy.com',
-    'cloudflare-ipfs.com',
-    'cf-ipfs.com',
-    'nftstorage.link',
-    'infura-ipfs.io',
-    'gateway.pinata.cloud'
-  ];
-  
-  // Skip proxying for URLs from known good services
-  for (const service of knownGoodServices) {
-    if (url.includes(service)) return false;
+  // IMPORTANT: ALWAYS proxy Alchemy URLs
+  if (url.includes('nft-cdn.alchemy.com') || url.includes('alchemy.com')) {
+    return true;
   }
   
-  return true;
+  // Always proxy these URLs that are known to cause CORS issues
+  const knownProblematicServices = [
+    'nft-cdn.alchemy.com',
+    'nftstorage.link',
+    'cloudflare-ipfs',
+    'cf-ipfs.com',
+    'ipfs.io'
+  ];
+  
+  // If URL contains a problematic service, proxy it
+  for (const service of knownProblematicServices) {
+    if (url.includes(service)) return true;
+  }
+  
+  // For other URLs, proxy those that are likely to have CORS issues (images from external domains)
+  return !url.includes('data:image');
 };
 
 /**
@@ -78,14 +83,15 @@ export const getProxiedUrl = (url) => {
       ? url 
       : `https://${url.replace(/^\/\//, '')}`;
     
-    // Skip proxying for known good services
+    // Check if the URL needs proxying
     if (!needsProxy(absoluteUrl)) {
       return absoluteUrl;
     }
     
-    // Use our proxy service
-    const proxyUrl = process.env.REACT_APP_PROXY_URL || 'https://proxy.gall3ry.co/';
-    return `${proxyUrl}?url=${encodeURIComponent(absoluteUrl)}`;
+    // Fixed proxy URL that we know works reliably
+    // Use a CORS proxy that actually works
+    const proxyUrl = 'https://images.weserv.nl/?url=';
+    return `${proxyUrl}${encodeURIComponent(absoluteUrl)}`;
   } catch (error) {
     return url;
   }
