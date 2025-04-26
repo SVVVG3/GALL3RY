@@ -125,7 +125,6 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   const [imageUrl, setImageUrl] = useState('');
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
-  const [showDebug, setShowDebug] = useState(false);
   
   // Handle null or invalid NFT data
   if (!nft) {
@@ -249,12 +248,6 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
     setMediaError(true);
   }, [imageUrl]);
   
-  // Toggle debug overlay
-  const toggleDebug = (e) => {
-    e.stopPropagation();
-    setShowDebug(!showDebug);
-  };
-
   // Handle showing collection friends modal
   const handleShowFriends = (e) => {
     e.stopPropagation();
@@ -360,7 +353,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       {imageUrl && <span style={{ fontSize: '12px', color: '#888', maxWidth: '80%', textAlign: 'center', marginTop: '4px', wordBreak: 'break-all' }}>{imageUrl.substring(0, 50)}{imageUrl.length > 50 ? '...' : ''}</span>}
     </div>
   );
-
+  
   return (
     <div 
       className="nft-card" 
@@ -379,52 +372,6 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         cursor: onSelect ? 'pointer' : 'default'
       }}
     >
-      {/* Debug toggle button */}
-      <button 
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleDebug();
-        }}
-        style={{
-          position: 'absolute',
-          top: '5px',
-          right: '5px',
-          zIndex: 1000,
-          background: 'rgba(255,0,0,0.5)',
-          border: 'none',
-          borderRadius: '50%',
-          width: '16px',
-          height: '16px',
-          fontSize: '10px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'white',
-          cursor: 'pointer'
-        }}
-      >
-        ?
-      </button>
-
-      {/* Debug overlay */}
-      {showDebug && (
-        <div style={{
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: '100%',
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '12px',
-          fontSize: '12px',
-          overflow: 'auto',
-          zIndex: 200
-        }}>
-          <pre>{JSON.stringify(nft, null, 2)}</pre>
-        </div>
-      )}
-
       {/* Image/media container with aspect ratio */}
       <div style={{ 
         position: 'relative', 
@@ -479,7 +426,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             {mediaType === 'video' ? (
               <video
                 src={imageUrl}
-                style={{
+                style={{ 
                   position: 'absolute',
                   top: 0,
                   left: 0,
