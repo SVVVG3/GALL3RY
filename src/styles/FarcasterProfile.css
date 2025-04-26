@@ -327,4 +327,17 @@
     margin-right: 0;
     margin-bottom: 8px;
   }
+}
+
+/* Small spinner for loading NFT count */
+.spinner-small {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(139, 92, 246, 0.2);
+  border-top-color: #8b5cf6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 6px;
+  vertical-align: middle;
 } 

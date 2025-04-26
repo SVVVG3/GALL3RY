@@ -153,9 +153,21 @@ const NFTGallery = () => {
       )}
       
       {isLoading ? (
-        <div className="nft-gallery-loading">
+        <div className="nft-section-loading" style={{ 
+          minHeight: '300px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '30px',
+          backgroundColor: '#ffffff',
+          borderRadius: '8px',
+          margin: '10px 0',
+          width: '100%',
+          border: '1px solid #eaeaea'
+        }}>
           <div className="loading-spinner"></div>
-          <p>Loading NFTs...</p>
+          <p style={{ marginTop: '15px', color: '#666' }}>Loading NFTs...</p>
         </div>
       ) : nfts.length > 0 ? (
         <>
