@@ -9,7 +9,6 @@ import NextImage from 'next/image';
 
 // Dynamic imports
 const Modal = dynamic(() => import('./Modal'));
-const NFTImage = dynamic(() => import('./NFTImage'));
 
 // IPFS gateway URLs in order of preference
 const IPFS_GATEWAYS = [
