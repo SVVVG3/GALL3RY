@@ -125,6 +125,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   const [imageUrl, setImageUrl] = useState('');
   const { isAuthenticated, profile: authProfile } = useAuth();
   const { profile } = useProfile();
+  const [showDebug, setShowDebug] = useState(false);
   
   // Extract essential NFT data
   const name = nft?.name || nft?.title || nft?.rawMetadata?.name || `#${nft?.tokenId || nft?.token_id || ''}`;
@@ -382,7 +383,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
                 left: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover', // Use 'cover' to fill the space
+                objectFit: 'cover',
                 zIndex: 2
               }}
               onLoad={() => {
@@ -432,14 +433,78 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
   // Handle contract address display
   const contractAddress = nft?.contract?.address ? formatAddress(nft.contract.address) : '';
 
+  // Add a toggleDebug function
+  const toggleDebug = (e) => {
+    e.stopPropagation();
+    setShowDebug(!showDebug);
+  };
+
   return (
     <div className={`nft-card ${selected ? 'nft-card-selected' : ''}`} onClick={onSelect} style={style}>
-      {/* Media container with fixed aspect ratio */}
-      <div className="nft-media-outer-container" style={{ position: 'relative', paddingTop: '100%', overflow: 'hidden', borderRadius: '12px 12px 0 0' }}>
+      {/* Debug toggle button */}
+      <button 
+        onClick={toggleDebug}
+        style={{
+          position: 'absolute',
+          top: '2px',
+          right: '2px',
+          zIndex: 1000,
+          background: 'rgba(255,0,0,0.5)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '16px',
+          height: '16px',
+          fontSize: '10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: 'white',
+        }}
+      >
+        ?
+      </button>
+
+      {/* Debug overlay */}
+      {showDebug && (
+        <div style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          background: 'rgba(255,0,0,0.2)',
+          zIndex: 999,
+          pointerEvents: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          padding: '20px',
+          color: 'white',
+          textShadow: '1px 1px 1px black',
+          fontSize: '9px',
+          overflow: 'auto'
+        }}>
+          <div>
+            <div>Name: {name}</div>
+            <div>Image URL: {imageUrl?.substring(0, 30)}...</div>
+            <div>Has Image: {Boolean(nft?.image).toString()}</div>
+            <div>Image Type: {typeof nft?.image}</div>
+            <div>Media Loaded: {mediaLoaded.toString()}</div>
+            <div>Media Error: {mediaError.toString()}</div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ 
+        position: 'relative', 
+        width: '100%',
+        paddingTop: '100%', 
+        overflow: 'hidden',
+        borderRadius: '12px 12px 0 0'
+      }}>
         {renderMedia()}
       </div>
           
-      <div className="nft-info">
+      <div className="nft-info" style={{ padding: '12px' }}>
         <div className="nft-info-header">
           <h3 className="nft-name" title={name}>{name}</h3>
             

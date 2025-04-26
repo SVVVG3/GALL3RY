@@ -176,7 +176,7 @@ button {
 .nft-card {
   position: relative;
   border-radius: 12px;
-  overflow: visible; /* Show overflow during debugging */
+  overflow: hidden; /* Changed back to hidden for production */
   background: #ffffff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -204,6 +204,7 @@ button {
   height: 100%;
   overflow: hidden;
   background: #f8f8f8;
+  z-index: 1;
 }
 
 .nft-loading {
@@ -215,7 +216,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: 5; /* Increased to show above all content */
   background: rgba(248, 248, 248, 0.8);
 }
 
@@ -249,7 +250,7 @@ button {
   justify-content: center;
   color: #888;
   background: #f0f0f0;
-  z-index: 2;
+  z-index: 5; /* Increased to show above all content */
 }
 
 /* Audio styling */
@@ -289,6 +290,7 @@ button {
   justify-content: flex-start;
   position: relative;
   z-index: 1;
+  background: #ffffff; /* Ensure the background is solid */
 }
 
 .nft-info-header {

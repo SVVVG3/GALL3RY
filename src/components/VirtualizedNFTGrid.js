@@ -29,13 +29,27 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
     if (Array.isArray(nfts)) {
       return nfts;
     }
-    // Handle the case where nfts is passed as {count, sample} object from FarcasterUserSearch
-    if (nfts && typeof nfts === 'object' && nfts.count >= 0 && Array.isArray(nfts.data)) {
-      return nfts.data;
+    // Handle the case where nfts is passed as {count, sample, data} object from FarcasterUserSearch
+    if (nfts && typeof nfts === 'object') {
+      if (nfts.count >= 0 && Array.isArray(nfts.data)) {
+        console.log(`Using data array from nfts object with ${nfts.data.length} items`);
+        return nfts.data;
+      }
+      
+      // Try to convert the object to an array if it has numeric keys
+      const keys = Object.keys(nfts).filter(key => !isNaN(parseInt(key)));
+      if (keys.length > 0) {
+        console.log(`Converting object with ${keys.length} numeric keys to array`);
+        return keys.map(key => nfts[key]);
+      }
     }
+    
     // Return empty array as default
+    console.warn('Could not extract NFT array from', nfts);
     return [];
   }, [nfts]);
+  
+  console.log(`Normalized NFTs array has ${nftsArray.length} items`);
 
   // Grid cell renderer
   const Cell = useCallback(({ columnIndex, rowIndex, style, data }) => {
@@ -83,7 +97,7 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
 
   if (isLoading) {
     return (
-      <div className="nft-loading">
+      <div className="nft-loading" style={{ minHeight: '300px' }}>
         <div className="loading-spinner"></div>
         <p>Loading NFTs...</p>
       </div>
@@ -92,14 +106,14 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
 
   if (!nftsArray || nftsArray.length === 0) {
     return (
-      <div className="nft-empty">
+      <div className="nft-empty" style={{ minHeight: '200px' }}>
         <p>{emptyMessage}</p>
       </div>
     );
   }
 
   return (
-    <div className="virtualized-grid-container">
+    <div className="virtualized-grid-container" style={{ height: '800px' }}>
       <AutoSizer>
         {({ height, width }) => {
           // Calculate number of columns based on width
@@ -107,6 +121,8 @@ const VirtualizedNFTGrid = ({ nfts = [], isLoading = false, emptyMessage = "No N
           const columnWidth = 270;
           const columnCount = Math.max(1, Math.floor(width / columnWidth));
           const rowCount = Math.ceil(nftsArray.length / columnCount);
+          
+          console.log(`Rendering grid with ${columnCount} columns, ${rowCount} rows for ${nftsArray.length} NFTs`);
           
           return (
             <FixedSizeGrid
