@@ -17,7 +17,6 @@ import { setNftList } from '../redux/nftFiltersSlice';
 import * as zapperService from '../services/zapperService';
 import NFTCard from './NftCard';
 import NFTGallery from './NFTGallery';
-import NFTLogButton from './NFTLogButton';
 
 // Validates if a string is a valid Ethereum address
 const isValidAddress = (address) => {
