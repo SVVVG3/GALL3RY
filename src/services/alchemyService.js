@@ -922,27 +922,40 @@ class AlchemyService {
         }
       }
       
-      // Normalize network names to Alchemy's expected values
+      // Normalize network names to Alchemy's expected format values
       const networkMapping = {
         'ethereum': 'eth',
         'optimism': 'opt',
         'arbitrum': 'arb',
+        'polygon': 'polygon',
+        'base': 'base',
+        'zora': 'zora'
       };
       
       // Apply mapping if the network is in our mapping
-      if (networkMapping[resolvedNetwork]) {
-        resolvedNetwork = networkMapping[resolvedNetwork];
-      }
+      const standardizedNetwork = networkMapping[resolvedNetwork.toLowerCase()] || resolvedNetwork;
       
-      console.log(`Fetching owners for contract ${resolvedContractAddress} on ${resolvedNetwork}`);
+      // Map network to the correct URL format per Alchemy docs
+      const networkUrlMapping = {
+        'eth': 'eth-mainnet',
+        'polygon': 'polygon-mainnet',
+        'opt': 'opt-mainnet',
+        'arb': 'arb-mainnet',
+        'base': 'base-mainnet',
+        'zora': 'zora-mainnet'
+      };
+      
+      const networkUrlBase = networkUrlMapping[standardizedNetwork] || 'eth-mainnet';
+      
+      console.log(`Fetching owners for contract ${resolvedContractAddress} on ${standardizedNetwork} (URL base: ${networkUrlBase})`);
       
       // Create a cache key based on contract address and network
-      const cacheKey = `owners_${resolvedContractAddress.toLowerCase()}_${resolvedNetwork.toLowerCase()}`;
+      const cacheKey = `owners_${resolvedContractAddress.toLowerCase()}_${standardizedNetwork.toLowerCase()}`;
       
       // Check if we have a valid cached response
       const cachedResponse = await this.getCachedResponse(cacheKey);
       if (cachedResponse) {
-        console.log(`Using cached owners for contract ${resolvedContractAddress} on ${resolvedNetwork} (${cachedResponse.length} owners)`);
+        console.log(`Using cached owners for contract ${resolvedContractAddress} on ${standardizedNetwork} (${cachedResponse.length} owners)`);
         return cachedResponse;
       }
 
@@ -950,7 +963,8 @@ class AlchemyService {
         originalContractAddress: contractAddress,
         resolvedContractAddress,
         originalNetwork: network,
-        resolvedNetwork,
+        resolvedNetwork: standardizedNetwork,
+        networkUrlBase,
         alchemyEndpoint: ALCHEMY_ENDPOINT,
         serverUrl: SERVER_URL,
         timestamp: new Date().toISOString()
@@ -968,8 +982,8 @@ class AlchemyService {
         // Build the API request params for our proxy
         const params = {
           endpoint: 'getOwnersForContract',
-          network: resolvedNetwork,
-          contractAddress: resolvedContractAddress
+          network: standardizedNetwork,
+          contractAddress: resolvedContractAddress.toLowerCase()  // Ensure address is lowercase
         };
         
         console.log('Making proxy Alchemy API request with params:', params);
@@ -977,12 +991,12 @@ class AlchemyService {
         // Make the API request with a longer timeout
         response = await axios.get(ALCHEMY_ENDPOINT, {
           params,
-          timeout: 20000 // 20 seconds - increased from 15 seconds
+          timeout: 20000 // 20 seconds
         });
         
         console.log('Proxy API responded with status:', response.status);
       } catch (proxyError) {
-        console.error(`❌ Proxy API failed for getOwnersForContract for ${resolvedContractAddress} on ${resolvedNetwork}:`, proxyError.message);
+        console.error(`❌ Proxy API failed for getOwnersForContract for ${resolvedContractAddress} on ${standardizedNetwork}:`, proxyError.message);
         
         // Try direct Alchemy API as a fallback
         try {
@@ -993,40 +1007,15 @@ class AlchemyService {
             throw new Error('Alchemy API key not available');
           }
           
-          // Create network-specific URL as per Alchemy docs
-          // Format: https://{network}-mainnet.g.alchemy.com/nft/v3/{apiKey}/getOwnersForContract
-          let networkPrefix;
-          switch (resolvedNetwork.toLowerCase()) {
-            case 'polygon':
-              networkPrefix = 'polygon';
-              break;
-            case 'opt':
-            case 'optimism':
-              networkPrefix = 'opt';
-              break;
-            case 'arb':
-            case 'arbitrum':
-              networkPrefix = 'arb';
-              break;
-            case 'base':
-              networkPrefix = 'base';
-              break;
-            case 'zora':
-              networkPrefix = 'zora';
-              break;
-            default:
-              networkPrefix = 'eth';
-          }
+          // Construct the URL according to Alchemy docs
+          const directUrl = `https://${networkUrlBase}.g.alchemy.com/nft/v3/${this.apiKey}/getOwnersForContract`;
           
-          // Construct the URL explicitly
-          const directUrl = `https://${networkPrefix}-mainnet.g.alchemy.com/nft/v3/${this.apiKey}/getOwnersForContract`;
+          console.log(`Direct API call to Alchemy URL: ${directUrl} for network ${standardizedNetwork}`);
           
-          console.log(`Direct API call to Alchemy URL: ${directUrl} for network ${resolvedNetwork}`);
-          
-          // NOTE: According to Alchemy docs, the contractAddress should be passed as a query parameter
+          // Make the direct API call
           response = await axios.get(directUrl, {
             params: {
-              contractAddress: resolvedContractAddress,
+              contractAddress: resolvedContractAddress.toLowerCase(),
               withTokenBalances: false // Don't need token balances, just owners
             },
             timeout: 20000
@@ -1040,7 +1029,7 @@ class AlchemyService {
             ownersCount: response.data?.owners?.length || 0
           });
         } catch (directApiError) {
-          console.error(`❌ Direct Alchemy API call failed on ${resolvedNetwork}:`, directApiError.message);
+          console.error(`❌ Direct Alchemy API call failed on ${standardizedNetwork}:`, directApiError.message);
           if (directApiError.response) {
             console.error('Error response data:', directApiError.response.data);
             console.error('Error response status:', directApiError.response.status);
@@ -1056,16 +1045,26 @@ class AlchemyService {
         dataKeys: response.data ? Object.keys(response.data) : [],
         hasOwners: Array.isArray(response.data?.owners),
         ownersCount: response.data?.owners?.length || 0,
-        network: resolvedNetwork
+        network: standardizedNetwork
       });
 
       // Extract owners from the response according to the API documentation
       const owners = response.data?.owners || [];
 
-      console.log(`Found ${owners.length} owners for contract ${resolvedContractAddress} on ${resolvedNetwork}`);
+      console.log(`Found ${owners.length} owners for contract ${resolvedContractAddress} on ${standardizedNetwork}`);
       
-      // Convert all addresses to lowercase for consistency
-      const normalizedOwners = owners.map(owner => owner.toLowerCase());
+      // Convert all addresses to lowercase for consistency and filter out invalid addresses
+      const normalizedOwners = owners
+        .map(owner => {
+          // Handle different response formats
+          if (typeof owner === 'string') {
+            return owner.toLowerCase();
+          } else if (owner.ownerAddress) {
+            return owner.ownerAddress.toLowerCase();
+          }
+          return null;
+        })
+        .filter(address => address && address.startsWith('0x'));
       
       // Cache the results
       if (normalizedOwners.length > 0) {

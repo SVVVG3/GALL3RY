@@ -252,16 +252,47 @@ module.exports = async function handler(req, res) {
     
     while (hasMoreOwners) {
       try {
+        // According to Alchemy docs, contractAddress should be normalized
+        const normalizedContractAddress = contractAddress.toLowerCase();
+        
+        console.log(`[CollectionFriends Direct] Making Alchemy API request to ${alchemyUrl} with params:`, {
+          contractAddress: normalizedContractAddress,
+          withTokenBalances: true,
+          pageKey: ownersCursor || undefined
+        });
+        
         const ownersResponse = await axios.get(alchemyUrl, {
           params: {
-            contractAddress,
+            contractAddress: normalizedContractAddress,
             withTokenBalances: true,
-            pageKey: ownersCursor
-          }
+            pageKey: ownersCursor || undefined
+          },
+          headers: {
+            'Accept': 'application/json'
+          },
+          timeout: 30000 // 30 seconds timeout
+        });
+        
+        console.log(`[CollectionFriends Direct] Alchemy API response status: ${ownersResponse.status}`);
+        console.log(`[CollectionFriends Direct] Response data structure:`, {
+          hasData: !!ownersResponse.data,
+          dataKeys: ownersResponse.data ? Object.keys(ownersResponse.data) : [],
+          ownersCount: ownersResponse.data?.owners?.length || 0
         });
         
         if (ownersResponse.data?.owners) {
-          allOwners = [...allOwners, ...ownersResponse.data.owners];
+          // Extract just the owner addresses from the response
+          const ownerAddresses = ownersResponse.data.owners.map(owner => {
+            // Handle both formats that Alchemy might return
+            if (typeof owner === 'string') {
+              return owner.toLowerCase();
+            } else if (owner.ownerAddress) {
+              return owner.ownerAddress.toLowerCase();
+            }
+            return null;
+          }).filter(address => !!address);
+          
+          allOwners = [...allOwners, ...ownerAddresses];
           
           if (ownersResponse.data.pageKey) {
             ownersCursor = ownersResponse.data.pageKey;
@@ -273,10 +304,48 @@ module.exports = async function handler(req, res) {
         }
       } catch (error) {
         console.error('[CollectionFriends Direct] Alchemy API error:', error.message);
-        return res.status(500).json({ 
-          error: 'Alchemy API error', 
-          message: error.message || 'Failed to fetch contract owners'
+        console.error('[CollectionFriends Direct] Error details:', {
+          status: error.response?.status,
+          data: error.response?.data,
+          url: alchemyUrl,
+          network: network,
+          contractAddress: contractAddress
         });
+        
+        // Try fallback to Alchemy direct NFT API if we got an error
+        try {
+          console.log('[CollectionFriends Direct] Attempting fallback to Alchemy NFT API');
+          const fallbackUrl = `https://${chainUrl}.g.alchemy.com/v2/${ALCHEMY_API_KEY}`;
+          
+          const fallbackResponse = await axios.post(fallbackUrl, {
+            jsonrpc: '2.0',
+            id: 1,
+            method: 'alchemy_getOwnersForToken',
+            params: [contractAddress, null]
+          }, {
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json'
+            },
+            timeout: 30000
+          });
+          
+          if (fallbackResponse.data?.result?.owners) {
+            allOwners = [...allOwners, ...fallbackResponse.data.result.owners.map(addr => addr.toLowerCase())];
+            console.log(`[CollectionFriends Direct] Fallback successful, found ${fallbackResponse.data.result.owners.length} owners`);
+          }
+          
+          // We're done with the fallback, don't try to paginate
+          hasMoreOwners = false;
+        } catch (fallbackError) {
+          console.error('[CollectionFriends Direct] Fallback also failed:', fallbackError.message);
+          return res.status(500).json({ 
+            error: 'Alchemy API error', 
+            message: error.message || 'Failed to fetch contract owners',
+            network: network,
+            contractAddress: contractAddress
+          });
+        }
       }
     }
     
