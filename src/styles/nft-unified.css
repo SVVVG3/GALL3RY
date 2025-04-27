@@ -632,6 +632,24 @@ button {
   fill: var(--accent-color);
 }
 
+/* Add this new class for the Friends Holding button container */
+.friends-holding-button-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 2px 0;
+  margin-top: 4px;
+  margin-bottom: 20px; /* Increased bottom margin */
+}
+
+/* Add mobile-specific styles */
+@media (max-width: 480px) {
+  .friends-holding-button-container {
+    margin-bottom: 30px; /* Add extra bottom margin on mobile */
+  }
+}
+
 /* =================== MEDIA SPECIFIC STYLES =================== */
 .nft-video {
   background-color: black;
@@ -825,4 +843,22 @@ button {
 /* Add bottom spacing for the page */
 .page-container {
   padding-bottom: 60px;
+}
+
+.nft-card-info-section {
+  padding: 16px;
+  padding-bottom: 20px; /* Extra bottom padding as baseline */
+  background-color: white;
+  display: flex;
+  flex-direction: column;
+  min-height: 110px;
+  width: 100%;
+  gap: 4px;
+}
+
+/* Mobile specific adjustments */
+@media (max-width: 480px) {
+  .nft-card-info-section {
+    padding-bottom: 25px; /* Even more padding on mobile */
+  }
 } 

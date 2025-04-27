@@ -475,22 +475,13 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       </div>
           
       {/* NFT info section */}
-      <div style={{ 
-        padding: '16px',
-        paddingBottom: '12px',
-        backgroundColor: 'white',
-        display: 'flex',
-        flexDirection: 'column',
-        minHeight: '110px',
-        width: '100%',
-        gap: '8px'
-      }}>
+      <div className="nft-card-info-section">
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'flex-start',
           width: '100%',
-          marginBottom: '6px'
+          marginBottom: '2px'
         }}>
           <h3 style={{
             fontSize: '15px',
@@ -500,9 +491,9 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
             flex: 1,
-            lineHeight: '1.3',
+            lineHeight: '1.2',
             color: '#333',
-            padding: '4px 0'
+            padding: '2px 0'
           }} title={name}>
             {name || "Unnamed NFT"}
           </h3>
@@ -513,8 +504,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             display: 'flex',
             alignItems: 'center',
             width: '100%',
-            padding: '3px 0',
-            marginBottom: '3px'
+            padding: '1px 0',
+            marginBottom: '1px'
           }}>
             <p style={{
               margin: 0,
@@ -536,8 +527,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             color: '#666',
             display: 'flex',
             alignItems: 'center',
-            padding: '3px 0',
-            marginBottom: '3px'
+            padding: '1px 0',
+            marginBottom: '1px'
           }}>
             <span style={{ fontWeight: '500' }}>Floor:</span> 
             <span style={{ marginLeft: '4px', color: '#333' }}>{floorPrice} ETH</span>
@@ -546,15 +537,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
         
         {/* Friends Holding Button - Always show if user is authenticated */}
         {isAuthenticated && profile && collection && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            padding: '3px 0',
-            marginTop: '6px',
-            marginBottom: '14px'
-          }}>
+          <div className="friends-holding-button-container">
             <button 
               className="collection-friends-button"
               onClick={(e) => {
