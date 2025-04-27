@@ -477,7 +477,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       {/* NFT info section */}
       <div style={{ 
         padding: '16px',
-        paddingBottom: '14px',
+        paddingBottom: '12px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
@@ -553,7 +553,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             width: '100%',
             padding: '3px 0',
             marginTop: '6px',
-            marginBottom: '10px'
+            marginBottom: '14px'
           }}>
             <button 
               className="collection-friends-button"
