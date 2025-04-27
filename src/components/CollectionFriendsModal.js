@@ -920,14 +920,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               ? `Friends owning ${collectionName.trim()}`
               : 'Friends owning this collection'}
           </h3>
-          
-          <button 
-            className="modal-close-button" 
-            onClick={onClose}
-            aria-label="Close modal"
-          >
-            &times;
-          </button>
         </div>
         
         {loading ? (
