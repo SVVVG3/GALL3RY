@@ -22,7 +22,6 @@ export const NFTProvider = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('collection'); // Default sort by collection
   const [sortOrder, setSortOrder] = useState('asc'); // Default ascending order
-  const [chainFilter, setChainFilter] = useState('all'); // Default to show all chains
   
   // Fetch NFTs for wallet addresses
   const fetchNFTs = useCallback(async (addresses) => {
@@ -79,67 +78,13 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
   
-  // Filter NFTs based on search query and chain
+  // Filter NFTs based on search query
   const getFilteredNFTs = useCallback(() => {
     if (!nfts.length) return [];
-    
-    // First apply chain filter if applicable
-    let filteredByChain = nfts;
-    if (chainFilter !== 'all') {
-      filteredByChain = nfts.filter(nft => {
-        // Try different property paths to find chain information
-        const chainValues = [];
-        
-        // Check various properties where chain info might be stored
-        if (nft.chain) chainValues.push(nft.chain.toLowerCase());
-        if (nft.network) chainValues.push(nft.network.toLowerCase());
-        if (nft.chainId) chainValues.push(nft.chainId.toLowerCase());
-        
-        // Check uniqueId for chain info - format: "chain:address:tokenId"
-        if (nft.uniqueId && nft.uniqueId.includes(':')) {
-          const parts = nft.uniqueId.split(':');
-          if (parts.length > 2 && parts[0]) {
-            chainValues.push(parts[0].toLowerCase());
-          }
-        }
-        
-        // Check contractAddress for chain info - format: "chain:address"
-        const contractAddress = nft.contractAddress || nft.contract?.address;
-        if (contractAddress && typeof contractAddress === 'string' && contractAddress.includes(':')) {
-          const parts = contractAddress.split(':');
-          if (parts.length > 1 && parts[0]) {
-            chainValues.push(parts[0].toLowerCase());
-          }
-        }
-        
-        // Special case for polygon/matic
-        if (chainFilter === 'polygon' && chainValues.includes('matic')) return true;
-        if (chainFilter === 'matic' && chainValues.includes('polygon')) return true;
-        
-        // Special case for eth/ethereum
-        if (chainFilter === 'eth' && chainValues.includes('ethereum')) return true;
-        if (chainFilter === 'ethereum' && chainValues.includes('eth')) return true;
-        
-        // Special case for arb/arbitrum
-        if (chainFilter === 'arb' && chainValues.includes('arbitrum')) return true;
-        if (chainFilter === 'arbitrum' && chainValues.includes('arb')) return true;
-        
-        // Special case for opt/optimism
-        if (chainFilter === 'opt' && chainValues.includes('optimism')) return true;
-        if (chainFilter === 'optimism' && chainValues.includes('opt')) return true;
-        
-        // Check if any of the chain values match the filter
-        return chainValues.includes(chainFilter.toLowerCase());
-      });
-      
-      console.log(`Filtered by chain "${chainFilter}": ${filteredByChain.length} of ${nfts.length} NFTs`);
-    }
-    
-    // Then apply search query filter
-    if (!searchQuery) return filteredByChain;
+    if (!searchQuery) return nfts;
     
     const query = searchQuery.toLowerCase();
-    return filteredByChain.filter(nft => {
+    return nfts.filter(nft => {
       // Get name
       const name = nft.name || nft.title || `#${nft.tokenId || nft.token_id || ''}`;
       
@@ -158,51 +103,7 @@ export const NFTProvider = ({ children }) => {
         collection.toLowerCase().includes(query)
       );
     });
-  }, [nfts, searchQuery, chainFilter]);
-  
-  // Get all unique chains from NFTs
-  const getUniqueChains = useCallback(() => {
-    if (!nfts.length) return [];
-    
-    const chains = new Set();
-    
-    // Add default common chains as fallback
-    const defaultChains = ['eth', 'polygon', 'base', 'arb', 'opt', 'zora'];
-    defaultChains.forEach(chain => chains.add(chain));
-    
-    // Then extract from NFTs
-    nfts.forEach(nft => {
-      // Try different property paths to find chain information
-      const chainFromChain = nft.chain?.toLowerCase();
-      const chainFromNetwork = nft.network?.toLowerCase();
-      const chainFromChainId = nft.chainId?.toLowerCase();
-      
-      // Add any non-empty chain values
-      if (chainFromChain) chains.add(chainFromChain);
-      if (chainFromNetwork) chains.add(chainFromNetwork);
-      if (chainFromChainId) chains.add(chainFromChainId);
-      
-      // Look for chain in contractAddress if it contains a colon (format: "chain:address")
-      const contractAddress = nft.contractAddress || nft.contract?.address;
-      if (contractAddress && contractAddress.includes(':')) {
-        const parts = contractAddress.split(':');
-        if (parts.length > 1 && parts[0]) {
-          chains.add(parts[0].toLowerCase());
-        }
-      }
-      
-      // If we have a uniqueId property containing chain info (format: "chain:address:tokenId")
-      if (nft.uniqueId && nft.uniqueId.includes(':')) {
-        const parts = nft.uniqueId.split(':');
-        if (parts.length > 2 && parts[0]) {
-          chains.add(parts[0].toLowerCase());
-        }
-      }
-    });
-    
-    // Convert to array and sort
-    return Array.from(chains).sort();
-  }, [nfts]);
+  }, [nfts, searchQuery]);
   
   // Get sorted and filtered NFTs
   const getSortedAndFilteredNFTs = useCallback(() => {
@@ -251,46 +152,6 @@ export const NFTProvider = ({ children }) => {
           return sortOrder === 'asc' ? result : -result;
         }
         
-        // Sort by value
-        if (sortBy === 'value') {
-          // Get floor prices, with fallbacks
-          const valueA = safeNumber(
-            a.collection?.floorPrice?.value || 
-            a.floorPrice?.value || 
-            a.collection?.floorPrice?.valueUsd || 
-            a.floorPrice?.valueUsd || 
-            0
-          );
-          const valueB = safeNumber(
-            b.collection?.floorPrice?.value || 
-            b.floorPrice?.value ||
-            b.collection?.floorPrice?.valueUsd || 
-            b.floorPrice?.valueUsd || 
-            0
-          );
-          
-          return sortOrder === 'asc' ? valueA - valueB : valueB - valueA;
-        }
-        
-        // Sort by recent (timestamps)
-        if (sortBy === 'recent') {
-          // Try to get timestamps, with fallbacks
-          const timeA = a.transferTimestamp || a.lastActivityTimestamp || a.acquiredAt || 0;
-          const timeB = b.transferTimestamp || b.lastActivityTimestamp || b.acquiredAt || 0;
-          
-          // If both values are valid dates
-          if (timeA && timeB) {
-            const dateA = new Date(timeA);
-            const dateB = new Date(timeB);
-            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
-          }
-          
-          // If values aren't valid dates, fall back to token IDs
-          const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
-          const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
-          return sortOrder === 'asc' ? idA - idB : idB - idA;
-        }
-        
         // Default to no sorting (return original order)
         return 0;
       });
@@ -305,7 +166,6 @@ export const NFTProvider = ({ children }) => {
     setNfts([]);
     setError(null);
     setSearchQuery('');
-    setChainFilter('all');
   }, []);
   
   // Context value
@@ -320,10 +180,7 @@ export const NFTProvider = ({ children }) => {
     sortBy,
     setSortBy,
     sortOrder,
-    setSortOrder,
-    chainFilter,
-    setChainFilter,
-    getUniqueChains
+    setSortOrder
   };
   
   return (
