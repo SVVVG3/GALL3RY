@@ -57,6 +57,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   }, [isOpen]);
   
   const modalRef = useRef(null);
+  const overlayRef = useRef(null);
   const { user, isAuthenticated, token } = useAuth();
   const { authenticated: privyAuthenticated, user: privyUser } = usePrivy();
   
@@ -906,271 +907,78 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
     <div 
       className="modal-overlay" 
       onClick={handleOverlayClick}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        zIndex: 10000,
-        pointerEvents: 'auto'
-      }}
+      ref={overlayRef}
     >
       <div 
         className="modal-container" 
         ref={modalRef} 
         onClick={handleModalClick}
-        style={{
-          backgroundColor: 'white',
-          borderRadius: '12px',
-          width: '95%',
-          maxWidth: '550px',
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-          overflow: 'hidden',
-          position: 'relative',
-          zIndex: 10001,
-          pointerEvents: 'auto'
-        }}
       >
-        <div 
-          className="modal-header"
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '16px',
-            borderBottom: '1px solid #eee',
-            backgroundColor: 'white',
-            flexShrink: 0
-          }}
-        >
-          <h3 style={{ 
-            margin: 0,
-            maxWidth: 'calc(100% - 40px)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap'
-          }}>Friends owning {collectionName}</h3>
+        <div className="modal-header">
+          <h3>
+            {collectionName 
+              ? `Friends owning ${collectionName.trim()}`
+              : 'Friends owning this collection'}
+          </h3>
           
-          {/* Close button removed - now handled by parent component */}
+          <button 
+            className="modal-close-button" 
+            onClick={onClose}
+            aria-label="Close modal"
+          >
+            &times;
+          </button>
         </div>
         
         {loading ? (
-          <div 
-            className="modal-content"
-            style={{
-              padding: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              minHeight: '200px'
-            }}
-          >
+          <div className="modal-content">
             <div className="modal-loading">
-              <div 
-                className="spinner"
-                style={{
-                  border: '4px solid #f3f3f3',
-                  borderTop: '4px solid #8b5cf6',
-                  borderRadius: '50%',
-                  width: '40px',
-                  height: '40px',
-                  animation: 'spin 2s linear infinite',
-                  marginBottom: '16px'
-                }}
-              ></div>
+              <div className="spinner"></div>
               <p>{fetchingFollowing ? 'Loading your Farcaster following...' : 'Checking for friends who own this collection...'}</p>
             </div>
           </div>
         ) : error ? (
-          <div 
-            className="modal-content"
-            style={{
-              padding: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              minHeight: '200px'
-            }}
-          >
+          <div className="modal-content">
             <div className="modal-error">
               <p>{error}</p>
               <button className="modal-close-btn" onClick={onClose}>Close</button>
             </div>
           </div>
         ) : !isUserAuthenticated ? (
-          <div 
-            className="modal-content"
-            style={{
-              padding: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              minHeight: '200px'
-            }}
-          >
+          <div className="modal-content">
             <div className="modal-auth-required">
               <p>Please connect with Farcaster to see friends who own this collection.</p>
               <button className="modal-close-btn" onClick={onClose}>Close</button>
             </div>
           </div>
         ) : friends.length === 0 ? (
-          <div 
-            className="modal-content"
-            style={{
-              padding: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              minHeight: '200px'
-            }}
-          >
+          <div className="modal-content">
             <div className="modal-no-friends">
               <p>No Collection Data Can Be Found For This Collection</p>
             </div>
           </div>
         ) : (
-          <div 
-            className="modal-content"
-            onClick={(e) => {
-              e.stopPropagation();
-              console.log('Content area clicked, preventing close');
-            }}
-            style={{
-              overflowY: 'auto',
-              flex: 1,
-              padding: 0,
-              maxHeight: 'calc(80vh - 64px)',
-              WebkitOverflowScrolling: 'touch', // For momentum scrolling on iOS
-              zIndex: 10002,
-              pointerEvents: 'auto',
-              overflowX: 'hidden'
-            }}
-            onWheel={(e) => e.stopPropagation()}
-          >
+          <div className="modal-content">
             {usingMockData && (
-              <div 
-                className="mock-data-disclaimer"
-                style={{
-                  backgroundColor: '#fff3cd',
-                  color: '#856404',
-                  padding: '8px 16px',
-                  borderBottom: '1px solid #f5c6cb',
-                  fontSize: '14px',
-                  textAlign: 'center',
-                  width: '100%'
-                }}
-              >
+              <div className="mock-data-disclaimer">
                 Using sample data for demonstration purposes
               </div>
             )}
-            <ul 
-              className="friends-list"
-              onClick={(e) => {
-                e.stopPropagation();
-                console.log('Friends list clicked, preventing close');
-              }}
-              style={{
-                listStyle: 'none',
-                margin: 0,
-                padding: 0,
-                width: '100%',
-                overflowY: 'auto',
-                zIndex: 10003,
-                pointerEvents: 'auto'
-              }}
-            >
+            <ul className="friends-list">
               {friends.map((friend) => (
-                <li 
-                  key={friend.id} 
-                  className="friend-item"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    console.log(`Friend ${friend.username} clicked, preventing close`);
-                  }}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '48px 1fr',
-                    gap: '12px',
-                    alignItems: 'center',
-                    padding: '12px 16px',
-                    borderBottom: '1px solid #eee',
-                    backgroundColor: 'white',
-                    pointerEvents: 'auto',
-                    cursor: 'default'
-                  }}
-                >
-                  <div 
-                    className="friend-avatar"
-                    style={{
-                      width: '48px',
-                      height: '48px',
-                      borderRadius: '50%',
-                      overflow: 'hidden'
-                    }}
-                  >
+                <li key={friend.id} className="friend-item">
+                  <div className="friend-avatar">
                     {friend.avatar ? (
-                      <img 
-                        src={friend.avatar} 
-                        alt={friend.name}
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'cover'
-                        }}
-                      />
+                      <img src={friend.avatar} alt={friend.name} />
                     ) : (
-                      <div 
-                        className="default-avatar"
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          backgroundColor: '#6c757d',
-                          color: 'white',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          fontSize: '24px',
-                          fontWeight: 'bold'
-                        }}
-                      >
+                      <div className="default-avatar">
                         {friend.name.charAt(0)}
                       </div>
                     )}
                   </div>
-                  <div 
-                    className="friend-info"
-                    style={{
-                      overflow: 'hidden',
-                      minWidth: 0
-                    }}
-                  >
-                    <h4 style={{
-                      margin: '0 0 4px 0',
-                      fontSize: '16px',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>{friend.name}</h4>
-                    <p style={{
-                      margin: 0,
-                      fontSize: '14px',
-                      color: '#6c757d',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }}>@{friend.username}</p>
+                  <div className="friend-info">
+                    <h4>{friend.name}</h4>
+                    <p>@{friend.username}</p>
                   </div>
                 </li>
               ))}

@@ -29,19 +29,20 @@ body.modal-open {
   background-color: white;
   border-radius: 12px;
   width: 90%;
-  max-width: 500px;
-  max-height: 90vh;
+  max-width: 420px;
+  height: 420px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   position: relative;
+  aspect-ratio: 1 / 1;
 }
 
 .modal-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   padding: 16px;
   border-bottom: 1px solid #eee;
   background-color: white;
@@ -51,9 +52,16 @@ body.modal-open {
   margin: 0;
   font-size: 18px;
   color: #333;
-  white-space: nowrap;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.3;
+  max-width: 85%;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .modal-close-button {
@@ -77,10 +85,11 @@ body.modal-open {
   -ms-overflow-style: -ms-autohiding-scrollbar;
   padding: 0;
   margin: 0;
-  max-height: calc(90vh - 64px); /* Subtract header height */
+  flex: 1;
   display: flex;
   flex-direction: column;
   position: relative;
+  max-height: none;
 }
 
 .modal-content::-webkit-scrollbar {
@@ -149,13 +158,13 @@ body.modal-open {
 }
 
 .friends-list {
-  list-style: none;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
   margin: 0;
   padding: 0;
-  width: 100%;
-  overflow-y: auto;
-  flex: 1;
-  box-sizing: border-box;
+  list-style: none;
 }
 
 .friend-item {
@@ -254,7 +263,8 @@ body.modal-open {
 @media (max-width: 600px) {
   .modal-container {
     width: 95%;
-    max-height: 80vh;
+    max-width: 370px;
+    height: 370px;
   }
   
   .modal-content {
@@ -263,6 +273,7 @@ body.modal-open {
   
   .modal-header h3 {
     font-size: 16px;
+    max-width: 80%;
   }
 }
 
