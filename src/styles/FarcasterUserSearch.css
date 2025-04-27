@@ -2050,6 +2050,7 @@
 .chain-filter-container {
   position: relative;
   display: inline-block;
+  z-index: 100; /* Increase z-index to ensure dropdown is above other elements */
 }
 
 .chain-filter-button {
@@ -2083,8 +2084,8 @@
   background-color: white;
   border: 1px solid #d1d5db;
   border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 10;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  z-index: 100;
   width: 180px;
   max-height: 300px;
   overflow-y: auto;
@@ -2094,7 +2095,7 @@
 .chain-option {
   display: block;
   width: 100%;
-  padding: 8px 12px;
+  padding: 10px 12px;
   text-align: left;
   background: none;
   border: none;
@@ -2102,6 +2103,11 @@
   transition: background-color 0.2s;
   font-size: 14px;
   color: #333;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.chain-option:last-child {
+  border-bottom: none;
 }
 
 .chain-option:hover {
@@ -2123,5 +2129,15 @@
   
   .chain-dropdown {
     width: 150px;
+    left: 0;
+    right: auto;
+    max-height: 250px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    border: 1px solid #ccc;
+  }
+  
+  /* Ensure dropdown is higher up in stacking order */
+  .chain-filter-container {
+    z-index: 1000;
   }
 } 

@@ -14,11 +14,14 @@ const NFTSortControls = () => {
   // Get all unique chains from NFTs
   const uniqueChains = getUniqueChains();
   
+  console.log('Available chains for filtering:', uniqueChains);
+  
   // Map chain IDs to readable names
   const chainNames = {
     'eth': 'Ethereum',
     'ethereum': 'Ethereum',
     'polygon': 'Polygon',
+    'matic': 'Polygon',
     'opt': 'Optimism',
     'optimism': 'Optimism',
     'arb': 'Arbitrum',
@@ -29,6 +32,7 @@ const NFTSortControls = () => {
   
   // Get readable chain name
   const getChainName = (chainId) => {
+    if (!chainId) return 'Unknown';
     return chainNames[chainId.toLowerCase()] || chainId;
   };
   
@@ -54,6 +58,9 @@ const NFTSortControls = () => {
   const toggleSortOrder = () => {
     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
   };
+  
+  // Ensure we have unique chains to display
+  const displayChains = uniqueChains.length > 0 ? uniqueChains : ['eth', 'polygon', 'base', 'arb', 'opt', 'zora'];
 
   return (
     <div className="nft-sort-controls">
@@ -98,7 +105,7 @@ const NFTSortControls = () => {
                 All Chains
               </button>
               
-              {uniqueChains.map(chain => (
+              {displayChains.map(chain => (
                 <button
                   key={chain}
                   className={`chain-option ${chainFilter === chain ? 'active' : ''}`}

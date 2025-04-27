@@ -79,7 +79,7 @@ export const NFTProvider = ({ children }) => {
     }
   }, []);
   
-  // Filter NFTs based on search query
+  // Filter NFTs based on search query and chain
   const getFilteredNFTs = useCallback(() => {
     if (!nfts.length) return [];
     
@@ -87,9 +87,52 @@ export const NFTProvider = ({ children }) => {
     let filteredByChain = nfts;
     if (chainFilter !== 'all') {
       filteredByChain = nfts.filter(nft => {
-        const nftChain = (nft.chain || nft.network || nft.chainId || '').toLowerCase();
-        return nftChain === chainFilter.toLowerCase();
+        // Try different property paths to find chain information
+        const chainValues = [];
+        
+        // Check various properties where chain info might be stored
+        if (nft.chain) chainValues.push(nft.chain.toLowerCase());
+        if (nft.network) chainValues.push(nft.network.toLowerCase());
+        if (nft.chainId) chainValues.push(nft.chainId.toLowerCase());
+        
+        // Check uniqueId for chain info - format: "chain:address:tokenId"
+        if (nft.uniqueId && nft.uniqueId.includes(':')) {
+          const parts = nft.uniqueId.split(':');
+          if (parts.length > 2 && parts[0]) {
+            chainValues.push(parts[0].toLowerCase());
+          }
+        }
+        
+        // Check contractAddress for chain info - format: "chain:address"
+        const contractAddress = nft.contractAddress || nft.contract?.address;
+        if (contractAddress && typeof contractAddress === 'string' && contractAddress.includes(':')) {
+          const parts = contractAddress.split(':');
+          if (parts.length > 1 && parts[0]) {
+            chainValues.push(parts[0].toLowerCase());
+          }
+        }
+        
+        // Special case for polygon/matic
+        if (chainFilter === 'polygon' && chainValues.includes('matic')) return true;
+        if (chainFilter === 'matic' && chainValues.includes('polygon')) return true;
+        
+        // Special case for eth/ethereum
+        if (chainFilter === 'eth' && chainValues.includes('ethereum')) return true;
+        if (chainFilter === 'ethereum' && chainValues.includes('eth')) return true;
+        
+        // Special case for arb/arbitrum
+        if (chainFilter === 'arb' && chainValues.includes('arbitrum')) return true;
+        if (chainFilter === 'arbitrum' && chainValues.includes('arb')) return true;
+        
+        // Special case for opt/optimism
+        if (chainFilter === 'opt' && chainValues.includes('optimism')) return true;
+        if (chainFilter === 'optimism' && chainValues.includes('opt')) return true;
+        
+        // Check if any of the chain values match the filter
+        return chainValues.includes(chainFilter.toLowerCase());
       });
+      
+      console.log(`Filtered by chain "${chainFilter}": ${filteredByChain.length} of ${nfts.length} NFTs`);
     }
     
     // Then apply search query filter
@@ -122,11 +165,42 @@ export const NFTProvider = ({ children }) => {
     if (!nfts.length) return [];
     
     const chains = new Set();
+    
+    // Add default common chains as fallback
+    const defaultChains = ['eth', 'polygon', 'base', 'arb', 'opt', 'zora'];
+    defaultChains.forEach(chain => chains.add(chain));
+    
+    // Then extract from NFTs
     nfts.forEach(nft => {
-      const chain = (nft.chain || nft.network || nft.chainId || '').toLowerCase();
-      if (chain) chains.add(chain);
+      // Try different property paths to find chain information
+      const chainFromChain = nft.chain?.toLowerCase();
+      const chainFromNetwork = nft.network?.toLowerCase();
+      const chainFromChainId = nft.chainId?.toLowerCase();
+      
+      // Add any non-empty chain values
+      if (chainFromChain) chains.add(chainFromChain);
+      if (chainFromNetwork) chains.add(chainFromNetwork);
+      if (chainFromChainId) chains.add(chainFromChainId);
+      
+      // Look for chain in contractAddress if it contains a colon (format: "chain:address")
+      const contractAddress = nft.contractAddress || nft.contract?.address;
+      if (contractAddress && contractAddress.includes(':')) {
+        const parts = contractAddress.split(':');
+        if (parts.length > 1 && parts[0]) {
+          chains.add(parts[0].toLowerCase());
+        }
+      }
+      
+      // If we have a uniqueId property containing chain info (format: "chain:address:tokenId")
+      if (nft.uniqueId && nft.uniqueId.includes(':')) {
+        const parts = nft.uniqueId.split(':');
+        if (parts.length > 2 && parts[0]) {
+          chains.add(parts[0].toLowerCase());
+        }
+      }
     });
     
+    // Convert to array and sort
     return Array.from(chains).sort();
   }, [nfts]);
   
