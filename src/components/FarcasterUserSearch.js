@@ -485,6 +485,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             excludeSpam: true,
             excludeAirdrops: true,
             pageSize: 100,
+            useAdvancedSpamFilter: true, // Enable advanced spam filtering
+            aggressiveSpamFiltering: true, // Use aggressive mode
             updateCallback: updateProgressCallback // Pass the callback for progressive updates
           }
         );

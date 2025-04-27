@@ -39,7 +39,9 @@ export const NFTProvider = ({ children }) => {
       
       const result = await fetchNftsForAddresses(normalizedAddresses, {
         excludeSpam: true,
-        excludeAirdrops: false // Include airdrops to increase NFT visibility
+        excludeAirdrops: false, // Include airdrops to increase NFT visibility
+        useAdvancedSpamFilter: true, // Enable our advanced spam filtering
+        aggressiveSpamFiltering: true // Use aggressive filtering mode
       });
       
       if (result.error) {
