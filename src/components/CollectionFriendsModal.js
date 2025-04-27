@@ -72,7 +72,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
   const [totalFriends, setTotalFriends] = useState(0);
   const [debugInfo, setDebugInfo] = useState({});
   const [timeMarkers, setTimeMarkers] = useState({});
-  const [sortOption, setSortOption] = useState('default'); // Options: default, alphabetical, username
 
   // Get following data from Redux store
   const followingState = useSelector(selectFollowing);
@@ -382,24 +381,18 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         name: 'dwr.eth',
         username: 'dwr',
         avatar: 'https://cdn.stamp.fyi/avatar/eth:0x2703483b1a5a7c577e8680de9df8be03c6f30e3c?s=300',
-        followerCount: 2500,
-        verified: true
       },
       {
         id: '2',
         name: 'Varun Srinivasan',
         username: 'v',
         avatar: 'https://cdn.stamp.fyi/avatar/eth:0xd8da6bf26964af9d7eed9e03e53415d37aa96045?s=300',
-        followerCount: 5000,
-        verified: true
       },
       {
         id: '3',
         name: 'Dan Savage',
         username: 'svvvg3.eth',
         avatar: 'https://cdn.stamp.fyi/avatar/fc:466111?s=300',
-        followerCount: 1000,
-        verified: false
       },
     ];
   };
@@ -710,9 +703,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
         name: friend.displayName || friend.username,
         username: friend.username,
         avatar: friend.imageUrl,
-        addresses: friend.addresses,
-        followerCount: friend.followerCount || 0,
-        verified: friend.verified || false
+        addresses: friend.addresses
       }));
       
       if (formattedFriends.length > 0) {
@@ -791,9 +782,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
               name: friend.displayName || friend.username,
               username: friend.username,
               avatar: friend.imageUrl,
-              addresses: friend.addresses,
-              followerCount: friend.followerCount || 0,
-              verified: friend.verified || false
+              addresses: friend.addresses
             }));
             
             if (formattedFriends.length > 0) {
@@ -869,9 +858,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 name: friend.displayName || friend.username,
                 username: friend.username,
                 avatar: friend.imageUrl,
-                addresses: friend.addresses,
-                followerCount: friend.followerCount || 0,
-                verified: friend.verified || false
+                addresses: friend.addresses
               }));
               
               setFriends(formattedFriends);
@@ -912,34 +899,6 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
       setLoading(false);
     }
   };
-
-  // Sort friends based on the current sort option
-  const sortedFriends = React.useMemo(() => {
-    if (!friends.length) return [];
-    
-    switch (sortOption) {
-      case 'alphabetical':
-        return [...friends].sort((a, b) => a.name.localeCompare(b.name));
-      case 'username':
-        return [...friends].sort((a, b) => a.username.localeCompare(b.username));
-      case 'verified':
-        // Sort verified users first, then alphabetically
-        return [...friends].sort((a, b) => {
-          if (a.verified && !b.verified) return -1;
-          if (!a.verified && b.verified) return 1;
-          return a.name.localeCompare(b.name);
-        });
-      case 'popularity':
-        // Sort by follower count (high to low)
-        return [...friends].sort((a, b) => b.followerCount - a.followerCount);
-      case 'reverse':
-        // Reverse of the default order
-        return [...friends].reverse();
-      case 'default':
-      default:
-        return friends; // Keep original order
-    }
-  }, [friends, sortOption]);
 
   // If modal is not open, don't render anything
   if (!isOpen) return null;
@@ -997,27 +956,8 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                 Using sample data for demonstration purposes
               </div>
             )}
-            {friends.length > 0 && (
-              <div className="sort-controls">
-                <label>
-                  Sort by:
-                  <select 
-                    value={sortOption}
-                    onChange={(e) => setSortOption(e.target.value)}
-                    aria-label="Sort friends"
-                  >
-                    <option value="default">Default</option>
-                    <option value="alphabetical">Name (A-Z)</option>
-                    <option value="username">Username</option>
-                    <option value="verified">Verified First</option>
-                    <option value="popularity">Popularity</option>
-                    <option value="reverse">Reverse Order</option>
-                  </select>
-                </label>
-              </div>
-            )}
             <ul className="friends-list">
-              {sortedFriends.map((friend) => (
+              {friends.map((friend) => (
                 <li key={friend.id} className="friend-item">
                   <div className="friend-avatar">
                     {friend.avatar ? (
@@ -1029,12 +969,7 @@ const CollectionFriendsModal = ({ isOpen, onClose, collectionAddress, collection
                     )}
                   </div>
                   <div className="friend-info">
-                    <h4>
-                      {friend.name}
-                      {friend.verified && (
-                        <span className="verified-badge" title="Verified">✓</span>
-                      )}
-                    </h4>
+                    <h4>{friend.name}</h4>
                     <p>@{friend.username}</p>
                   </div>
                 </li>
