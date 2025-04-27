@@ -72,7 +72,7 @@ class AlchemyService {
   constructor() {
     this.apiKey = null;
     this.requestCache = new Map();
-    this.cacheTTL = 5 * 60 * 1000; // 5 minutes cache TTL
+    this.cacheTTL = 30 * 60 * 1000; // 30 minutes cache TTL (increased from 5 minutes)
   }
 
   // Store the API key
@@ -95,13 +95,83 @@ class AlchemyService {
    * Set cached response
    * @param {string} cacheKey - The cache key 
    * @param {Object} data - The data to cache
+   * @param {number} customTTL - Optional custom TTL in milliseconds
    */
-  async setCachedResponse(cacheKey, data) {
+  async setCachedResponse(cacheKey, data, customTTL = null) {
     this.requestCache.set(cacheKey, {
       data,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      ttl: customTTL || this.cacheTTL
     });
+    
+    // Cleanup the cache if it's getting too large
+    this.cleanupCacheIfNeeded();
+    
     return data;
+  }
+  
+  /**
+   * Cleans up the cache if it exceeds a certain size
+   */
+  cleanupCacheIfNeeded() {
+    // Only cleanup if we have more than 100 items in cache
+    if (this.requestCache.size > 100) {
+      console.log(`Cache cleanup triggered, current size: ${this.requestCache.size}`);
+      const now = Date.now();
+      const keysToDelete = [];
+      
+      // Find expired entries
+      for (const [key, entry] of this.requestCache.entries()) {
+        const ttl = entry.ttl || this.cacheTTL;
+        if (now - entry.timestamp > ttl) {
+          keysToDelete.push(key);
+        }
+      }
+      
+      // Delete expired entries
+      keysToDelete.forEach(key => this.requestCache.delete(key));
+      console.log(`Cache cleanup completed, removed ${keysToDelete.length} items, new size: ${this.requestCache.size}`);
+    }
+  }
+  
+  /**
+   * Creates an optimized cache key for NFT requests
+   * @param {string} owner - The wallet address
+   * @param {Object} options - Query options 
+   * @param {string} chain - The blockchain chain
+   * @returns {string} - The cache key
+   */
+  createNftCacheKey(owner, options = {}, chain = 'eth') {
+    // Extract only the essential options that affect the result
+    const essentialOptions = {
+      withMetadata: options.withMetadata !== false,
+      pageSize: options.pageSize || '100',
+      excludeSpam: options.excludeSpam === true,
+      excludeAirdrops: options.excludeAirdrops === true,
+      pageKey: options.pageKey || null
+    };
+    
+    // Create a short hash of the options
+    const optionsStr = JSON.stringify(essentialOptions);
+    const optionsHash = this.simpleHash(optionsStr);
+    
+    // Return a compact cache key
+    return `nfts_${owner.slice(0, 8)}_${chain}_${optionsHash}`;
+  }
+  
+  /**
+   * Creates a simple hash string from an input string
+   * @param {string} str - Input string to hash
+   * @returns {string} - Hash string
+   */
+  simpleHash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash).toString(16);
   }
 
   // Initialize the API key
@@ -228,12 +298,12 @@ class AlchemyService {
   async getNftsForOwner(owner, options = {}, chain = 'eth') {
     try {
       // Build a cache key
-      const cacheKey = `nfts_${owner}_${JSON.stringify(options)}_${chain}`;
+      const cacheKey = this.createNftCacheKey(owner, options, chain);
       
       // Check if we have a valid cached response
       const cachedResponse = await this.getCachedResponse(cacheKey);
       if (cachedResponse) {
-        console.log(`Using cached NFTs for ${owner} on ${chain}`);
+        console.log(`Using cached NFTs for ${owner.slice(0, 8)}... on ${chain}`);
         return cachedResponse;
       }
       
@@ -296,14 +366,14 @@ class AlchemyService {
         }
       });
         
-        if (!response.ok) {
+      if (!response.ok) {
         const errorText = await response.text();
         console.error(`Failed to fetch NFTs on ${chain}:`, errorText);
         throw new Error(`Failed to fetch NFTs on ${chain}: ${errorText}`);
-        }
+      }
 
-        const data = await response.json();
-        
+      const data = await response.json();
+      
       // Verify chain info is included in the response; if not, add it
       if (data.ownedNfts) {
         data.ownedNfts = data.ownedNfts.map(nft => {
@@ -344,8 +414,17 @@ class AlchemyService {
         }
       }
 
+      // Determine appropriate TTL based on size
+      // - Large collections (>10 NFTs) get longer TTL since they're expensive to fetch
+      // - Small collections get shorter TTL since they might change more frequently
+      let customTTL = null;
+      if (data.ownedNfts?.length > 10) {
+        // 2 hours for larger collections
+        customTTL = 2 * 60 * 60 * 1000;
+      }
+
       // Cache the response
-      await this.setCachedResponse(cacheKey, data);
+      await this.setCachedResponse(cacheKey, data, customTTL);
       
       console.log(`Completed fetch for ${owner} on ${chain}, got ${data.ownedNfts?.length || 0} total NFTs`);
       return data;
@@ -1210,16 +1289,18 @@ class AlchemyService {
         .filter(address => address && typeof address === 'string' && address.trim() !== '')
         .map(address => address.toLowerCase().trim());
     
-    if (validAddresses.length === 0) {
+      if (validAddresses.length === 0) {
         console.log('No valid addresses provided');
         return { nfts: [], errors: ['No valid addresses provided'] };
       }
       
       console.log(`Fetching NFTs for ${validAddresses.length} wallet addresses using direct method`);
       
-      // Determine chains to fetch from
-      const chainsToFetch = options.chains || ['eth', 'polygon', 'opt', 'arb', 'base'];
-      console.log(`Fetching from chains: ${chainsToFetch.join(', ')}`);
+      // Prioritize ETH and Base chains first, then fetch the rest
+      const primaryChains = ['eth', 'base'];
+      const secondaryChains = ['polygon', 'opt', 'arb'];
+      
+      console.log(`Prioritizing ${primaryChains.join(', ')} chains first, then ${secondaryChains.join(', ')}`);
       
       // Set up fetch options - include only what Alchemy API supports
       const fetchOptions = {
@@ -1241,6 +1322,7 @@ class AlchemyService {
       
       console.log(`Fetch options: ${JSON.stringify(fetchOptions)}`);
       
+      // Implement progressive loading with state updates
       const allNfts = [];
       const walletNftCounts = {};
       const errors = [];
@@ -1250,95 +1332,141 @@ class AlchemyService {
         walletNftCounts[addr] = 0;
       });
       
-      // For each address and chain combination, fetch NFTs
-      for (const address of validAddresses) {
-        for (const chain of chainsToFetch) {
-          try {
-            console.log(`Fetching NFTs for ${address} on ${chain} with pagination enabled`);
-            const result = await this.getNftsForOwner(address, fetchOptions, chain);
+      // Create a callback function for state updates during fetch process
+      const updateCallback = options.updateCallback || (() => {});
+      
+      // Track the total count for progress updates
+      let totalFetchedCount = 0;
+      
+      // Function to fetch NFTs for a single address on a specific chain
+      const fetchSingleAddressChain = async (address, chain) => {
+        try {
+          console.log(`Fetching NFTs for ${address} on ${chain} with pagination enabled`);
+          const result = await this.getNftsForOwner(address, fetchOptions, chain);
+          
+          if (result.error) {
+            console.error(`Error fetching NFTs for ${address} on ${chain}: ${result.error}`);
+            errors.push(`${chain}: ${result.error}`);
+            return [];
+          }
+          
+          if (result.ownedNfts && Array.isArray(result.ownedNfts)) {
+            const count = result.ownedNfts.length;
+            console.log(`Found ${count} NFTs for ${address} on ${chain}`);
             
-            if (result.error) {
-              console.error(`Error fetching NFTs for ${address} on ${chain}: ${result.error}`);
-              errors.push(`${chain}: ${result.error}`);
-              continue;
-            }
-            
-            if (result.ownedNfts && Array.isArray(result.ownedNfts)) {
-              console.log(`Found ${result.ownedNfts.length} NFTs for ${address} on ${chain}`);
-              
-              // Add wallet and chain info to each NFT
-              const nftsWithInfo = result.ownedNfts.map(nft => {
-                // Create a consistent unique ID right when we process each NFT
-                const uniqueId = this.createConsistentUniqueId({
-                  ...nft,
-                  chain,
-                  chainId: chain
-                });
-                
-      return { 
-                  ...nft,
-                  chain: chain,
-                  chainId: chain,
-                  network: chain,
-                  ownerAddress: address,
-                  uniqueId // Add uniqueId directly to NFT object
-                };
+            // Add wallet and chain info to each NFT
+            const nftsWithInfo = result.ownedNfts.map(nft => {
+              // Create a consistent unique ID right when we process each NFT
+              const uniqueId = this.createConsistentUniqueId({
+                ...nft,
+                chain,
+                chainId: chain
               });
               
-              // Track count for this wallet
-              walletNftCounts[address] += nftsWithInfo.length;
-              
-              // Add to the combined list
-              allNfts.push(...nftsWithInfo);
-            }
-          } catch (error) {
-            console.error(`Error fetching NFTs for ${address} on ${chain}:`, error);
-            errors.push(`${chain}: ${error.message}`);
+              return {
+                ...nft,
+                chain: chain,
+                chainId: chain,
+                network: chain,
+                ownerAddress: address,
+                uniqueId // Add uniqueId directly to NFT object
+              };
+            });
+            
+            // Track count for this wallet
+            walletNftCounts[address] = (walletNftCounts[address] || 0) + nftsWithInfo.length;
+            totalFetchedCount += nftsWithInfo.length;
+            
+            return nftsWithInfo;
           }
+          return [];
+        } catch (error) {
+          console.error(`Error fetching NFTs for ${address} on ${chain}:`, error);
+          errors.push(`${chain}: ${error.message}`);
+          return [];
+        }
+      };
+
+      // Step 1: Fetch primary chains (ETH and Base) in parallel for all addresses
+      const primaryPromises = [];
+      
+      // Create a promise for each address and primary chain combination
+      for (const address of validAddresses) {
+        for (const chain of primaryChains) {
+          primaryPromises.push(fetchSingleAddressChain(address, chain));
         }
       }
       
-      // Log counts per wallet
-      Object.entries(walletNftCounts).forEach(([wallet, count]) => {
-        if (count > 0) {
-          console.log(`Found ${count} NFTs for wallet ${wallet}`);
-        }
+      // Execute primary chain fetches in parallel
+      console.log(`Executing ${primaryPromises.length} parallel requests for primary chains`);
+      const primaryResults = await Promise.all(primaryPromises);
+      
+      // Combine primary results
+      const primaryNfts = primaryResults.flat();
+      console.log(`Found ${primaryNfts.length} NFTs from primary chains (eth, base)`);
+      
+      // Add primary NFTs to allNfts
+      allNfts.push(...primaryNfts);
+      
+      // Update state with primary results
+      updateCallback({
+        nfts: [...allNfts], // Clone to ensure we're not passing a reference
+        totalFound: allNfts.length,
+        inProgress: true, // Signal that more NFTs are coming
+        walletNftCounts: {...walletNftCounts},
+        errors: errors.length > 0 ? [...errors] : undefined
       });
       
-      // De-duplicate NFTs using a Map with our consistent uniqueId
+      // Step 2: Fetch secondary chains in parallel
+      const secondaryPromises = [];
+      
+      // Create a promise for each address and secondary chain combination
+      for (const address of validAddresses) {
+        for (const chain of secondaryChains) {
+          secondaryPromises.push(fetchSingleAddressChain(address, chain));
+        }
+      }
+      
+      // Execute secondary chain fetches in parallel
+      console.log(`Executing ${secondaryPromises.length} parallel requests for secondary chains`);
+      const secondaryResults = await Promise.all(secondaryPromises);
+      
+      // Combine secondary results
+      const secondaryNfts = secondaryResults.flat();
+      console.log(`Found ${secondaryNfts.length} NFTs from secondary chains (polygon, opt, arb)`);
+      
+      // Add secondary NFTs to allNfts
+      allNfts.push(...secondaryNfts);
+      
+      // Deduplicate NFTs based on uniqueId
       const uniqueNftsMap = new Map();
-      let duplicatesRemoved = 0;
-      
       allNfts.forEach(nft => {
-        try {
-          if (!nft.uniqueId) {
-            // If uniqueId wasn't already created, create it now
-            nft.uniqueId = this.createConsistentUniqueId(nft);
-          }
-          
-          if (!uniqueNftsMap.has(nft.uniqueId)) {
-            uniqueNftsMap.set(nft.uniqueId, nft);
-          } else {
-            duplicatesRemoved++;
-          }
-        } catch (err) {
-          console.error('Error processing NFT:', err);
+        if (nft.uniqueId && !uniqueNftsMap.has(nft.uniqueId)) {
+          uniqueNftsMap.set(nft.uniqueId, nft);
         }
       });
       
-      // Convert the unique NFTs map to an array
       const uniqueNfts = Array.from(uniqueNftsMap.values());
-      console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets (removed ${duplicatesRemoved} duplicates)`);
-    
-    return {
+      console.log(`Found ${uniqueNfts.length} unique NFTs across all wallets (removed ${allNfts.length - uniqueNfts.length} duplicates)`);
+      
+      // For each address, log the count of NFTs found
+      Object.keys(walletNftCounts).forEach(addr => {
+        console.log(`Found ${walletNftCounts[addr]} NFTs for wallet ${addr}`);
+      });
+      
+      return { 
         nfts: uniqueNfts,
         totalFound: uniqueNfts.length,
         walletNftCounts,
         errors: errors.length > 0 ? errors : undefined
-    };
-  } catch (error) {
+      };
+    } catch (error) {
       console.error('Error in fetchNftsForFarcaster:', error);
-      return { nfts: [], error: error.message };
+      return { 
+        nfts: [],
+        error: error.message,
+        errors: [error.message]
+      };
     }
   }
 

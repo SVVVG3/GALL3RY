@@ -430,37 +430,114 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         }
       }
       
-      if (profile) {
-        // Only proceed with NFT fetching if this is a new profile or forced refresh
-        if (!userProfile || userProfile.username !== profile.username) {
-          setUserProfile(profile);
-          await handleUserProfileFound(profile);
+      if (!profile) {
+        throw new Error(`User ${query} not found`);
+      }
+      
+      // Set loading state
+      setIsSearching(true);
+      setSearchError(null);
+      
+      try {
+        console.log('User profile found:', profile);
+        
+        // Prepare wallet addresses
+        const walletAddresses = [
+          ...new Set([
+            profile.custodyAddress,
+            ...(profile.connectedAddresses || [])
+          ])
+        ].filter(address => isValidAddress(address));
+        
+        console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
+        
+        // Update user profile and wallet addresses immediately
+        setUserProfile(profile);
+        setWalletAddresses(walletAddresses);
+        
+        if (walletAddresses.length === 0) {
+          throw new Error('No valid wallet addresses found');
         }
-      } else {
-        // Provide a more detailed error message, especially for .eth addresses
-        if (query.includes('.eth')) {
-          setSearchError(
-            `No user found with username '${query}'. Note that Farcaster usernames might not include the .eth suffix. Try searching for '${query.split('.')[0]}' instead.`
-          );
-        } else {
-          setSearchError(`No user found with username '${query}'. Please check the spelling and try again.`);
+
+        // Define an update callback for progressive loading
+        const updateProgressCallback = (progressData) => {
+          if (progressData && progressData.nfts) {
+            // Format the NFTs for display
+            const formattedProgressNfts = formatNFTsForDisplay(progressData.nfts);
+            
+            console.log(`Progressive update: Received ${progressData.nfts.length} NFTs, after formatting: ${formattedProgressNfts.length}`);
+            
+            // Update the NFT state with the latest data
+            setUserNfts(formattedProgressNfts);
+            
+            // If this is a final update (not in progress), set searching to false
+            if (!progressData.inProgress) {
+              setIsSearching(false);
+            }
+          }
+        };
+
+        // Use our dedicated method for Farcaster users with pagination enabled
+        const result = await fetchNftsForFarcaster(
+          walletAddresses,
+          {
+            chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
+            excludeSpam: true,
+            excludeAirdrops: true,
+            pageSize: 100,
+            updateCallback: updateProgressCallback // Pass the callback for progressive updates
+          }
+        );
+        
+        if (result.error) {
+          throw new Error(result.error);
         }
+        
+        const nfts = result.nfts || [];
+        
+        console.log(`Fetched ${nfts.length} unique NFTs for user ${profile.username}`);
+        console.log(`NFT distribution by wallets:`, result.walletNftCounts);
+        
+        // Format NFTs for display - no need for additional deduplication
+        // as fetchNftsForFarcaster already handles this with createConsistentUniqueId
+        const formattedNfts = formatNFTsForDisplay(nfts);
+        
+        // Log stats without additional deduplication
+        console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
+        
+        // After formatting the NFTs for display but before returning
+        if (formattedNfts.length > 0) {
+          console.log('Sample NFT structure:', JSON.stringify(formattedNfts[0], null, 2));
+        }
+        
+        // Set the NFTs in component state
+        setUserNfts(formattedNfts);
+        
+        // Update Redux store if available
+        if (dispatch && setNftList) {
+          dispatch(setNftList(formattedNfts));
+        }
+        
+        // Ensure search state is complete
+        setIsSearching(false);
+        
+        return {
+          profile,
+          nfts: formattedNfts
+        };
+      } catch (fetchError) {
+        console.error('Error fetching NFTs:', fetchError);
+        setSearchError(`Error fetching NFTs: ${fetchError.message}`);
+        setIsSearching(false);
+        throw fetchError;
       }
     } catch (error) {
-      console.error('Error searching for user:', error);
-      
-      // Provide more helpful error messages based on the type of error
-      if (error.response && error.response.status === 404) {
-        setSearchError(`User '${query}' not found in the Farcaster network.`);
-      } else if (error.code === 'ECONNABORTED') {
-        setSearchError('Search timed out. Please try again or check your internet connection.');
-      } else {
-        setSearchError(error.message || 'Failed to search user. Please try again later.');
-      }
-    } finally {
+      console.error('Error in Farcaster search:', error);
+      setSearchError(error.message);
       setIsSearching(false);
+      throw error;
     }
-  }, [formSearchQuery, userProfile]);
+  }, [userProfile, formSearchQuery, dispatch, fetchAllNFTsForWallets]);
 
   /**
    * Effect for initial search if username is provided
@@ -492,77 +569,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       performSearch();
     }
   }, [formSearchQuery, initialUsername, handleSearch]);
-
-  // Handle when a user profile is found
-  const handleUserProfileFound = async (profile) => {
-    // Set loading state
-    setIsSearching(true);
-    setSearchError(null);
-    
-    try {
-      console.log('User profile found:', profile);
-      
-      // Prepare wallet addresses
-      const walletAddresses = [
-        ...new Set([
-          profile.custodyAddress,
-          ...(profile.connectedAddresses || [])
-        ])
-      ].filter(address => isValidAddress(address));
-      
-      console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
-      
-      // Update user profile and wallet addresses immediately
-      setUserProfile(profile);
-      setWalletAddresses(walletAddresses);
-      
-      if (walletAddresses.length === 0) {
-        throw new Error('No valid wallet addresses found');
-      }
-
-      // Use our dedicated method for Farcaster users with pagination enabled
-      const result = await fetchNftsForFarcaster(
-        walletAddresses,
-        {
-          chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
-          excludeSpam: true,
-          excludeAirdrops: true, // Add filtering for airdrops as supported by Alchemy
-          pageSize: 100
-        }
-      );
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      const nfts = result.nfts || [];
-      
-      console.log(`Fetched ${nfts.length} unique NFTs for user ${profile.username}`);
-      console.log(`NFT distribution by wallets:`, result.walletNftCounts);
-      
-      // Format NFTs for display - no need for additional deduplication
-      // as fetchNftsForFarcaster already handles this with createConsistentUniqueId
-      const formattedNfts = formatNFTsForDisplay(nfts);
-      
-      // Log stats without additional deduplication
-      console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
-      
-      // After formatting the NFTs for display but before returning
-      if (formattedNfts.length > 0) {
-        console.log('Sample NFT structure:', JSON.stringify(formattedNfts[0], null, 2));
-      }
-      
-      // Update NFTs state and Redux store
-      setUserNfts(formattedNfts);
-      dispatch(setNftList(formattedNfts));
-
-    } catch (error) {
-      console.error('Error in handleUserProfileFound:', error);
-      setSearchError(`Error fetching NFTs: ${error.message}`);
-    } finally {
-      setIsSearching(false);
-    }
-  };
 
   // Update the input rect whenever input is focused or window is resized
   useEffect(() => {
