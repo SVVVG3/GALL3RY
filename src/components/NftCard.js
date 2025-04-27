@@ -477,7 +477,7 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
       {/* NFT info section */}
       <div style={{ 
         padding: '16px',
-        paddingBottom: '24px',
+        paddingBottom: '14px',
         backgroundColor: 'white',
         display: 'flex',
         flexDirection: 'column',
@@ -552,7 +552,8 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
             justifyContent: 'center',
             width: '100%',
             padding: '3px 0',
-            marginTop: '6px'
+            marginTop: '6px',
+            marginBottom: '10px'
           }}>
             <button 
               className="collection-friends-button"
@@ -561,18 +562,21 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
                 handleShowFriends(e);
               }}
               style={{
-                background: '#f0f0f0',
+                background: '#8b5cf6',
                 border: 'none',
-                borderRadius: '4px',
-                padding: '5px 10px',
+                borderRadius: '6px',
+                padding: '6px 12px',
                 display: 'flex',
                 alignItems: 'center',
                 cursor: 'pointer',
                 fontSize: '12px',
-                color: '#555',
-                transition: 'background-color 0.2s ease',
-                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                fontWeight: '500',
+                color: 'white',
+                transition: 'all 0.2s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
               }}
+              onMouseOver={(e) => e.currentTarget.style.background = '#7c3aed'}
+              onMouseOut={(e) => e.currentTarget.style.background = '#8b5cf6'}
               aria-label="View collection friends"
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
