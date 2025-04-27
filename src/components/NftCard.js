@@ -544,58 +544,45 @@ const NFTCard = ({ nft, onSelect, selected, showFriends, style }) => {
           </div>
         )}
         
-        {contractAddress && (
+        {/* Friends Holding Button - Always show if user is authenticated */}
+        {isAuthenticated && profile && collection && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'center',
             width: '100%',
-            padding: '3px 0'
+            padding: '3px 0',
+            marginTop: '6px'
           }}>
-            <span style={{
-              fontSize: '11px',
-              color: '#888',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '70%'
-            }}>
-              {contractAddress}
-            </span>
-            
-            {/* Collection Friends Button - Moved to wallet address line */}
-            {isAuthenticated && profile && collection && (
-              <button 
-                className="collection-friends-button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleShowFriends(e);
-                }}
-                style={{
-                  background: '#f0f0f0',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '3px 6px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  cursor: 'pointer',
-                  fontSize: '11px',
-                  color: '#555',
-                  transition: 'background-color 0.2s ease',
-                  flexShrink: 0,
-                  marginLeft: '4px'
-                }}
-                aria-label="View collection friends"
-              >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '3px' }}>
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="9" cy="7" r="4"></circle>
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                </svg>
-                Friends
-              </button>
-            )}
+            <button 
+              className="collection-friends-button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShowFriends(e);
+              }}
+              style={{
+                background: '#f0f0f0',
+                border: 'none',
+                borderRadius: '4px',
+                padding: '5px 10px',
+                display: 'flex',
+                alignItems: 'center',
+                cursor: 'pointer',
+                fontSize: '12px',
+                color: '#555',
+                transition: 'background-color 0.2s ease',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+              aria-label="View collection friends"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '4px' }}>
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                <circle cx="9" cy="7" r="4"></circle>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+              </svg>
+              Friends Holding
+            </button>
           </div>
         )}
       </div>
