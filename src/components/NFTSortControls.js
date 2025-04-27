@@ -1,13 +1,55 @@
-import React from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNFT } from '../contexts/NFTContext';
 import '../styles/FarcasterUserSearch.css';
 
 /**
  * NFT Sort Controls Component
- * Provides UI for sorting NFTs by different criteria
+ * Provides UI for sorting NFTs by different criteria and filtering by chain
  */
 const NFTSortControls = () => {
-  const { sortBy, setSortBy, sortOrder, setSortOrder } = useNFT();
+  const { sortBy, setSortBy, sortOrder, setSortOrder, chainFilter, setChainFilter, getUniqueChains } = useNFT();
+  const [isChainDropdownOpen, setIsChainDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  
+  // Get all unique chains from NFTs
+  const uniqueChains = getUniqueChains();
+  
+  // Map chain IDs to readable names
+  const chainNames = {
+    'eth': 'Ethereum',
+    'ethereum': 'Ethereum',
+    'polygon': 'Polygon',
+    'opt': 'Optimism',
+    'optimism': 'Optimism',
+    'arb': 'Arbitrum',
+    'arbitrum': 'Arbitrum',
+    'base': 'Base',
+    'zora': 'Zora'
+  };
+  
+  // Get readable chain name
+  const getChainName = (chainId) => {
+    return chainNames[chainId.toLowerCase()] || chainId;
+  };
+  
+  // Get current chain filter name for display
+  const getCurrentChainName = () => {
+    return chainFilter === 'all' ? 'All Chains' : getChainName(chainFilter);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsChainDropdownOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const toggleSortOrder = () => {
     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -16,14 +58,6 @@ const NFTSortControls = () => {
   return (
     <div className="nft-sort-controls">
       <div className="sort-options">
-        <button
-          className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
-          onClick={() => setSortBy('recent')}
-          aria-label="Sort by recent"
-          aria-pressed={sortBy === 'recent'}
-        >
-          Recent
-        </button>
         <button
           className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
           onClick={() => setSortBy('name')}
@@ -40,15 +74,47 @@ const NFTSortControls = () => {
         >
           Collection
         </button>
-        <button
-          className={`sort-option ${sortBy === 'value' ? 'active' : ''}`}
-          onClick={() => setSortBy('value')}
-          aria-label="Sort by value"
-          aria-pressed={sortBy === 'value'}
-        >
-          Value
-        </button>
+        
+        {/* Chain filter dropdown */}
+        <div className="chain-filter-container" ref={dropdownRef}>
+          <button
+            className={`sort-option chain-filter-button ${isChainDropdownOpen ? 'active' : ''}`}
+            onClick={() => setIsChainDropdownOpen(!isChainDropdownOpen)}
+            aria-label="Filter by chain"
+            aria-expanded={isChainDropdownOpen}
+          >
+            {getCurrentChainName()}
+          </button>
+          
+          {isChainDropdownOpen && (
+            <div className="chain-dropdown">
+              <button
+                className={`chain-option ${chainFilter === 'all' ? 'active' : ''}`}
+                onClick={() => {
+                  setChainFilter('all');
+                  setIsChainDropdownOpen(false);
+                }}
+              >
+                All Chains
+              </button>
+              
+              {uniqueChains.map(chain => (
+                <button
+                  key={chain}
+                  className={`chain-option ${chainFilter === chain ? 'active' : ''}`}
+                  onClick={() => {
+                    setChainFilter(chain);
+                    setIsChainDropdownOpen(false);
+                  }}
+                >
+                  {getChainName(chain)}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+      
       <button
         className="sort-order-toggle"
         onClick={toggleSortOrder}

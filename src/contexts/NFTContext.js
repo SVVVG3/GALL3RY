@@ -22,6 +22,7 @@ export const NFTProvider = ({ children }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('collection'); // Default sort by collection
   const [sortOrder, setSortOrder] = useState('asc'); // Default ascending order
+  const [chainFilter, setChainFilter] = useState('all'); // Default to show all chains
   
   // Fetch NFTs for wallet addresses
   const fetchNFTs = useCallback(async (addresses) => {
@@ -81,10 +82,21 @@ export const NFTProvider = ({ children }) => {
   // Filter NFTs based on search query
   const getFilteredNFTs = useCallback(() => {
     if (!nfts.length) return [];
-    if (!searchQuery) return nfts;
+    
+    // First apply chain filter if applicable
+    let filteredByChain = nfts;
+    if (chainFilter !== 'all') {
+      filteredByChain = nfts.filter(nft => {
+        const nftChain = (nft.chain || nft.network || nft.chainId || '').toLowerCase();
+        return nftChain === chainFilter.toLowerCase();
+      });
+    }
+    
+    // Then apply search query filter
+    if (!searchQuery) return filteredByChain;
     
     const query = searchQuery.toLowerCase();
-    return nfts.filter(nft => {
+    return filteredByChain.filter(nft => {
       // Get name
       const name = nft.name || nft.title || `#${nft.tokenId || nft.token_id || ''}`;
       
@@ -103,7 +115,20 @@ export const NFTProvider = ({ children }) => {
         collection.toLowerCase().includes(query)
       );
     });
-  }, [nfts, searchQuery]);
+  }, [nfts, searchQuery, chainFilter]);
+  
+  // Get all unique chains from NFTs
+  const getUniqueChains = useCallback(() => {
+    if (!nfts.length) return [];
+    
+    const chains = new Set();
+    nfts.forEach(nft => {
+      const chain = (nft.chain || nft.network || nft.chainId || '').toLowerCase();
+      if (chain) chains.add(chain);
+    });
+    
+    return Array.from(chains).sort();
+  }, [nfts]);
   
   // Get sorted and filtered NFTs
   const getSortedAndFilteredNFTs = useCallback(() => {
@@ -206,6 +231,7 @@ export const NFTProvider = ({ children }) => {
     setNfts([]);
     setError(null);
     setSearchQuery('');
+    setChainFilter('all');
   }, []);
   
   // Context value
@@ -220,7 +246,10 @@ export const NFTProvider = ({ children }) => {
     sortBy,
     setSortBy,
     sortOrder,
-    setSortOrder
+    setSortOrder,
+    chainFilter,
+    setChainFilter,
+    getUniqueChains
   };
   
   return (
