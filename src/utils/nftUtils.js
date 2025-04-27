@@ -114,4 +114,54 @@ export function removeDuplicates(nfts) {
   }
   
   return uniqueNfts;
-} 
+}
+
+/**
+ * Advanced filtering of spam NFTs using multiple methods
+ * @param {Array} nfts - Array of NFTs to filter
+ * @param {Object} alchemyService - Instance of the Alchemy service
+ * @param {string} network - Network to check
+ * @param {boolean} aggressive - Whether to use aggressive filtering
+ * @returns {Promise<Array>} Filtered NFTs
+ */
+export const advancedSpamFilter = async (nfts, alchemyService, network = 'eth', aggressive = true) => {
+  if (!nfts || nfts.length === 0) return [];
+  console.log(`Performing advanced spam filtering on ${nfts.length} NFTs`);
+  
+  // Get the spam contracts list from Alchemy (cached)
+  const spamContracts = await alchemyService.getSpamContracts(network);
+  const spamContractsSet = new Set(spamContracts.map(addr => addr.toLowerCase()));
+  
+  // Track how many were filtered
+  let spamCount = 0;
+  
+  // Filter out known spam contracts
+  const filtered = await Promise.all(nfts.map(async (nft) => {
+    if (!nft) return null;
+    
+    const contractAddress = (nft.contractAddress || nft.contract?.address || '').toLowerCase();
+    if (!contractAddress) return nft;
+    
+    // Check if it's in the known spam contracts list
+    if (spamContractsSet.has(contractAddress)) {
+      spamCount++;
+      return null;
+    }
+    
+    // For more aggressive filtering, check each contract individually
+    if (aggressive && !spamContractsSet.has(contractAddress)) {
+      // The isSpamContract function is cached, so it won't make excess API calls
+      const isSpam = await alchemyService.isSpamContract(contractAddress, network);
+      if (isSpam) {
+        spamCount++;
+        return null;
+      }
+    }
+    
+    return nft;
+  }));
+  
+  const result = filtered.filter(Boolean);
+  console.log(`Advanced spam filtering removed ${spamCount} spam NFTs`);
+  return result;
+}; 

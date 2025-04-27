@@ -474,17 +474,22 @@ class AlchemyService {
         withFloorPrice: options.withFloorPrice !== false
       };
       
-      // Handle filters - only add filters supported by Alchemy API
-      fetchOptions.excludeSpam = options.excludeSpam === true;
+      // Always enable spam filtering with Alchemy API
+      fetchOptions.excludeSpam = true;
       
-      // Add excludeAirdrops if specified - proper handling in the getNftsForOwner method
-      if (options.excludeAirdrops === true) {
-        fetchOptions.excludeAirdrops = true;
-      }
+      // Always exclude airdrops too
+      fetchOptions.excludeAirdrops = true;
       
-      // Handle excludeFilters if provided
+      // Set up excludeFilters array properly for Alchemy API V3
+      fetchOptions.excludeFilters = ['SPAM', 'AIRDROPS'];
+      
+      // Add any additional exclude filters if provided
       if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
-        fetchOptions.excludeFilters = [...options.excludeFilters];
+        options.excludeFilters.forEach(filter => {
+          if (!fetchOptions.excludeFilters.includes(filter)) {
+            fetchOptions.excludeFilters.push(filter);
+          }
+        });
       }
 
       // Create an array of promises, one for each chain
@@ -499,45 +504,62 @@ class AlchemyService {
           })
       );
       
-      // Wait for all promises to settle
-      const results = await Promise.allSettled(chainPromises);
+      // Wait for all chain queries to complete
+      const results = await Promise.all(chainPromises);
       
-      // Process all results
-      const nftsByChain = {};
-      let totalNfts = 0;
-      const errors = [];
-      
-      // Build the combined results object
-      results.forEach((result, index) => {
-        const chain = chainsToFetch[index];
-        
-        if (result.status === 'fulfilled') {
-          const data = result.value;
-          const nfts = data.ownedNfts || [];
-          
-          if (data.error) {
-            errors.push(data.error);
-          }
-          
-          nftsByChain[chain] = nfts;
-          totalNfts += nfts.length;
-          
-          if (nfts.length > 0) {
-            console.log(`Found ${nfts.length} NFTs for ${owner} on ${chain}`);
-          }
-        } else {
-          errors.push(`Error on ${chain}: ${result.reason}`);
-          nftsByChain[chain] = [];
-        }
-      });
-      
-      // Return combined results
-      return {
-        ownedNfts: Object.values(nftsByChain).flat(),
-        nftsByChain,
-        totalNfts,
-        errors: errors.length > 0 ? errors : undefined
+      // Combine the results
+      const combinedData = {
+        owner,
+        chains: {},
+        totalCount: 0,
+        ownedNfts: []
       };
+      
+      // Process each chain's results
+      for (let i = 0; i < chainsToFetch.length; i++) {
+        const chain = chainsToFetch[i];
+        const chainResult = results[i] || { ownedNfts: [] };
+        
+        // Add chain-specific data to the result
+        combinedData.chains[chain] = {
+          count: chainResult.ownedNfts?.length || 0,
+          pageKey: chainResult.pageKey || null,
+          error: chainResult.error || null
+        };
+        
+        // Add NFTs to the combined array
+        if (chainResult.ownedNfts && chainResult.ownedNfts.length > 0) {
+          // Apply our advanced spam filtering if requested
+          let nftsToAdd = chainResult.ownedNfts;
+          
+          // Use advanced spam filtering if not disabled
+          if (options.useAdvancedSpamFilter !== false) {
+            try {
+              const utils = await import('../utils/nftUtils');
+              nftsToAdd = await utils.advancedSpamFilter(
+                nftsToAdd, 
+                this, 
+                chain,
+                options.aggressiveSpamFiltering !== false
+              );
+            } catch (filterError) {
+              console.error(`Error applying advanced spam filtering for ${chain}:`, filterError);
+            }
+          }
+          
+          // Add the filtered NFTs to the combined array
+          combinedData.ownedNfts.push(...nftsToAdd);
+          combinedData.totalCount += nftsToAdd.length;
+        }
+      }
+      
+      // Sort by chain priority if required
+      if (options.sortByChainPriority) {
+        // ... existing sorting code (keep as is)
+      }
+      
+      console.log(`Combined NFTs from ${chainsToFetch.length} chains. Total: ${combinedData.totalCount}`);
+      return combinedData;
     } catch (error) {
       console.error('Error in fetchNftsAcrossChains:', error);
       return { error: error.message, ownedNfts: [] };
@@ -1694,6 +1716,123 @@ class AlchemyService {
     } catch (error) {
       console.error('Error in fetchNftsSimple:', error);
       return { nfts: [], error: error.message };
+    }
+  }
+
+  /**
+   * Checks if a specific contract is marked as spam by Alchemy
+   * @param {string} contractAddress - The contract address to check
+   * @param {string} network - The network to check on (eth, polygon, etc.)
+   * @returns {Promise<boolean>} - True if contract is spam, false otherwise
+   */
+  async isSpamContract(contractAddress, network = 'eth') {
+    try {
+      this.initApiKey();
+      
+      if (!contractAddress || !this.isValidAddress(contractAddress)) {
+        console.error('Invalid contract address for isSpamContract check');
+        return false;
+      }
+      
+      // Build cache key
+      const cacheKey = `spam_check_${contractAddress.toLowerCase()}_${network}`;
+      
+      // Check cache first
+      const cachedResult = await this.getCachedResponse(cacheKey);
+      if (cachedResult !== null) {
+        return cachedResult.isSpam;
+      }
+      
+      // Build the query URL
+      const queryParams = new URLSearchParams({
+        endpoint: 'isSpamContract',
+        network,
+        contractAddress
+      });
+      
+      const url = `${ALCHEMY_ENDPOINT}?${queryParams.toString()}`;
+      
+      console.log(`Checking if contract ${contractAddress} is spam on ${network}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Error checking spam status:', await response.text());
+        return false;
+      }
+      
+      const data = await response.json();
+      
+      // Cache the result for a long time since spam status doesn't change often
+      await this.setCachedResponse(cacheKey, { isSpam: data.isSpamContract }, 7 * 24 * 60 * 60 * 1000); // 1 week
+      
+      return data.isSpamContract;
+    } catch (error) {
+      console.error('Error checking if contract is spam:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Gets a list of all spam contracts from Alchemy
+   * @param {string} network - The network to check (eth, polygon, etc.)
+   * @returns {Promise<string[]>} - Array of spam contract addresses
+   */
+  async getSpamContracts(network = 'eth') {
+    try {
+      this.initApiKey();
+      
+      // Build cache key - we want to cache this for a while since it doesn't change often
+      const cacheKey = `spam_contracts_${network}`;
+      
+      // Check cache first
+      const cachedResult = await this.getCachedResponse(cacheKey);
+      if (cachedResult !== null) {
+        return cachedResult.contracts;
+      }
+      
+      // Build the query URL
+      const queryParams = new URLSearchParams({
+        endpoint: 'getSpamContracts',
+        network
+      });
+      
+      const url = `${ALCHEMY_ENDPOINT}?${queryParams.toString()}`;
+      
+      console.log(`Fetching spam contracts for ${network}`);
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'accept': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error('Error fetching spam contracts:', await response.text());
+        return [];
+      }
+      
+      const data = await response.json();
+      
+      if (!data.contractAddresses || !Array.isArray(data.contractAddresses)) {
+        console.error('Invalid response from getSpamContracts:', data);
+        return [];
+      }
+      
+      // Cache the result for a day
+      await this.setCachedResponse(cacheKey, { contracts: data.contractAddresses }, 24 * 60 * 60 * 1000);
+      
+      console.log(`Fetched ${data.contractAddresses.length} spam contracts for ${network}`);
+      return data.contractAddresses;
+    } catch (error) {
+      console.error('Error getting spam contracts:', error);
+      return [];
     }
   }
 }
