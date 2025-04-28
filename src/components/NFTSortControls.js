@@ -1,5 +1,6 @@
 import React from 'react';
-import { useNFT } from '../contexts/NFTContext';
+import { useDispatch, useSelector } from 'react-redux';
+import { setSortOption, setSortDirection } from '../redux/nftFiltersSlice';
 import '../styles/FarcasterUserSearch.css';
 
 /**
@@ -7,10 +8,27 @@ import '../styles/FarcasterUserSearch.css';
  * Provides UI for sorting NFTs by different criteria
  */
 const NFTSortControls = () => {
-  const { sortBy, setSortBy, sortOrder, setSortOrder } = useNFT();
+  const dispatch = useDispatch();
+  
+  // Get sort state from Redux
+  const { sortOption, sortDirection } = useSelector(state => ({
+    sortOption: state.nftFilters?.sortOption || 'recent',
+    sortDirection: state.nftFilters?.sortDirection || 'desc'
+  }));
+  
+  // Use sortBy and sortOrder as aliases for easier readability
+  const sortBy = sortOption;
+  const sortOrder = sortDirection;
 
+  // Update sort option in Redux
+  const handleSetSortBy = (option) => {
+    dispatch(setSortOption(option));
+  };
+  
+  // Toggle sort direction in Redux
   const toggleSortOrder = () => {
-    setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    const newDirection = sortOrder === 'asc' ? 'desc' : 'asc';
+    dispatch(setSortDirection(newDirection));
   };
 
   return (
@@ -18,7 +36,7 @@ const NFTSortControls = () => {
       <div className="sort-options">
         <button
           className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
-          onClick={() => setSortBy('recent')}
+          onClick={() => handleSetSortBy('recent')}
           aria-label="Sort by recent acquisition"
           aria-pressed={sortBy === 'recent'}
         >
@@ -26,7 +44,7 @@ const NFTSortControls = () => {
         </button>
         <button
           className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
-          onClick={() => setSortBy('name')}
+          onClick={() => handleSetSortBy('name')}
           aria-label="Sort by name"
           aria-pressed={sortBy === 'name'}
         >
@@ -34,7 +52,7 @@ const NFTSortControls = () => {
         </button>
         <button
           className={`sort-option ${sortBy === 'collection' ? 'active' : ''}`}
-          onClick={() => setSortBy('collection')}
+          onClick={() => handleSetSortBy('collection')}
           aria-label="Sort by collection"
           aria-pressed={sortBy === 'collection'}
         >
