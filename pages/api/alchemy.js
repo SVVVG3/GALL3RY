@@ -72,74 +72,14 @@ export default async function handler(req, res) {
     // Copy all query parameters except the ones we handle specially
     Object.keys(req.query).forEach(key => {
       if (key !== 'endpoint' && 
-          key !== 'network' && 
-          key !== 'excludeFilters' && 
-          key !== 'excludeFilters[]' && 
-          key !== 'spamConfidenceLevel') {
+          key !== 'network') {
         queryParams.append(key, req.query[key]);
       }
     });
     
-    // Set spam confidence level based on the network
-    // HIGH for Ethereum, MEDIUM for all other chains
-    const isEthMainnet = networkParam.toLowerCase() === 'eth' || networkParam.toLowerCase() === 'ethereum';
-    const spamConfidenceLevel = isEthMainnet ? 'HIGH' : 'MEDIUM';
-    
-    // Handle excludeFilters - add both SPAM and AIRDROPS for better filtering
-    const filters = [];
-    
-    // Get filters from query - check all possible formats
-    // First check 'excludeFilters' (standard format)
-    if (req.query.excludeFilters) {
-      // Could be a single value or comma-separated string
-      const requestedFilters = req.query.excludeFilters.split(',');
-      
-      requestedFilters.forEach(filter => {
-        const cleanFilter = filter.trim().toUpperCase();
-        if (cleanFilter && !filters.includes(cleanFilter)) {
-          filters.push(cleanFilter);
-        }
-      });
-    }
-    
-    // Also check 'excludeFilters[]' (array format)
-    if (req.query['excludeFilters[]']) {
-      const requestedFilters = Array.isArray(req.query['excludeFilters[]']) 
-        ? req.query['excludeFilters[]'] 
-        : [req.query['excludeFilters[]']];
-      
-      requestedFilters.forEach(filter => {
-        if (filter && !filters.includes(filter.toUpperCase())) {
-          filters.push(filter.toUpperCase());
-        }
-      });
-    }
-    
-    // Make sure SPAM and AIRDROPS are included in filters
-    if (!filters.includes('SPAM')) filters.push('SPAM');
-    if (!filters.includes('AIRDROPS')) filters.push('AIRDROPS');
-    
-    // IMPORTANT: Alchemy API requires SPAM filter to be present when using spamConfidenceLevel
-    // Add excludeFilters as comma-separated values - NOTE: Format changed to match Alchemy API requirements
-    // Temporarily disabling filters to troubleshoot API issues
-    
-    if (filters.length > 0) {
-      // IMPORTANT: Alchemy expects 'excludeFilters=SPAM,AIRDROPS' not 'excludeFilters[]'
-      // and does NOT want square brackets in the value
-      const filterValue = filters.join(',');
-      queryParams.set('excludeFilters', filterValue);
-      console.log(`[API:Alchemy] Using excludeFilters: ${filterValue}`);
-    }
-    
-    // IMPORTANT: Add spamConfidenceLevel AFTER excludeFilters is set
-    // spamConfidenceLevel requires excludeFilters to contain SPAM
-    if (filters.includes('SPAM')) {
-      // IMPORTANT: Make sure spamConfidenceLevel is explicitly added to the query parameters
-      queryParams.append('spamConfidenceLevel', spamConfidenceLevel);
-      console.log(`[API:Alchemy] Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
-    } else {
-      console.warn(`[API:Alchemy] Cannot set spamConfidenceLevel because SPAM filter is not included`);
-    }
+    // REMOVING ALL SPAM FILTER FUNCTIONALITY
+    // No longer setting spamConfidenceLevel or excludeFilters
+    // This should resolve issues with fetching NFTs
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
@@ -147,16 +87,6 @@ export default async function handler(req, res) {
     console.log(`[API:Alchemy] Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
     console.log(`[API:Alchemy] Full URL parameters: ${queryParams.toString()}`);
     console.log(`[API:Alchemy] Final Alchemy URL: ${apiUrl}`);
-    
-    // Check if the parameters are properly formatted in the URL
-    if (apiUrl.includes('[SPAM') || apiUrl.includes('SPAM]')) {
-      console.error(`[API:Alchemy] ERROR: Square brackets detected in URL parameters: ${apiUrl}`);
-    }
-    
-    // Check if the spamConfidenceLevel is in the final URL
-    if (!apiUrl.includes('spamConfidenceLevel=')) {
-      console.warn(`[API:Alchemy] WARNING: spamConfidenceLevel parameter is missing in the URL!`);
-    }
     
     try {
       // Forward the request to Alchemy
@@ -172,29 +102,15 @@ export default async function handler(req, res) {
       
       console.log(`[API:Alchemy] Successful response from Alchemy API for ${networkEndpoint}`);
       
-      // Add logging to track how many NFTs were filtered by spam/airdrops
+      // Add logging to track how many NFTs were returned
       if (endpoint === 'getNFTsForOwner' && response.data && response.data.ownedNfts) {
-        console.log(`[API:Alchemy] Received ${response.data.ownedNfts.length} NFTs after filtering with spamConfidenceLevel=${spamConfidenceLevel} and excludeFilters=${filters.join(',')}`);
+        console.log(`[API:Alchemy] Received ${response.data.ownedNfts.length} NFTs from ${networkEndpoint}`);
         
-        // Print the API key tier to check if it supports spam filtering
-        console.log(`[API:Alchemy] API key begins with ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.substring(0, 4) + '...' : 'undefined'}`);
-        
-        // Debug: Check if API supports spam filtering by checking if there's a filteredOut property
-        if (response.data.hasOwnProperty('filteredOutNfts') || response.data.hasOwnProperty('spamFiltered')) {
-          console.log(`[API:Alchemy] Alchemy API provided filtered NFT info: filteredOutNfts=${response.data.filteredOutNfts ? response.data.filteredOutNfts.length : 'none'}, spamFiltered=${response.data.spamFiltered || 'none'}`);
-        } else {
-          console.log(`[API:Alchemy] WARNING: No filtering information found in Alchemy response. Make sure your API key tier supports spam filtering.`);
-        }
-        
-        // Add metadata about filtering for client-side debugging
+        // Add metadata about request for client-side debugging
         response.data._diagnostic = {
           chain: networkParam,
           endpoint: endpoint,
-          timestamp: new Date().toISOString(),
-          filtering: {
-            spamConfidenceLevel,
-            excludeFilters: filters
-          }
+          timestamp: new Date().toISOString()
         };
       }
       

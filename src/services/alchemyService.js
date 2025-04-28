@@ -319,39 +319,10 @@ class AlchemyService {
         withFloorPrice: options.withFloorPrice !== false ? 'true' : 'false'
       });
 
-      // Handle excludeFilters array properly according to Alchemy API v3 docs
-      const excludeFilters = [];
-      
-      // Add SPAM filter if requested
-      if (options.excludeSpam === true) {
-        excludeFilters.push('SPAM');
-      }
-      
-      // Add AIRDROPS filter if requested
-      if (options.excludeAirdrops === true) {
-        excludeFilters.push('AIRDROPS');
-      }
-      
-      // If custom excludeFilters were provided, use those instead
-      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
-        // Use the provided filters directly
-        options.excludeFilters.forEach(filter => {
-          if (!excludeFilters.includes(filter)) {
-            excludeFilters.push(filter);
-          }
-        });
-      }
-      
-      // Add all excludeFilters to query params
-      if (excludeFilters.length > 0) {
-        queryParams.set('excludeFilters', excludeFilters.join(','));
-        console.log(`Excluding filters: ${excludeFilters.join(', ')}`);
-      }
-      
-      // Note: The server will set spamConfidenceLevel based on the chain
-      // HIGH for Ethereum, MEDIUM for all other chains
-      console.log(`Server will apply spamConfidenceLevel: ${chain === 'eth' ? 'HIGH' : 'MEDIUM'} for ${chain}`);
-      
+      // REMOVED ALL SPAM FILTER PARAMETERS
+      // No longer setting excludeSpam, excludeAirdrops, or excludeFilters
+      // This should resolve issues with fetching NFTs
+
       // Add pageKey if provided
       if (options.pageKey) {
         queryParams.append('pageKey', options.pageKey);
@@ -487,23 +458,9 @@ class AlchemyService {
         withFloorPrice: options.withFloorPrice !== false
       };
       
-      // Always enable spam filtering with Alchemy API
-      fetchOptions.excludeSpam = true;
-      
-      // Always exclude airdrops too
-      fetchOptions.excludeAirdrops = true;
-      
-      // Set up excludeFilters array properly for Alchemy API V3
-      fetchOptions.excludeFilters = ['SPAM', 'AIRDROPS'];
-      
-      // Add any additional exclude filters if provided
-      if (options.excludeFilters && Array.isArray(options.excludeFilters)) {
-        options.excludeFilters.forEach(filter => {
-          if (!fetchOptions.excludeFilters.includes(filter)) {
-            fetchOptions.excludeFilters.push(filter);
-          }
-        });
-      }
+      // REMOVED ALL SPAM FILTER PARAMETERS
+      // No longer setting excludeSpam, excludeAirdrops, or excludeFilters
+      // This should resolve issues with fetching NFTs
 
       // Create an array of promises, one for each chain
       const chainPromises = chainsToFetch.map(chain => 
@@ -1345,15 +1302,9 @@ class AlchemyService {
         withFloorPrice: true // Enable floor price data for sorting by value
       };
       
-      // Handle filters - use the standard excludeFilters array format expected by Alchemy
-      if (options.excludeSpam) {
-        fetchOptions.excludeSpam = true;
-      }
-      
-      // Handle excludeAirdrops if specified
-      if (options.excludeAirdrops) {
-        fetchOptions.excludeAirdrops = true;
-      }
+      // TEMPORARILY REMOVED ALL FILTER OPTIONS TO FIX 400 BAD REQUEST ERRORS
+      // fetchOptions.excludeSpam = true;
+      // fetchOptions.excludeAirdrops = true;
       
       console.log(`Fetch options: ${JSON.stringify(fetchOptions)}`);
       
