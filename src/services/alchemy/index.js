@@ -112,7 +112,7 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
     }
     
     if (excludeSpam) {
-      url += '&excludeFilters[]=SPAM';
+      url += '&excludeFilters=SPAM,AIRDROPS';
     }
 
     // Make the request
