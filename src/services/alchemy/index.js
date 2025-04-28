@@ -111,9 +111,10 @@ const fetchNFTsForAddress = async (address, chain = 'eth', options = {}) => {
       url += `&pageKey=${encodeURIComponent(pageKey)}`;
     }
     
-    if (excludeSpam) {
-      url += '&excludeFilters=SPAM,AIRDROPS';
-    }
+    // Temporarily remove all filter parameters to troubleshoot API issues
+    // if (excludeSpam) {
+    //   url += '&excludeFilters=SPAM,AIRDROPS';
+    // }
 
     // Make the request
     const response = await alchemyAxios.get(url);
