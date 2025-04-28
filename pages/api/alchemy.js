@@ -111,7 +111,9 @@ export default async function handler(req, res) {
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
+    // Log detailed URL for debugging purposes
     console.log(`Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
+    console.log(`Full URL parameters: ${queryParams.toString()}`);
     console.log(`Full URL: ${apiUrl}`);
     
     try {
@@ -131,6 +133,16 @@ export default async function handler(req, res) {
       // Add logging to track how many NFTs were filtered by spam/airdrops
       if (endpoint === 'getNFTsForOwner' && response.data && response.data.ownedNfts) {
         console.log(`Received ${response.data.ownedNfts.length} NFTs after filtering with spamConfidenceLevel=${spamConfidenceLevel} and excludeFilters=${filters.join(',')}`);
+        
+        // Print the API key tier to check if it supports spam filtering
+        console.log(`Alchemy API tier check: API key begins with ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.substring(0, 4) + '...' : 'undefined'}`);
+        
+        // Debug: Check if API supports spam filtering by checking if there's a filteredOut property
+        if (response.data.hasOwnProperty('filteredOutNfts') || response.data.hasOwnProperty('spamFiltered')) {
+          console.log(`Alchemy API provided filtered NFT info: filteredOutNfts=${response.data.filteredOutNfts ? response.data.filteredOutNfts.length : 'none'}, spamFiltered=${response.data.spamFiltered || 'none'}`);
+        } else {
+          console.log(`WARNING: No filtering information found in Alchemy response. Make sure your API key tier supports spam filtering.`);
+        }
         
         // Add metadata about filtering for client-side debugging
         response.data.filteringApplied = {
