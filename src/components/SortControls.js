@@ -14,7 +14,7 @@ const SortControls = () => {
         onClick={() => setSortBy('recent')}
         className={`px-3 py-1.5 text-sm font-medium rounded-md ${
           sortBy === 'recent'
-            ? 'bg-purple-100 text-purple-800'
+            ? 'bg-purple-600 text-white'
             : 'bg-white text-gray-600 hover:bg-gray-100'
         }`}
       >
@@ -24,7 +24,7 @@ const SortControls = () => {
         onClick={() => setSortBy('a-z')}
         className={`px-3 py-1.5 text-sm font-medium rounded-md ${
           sortBy === 'a-z'
-            ? 'bg-purple-100 text-purple-800'
+            ? 'bg-purple-600 text-white'
             : 'bg-white text-gray-600 hover:bg-gray-100'
         }`}
       >
@@ -34,7 +34,7 @@ const SortControls = () => {
         onClick={() => setSortBy('collection')}
         className={`px-3 py-1.5 text-sm font-medium rounded-md ${
           sortBy === 'collection'
-            ? 'bg-purple-100 text-purple-800'
+            ? 'bg-purple-600 text-white'
             : 'bg-white text-gray-600 hover:bg-gray-100'
         }`}
       >
@@ -44,7 +44,7 @@ const SortControls = () => {
         onClick={() => setSortBy('value')}
         className={`px-3 py-1.5 text-sm font-medium rounded-md ${
           sortBy === 'value'
-            ? 'bg-purple-100 text-purple-800'
+            ? 'bg-purple-600 text-white'
             : 'bg-white text-gray-600 hover:bg-gray-100'
         }`}
       >
