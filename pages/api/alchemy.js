@@ -69,9 +69,13 @@ export default async function handler(req, res) {
     // Create a new URLSearchParams object for the query
     const queryParams = new URLSearchParams();
     
-    // Copy all query parameters except endpoint, network, excludeFilters and spamConfidenceLevel
+    // Copy all query parameters except the ones we handle specially
     Object.keys(req.query).forEach(key => {
-      if (key !== 'endpoint' && key !== 'network' && key !== 'excludeFilters[]' && key !== 'spamConfidenceLevel') {
+      if (key !== 'endpoint' && 
+          key !== 'network' && 
+          key !== 'excludeFilters' && 
+          key !== 'excludeFilters[]' && 
+          key !== 'spamConfidenceLevel') {
         queryParams.append(key, req.query[key]);
       }
     });
@@ -84,7 +88,21 @@ export default async function handler(req, res) {
     // Handle excludeFilters - add both SPAM and AIRDROPS for better filtering
     const filters = [];
     
-    // Get filters from query if available
+    // Get filters from query - check all possible formats
+    // First check 'excludeFilters' (standard format)
+    if (req.query.excludeFilters) {
+      // Could be a single value or comma-separated string
+      const requestedFilters = req.query.excludeFilters.split(',');
+      
+      requestedFilters.forEach(filter => {
+        const cleanFilter = filter.trim().toUpperCase();
+        if (cleanFilter && !filters.includes(cleanFilter)) {
+          filters.push(cleanFilter);
+        }
+      });
+    }
+    
+    // Also check 'excludeFilters[]' (array format)
     if (req.query['excludeFilters[]']) {
       const requestedFilters = Array.isArray(req.query['excludeFilters[]']) 
         ? req.query['excludeFilters[]'] 
@@ -104,9 +122,11 @@ export default async function handler(req, res) {
     // IMPORTANT: Alchemy API requires SPAM filter to be present when using spamConfidenceLevel
     // Add excludeFilters as comma-separated values - NOTE: Format changed to match Alchemy API requirements
     if (filters.length > 0) {
-      // IMPORTANT CHANGE: Alchemy expects 'excludeFilters=SPAM,AIRDROPS' not 'excludeFilters[]'
-      queryParams.set('excludeFilters', filters.join(','));
-      console.log(`[API:Alchemy] Using excludeFilters: ${filters.join(',')}`);
+      // IMPORTANT: Alchemy expects 'excludeFilters=SPAM,AIRDROPS' not 'excludeFilters[]'
+      // and does NOT want square brackets in the value
+      const filterValue = filters.join(',');
+      queryParams.set('excludeFilters', filterValue);
+      console.log(`[API:Alchemy] Using excludeFilters: ${filterValue}`);
     }
     
     // IMPORTANT: Add spamConfidenceLevel AFTER excludeFilters is set
@@ -125,6 +145,11 @@ export default async function handler(req, res) {
     console.log(`[API:Alchemy] Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
     console.log(`[API:Alchemy] Full URL parameters: ${queryParams.toString()}`);
     console.log(`[API:Alchemy] Final Alchemy URL: ${apiUrl}`);
+    
+    // Check if the parameters are properly formatted in the URL
+    if (apiUrl.includes('[SPAM') || apiUrl.includes('SPAM]')) {
+      console.error(`[API:Alchemy] ERROR: Square brackets detected in URL parameters: ${apiUrl}`);
+    }
     
     // Check if the spamConfidenceLevel is in the final URL
     if (!apiUrl.includes('spamConfidenceLevel=')) {
