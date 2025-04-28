@@ -80,8 +80,11 @@ export default async function handler(req, res) {
     // HIGH for Ethereum, MEDIUM for all other chains
     const isEthMainnet = networkParam.toLowerCase() === 'eth' || networkParam.toLowerCase() === 'ethereum';
     const spamConfidenceLevel = isEthMainnet ? 'HIGH' : 'MEDIUM';
-    queryParams.append('spamConfidenceLevel', spamConfidenceLevel);
-    console.log(`Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
+    
+    // IMPORTANT: Make sure spamConfidenceLevel is explicitly added to the query parameters
+    queryParams.set('spamConfidenceLevel', spamConfidenceLevel);
+    
+    console.log(`[API:Alchemy] Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
     
     // Handle excludeFilters - add both SPAM and AIRDROPS for better filtering
     const filters = [];
@@ -105,16 +108,21 @@ export default async function handler(req, res) {
     
     // Add excludeFilters as comma-separated values
     if (filters.length > 0) {
-      queryParams.append('excludeFilters', filters.join(','));
-      console.log(`Using excludeFilters: ${filters.join(',')}`);
+      queryParams.set('excludeFilters', filters.join(','));
+      console.log(`[API:Alchemy] Using excludeFilters: ${filters.join(',')}`);
     }
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
     // Log detailed URL for debugging purposes
-    console.log(`Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
-    console.log(`Full URL parameters: ${queryParams.toString()}`);
-    console.log(`Full URL: ${apiUrl}`);
+    console.log(`[API:Alchemy] Forwarding request to Alchemy API: ${endpoint} on network ${networkEndpoint}`);
+    console.log(`[API:Alchemy] Full URL parameters: ${queryParams.toString()}`);
+    console.log(`[API:Alchemy] Final Alchemy URL: ${apiUrl}`);
+    
+    // Check if the spamConfidenceLevel is in the final URL
+    if (!apiUrl.includes('spamConfidenceLevel=')) {
+      console.warn(`[API:Alchemy] WARNING: spamConfidenceLevel parameter is missing in the URL!`);
+    }
     
     try {
       // Forward the request to Alchemy
@@ -128,35 +136,39 @@ export default async function handler(req, res) {
         timeout: 15000 // Extended timeout to 15 seconds
       });
       
-      console.log(`Successful response from Alchemy API for ${networkEndpoint}`);
+      console.log(`[API:Alchemy] Successful response from Alchemy API for ${networkEndpoint}`);
       
       // Add logging to track how many NFTs were filtered by spam/airdrops
       if (endpoint === 'getNFTsForOwner' && response.data && response.data.ownedNfts) {
-        console.log(`Received ${response.data.ownedNfts.length} NFTs after filtering with spamConfidenceLevel=${spamConfidenceLevel} and excludeFilters=${filters.join(',')}`);
+        console.log(`[API:Alchemy] Received ${response.data.ownedNfts.length} NFTs after filtering with spamConfidenceLevel=${spamConfidenceLevel} and excludeFilters=${filters.join(',')}`);
         
         // Print the API key tier to check if it supports spam filtering
-        console.log(`Alchemy API tier check: API key begins with ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.substring(0, 4) + '...' : 'undefined'}`);
+        console.log(`[API:Alchemy] API key begins with ${ALCHEMY_API_KEY ? ALCHEMY_API_KEY.substring(0, 4) + '...' : 'undefined'}`);
         
         // Debug: Check if API supports spam filtering by checking if there's a filteredOut property
         if (response.data.hasOwnProperty('filteredOutNfts') || response.data.hasOwnProperty('spamFiltered')) {
-          console.log(`Alchemy API provided filtered NFT info: filteredOutNfts=${response.data.filteredOutNfts ? response.data.filteredOutNfts.length : 'none'}, spamFiltered=${response.data.spamFiltered || 'none'}`);
+          console.log(`[API:Alchemy] Alchemy API provided filtered NFT info: filteredOutNfts=${response.data.filteredOutNfts ? response.data.filteredOutNfts.length : 'none'}, spamFiltered=${response.data.spamFiltered || 'none'}`);
         } else {
-          console.log(`WARNING: No filtering information found in Alchemy response. Make sure your API key tier supports spam filtering.`);
+          console.log(`[API:Alchemy] WARNING: No filtering information found in Alchemy response. Make sure your API key tier supports spam filtering.`);
         }
         
         // Add metadata about filtering for client-side debugging
-        response.data.filteringApplied = {
-          spamConfidenceLevel,
-          excludeFilters: filters,
-          network: networkParam
+        response.data._diagnostic = {
+          chain: networkParam,
+          endpoint: endpoint,
+          timestamp: new Date().toISOString(),
+          filtering: {
+            spamConfidenceLevel,
+            excludeFilters: filters
+          }
         };
       }
       
       return res.status(200).json(response.data);
     } catch (error) {
-      console.error(`Error with Alchemy API on ${networkEndpoint}:`, error.message);
+      console.error(`[API:Alchemy] Error with Alchemy API on ${networkEndpoint}:`, error.message);
       if (error.response?.data) {
-        console.error('Alchemy API error details:', error.response.data);
+        console.error('[API:Alchemy] Alchemy API error details:', error.response.data);
       }
       
       return res.status(error.response?.status || 502).json({ 
@@ -166,7 +178,7 @@ export default async function handler(req, res) {
       });
     }
   } catch (error) {
-    console.error('Error in Alchemy API proxy:', error);
+    console.error('[API:Alchemy] Error in Alchemy API proxy:', error);
     
     return res.status(500).json({ 
       error: 'Internal server error',
