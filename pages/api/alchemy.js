@@ -113,7 +113,7 @@ export default async function handler(req, res) {
     // spamConfidenceLevel requires excludeFilters to contain SPAM
     if (filters.includes('SPAM')) {
       // IMPORTANT: Make sure spamConfidenceLevel is explicitly added to the query parameters
-      queryParams.set('spamConfidenceLevel', spamConfidenceLevel);
+      queryParams.append('spamConfidenceLevel', spamConfidenceLevel);
       console.log(`[API:Alchemy] Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
     } else {
       console.warn(`[API:Alchemy] Cannot set spamConfidenceLevel because SPAM filter is not included`);
