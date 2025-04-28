@@ -122,7 +122,7 @@ export default async function handler(req, res) {
     // IMPORTANT: Alchemy API requires SPAM filter to be present when using spamConfidenceLevel
     // Add excludeFilters as comma-separated values - NOTE: Format changed to match Alchemy API requirements
     // Temporarily disabling filters to troubleshoot API issues
-    /*
+    
     if (filters.length > 0) {
       // IMPORTANT: Alchemy expects 'excludeFilters=SPAM,AIRDROPS' not 'excludeFilters[]'
       // and does NOT want square brackets in the value
@@ -140,7 +140,6 @@ export default async function handler(req, res) {
     } else {
       console.warn(`[API:Alchemy] Cannot set spamConfidenceLevel because SPAM filter is not included`);
     }
-    */
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
     
