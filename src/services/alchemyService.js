@@ -350,6 +350,10 @@ class AlchemyService {
         console.log(`Excluding filters: ${excludeFilters.join(', ')}`);
       }
       
+      // Note: The server will set spamConfidenceLevel based on the chain
+      // HIGH for Ethereum, MEDIUM for all other chains
+      console.log(`Server will apply spamConfidenceLevel: ${chain === 'eth' ? 'HIGH' : 'MEDIUM'} for ${chain}`);
+      
       // Add pageKey if provided
       if (options.pageKey) {
         queryParams.append('pageKey', options.pageKey);
@@ -373,6 +377,11 @@ class AlchemyService {
       }
 
       const data = await response.json();
+      
+      // Log filtering metadata if available
+      if (data.filteringApplied) {
+        console.log(`Server applied filtering: spamConfidenceLevel=${data.filteringApplied.spamConfidenceLevel}, excludeFilters=[${data.filteringApplied.excludeFilters.join(',')}] on ${data.filteringApplied.network}`);
+      }
       
       // Verify chain info is included in the response; if not, add it
       if (data.ownedNfts) {
@@ -427,6 +436,12 @@ class AlchemyService {
       await this.setCachedResponse(cacheKey, data, customTTL);
       
       console.log(`Completed fetch for ${owner} on ${chain}, got ${data.ownedNfts?.length || 0} total NFTs`);
+      
+      // Try to add logging about filtered spam if that metadata exists
+      if (data && data.filteringApplied) {
+        console.log(`Spam filtering was active: spamConfidenceLevel=${data.filteringApplied.spamConfidenceLevel}, filtered out potentially harmful NFTs`);
+      }
+      
       return data;
     } catch (error) {
       console.error(`Error in getNftsForOwner for ${chain}:`, error);

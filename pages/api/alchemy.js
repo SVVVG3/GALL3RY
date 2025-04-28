@@ -69,31 +69,44 @@ export default async function handler(req, res) {
     // Create a new URLSearchParams object for the query
     const queryParams = new URLSearchParams();
     
-    // Copy all query parameters except endpoint, network, and excludeFilters
+    // Copy all query parameters except endpoint, network, excludeFilters and spamConfidenceLevel
     Object.keys(req.query).forEach(key => {
-      if (key !== 'endpoint' && key !== 'network' && key !== 'excludeFilters[]') {
+      if (key !== 'endpoint' && key !== 'network' && key !== 'excludeFilters[]' && key !== 'spamConfidenceLevel') {
         queryParams.append(key, req.query[key]);
       }
     });
     
-    // Handle excludeFilters specially - Alchemy expects a single parameter with comma-separated values
-    // instead of multiple parameters with the same name
+    // Set spam confidence level based on the network
+    // HIGH for Ethereum, MEDIUM for all other chains
+    const isEthMainnet = networkParam.toLowerCase() === 'eth' || networkParam.toLowerCase() === 'ethereum';
+    const spamConfidenceLevel = isEthMainnet ? 'HIGH' : 'MEDIUM';
+    queryParams.append('spamConfidenceLevel', spamConfidenceLevel);
+    console.log(`Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
+    
+    // Handle excludeFilters - add both SPAM and AIRDROPS for better filtering
+    const filters = [];
+    
+    // Get filters from query if available
     if (req.query['excludeFilters[]']) {
-      const filters = Array.isArray(req.query['excludeFilters[]']) 
+      const requestedFilters = Array.isArray(req.query['excludeFilters[]']) 
         ? req.query['excludeFilters[]'] 
         : [req.query['excludeFilters[]']];
       
-      // Only add the excludeFilters if we have valid filters
-      // According to Alchemy API docs, only SPAM is valid for excludeFilters
-      const validFilters = filters.filter(filter => 
-        ['SPAM'].includes(filter.toUpperCase())
-      );
-      
-      if (validFilters.length > 0) {
-        queryParams.append('excludeFilters', validFilters.join(','));
-      }
-      
-      console.log(`Using excludeFilters: ${validFilters.join(',') || 'none'}`);
+      requestedFilters.forEach(filter => {
+        if (filter && !filters.includes(filter.toUpperCase())) {
+          filters.push(filter.toUpperCase());
+        }
+      });
+    }
+    
+    // Make sure SPAM and AIRDROPS are included in filters
+    if (!filters.includes('SPAM')) filters.push('SPAM');
+    if (!filters.includes('AIRDROPS')) filters.push('AIRDROPS');
+    
+    // Add excludeFilters as comma-separated values
+    if (filters.length > 0) {
+      queryParams.append('excludeFilters', filters.join(','));
+      console.log(`Using excludeFilters: ${filters.join(',')}`);
     }
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
@@ -114,6 +127,19 @@ export default async function handler(req, res) {
       });
       
       console.log(`Successful response from Alchemy API for ${networkEndpoint}`);
+      
+      // Add logging to track how many NFTs were filtered by spam/airdrops
+      if (endpoint === 'getNFTsForOwner' && response.data && response.data.ownedNfts) {
+        console.log(`Received ${response.data.ownedNfts.length} NFTs after filtering with spamConfidenceLevel=${spamConfidenceLevel} and excludeFilters=${filters.join(',')}`);
+        
+        // Add metadata about filtering for client-side debugging
+        response.data.filteringApplied = {
+          spamConfidenceLevel,
+          excludeFilters: filters,
+          network: networkParam
+        };
+      }
+      
       return res.status(200).json(response.data);
     } catch (error) {
       console.error(`Error with Alchemy API on ${networkEndpoint}:`, error.message);
