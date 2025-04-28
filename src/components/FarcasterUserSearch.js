@@ -35,8 +35,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     fetchAllNFTsForWallets, 
     isLoading: isNftLoading,
     searchQuery, // NFT filter search query from context
-    sortBy,
-    sortOrder
   } = useNFT();
   
   const dispatch = useDispatch();
@@ -59,18 +57,23 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Input reference for positioning the dropdown
   const inputRef = useRef(null);
   
+  // Define the updateInputRect function
+  const updateInputRect = useCallback(() => {
+    if (inputRef.current) {
+      const rect = inputRef.current.getBoundingClientRect();
+      setInputRect(rect);
+      console.log('Updated input rect:', rect);
+    }
+  }, [inputRef]);
+  
   // Get filter/sort state from Redux or use local defaults
-  const {
-    searchTerm = '',
-    sortOption = 'recent',  // Changed default to 'recent'
-    sortDirection = 'desc'  // Default to newest first
-  } = useSelector(state => ({
+  const { searchTerm, sortOption, sortDirection } = useSelector(state => ({
     searchTerm: state.nftFilters?.searchTerm || '',
-    sortOption: state.nftFilters?.sortOption || 'recent', 
+    sortOption: state.nftFilters?.sortOption || 'recent', // Use 'recent' as default
     sortDirection: state.nftFilters?.sortDirection || 'desc'
   }));
   
-  // Create alias for better readability in component
+  // Create aliases for better readability in component
   const sortBy = sortOption;
   const sortOrder = sortDirection;
   
