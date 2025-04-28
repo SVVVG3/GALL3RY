@@ -77,6 +77,16 @@ export default async function handler(req, res) {
       }
     });
     
+    // Support orderBy parameter for Ethereum and Polygon Mainnet
+    // This will sort NFTs by transfer time (newest first)
+    const networkLower = networkParam.toLowerCase();
+    if ((networkLower === 'eth' || networkLower === 'ethereum' || networkLower === 'polygon') && 
+        endpoint === 'getNFTsForOwner' && 
+        !queryParams.has('orderBy')) {
+      queryParams.append('orderBy', 'transferTime');
+      console.log(`[API:Alchemy] Adding orderBy=transferTime for ${networkParam} to sort by newest NFTs`);
+    }
+    
     // REMOVING ALL SPAM FILTER FUNCTIONALITY
     // No longer setting spamConfidenceLevel or excludeFilters
     // This should resolve issues with fetching NFTs

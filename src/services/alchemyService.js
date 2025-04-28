@@ -319,6 +319,13 @@ class AlchemyService {
         withFloorPrice: options.withFloorPrice !== false ? 'true' : 'false'
       });
 
+      // Add orderBy parameter to sort by transfer time for supported networks
+      // This is only supported on Ethereum Mainnet and Polygon Mainnet
+      if ((chain === 'eth' || chain === 'ethereum' || chain === 'polygon') && options.orderBy !== false) {
+        queryParams.append('orderBy', 'transferTime');
+        console.log(`Using orderBy=transferTime for ${chain} to show newest NFTs first`);
+      }
+
       // REMOVED ALL SPAM FILTER PARAMETERS
       // No longer setting excludeSpam, excludeAirdrops, or excludeFilters
       // This should resolve issues with fetching NFTs
