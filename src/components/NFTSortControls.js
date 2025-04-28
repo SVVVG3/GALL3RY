@@ -17,6 +17,14 @@ const NFTSortControls = () => {
     <div className="nft-sort-controls">
       <div className="sort-options">
         <button
+          className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
+          onClick={() => setSortBy('recent')}
+          aria-label="Sort by recent acquisition"
+          aria-pressed={sortBy === 'recent'}
+        >
+          Recent
+        </button>
+        <button
           className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
           onClick={() => setSortBy('name')}
           aria-label="Sort by name"

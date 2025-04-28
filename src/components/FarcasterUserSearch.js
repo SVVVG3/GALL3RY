@@ -41,7 +41,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   
   const dispatch = useDispatch();
   
-  // Form search state (for Farcaster username, not NFT filtering)
+  // Initialize state with Redux or default values
   const [formSearchQuery, setFormSearchQuery] = useState(initialUsername || '');
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(null);
@@ -59,21 +59,20 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Input reference for positioning the dropdown
   const inputRef = useRef(null);
   
-  // Define the updateInputRect function
-  const updateInputRect = useCallback(() => {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
-      setInputRect(rect);
-      console.log('Updated input rect:', rect);
-    }
-  }, [inputRef]);
-  
-  // NFT filtering and sorting from redux
-  const { searchTerm, sortOption, sortDirection } = useSelector(state => ({
+  // Get filter/sort state from Redux or use local defaults
+  const {
+    searchTerm = '',
+    sortOption = 'recent',  // Changed default to 'recent'
+    sortDirection = 'desc'  // Default to newest first
+  } = useSelector(state => ({
     searchTerm: state.nftFilters?.searchTerm || '',
-    sortOption: state.nftFilters?.sortOption || 'acquisition',
+    sortOption: state.nftFilters?.sortOption || 'recent', 
     sortDirection: state.nftFilters?.sortDirection || 'desc'
   }));
+  
+  // Create alias for better readability in component
+  const sortBy = sortOption;
+  const sortOrder = sortDirection;
   
   // Notify parent component when NFTs are displayed
   useEffect(() => {

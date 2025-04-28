@@ -7,8 +7,8 @@ const nftFiltersSlice = createSlice({
   name: 'nftFilters',
   initialState: {
     searchTerm: '',
-    sortOption: 'acquisition', // Default sort option
-    sortDirection: 'desc',     // Default sort direction
+    sortOption: 'recent',     // Default to recent sorting
+    sortDirection: 'desc',    // Default sort direction
     nftList: [],               // List of NFTs to be filtered
     filters: {
       collections: [],         // Collections to filter by
