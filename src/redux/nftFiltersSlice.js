@@ -7,12 +7,13 @@ const nftFiltersSlice = createSlice({
   name: 'nftFilters',
   initialState: {
     searchTerm: '',
-    sortOption: 'recent',     // Default to recent sorting
-    sortDirection: 'desc',    // Default sort direction
-    nftList: [],               // List of NFTs to be filtered
+    sortOption: 'collection',   // Default to collection sorting
+    sortDirection: 'asc',       // Default sort direction
+    selectedWallet: 'all',      // Default to showing all wallets
+    nftList: [],                // List of NFTs to be filtered
     filters: {
-      collections: [],         // Collections to filter by
-      traits: {},              // Traits to filter by
+      collections: [],          // Collections to filter by
+      traits: {},               // Traits to filter by
     }
   },
   reducers: {
@@ -29,6 +30,11 @@ const nftFiltersSlice = createSlice({
     // Set the sort direction (asc/desc)
     setSortDirection: (state, action) => {
       state.sortDirection = action.payload;
+    },
+    
+    // Set the selected wallet for filtering
+    setSelectedWallet: (state, action) => {
+      state.selectedWallet = action.payload;
     },
     
     // Set the list of NFTs to be filtered
@@ -49,6 +55,7 @@ const nftFiltersSlice = createSlice({
     // Clear all filters
     clearFilters: (state) => {
       state.searchTerm = '';
+      state.selectedWallet = 'all';
       state.filters.collections = [];
       state.filters.traits = {};
     }
@@ -60,6 +67,7 @@ export const {
   setSearchTerm,
   setSortOption,
   setSortDirection,
+  setSelectedWallet,
   setNftList,
   setCollectionFilters,
   setTraitFilters,

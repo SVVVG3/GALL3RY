@@ -2044,4 +2044,89 @@
     max-width: 100% !important;
     margin: 0 auto 16px !important;
   }
+}
+
+/* Add styles for the wallet filter dropdown */
+.wallet-filter {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  color: #374151;
+  font-size: 14px;
+  margin-right: 8px;
+  cursor: pointer;
+  min-width: 130px;
+  max-width: 200px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.wallet-filter:hover {
+  border-color: #9ca3af;
+}
+
+.wallet-filter:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* Optional: Style the dropdown options */
+.wallet-filter option {
+  padding: 8px;
+  background-color: #ffffff;
+}
+
+/* Adjust the existing sort controls to work better with the dropdown */
+.nft-sort-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sort-options {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sort-option {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sort-option.active {
+  background-color: #6366f1;
+  color: white;
+  border-color: #4f46e5;
+}
+
+.sort-option:hover:not(.active) {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.sort-order-toggle {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #f9fafb;
+  color: #374151;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sort-order-toggle:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
 } 

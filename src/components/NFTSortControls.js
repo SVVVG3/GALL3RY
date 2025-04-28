@@ -1,19 +1,20 @@
 import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { setSortOption, setSortDirection } from '../redux/nftFiltersSlice';
+import { setSortOption, setSortDirection, setSelectedWallet } from '../redux/nftFiltersSlice';
 import '../styles/FarcasterUserSearch.css';
 
 /**
  * NFT Sort Controls Component
- * Provides UI for sorting NFTs by different criteria
+ * Provides UI for sorting NFTs by different criteria and filtering by wallet
  */
-const NFTSortControls = () => {
+const NFTSortControls = ({ walletAddresses = [] }) => {
   const dispatch = useDispatch();
   
-  // Get sort state from Redux
-  const { sortOption, sortDirection } = useSelector(state => ({
-    sortOption: state.nftFilters?.sortOption || 'recent',
-    sortDirection: state.nftFilters?.sortDirection || 'desc'
+  // Get sort and filter state from Redux
+  const { sortOption, sortDirection, selectedWallet } = useSelector(state => ({
+    sortOption: state.nftFilters?.sortOption || 'collection',
+    sortDirection: state.nftFilters?.sortDirection || 'asc',
+    selectedWallet: state.nftFilters?.selectedWallet || 'all'
   }));
   
   // Use sortBy and sortOrder as aliases for easier readability
@@ -30,18 +31,38 @@ const NFTSortControls = () => {
     const newDirection = sortOrder === 'asc' ? 'desc' : 'asc';
     dispatch(setSortDirection(newDirection));
   };
+  
+  // Handle wallet selection
+  const handleWalletSelect = (e) => {
+    dispatch(setSelectedWallet(e.target.value));
+  };
+
+  // Prepare wallet options for dropdown
+  const walletOptions = [
+    { value: 'all', label: 'All Wallets' },
+    ...(walletAddresses || []).map(address => ({
+      value: address.toLowerCase(),
+      label: `${address.substring(0, 6)}...${address.substring(address.length - 4)}`
+    }))
+  ];
 
   return (
     <div className="nft-sort-controls">
       <div className="sort-options">
-        <button
-          className={`sort-option ${sortBy === 'recent' ? 'active' : ''}`}
-          onClick={() => handleSetSortBy('recent')}
-          aria-label="Sort by recent acquisition"
-          aria-pressed={sortBy === 'recent'}
+        {/* Wallet filter dropdown */}
+        <select 
+          className="wallet-filter"
+          value={selectedWallet}
+          onChange={handleWalletSelect}
+          aria-label="Filter by wallet"
         >
-          Recent
-        </button>
+          {walletOptions.map(option => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        
         <button
           className={`sort-option ${sortBy === 'name' ? 'active' : ''}`}
           onClick={() => handleSetSortBy('name')}

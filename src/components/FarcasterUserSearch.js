@@ -67,13 +67,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   }, [inputRef]);
   
   // Get filter/sort state from Redux or use local defaults
-  const { searchTerm, sortOption, sortDirection } = useSelector(state => ({
+  const { searchTerm, sortOption, sortDirection, selectedWallet } = useSelector(state => ({
     searchTerm: state.nftFilters?.searchTerm || '',
-    sortOption: state.nftFilters?.sortOption || 'recent', // Use 'recent' as default
-    sortDirection: state.nftFilters?.sortDirection || 'desc'
+    sortOption: state.nftFilters?.sortOption || 'collection', 
+    sortDirection: state.nftFilters?.sortDirection || 'asc',
+    selectedWallet: state.nftFilters?.selectedWallet || 'all'
   }));
   
-  // Create aliases for better readability in component
+  // Create alias for better readability in component
   const sortBy = sortOption;
   const sortOrder = sortDirection;
   
@@ -353,13 +354,34 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     });
   }, [searchQuery]);
 
+  // Filter NFTs by wallet if a specific wallet is selected
+  const filterNftsByWallet = useCallback((nfts) => {
+    if (!selectedWallet || selectedWallet === 'all') {
+      return nfts; // Return all NFTs if no wallet is selected or 'all' is selected
+    }
+    
+    // Filter NFTs to only those owned by the selected wallet
+    return nfts.filter(nft => {
+      const ownerWallet = (nft.ownerWallet || nft.ownerAddress || '').toLowerCase();
+      return ownerWallet === selectedWallet.toLowerCase();
+    });
+  }, [selectedWallet]);
+
   // Apply filter to sorted NFTs
   const filteredAndSortedNfts = useCallback(() => {
     // Add debug logging
     console.log('filteredAndSortedNfts called, userNfts length:', userNfts.length);
     
     try {
-      const result = filterNftsBySearch(sortedNfts());
+      // First sort NFTs
+      const sorted = sortedNfts();
+      
+      // Then filter by wallet
+      const walletFiltered = filterNftsByWallet(sorted);
+      
+      // Then filter by search term
+      const result = filterNftsBySearch(walletFiltered);
+      
       console.log('Returning filtered and sorted NFTs:', {
         count: result.length,
         sample: result.length > 0 ? result[0] : null
@@ -382,7 +404,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       console.error('Error in filteredAndSortedNfts:', error);
       return { count: 0, data: [], isLoading: false };
     }
-  }, [filterNftsBySearch, sortedNfts, userNfts.length]);
+  }, [filterNftsBySearch, filterNftsByWallet, sortedNfts, userNfts.length]);
   
   /**
    * Handle search for Farcaster user and their NFTs
@@ -771,7 +793,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               {/* Add sort controls if NFTs are available */}
               {userNfts.length > 0 && (
                 <div className="nft-header-right">
-                  <NFTSortControls />
+                  <NFTSortControls walletAddresses={walletAddresses} />
                 </div>
               )}
             </div>
