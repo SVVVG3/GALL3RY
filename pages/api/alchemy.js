@@ -81,11 +81,6 @@ export default async function handler(req, res) {
     const isEthMainnet = networkParam.toLowerCase() === 'eth' || networkParam.toLowerCase() === 'ethereum';
     const spamConfidenceLevel = isEthMainnet ? 'HIGH' : 'MEDIUM';
     
-    // IMPORTANT: Make sure spamConfidenceLevel is explicitly added to the query parameters
-    queryParams.set('spamConfidenceLevel', spamConfidenceLevel);
-    
-    console.log(`[API:Alchemy] Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
-    
     // Handle excludeFilters - add both SPAM and AIRDROPS for better filtering
     const filters = [];
     
@@ -106,10 +101,22 @@ export default async function handler(req, res) {
     if (!filters.includes('SPAM')) filters.push('SPAM');
     if (!filters.includes('AIRDROPS')) filters.push('AIRDROPS');
     
-    // Add excludeFilters as comma-separated values
+    // IMPORTANT: Alchemy API requires SPAM filter to be present when using spamConfidenceLevel
+    // Add excludeFilters as comma-separated values - NOTE: Format changed to match Alchemy API requirements
     if (filters.length > 0) {
+      // IMPORTANT CHANGE: Alchemy expects 'excludeFilters=SPAM,AIRDROPS' not 'excludeFilters[]'
       queryParams.set('excludeFilters', filters.join(','));
       console.log(`[API:Alchemy] Using excludeFilters: ${filters.join(',')}`);
+    }
+    
+    // IMPORTANT: Add spamConfidenceLevel AFTER excludeFilters is set
+    // spamConfidenceLevel requires excludeFilters to contain SPAM
+    if (filters.includes('SPAM')) {
+      // IMPORTANT: Make sure spamConfidenceLevel is explicitly added to the query parameters
+      queryParams.set('spamConfidenceLevel', spamConfidenceLevel);
+      console.log(`[API:Alchemy] Using spamConfidenceLevel: ${spamConfidenceLevel} for network ${networkParam}`);
+    } else {
+      console.warn(`[API:Alchemy] Cannot set spamConfidenceLevel because SPAM filter is not included`);
     }
     
     const apiUrl = `${baseUrl}/${endpoint}?${queryParams.toString()}`;
