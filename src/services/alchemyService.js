@@ -344,9 +344,7 @@ class AlchemyService {
       
       // Add all excludeFilters to query params
       if (excludeFilters.length > 0) {
-        excludeFilters.forEach(filter => {
-          queryParams.append('excludeFilters[]', filter);
-        });
+        queryParams.set('excludeFilters', excludeFilters.join(','));
         console.log(`Excluding filters: ${excludeFilters.join(', ')}`);
       }
       
