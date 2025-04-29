@@ -594,6 +594,7 @@
   .search-input-wrapper {
     flex-direction: column;
     gap: 8px;
+    position: relative;
   }
 
   .search-input {
@@ -608,30 +609,25 @@
   }
 
   .farcaster-suggestions {
-    position: fixed;
-    top: auto;
-    bottom: 0;
+    position: absolute;
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
     width: 100%;
-    border-radius: 16px 16px 0 0;
-    border: 1px solid #e5e7eb;
-    border-bottom: none;
-    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     margin: 0;
-    max-height: 60vh;
+    max-height: 50vh;
     z-index: 1000001;
     background: #fff;
-    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .suggestion-item {
     padding: 16px;
   }
 
-  /* Add bottom padding to account for suggestions */
   .farcaster-search-container {
-    padding-bottom: calc(60vh + 20px);
+    padding-bottom: 20px;
   }
 }
 
