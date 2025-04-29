@@ -36,6 +36,31 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
 
   if (!visible) return null;
 
+  const handleSuggestionClick = async (user) => {
+    try {
+      // Prevent event bubbling
+      event.preventDefault();
+      event.stopPropagation();
+      
+      // Log the user object we're selecting
+      console.log('Selected user from suggestions:', user);
+      
+      // Call the onSelect handler with the complete user object
+      onSelect({
+        username: user.username,
+        fid: user.fid,
+        displayName: user.displayName || user.username,
+        imageUrl: user.imageUrl,
+        bio: user.bio,
+        followerCount: user.followerCount,
+        followingCount: user.followingCount,
+        connectedAddresses: user.connectedAddresses || []
+      });
+    } catch (error) {
+      console.error('Error handling suggestion click:', error);
+    }
+  };
+
   const suggestionsContent = (
     <div className="farcaster-suggestions">
       {loading ? (
@@ -47,11 +72,7 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
           <div
             key={user.fid}
             className="suggestion-item"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onSelect(user);
-            }}
+            onClick={() => handleSuggestionClick(user)}
           >
             {user.imageUrl ? (
               <img

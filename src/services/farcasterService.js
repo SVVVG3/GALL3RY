@@ -219,122 +219,86 @@ const farcasterService = {
       
       console.log(`Making API request to ${API_URL}/neynar for user search with query: "${sanitizedQuery}"`);
       
-      let response;
-      // Try our proxy endpoint first
-      try {
-        response = await axios.get(`${API_URL}/neynar`, {
-          params: {
-            endpoint: 'user/search',
-            q: sanitizedQuery,
-            limit
-          },
-          timeout: 8000 // 8 second timeout
-        });
-      } catch (proxyError) {
-        console.error('Proxy endpoint failed:', proxyError.message);
-        
-        // Fall back to direct Neynar API if proxy fails
-        console.log('Falling back to direct Neynar API for search');
-        const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || "NEYNAR_API_DOCS";
-        
-        response = await axios.get(`https://api.neynar.com/v2/farcaster/user/search`, {
-          params: { q: sanitizedQuery, limit },
-          headers: { api_key: NEYNAR_API_KEY },
-          timeout: 8000
-        });
-      }
+      // First try to get search results from Neynar API
+      const NEYNAR_API_KEY = process.env.REACT_APP_NEYNAR_API_KEY || 'NEYNAR_API_DOCS';
+      const searchResponse = await axios({
+        method: 'get',
+        url: `https://api.neynar.com/v2/farcaster/user/search?q=${encodeURIComponent(sanitizedQuery)}&limit=${limit}`,
+        headers: {
+          'Accept': 'application/json',
+          'api_key': NEYNAR_API_KEY
+        },
+        timeout: 5000
+      });
       
-      if (!response || !response.data) {
-        console.error('Empty or invalid response from API');
-        return [];
-      }
-      
-      console.log('Raw API response received');
-      
-      // Handle different response formats
       let usersData = [];
       
-      // Check if response is in format { users: [...] }
-      if (response.data && Array.isArray(response.data.users)) {
-        usersData = response.data.users;
-        console.log('Found users in direct users array format');
-      } 
-      // Check if response is in format { result: { users: [...] } }
-      else if (response.data?.result && Array.isArray(response.data.result.users)) {
-        usersData = response.data.result.users;
-        console.log('Found users in result.users format');
-      }
-      // If we're getting direct array response
-      else if (Array.isArray(response.data)) {
-        usersData = response.data;
-        console.log('API returned direct array of users');
-      }
-      // Check if array is wrapped in some other property
-      else {
-        // Try to find an array in the response that might contain users
-        for (const key in response.data) {
-          if (Array.isArray(response.data[key])) {
-            if (response.data[key].length > 0 && response.data[key][0].fid) {
-              usersData = response.data[key];
-              console.log(`Found user array in response.data.${key}`);
-              break;
-            }
-          } else if (typeof response.data[key] === 'object' && response.data[key] !== null) {
-            // Check second level properties for arrays
-            for (const subKey in response.data[key]) {
-              if (Array.isArray(response.data[key][subKey])) {
-                if (response.data[key][subKey].length > 0 && response.data[key][subKey][0].fid) {
-                  usersData = response.data[key][subKey];
-                  console.log(`Found user array in response.data.${key}.${subKey}`);
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
-      
-      if (!Array.isArray(usersData) || usersData.length === 0) {
-        console.warn('No users found in API response or invalid format');
-        return [];
-      }
-      
-      console.log(`Found ${usersData.length} users in API response`);
-      
-      // Format the response to match the structure expected by the app
-      const users = usersData.map(user => {
-        // Validate user object
-        if (!user || typeof user !== 'object') return null;
+      if (searchResponse.data?.result?.users) {
+        usersData = searchResponse.data.result.users;
+        console.log(`Found ${usersData.length} users in search response`);
         
-        return {
-          // Required fields - use fallbacks if missing
-          fid: user.fid || 0,
-          username: user.username || '',
-          
-          // Optional fields with fallbacks
-          displayName: user.display_name || user.displayName || user.username || '',
-          imageUrl: user.pfp_url || user.pfpUrl || user.profile?.pfp?.url || '',
-          bio: user.profile?.bio?.text || user.bio || '',
-          followerCount: user.follower_count || user.followerCount || 0,
-          followingCount: user.following_count || user.followingCount || 0,
-          
-          // Neynar doesn't provide connected addresses in search results
-          connectedAddresses: []
-        };
-      }).filter(user => user !== null && user.fid && user.username); // Filter out invalid users
+        // For each user in the search results, get their full profile data
+        const enrichedUsers = await Promise.all(
+          usersData.map(async (user) => {
+            try {
+              // Try to get the full profile for each user
+              const fullProfile = await farcasterService.getProfile({ username: user.username });
+              
+              if (fullProfile) {
+                return {
+                  ...user,
+                  displayName: fullProfile.metadata?.displayName || user.display_name || user.username,
+                  imageUrl: fullProfile.metadata?.imageUrl || user.pfp_url,
+                  bio: fullProfile.metadata?.description || user.profile?.bio?.text,
+                  followerCount: fullProfile.followerCount || user.follower_count,
+                  followingCount: fullProfile.followingCount || user.following_count,
+                  connectedAddresses: fullProfile.connectedAddresses || []
+                };
+              }
+              
+              // Fallback to basic user data if full profile fetch fails
+              return {
+                fid: user.fid,
+                username: user.username,
+                displayName: user.display_name || user.username,
+                imageUrl: user.pfp_url,
+                bio: user.profile?.bio?.text,
+                followerCount: user.follower_count,
+                followingCount: user.following_count,
+                connectedAddresses: []
+              };
+            } catch (error) {
+              console.warn(`Failed to get full profile for user ${user.username}:`, error);
+              // Return basic user data on error
+              return {
+                fid: user.fid,
+                username: user.username,
+                displayName: user.display_name || user.username,
+                imageUrl: user.pfp_url,
+                bio: user.profile?.bio?.text,
+                followerCount: user.follower_count,
+                followingCount: user.following_count,
+                connectedAddresses: []
+              };
+            }
+          })
+        );
+        
+        // Filter out any null results and update usersData
+        usersData = enrichedUsers.filter(user => user !== null);
+        console.log(`Enriched ${usersData.length} user profiles with full data`);
+      }
       
-      console.log(`Processed ${users.length} valid user suggestions from API response`);
-      
-      // Cache the result
+      // Cache the enriched results
       localStorage.setItem(
-        CACHE_CONFIG.KEYS.SEARCH_PREFIX + cacheKey,
+        cacheKey,
         JSON.stringify({
-          results: users,
+          results: usersData,
           timestamp: Date.now()
         })
       );
       
-      return users;
+      return usersData;
     } catch (error) {
       console.error('Error searching Farcaster users:', error);
       console.error('Error details:', {
