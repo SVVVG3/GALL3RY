@@ -77,26 +77,23 @@ const FarcasterSuggestions = ({
     return null;
   }
   
-  // Get input position if available
-  let dropdownStyle = {
+  // Updated dropdown styling
+  const dropdownStyle = {
     position: 'absolute',
-    top: '100%',
+    top: 'calc(100% + 4px)', // Add small gap between input and dropdown
     left: 0,
+    right: 0, // Ensure full width
     width: '100%',
-    zIndex: 100000,
-    marginTop: '2px',
+    zIndex: 1000000, // Very high z-index to ensure visibility
     backgroundColor: '#fff',
     border: '1px solid #e5e7eb',
     borderRadius: '8px',
     boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-    maxHeight: '300px',
-    overflowY: 'auto'
+    maxHeight: '50vh', // Use viewport height for better mobile experience
+    overflowY: 'auto',
+    overscrollBehavior: 'contain', // Prevent scroll bleed
+    WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
   };
-  
-  if (inputRef?.current) {
-    const rect = inputRef.current.getBoundingClientRect();
-    console.log('FarcasterSuggestions: Input rect', rect);
-  }
   
   return (
     <div 
@@ -110,14 +107,15 @@ const FarcasterSuggestions = ({
             key={user.fid}
             onClick={() => handleSelect(user.username)}
             style={{
-              padding: "10px 15px",
+              padding: "12px 15px", // Increased padding for better touch targets
               display: "flex",
               alignItems: "center", 
               borderBottom: "1px solid #f3f4f6",
               cursor: "pointer",
               backgroundColor: "#ffffff",
               transition: "background-color 0.2s",
-              fontSize: "14px"
+              fontSize: "14px",
+              minHeight: "60px", // Ensure minimum height for touch targets
             }}
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
@@ -127,8 +125,8 @@ const FarcasterSuggestions = ({
                 src={user.imageUrl} 
                 alt=""
                 style={{
-                  width: "32px",
-                  height: "32px",
+                  width: "40px", // Slightly larger images
+                  height: "40px",
                   borderRadius: "50%",
                   marginRight: "12px",
                   border: "1px solid #e5e7eb",
@@ -142,15 +140,15 @@ const FarcasterSuggestions = ({
               />
             ) : (
               <div style={{
-                width: "32px",
-                height: "32px",
+                width: "40px",
+                height: "40px",
                 borderRadius: "50%",
                 marginRight: "12px",
                 backgroundColor: "#f3f4f6",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                fontSize: "14px",
+                fontSize: "16px",
                 fontWeight: "bold",
                 color: "#6b7280",
                 flexShrink: 0
@@ -162,18 +160,18 @@ const FarcasterSuggestions = ({
               <span 
                 style={{
                   fontWeight: "600",
-                  fontSize: "14px",
+                  fontSize: "16px", // Larger font size
                   color: "#111827",
                   display: "block",
                   lineHeight: "1.2",
-                  marginBottom: "2px"
+                  marginBottom: "4px"
                 }}
               >
                 {user.displayName || user.username}
               </span>
               <span 
                 style={{
-                  fontSize: "12px",
+                  fontSize: "14px", // Larger font size
                   color: "#6b7280",
                   display: "block",
                   lineHeight: "1.2"
