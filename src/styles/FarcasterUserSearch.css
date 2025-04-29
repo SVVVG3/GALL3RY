@@ -116,6 +116,7 @@
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background-color 0.2s;
+  min-height: 48px;
 }
 
 .suggestion-item:last-child {
@@ -127,27 +128,29 @@
 }
 
 .username-suggestion-item img {
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   margin-right: 12px;
   object-fit: cover;
+  border: 1px solid #e5e7eb;
 }
 
 .suggestion-user-info {
   display: flex;
   flex-direction: column;
+  gap: 4px;
 }
 
 .suggestion-display-name {
   font-weight: 600;
   color: var(--heading-color);
-  font-size: 14px;
+  font-size: 16px;
   line-height: 1.2;
 }
 
 .suggestion-username {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--secondary-text);
   line-height: 1.2;
 }
@@ -2117,4 +2120,24 @@
 .sort-order-toggle:hover {
   background-color: #f3f4f6;
   border-color: #9ca3af;
+}
+
+/* Mobile responsiveness for suggestions */
+@media (max-width: 480px) {
+  .farcaster-suggestions {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+    margin-top: 0;
+  }
+  
+  .suggestion-item {
+    padding: 16px;
+  }
 } 

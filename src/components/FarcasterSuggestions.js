@@ -80,19 +80,18 @@ const FarcasterSuggestions = ({
   // Updated dropdown styling
   const dropdownStyle = {
     position: 'absolute',
-    top: 'calc(100% + 4px)', // Add small gap between input and dropdown
+    top: '100%',
     left: 0,
-    right: 0, // Ensure full width
+    right: 0,
     width: '100%',
-    zIndex: 1000000, // Very high z-index to ensure visibility
+    zIndex: 1000000,
     backgroundColor: '#fff',
     border: '1px solid #e5e7eb',
     borderRadius: '8px',
     boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-    maxHeight: '50vh', // Use viewport height for better mobile experience
-    overflowY: 'auto',
-    overscrollBehavior: 'contain', // Prevent scroll bleed
-    WebkitOverflowScrolling: 'touch', // Smooth scrolling on iOS
+    overscrollBehavior: 'contain',
+    WebkitOverflowScrolling: 'touch',
+    marginTop: '4px',
   };
   
   return (
@@ -107,7 +106,7 @@ const FarcasterSuggestions = ({
             key={user.fid}
             onClick={() => handleSelect(user.username)}
             style={{
-              padding: "12px 15px", // Increased padding for better touch targets
+              padding: "12px 15px",
               display: "flex",
               alignItems: "center", 
               borderBottom: "1px solid #f3f4f6",
@@ -115,7 +114,7 @@ const FarcasterSuggestions = ({
               backgroundColor: "#ffffff",
               transition: "background-color 0.2s",
               fontSize: "14px",
-              minHeight: "60px", // Ensure minimum height for touch targets
+              minHeight: "48px",
             }}
             onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
