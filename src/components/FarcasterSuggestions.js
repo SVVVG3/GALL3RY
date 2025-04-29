@@ -47,7 +47,11 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
           <div
             key={user.fid}
             className="suggestion-item"
-            onClick={() => onSelect(user)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect(user);
+            }}
           >
             {user.imageUrl ? (
               <img

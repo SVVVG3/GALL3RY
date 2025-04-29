@@ -113,23 +113,35 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Handle suggestion selection
   const handleSuggestionSelect = async (user) => {
-    const username = user.username;
-    // Update form query
-    setFormSearchQuery(username);
-    // Clear suggestions
-    setSuggestions([]);
-    setShowSuggestions(false);
-    
-    // Ensure we're using the username directly in the search
     try {
-      console.log('Searching for selected user:', username);
-      // Clear any previous errors
+      // Get the username before we do anything else
+      const username = user.username;
+      console.log('Suggestion selected:', username);
+      
+      // Update UI state
+      setFormSearchQuery(username);
+      setSuggestions([]);
+      setShowSuggestions(false);
       setSearchError(null);
-      // Trigger search with the username
+      
+      // Ensure we're not already searching
+      if (isSearching) {
+        console.log('Already searching, waiting...');
+        return;
+      }
+      
+      // Set searching state
+      setIsSearching(true);
+      
+      console.log('Initiating search for selected user:', username);
+      
+      // Perform the search
       await handleSearch(username);
     } catch (error) {
-      console.error('Error searching for selected user:', error);
+      console.error('Error in handleSuggestionSelect:', error);
       setSearchError(error.message);
+    } finally {
+      setIsSearching(false);
     }
   };
   
