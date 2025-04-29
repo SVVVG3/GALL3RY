@@ -113,10 +113,16 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Handle suggestion selection
   const handleSuggestionSelect = async (user) => {
-    setFormSearchQuery(user.username);
+    const username = user.username;
+    setFormSearchQuery(username);
     setSuggestions([]);
     setShowSuggestions(false);
-    await handleSearch(user.username);
+    try {
+      await handleSearch(username);
+    } catch (error) {
+      console.error('Error searching for selected user:', error);
+      setSearchError(error.message);
+    }
   };
   
   // Get sorted NFTs
@@ -431,9 +437,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       e.preventDefault();
     }
     
-    // Get the query either from the event or use the current formSearchQuery
+    // Get the query either from the event, direct string parameter, or current formSearchQuery
     let query = '';
-    if (e && e.target && e.target.value) {
+    if (typeof e === 'string') {
+      query = e.trim();
+    } else if (e && e.target && e.target.value) {
       query = e.target.value.trim();
     } else {
       query = formSearchQuery.trim();
