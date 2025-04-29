@@ -114,10 +114,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Handle suggestion selection
   const handleSuggestionSelect = async (user) => {
     const username = user.username;
+    // Update form query
     setFormSearchQuery(username);
+    // Clear suggestions
     setSuggestions([]);
     setShowSuggestions(false);
+    
+    // Ensure we're using the username directly in the search
     try {
+      console.log('Searching for selected user:', username);
+      // Clear any previous errors
+      setSearchError(null);
+      // Trigger search with the username
       await handleSearch(username);
     } catch (error) {
       console.error('Error searching for selected user:', error);
@@ -431,20 +439,25 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   /**
    * Handle search for Farcaster user and their NFTs
    */
-  const handleSearch = useCallback(async (e) => {
-    // Prevent default form submission if this is an event
-    if (e && e.preventDefault) {
-      e.preventDefault();
-    }
-    
-    // Get the query either from the event, direct string parameter, or current formSearchQuery
+  const handleSearch = useCallback(async (searchParam) => {
+    // Get the query from either the search parameter, event, or current form state
     let query = '';
-    if (typeof e === 'string') {
-      query = e.trim();
-    } else if (e && e.target && e.target.value) {
-      query = e.target.value.trim();
-    } else {
+    
+    // If searchParam is a string (direct username search)
+    if (typeof searchParam === 'string') {
+      query = searchParam.trim();
+      console.log('Handling direct username search for:', query);
+    }
+    // If searchParam is an event (form submission)
+    else if (searchParam && searchParam.preventDefault) {
+      searchParam.preventDefault();
       query = formSearchQuery.trim();
+      console.log('Handling form submission search for:', query);
+    }
+    // If no parameter provided, use current form state
+    else {
+      query = formSearchQuery.trim();
+      console.log('Handling default search for:', query);
     }
     
     if (query.length < 1) {
@@ -463,7 +476,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         setWalletAddresses([]);
       }
       
-      console.log(`Searching for Farcaster user: ${query}`);
+      console.log(`Initiating Farcaster user search for: ${query}`);
       
       // Check if we already have this profile cached
       let profile = userProfile;
