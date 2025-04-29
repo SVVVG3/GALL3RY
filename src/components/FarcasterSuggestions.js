@@ -1,5 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
-import farcasterService from '../services/farcasterService';
+import React, { useState, useEffect, useCallback } from 'react';
+import ReactDOM from 'react-dom';
+import '../styles/FarcasterUserSearch.css';
+import { getFarcasterSuggestions } from '../services/farcasterService';
 
 /**
  * A completely standalone component for farcaster username suggestions
@@ -11,110 +13,94 @@ const FarcasterSuggestions = ({
 }) => {
   // Component state
   const [suggestions, setSuggestions] = useState([]);
-  const [isVisible, setIsVisible] = useState(false);
-  const containerRef = useRef(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth <= 480);
+  
+  // Update isMobile state on window resize
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 480);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // Fetch suggestions when input value changes
   useEffect(() => {
     const fetchSuggestions = async () => {
-      // Only show suggestions when input has at least 2 characters
-      if (!inputValue || inputValue.trim().length < 2) {
+      if (inputValue.trim().length < 1) {
         setSuggestions([]);
-        setIsVisible(false);
         return;
       }
       
       try {
-        console.log('FarcasterSuggestions: Fetching suggestions for:', inputValue);
-        const users = await farcasterService.searchUsers(inputValue.trim(), 5);
-        console.log('FarcasterSuggestions: Found', users.length, 'suggestions');
-        
-        if (users && users.length > 0) {
-          setSuggestions(users);
-          setIsVisible(true);
-        } else {
-          setIsVisible(false);
-        }
+        const results = await getFarcasterSuggestions(inputValue);
+        setSuggestions(results);
       } catch (error) {
-        console.error('FarcasterSuggestions: Error fetching suggestions', error);
-        setIsVisible(false);
+        console.error('Error fetching suggestions:', error);
+        setSuggestions([]);
       }
     };
     
     // Use debounce to avoid too many API calls
-    const timerId = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(timerId);
+    const timeoutId = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timeoutId);
   }, [inputValue]);
   
-  // Hide suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        containerRef.current && 
-        !containerRef.current.contains(event.target) &&
-        inputRef && 
-        inputRef.current &&
-        !inputRef.current.contains(event.target)
-      ) {
-        setIsVisible(false);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [inputRef]);
-  
   // Handle selection
-  const handleSelect = (username) => {
-    setIsVisible(false);
+  const handleSuggestionClick = (username) => {
     onSelectSuggestion(username);
+    setSuggestions([]);
   };
   
-  // Don't render anything if not visible or no suggestions
-  if (!isVisible || !suggestions.length) {
-    return null;
+  const SuggestionsList = () => {
+    if (suggestions.length === 0) return null;
+
+    return (
+      <div className="farcaster-suggestions">
+        {suggestions.map((suggestion, index) => (
+          <div
+            key={suggestion.fid || index}
+            className="suggestion-item"
+            onClick={() => handleSuggestionClick(suggestion.username)}
+          >
+            {suggestion.pfp ? (
+              <img
+                src={suggestion.pfp}
+                alt={suggestion.username}
+                className="suggestion-avatar"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = '/assets/placeholder-profile.png';
+                }}
+              />
+            ) : (
+              <div className="suggestion-avatar-placeholder">
+                {suggestion.username.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="suggestion-user-info">
+              <span className="suggestion-display-name">
+                {suggestion.displayName || suggestion.username}
+              </span>
+              <span className="suggestion-username">@{suggestion.username}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
+  // If on mobile, render using a portal
+  if (isMobile && suggestions.length > 0) {
+    return ReactDOM.createPortal(
+      <SuggestionsList />,
+      document.body
+    );
   }
   
-  return (
-    <div 
-      ref={containerRef}
-      className="farcaster-suggestions"
-    >
-      {suggestions.map((user) => (
-        <div 
-          key={user.fid}
-          onClick={() => handleSelect(user.username)}
-          className="suggestion-item"
-        >
-          {user.imageUrl ? (
-            <img 
-              src={user.imageUrl} 
-              alt=""
-              className="suggestion-avatar"
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = '/assets/placeholder-profile.png';
-              }}
-            />
-          ) : (
-            <div className="suggestion-avatar-placeholder">
-              {user.username ? user.username[0].toUpperCase() : '?'}
-            </div>
-          )}
-          <div className="suggestion-user-info">
-            <span className="suggestion-display-name">
-              {user.displayName || user.username}
-            </span>
-            <span className="suggestion-username">
-              @{user.username}
-            </span>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
+  // On desktop, render normally
+  return <SuggestionsList />;
 };
 
 export default FarcasterSuggestions; 

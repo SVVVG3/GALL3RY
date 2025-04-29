@@ -101,7 +101,7 @@
   cursor: not-allowed;
 }
 
-/* Username suggestions dropdown */
+/* Username suggestions dropdown - Desktop */
 .farcaster-suggestions {
   position: absolute;
   top: 100%;
@@ -617,15 +617,25 @@
   }
 
   .farcaster-suggestions {
-    position: absolute;
-    top: calc(100% + 8px);
+    position: fixed;
+    top: auto;
+    bottom: 0;
     left: 0;
-    transform: none;
+    right: 0;
     width: 100%;
-    max-width: none;
-    border-radius: 8px;
-    margin-top: 0;
-    max-height: 300px;
+    max-width: 100%;
+    transform: none;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+    max-height: 60vh;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* Ensure suggestions are above everything else */
+  body > .farcaster-suggestions {
+    z-index: 1000001;
   }
 
   .suggestion-item {
