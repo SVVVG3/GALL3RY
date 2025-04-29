@@ -143,8 +143,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         }
       };
 
-      // Use our dedicated method for Farcaster users with pagination enabled
-      await fetchNftsForFarcaster(
+      // Fetch NFTs for all wallets
+      const nftResult = await fetchNftsForFarcaster(
         walletAddresses,
         {
           chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
@@ -156,6 +156,17 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           updateCallback: updateProgressCallback
         }
       );
+
+      // Handle the final result
+      if (nftResult && nftResult.nfts) {
+        const formattedNfts = formatNFTsForDisplay(nftResult.nfts);
+        setUserNfts(formattedNfts);
+        console.log(`Final update: Found ${formattedNfts.length} NFTs`);
+      }
+
+      // Set searching to false after all NFTs are loaded
+      setIsSearching(false);
+
     } catch (error) {
       console.error('Error in search:', error);
       setSearchError(error.message);
