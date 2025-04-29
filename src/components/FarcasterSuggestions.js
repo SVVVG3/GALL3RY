@@ -77,111 +77,42 @@ const FarcasterSuggestions = ({
     return null;
   }
   
-  // Updated dropdown styling
-  const dropdownStyle = {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    width: '100%',
-    zIndex: 1000000,
-    backgroundColor: '#fff',
-    border: '1px solid #e5e7eb',
-    borderRadius: '8px',
-    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-    overscrollBehavior: 'contain',
-    WebkitOverflowScrolling: 'touch',
-    marginTop: '4px',
-  };
-  
   return (
     <div 
       ref={containerRef}
       className="farcaster-suggestions"
-      style={dropdownStyle}
     >
-      <div style={{ padding: "4px 0" }}>
-        {suggestions.map((user) => (
-          <div 
-            key={user.fid}
-            onClick={() => handleSelect(user.username)}
-            style={{
-              padding: "12px 15px",
-              display: "flex",
-              alignItems: "center", 
-              borderBottom: "1px solid #f3f4f6",
-              cursor: "pointer",
-              backgroundColor: "#ffffff",
-              transition: "background-color 0.2s",
-              fontSize: "14px",
-              minHeight: "48px",
-            }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = "#f9fafb"}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = "#ffffff"}
-          >
-            {user.imageUrl ? (
-              <img 
-                src={user.imageUrl} 
-                alt=""
-                style={{
-                  width: "40px", // Slightly larger images
-                  height: "40px",
-                  borderRadius: "50%",
-                  marginRight: "12px",
-                  border: "1px solid #e5e7eb",
-                  objectFit: "cover",
-                  flexShrink: 0
-                }}
-                onError={(e) => {
-                  e.target.onerror = null;
-                  e.target.src = '/assets/placeholder-profile.png';
-                }}
-              />
-            ) : (
-              <div style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                marginRight: "12px",
-                backgroundColor: "#f3f4f6",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "16px",
-                fontWeight: "bold",
-                color: "#6b7280",
-                flexShrink: 0
-              }}>
-                {user.username ? user.username[0].toUpperCase() : '?'}
-              </div>
-            )}
-            <div className="suggestion-user-info">
-              <span 
-                style={{
-                  fontWeight: "600",
-                  fontSize: "16px", // Larger font size
-                  color: "#111827",
-                  display: "block",
-                  lineHeight: "1.2",
-                  marginBottom: "4px"
-                }}
-              >
-                {user.displayName || user.username}
-              </span>
-              <span 
-                style={{
-                  fontSize: "14px", // Larger font size
-                  color: "#6b7280",
-                  display: "block",
-                  lineHeight: "1.2"
-                }}
-              >
-                @{user.username}
-              </span>
+      {suggestions.map((user) => (
+        <div 
+          key={user.fid}
+          onClick={() => handleSelect(user.username)}
+          className="suggestion-item"
+        >
+          {user.imageUrl ? (
+            <img 
+              src={user.imageUrl} 
+              alt=""
+              className="suggestion-avatar"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = '/assets/placeholder-profile.png';
+              }}
+            />
+          ) : (
+            <div className="suggestion-avatar-placeholder">
+              {user.username ? user.username[0].toUpperCase() : '?'}
             </div>
+          )}
+          <div className="suggestion-user-info">
+            <span className="suggestion-display-name">
+              {user.displayName || user.username}
+            </span>
+            <span className="suggestion-username">
+              @{user.username}
+            </span>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
     </div>
   );
 };

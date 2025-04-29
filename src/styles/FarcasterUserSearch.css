@@ -114,6 +114,8 @@
   z-index: 1000000;
   max-height: 400px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .suggestion-item {
@@ -122,25 +124,43 @@
   align-items: center;
   border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
+  background-color: #ffffff;
   transition: background-color 0.2s;
+  font-size: 14px;
   min-height: 48px;
-}
-
-.suggestion-item:last-child {
-  border-bottom: none;
 }
 
 .suggestion-item:hover {
   background-color: #f9fafb;
 }
 
-.username-suggestion-item img {
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.suggestion-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
   margin-right: 12px;
-  object-fit: cover;
   border: 1px solid #e5e7eb;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.suggestion-avatar-placeholder {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  margin-right: 12px;
+  background-color: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #6b7280;
+  flex-shrink: 0;
 }
 
 .suggestion-user-info {
@@ -151,14 +171,16 @@
 
 .suggestion-display-name {
   font-weight: 600;
-  color: var(--heading-color);
   font-size: 16px;
+  color: #111827;
+  display: block;
   line-height: 1.2;
 }
 
 .suggestion-username {
   font-size: 14px;
-  color: var(--secondary-text);
+  color: #6b7280;
+  display: block;
   line-height: 1.2;
 }
 
@@ -600,6 +622,7 @@
     max-height: 60vh;
     z-index: 1000001;
     background: #fff;
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .suggestion-item {
@@ -1237,7 +1260,7 @@
 .nft-header-right {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
+  gap: 10px;
 }
 
 .nft-count {
