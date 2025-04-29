@@ -9,7 +9,6 @@ import safeStorage from '../utils/storage';
 import NFTSearchBar from './NFTSearchBar';
 import NFTSortControls from './NFTSortControls';
 import farcasterService from '../services/farcasterService';
-import FarcasterSuggestions from './FarcasterSuggestions';
 import { useDispatch, useSelector } from 'react-redux';
 import { formatNFTsForDisplay, removeDuplicates } from '../utils/nftUtils';
 import alchemyService, { fetchNftsForAddresses, fetchNftsSimple, fetchNftsForFarcaster } from '../services/alchemyService';
@@ -51,22 +50,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
-  const [suggestions, setSuggestions] = useState([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [inputRect, setInputRect] = useState(null);
-  
-  // Input reference for positioning the dropdown
-  const inputRef = useRef(null);
-  
-  // Define the updateInputRect function
-  const updateInputRect = useCallback(() => {
-    if (inputRef.current) {
-      const rect = inputRef.current.getBoundingClientRect();
-      setInputRect(rect);
-      console.log('Updated input rect:', rect);
-    }
-  }, [inputRef]);
   
   // Get filter/sort state from Redux or use local defaults
   const { searchTerm, sortOption, sortDirection, selectedWallet } = useSelector(state => ({
@@ -88,61 +71,34 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       onNFTsDisplayChange(hasNFTsToDisplay);
     }
   }, [userProfile, userNfts, onNFTsDisplayChange]);
-  
-  // Handle input change and fetch suggestions
-  const handleInputChange = async (e) => {
-    const value = e.target.value;
-    setFormSearchQuery(value);
-    
-    if (value.trim().length > 0) {
-      setIsLoadingSuggestions(true);
-      setShowSuggestions(true);
-      try {
-        const results = await farcasterService.searchUsers(value);
-        setSuggestions(results);
-      } catch (error) {
-        console.error('Error fetching suggestions:', error);
-        setSuggestions([]);
-      }
-      setIsLoadingSuggestions(false);
-    } else {
-      setSuggestions([]);
-      setShowSuggestions(false);
-    }
-  };
 
-  // Handle suggestion selection
-  const handleSuggestionSelect = async (user) => {
+  // Handle form submission and search
+  const handleSearch = async (e) => {
+    if (e) {
+      e.preventDefault();
+    }
+
+    const username = formSearchQuery.trim();
+    if (!username) {
+      setSearchError('Please enter a username');
+      return;
+    }
+
     try {
-      // Get the username before we do anything else
-      const username = user.username;
-      console.log('Suggestion selected:', username);
-      
-      // Update UI state
-      setFormSearchQuery(username);
-      setSuggestions([]);
-      setShowSuggestions(false);
+      setIsSearching(true);
       setSearchError(null);
       
-      // Ensure we're not already searching
-      if (isSearching) {
-        console.log('Already searching, waiting...');
-        return;
-      }
+      // Clear previous user data
+      setUserNfts([]);
+      setWalletAddresses([]);
       
-      // Set searching state
-      setIsSearching(true);
-      
-      console.log('Initiating search for selected user:', username);
-      
-      // First try to get the full profile data
+      // Get the profile
       let profile;
       try {
         profile = await zapperService.getFarcasterProfile(username);
         console.log('Zapper API returned profile:', profile);
       } catch (zapperError) {
         console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
-        // Fallback to farcasterService if Zapper fails
         profile = await farcasterService.getProfile({ username });
       }
       
@@ -150,9 +106,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         throw new Error(`User ${username} not found`);
       }
       
-      console.log('User profile found:', profile);
+      // Update user profile immediately
+      setUserProfile(profile);
       
-      // Prepare wallet addresses
+      // Get valid wallet addresses
       const walletAddresses = [
         ...new Set([
           profile.custodyAddress,
@@ -162,8 +119,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
       
-      // Update user profile and wallet addresses immediately
-      setUserProfile(profile);
+      // Update wallet addresses state
       setWalletAddresses(walletAddresses);
       
       if (walletAddresses.length === 0) {
@@ -175,7 +131,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         if (progressData && progressData.nfts) {
           // Format the NFTs for display
           const formattedProgressNfts = formatNFTsForDisplay(progressData.nfts);
-          
           console.log(`Progressive update: Received ${progressData.nfts.length} NFTs, after formatting: ${formattedProgressNfts.length}`);
           
           // Update the NFT state with the latest data
@@ -196,18 +151,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           excludeSpam: true,
           excludeAirdrops: true,
           pageSize: 100,
-          useAdvancedSpamFilter: true, // Enable advanced spam filtering
-          aggressiveSpamFiltering: true, // Use aggressive mode
-          updateCallback: updateProgressCallback // Pass the callback for progressive updates
+          useAdvancedSpamFilter: true,
+          aggressiveSpamFiltering: true,
+          updateCallback: updateProgressCallback
         }
       );
     } catch (error) {
-      console.error('Error in handleSuggestionSelect:', error);
+      console.error('Error in search:', error);
       setSearchError(error.message);
       setIsSearching(false);
     }
   };
-  
+
   // Get sorted NFTs
   const sortedNfts = useCallback(() => {
     if (!userNfts || userNfts.length === 0) return [];
@@ -278,9 +233,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                         a.collection?.floorPrice?.value || 
                         a.floorPrice?.value || 
                         (a.contractMetadata?.openSea?.floorPrice || 0) ||
-                        // Additional paths for Alchemy v3 API response format
                         (a.contract?.openSeaMetadata?.floorPrice || 0) ||
-                        // Direct floor price values
                         (typeof a.collection?.floorPrice === 'number' ? a.collection.floorPrice : 0) ||
                         (typeof a.floorPrice === 'number' ? a.floorPrice : 0) ||
                         0;
@@ -290,30 +243,10 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                         b.collection?.floorPrice?.value || 
                         b.floorPrice?.value || 
                         (b.contractMetadata?.openSea?.floorPrice || 0) ||
-                        // Additional paths for Alchemy v3 API response format
                         (b.contract?.openSeaMetadata?.floorPrice || 0) ||
-                        // Direct floor price values
                         (typeof b.collection?.floorPrice === 'number' ? b.collection.floorPrice : 0) ||
                         (typeof b.floorPrice === 'number' ? b.floorPrice : 0) ||
                         0;
-          
-          // Debug log for troubleshooting (only for first few NFTs)
-          if (a.name && a.name === userNfts[0]?.name || b.name === userNfts[0]?.name) {
-            console.log('Value comparison NFT structure:', {
-              nameA: a.name, 
-              valueA, 
-              paths: {
-                floorPriceValueUsd: a.collection?.floorPrice?.valueUsd,
-                floorPriceValueUsdDirect: a.floorPrice?.valueUsd,
-                floorPriceEth: a.collection?.floorPrice?.value,
-                floorPriceEthDirect: a.floorPrice?.value,
-                openSea: a.contractMetadata?.openSea?.floorPrice,
-                openSeaV3: a.contract?.openSeaMetadata?.floorPrice,
-                directCollectionFloorPrice: typeof a.collection?.floorPrice === 'number' ? a.collection.floorPrice : null,
-                directFloorPrice: typeof a.floorPrice === 'number' ? a.floorPrice : null
-              }
-            });
-          }
           
           // Convert to numbers to ensure proper comparison
           const numA = parseFloat(valueA) || 0;
@@ -328,8 +261,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         
       case 'recent':
         return nftsCopy.sort((a, b) => {
-          // Prioritize transferTimestamp which comes from Alchemy's getAssetTransfers
-          // Then fall back to other timestamp fields if available
           const timeA = a.transferTimestamp || 
                        a.lastActivityTimestamp || 
                        a.acquiredAt || 
@@ -346,24 +277,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                        b.timeLastUpdated ||
                        b.createdAt;
           
-          // Debug timestamps for the first few NFTs to help troubleshoot
-          if (a === userNfts[0] || b === userNfts[0]) {
-            console.log('Recent sorting timestamp info:', {
-              name: a.name || a.title,
-              transferTimestampA: a.transferTimestamp,
-              otherTimestampA: a.lastActivityTimestamp || a.acquiredAt || a.lastTransferTimestamp || a.timeLastUpdated,
-              allTimestampsA: {
-                transfer: a.transferTimestamp,
-                lastActivity: a.lastActivityTimestamp,
-                acquired: a.acquiredAt,
-                lastTransfer: a.lastTransferTimestamp,
-                timeLastUpdated: a.timeLastUpdated
-              },
-              transferTimestampB: b.transferTimestamp,
-              otherTimestampB: b.lastActivityTimestamp || b.acquiredAt || b.lastTransferTimestamp || b.timeLastUpdated
-            });
-          }
-          
           // If both have timestamps, compare them as dates
           if (timeA && timeB) {
             try {
@@ -372,7 +285,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
             } catch (e) {
               console.warn('Error comparing dates:', e);
-              // Fall through to numeric comparison
             }
           }
           
@@ -380,7 +292,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           if (timeA && !timeB) return sortOrder === 'asc' ? -1 : 1;
           if (!timeA && timeB) return sortOrder === 'asc' ? 1 : -1;
           
-          // If neither has a timestamp or date comparison failed, fall back to token ID
+          // If neither has a timestamp, fall back to token ID
           const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
           const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
           
@@ -390,7 +302,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       case 'collection':
       default:
         return nftsCopy.sort((a, b) => {
-          // Enhanced collection name extraction with more fallbacks
           const collA = (a.collection?.name || 
                        a.collectionName || 
                        a.contract?.name || 
@@ -411,15 +322,14 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           
           // Empty collections (with '') should be sorted last
           if (collA === '' && collB !== '') {
-            return sortOrder === 'asc' ? 1 : -1; // Empty collections last
+            return sortOrder === 'asc' ? 1 : -1;
           }
           if (collA !== '' && collB === '') {
-            return sortOrder === 'asc' ? -1 : 1; // Empty collections last
+            return sortOrder === 'asc' ? -1 : 1;
           }
           
           // If same collection, sort by token ID
           if (collA === collB) {
-            // Parse token IDs as numbers when possible
             const idA = parseInt(a.tokenId || a.token_id || '0') || 0;
             const idB = parseInt(b.tokenId || b.token_id || '0') || 0;
             
@@ -428,13 +338,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           
           // If one starts with letter and other doesn't, letter comes first
           if (startsWithLetter(collA) && !startsWithLetter(collB)) {
-            return sortOrder === 'asc' ? -1 : 1; // Letters first
+            return sortOrder === 'asc' ? -1 : 1;
           }
           if (!startsWithLetter(collA) && startsWithLetter(collB)) {
-            return sortOrder === 'asc' ? 1 : -1; // Letters first
+            return sortOrder === 'asc' ? 1 : -1;
           }
           
-          // Normal comparison for collections that both start with letters or both don't
+          // Normal comparison
           const result = sortOrder === 'asc' 
             ? collA.localeCompare(collB, undefined, { numeric: true }) 
             : collB.localeCompare(collA, undefined, { numeric: true });
@@ -443,7 +353,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         });
     }
   }, [userNfts, sortBy, sortOrder]);
-  
+
   // Function to filter NFTs by search term
   const filterNftsBySearch = useCallback((nfts) => {
     if (!searchQuery.trim()) return nfts;
@@ -462,10 +372,9 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // Filter NFTs by wallet if a specific wallet is selected
   const filterNftsByWallet = useCallback((nfts) => {
     if (!selectedWallet || selectedWallet === 'all') {
-      return nfts; // Return all NFTs if no wallet is selected or 'all' is selected
+      return nfts;
     }
     
-    // Filter NFTs to only those owned by the selected wallet
     return nfts.filter(nft => {
       const ownerWallet = (nft.ownerWallet || nft.ownerAddress || '').toLowerCase();
       return ownerWallet === selectedWallet.toLowerCase();
@@ -474,31 +383,18 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
 
   // Apply filter to sorted NFTs
   const filteredAndSortedNfts = useCallback(() => {
-    // Add debug logging
     console.log('filteredAndSortedNfts called, userNfts length:', userNfts.length);
     
     try {
-      // First sort NFTs
       const sorted = sortedNfts();
-      
-      // Then filter by wallet
       const walletFiltered = filterNftsByWallet(sorted);
-      
-      // Then filter by search term
       const result = filterNftsBySearch(walletFiltered);
       
-      console.log('Returning filtered and sorted NFTs:', {
-        count: result.length,
-        sample: result.length > 0 ? result[0] : null
-      });
-      
-      // Ensure result is not null/undefined and is an array
       if (!result || !Array.isArray(result)) {
         console.warn('filteredAndSortedNfts returned non-array result:', result);
         return { count: 0, data: [], isLoading: false };
       }
       
-      // Return properly formatted data for VirtualizedNFTGrid
       return {
         count: result.length,
         data: result,
@@ -510,192 +406,19 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       return { count: 0, data: [], isLoading: false };
     }
   }, [filterNftsBySearch, filterNftsByWallet, sortedNfts, userNfts.length]);
-  
-  /**
-   * Handle search for Farcaster user and their NFTs
-   */
-  const handleSearch = useCallback(async (searchParam) => {
-    // Get the query from either the search parameter, event, or current form state
-    let query = '';
-    
-    // If searchParam is a string (direct username search)
-    if (typeof searchParam === 'string') {
-      query = searchParam.trim();
-      console.log('Handling direct username search for:', query);
-    }
-    // If searchParam is an event (form submission)
-    else if (searchParam && searchParam.preventDefault) {
-      searchParam.preventDefault();
-      query = formSearchQuery.trim();
-      console.log('Handling form submission search for:', query);
-    }
-    // If no parameter provided, use current form state
-    else {
-      query = formSearchQuery.trim();
-      console.log('Handling default search for:', query);
-    }
-    
-    if (query.length < 1) {
-      setUserProfile(null);
-      setSearchError(null);
-      return;
-    }
-    
-    try {
-      setIsSearching(true);
-      setSearchError(null);
-      
-      // Clear previous user data to prevent lingering display
-      if (userProfile && userProfile.username !== query) {
-        setUserNfts([]);
-        setWalletAddresses([]);
-      }
-      
-      console.log(`Initiating Farcaster user search for: ${query}`);
-      
-      // Check if we already have this profile cached
-      let profile = userProfile;
-      if (!profile || profile.username !== query) {
-        try {
-          profile = await zapperService.getFarcasterProfile(query);
-          console.log('Zapper API returned profile:', profile);
-        } catch (zapperError) {
-          console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
-          // Fallback to farcasterService if Zapper fails
-          profile = await farcasterService.getProfile({ username: query });
-        }
-      }
-      
-      if (!profile) {
-        throw new Error(`User ${query} not found`);
-      }
-      
-      // Set loading state
-      setIsSearching(true);
-      setSearchError(null);
-      
-      try {
-        console.log('User profile found:', profile);
-        
-        // Prepare wallet addresses
-        const walletAddresses = [
-          ...new Set([
-            profile.custodyAddress,
-            ...(profile.connectedAddresses || [])
-          ])
-        ].filter(address => isValidAddress(address));
-        
-        console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
-        
-        // Update user profile and wallet addresses immediately
-        setUserProfile(profile);
-        setWalletAddresses(walletAddresses);
-        
-        if (walletAddresses.length === 0) {
-          throw new Error('No valid wallet addresses found');
-        }
 
-        // Define an update callback for progressive loading
-        const updateProgressCallback = (progressData) => {
-          if (progressData && progressData.nfts) {
-            // Format the NFTs for display
-            const formattedProgressNfts = formatNFTsForDisplay(progressData.nfts);
-            
-            console.log(`Progressive update: Received ${progressData.nfts.length} NFTs, after formatting: ${formattedProgressNfts.length}`);
-            
-            // Update the NFT state with the latest data
-            setUserNfts(formattedProgressNfts);
-            
-            // If this is a final update (not in progress), set searching to false
-            if (!progressData.inProgress) {
-              setIsSearching(false);
-            }
-          }
-        };
-
-        // Use our dedicated method for Farcaster users with pagination enabled
-        const result = await fetchNftsForFarcaster(
-          walletAddresses,
-          {
-            chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
-            excludeSpam: true,
-            excludeAirdrops: true,
-            pageSize: 100,
-            useAdvancedSpamFilter: true, // Enable advanced spam filtering
-            aggressiveSpamFiltering: true, // Use aggressive mode
-            updateCallback: updateProgressCallback // Pass the callback for progressive updates
-          }
-        );
-        
-        if (result.error) {
-          throw new Error(result.error);
-        }
-        
-        const nfts = result.nfts || [];
-        
-        console.log(`Fetched ${nfts.length} unique NFTs for user ${profile.username}`);
-        console.log(`NFT distribution by wallets:`, result.walletNftCounts);
-        
-        // Format NFTs for display - no need for additional deduplication
-        // as fetchNftsForFarcaster already handles this with createConsistentUniqueId
-        const formattedNfts = formatNFTsForDisplay(nfts);
-        
-        // Log stats without additional deduplication
-        console.log(`Original unique NFTs: ${nfts.length}, Formatted for display: ${formattedNfts.length}`);
-        
-        // After formatting the NFTs for display but before returning
-        if (formattedNfts.length > 0) {
-          console.log('Sample NFT structure:', JSON.stringify(formattedNfts[0], null, 2));
-        }
-        
-        // Set the NFTs in component state
-        setUserNfts(formattedNfts);
-        
-        // Update Redux store if available
-        if (dispatch && setNftList) {
-          dispatch(setNftList(formattedNfts));
-        }
-        
-        // Ensure search state is complete
-        setIsSearching(false);
-        
-        return {
-          profile,
-          nfts: formattedNfts
-        };
-      } catch (fetchError) {
-        console.error('Error fetching NFTs:', fetchError);
-        setSearchError(`Error fetching NFTs: ${fetchError.message}`);
-        setIsSearching(false);
-        throw fetchError;
-      }
-    } catch (error) {
-      console.error('Error in Farcaster search:', error);
-      setSearchError(error.message);
-      setIsSearching(false);
-      throw error;
-    }
-  }, [userProfile, formSearchQuery, dispatch, fetchAllNFTsForWallets]);
-
-  /**
-   * Effect for initial search if username is provided
-   * This must be at the top level, not conditionally called
-   */
+  // Effect for initial search if username is provided
   useEffect(() => {
-    // Only trigger search if we have an initialUsername
     if (initialUsername && initialUsername.trim()) {
       setFormSearchQuery(initialUsername.trim());
-      // We'll handle the actual search in a separate effect to avoid calling handleSearch directly
     }
-  }, [initialUsername]); // Note: do NOT include handleSearch in dependencies
+  }, [initialUsername]);
 
   // Separate effect to handle searching when formSearchQuery changes from initialUsername
   useEffect(() => {
-    // Only perform search if formSearchQuery was set from initialUsername
     const searchFromInitial = formSearchQuery && formSearchQuery === initialUsername && initialUsername.trim();
     
     if (searchFromInitial) {
-      // Call handleSearch with no arguments to avoid event handling issues
       const performSearch = async () => {
         try {
           await handleSearch();
@@ -706,62 +429,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       performSearch();
     }
-  }, [formSearchQuery, initialUsername, handleSearch]);
-
-  // Update the input rect whenever input is focused or window is resized
-  useEffect(() => {
-    // Update initially
-    updateInputRect();
-    
-    // Update on resize
-    window.addEventListener('resize', updateInputRect);
-    
-    // Update on focus
-    if (inputRef.current) {
-      inputRef.current.addEventListener('focus', updateInputRect);
-    }
-    
-    return () => {
-      window.removeEventListener('resize', updateInputRect);
-      if (inputRef.current) {
-        inputRef.current.removeEventListener('focus', updateInputRect);
-      }
-    };
-  }, [updateInputRect]);
-
-  // Add an effect that clears suggestions on search
-  useEffect(() => {
-    // When user is searching, clear any existing suggestions
-    if (isSearching) {
-      setSuggestions([]);
-    }
-  }, [isSearching]);
-
-  // Add event listener to dismiss suggestions when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      // Don't dismiss if clicking on the search input or its children
-      if (inputRef.current && inputRef.current.contains(event.target)) {
-        return;
-      }
-      
-      // Don't dismiss if clicking within the suggestions dropdown
-      const suggestionPortal = document.getElementById('suggestion-portal');
-      if (suggestionPortal && suggestionPortal.contains(event.target)) {
-        return;
-      }
-      
-      // Otherwise, dismiss suggestions
-      if (suggestions.length > 0) {
-        setSuggestions([]);
-      }
-    };
-    
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [suggestions.length]);
+  }, [formSearchQuery, initialUsername]);
 
   return (
     <div className="farcaster-search-container">
@@ -769,17 +437,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         <p className="search-instructions">Enter a Farcaster username to explore their NFT collection</p>
       </div>
       
-      <form onSubmit={(e) => {
-        e.preventDefault();
-        handleSearch(e);
-      }} className="search-form">
+      <form onSubmit={handleSearch} className="search-form">
         <div className="search-input-wrapper">
           <div className="username-input-container">
             <input
               type="text"
-              ref={inputRef}
               value={formSearchQuery}
-              onChange={handleInputChange}
+              onChange={(e) => setFormSearchQuery(e.target.value)}
               placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
               className="search-input"
               aria-label="Farcaster username"
@@ -798,13 +462,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             {isSearching ? 'Searching...' : 'Search'}
           </button>
         </div>
-
-        <FarcasterSuggestions 
-          suggestions={suggestions}
-          onSelect={handleSuggestionSelect}
-          visible={showSuggestions}
-          loading={isLoadingSuggestions}
-        />
       </form>
       
       {searchError && (
@@ -845,7 +502,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                   <span className="fid-display">FID: {userProfile.fid}</span>
                 </div>
                 
-                {/* NFT count between username and wallets */}
                 <div className="nft-total-count">
                   {isSearching ? (
                     <p className="loading-nft-count">
@@ -892,7 +548,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
                 <NFTSearchBar />
               </div>
               
-              {/* Add sort controls if NFTs are available */}
               {userNfts.length > 0 && (
                 <div className="nft-header-right">
                   <NFTSortControls walletAddresses={walletAddresses} />
@@ -900,7 +555,6 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               )}
             </div>
             
-            {/* Use the virtualized grid to display NFTs */}
             <div className="nft-section nft-display">
               <VirtualizedNFTGrid 
                 nfts={filteredAndSortedNfts()} 
