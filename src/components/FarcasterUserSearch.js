@@ -52,6 +52,8 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   // UI state
   const [walletsExpanded, setWalletsExpanded] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [inputRect, setInputRect] = useState(null);
   
   // Input reference for positioning the dropdown
@@ -87,20 +89,33 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
     }
   }, [userProfile, userNfts, onNFTsDisplayChange]);
   
-  // Handle selection from suggestions dropdown
-  const handleSuggestionSelect = (username) => {
-    console.log('Selected username:', username);
+  // Handle input change and fetch suggestions
+  const handleInputChange = async (e) => {
+    const value = e.target.value;
+    setFormSearchQuery(value);
     
-    // Set form query
-    setFormSearchQuery(username);
-    
-    // Execute search immediately
-    handleSearch({ preventDefault: () => {} });
-    
-    // Blur the input to hide mobile keyboard
-    if (inputRef.current) {
-      inputRef.current.blur();
+    if (value.trim().length > 0) {
+      setIsLoadingSuggestions(true);
+      setShowSuggestions(true);
+      try {
+        const results = await farcasterService.searchUsers(value);
+        setSuggestions(results);
+      } catch (error) {
+        console.error('Error fetching suggestions:', error);
+        setSuggestions([]);
+      }
+      setIsLoadingSuggestions(false);
+    } else {
+      setSuggestions([]);
+      setShowSuggestions(false);
     }
+  };
+
+  // Handle suggestion selection
+  const handleSuggestionSelect = (user) => {
+    setFormSearchQuery(user.username);
+    setShowSuggestions(false);
+    handleSearch();
   };
   
   // Get sorted NFTs
@@ -667,9 +682,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               type="text"
               ref={inputRef}
               value={formSearchQuery}
-              onChange={(e) => {
-                setFormSearchQuery(e.target.value);
-              }}
+              onChange={handleInputChange}
               placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
               className="search-input"
               aria-label="Farcaster username"
@@ -689,11 +702,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
           </button>
         </div>
 
-        {/* Move FarcasterSuggestions here, directly under search-input-wrapper */}
         <FarcasterSuggestions 
-          inputValue={formSearchQuery}
-          onSelectSuggestion={handleSuggestionSelect}
-          inputRef={inputRef}
+          suggestions={suggestions}
+          onSelect={handleSuggestionSelect}
+          visible={showSuggestions}
+          loading={isLoadingSuggestions}
         />
       </form>
       
