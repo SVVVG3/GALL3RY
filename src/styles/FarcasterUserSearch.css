@@ -595,11 +595,18 @@
     flex-direction: column;
     gap: 8px;
     position: relative;
+    width: 100%;
+  }
+
+  .username-input-container {
+    position: relative;
+    width: 100%;
   }
 
   .search-input {
     border-radius: 8px;
     padding: 12px 16px;
+    width: 100%;
   }
 
   .search-button {
@@ -608,31 +615,23 @@
     padding: 12px 16px;
   }
 
-  .username-input-container {
-    position: relative;
-    width: 100%;
-  }
-
   .farcaster-suggestions {
     position: absolute;
     top: 100%;
     left: 0;
     right: 0;
     width: 100%;
+    margin-top: 4px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
     border-radius: 8px;
     box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-    margin-top: 4px;
-    max-height: 50vh;
+    max-height: 200px;
     z-index: 1000001;
-    background: #fff;
   }
 
   .suggestion-item {
     padding: 16px;
-  }
-
-  .farcaster-search-container {
-    padding-bottom: 20px;
   }
 }
 
