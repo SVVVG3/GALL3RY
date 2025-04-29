@@ -55,9 +55,8 @@
   display: flex;
   width: 100%;
   max-width: 600px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-  border-radius: 8px;
-  overflow: hidden;
+  margin: 0 auto;
+  position: relative;
 }
 
 .username-input-container {
@@ -66,33 +65,28 @@
 }
 
 .search-input {
-  flex: 1;
-  padding: 12px 16px;
-  font-size: 1rem;
-  border: 1px solid var(--input-border);
-  border-right: none;
-  border-radius: 8px 0 0 8px;
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  transition: border-color 0.3s;
-  min-width: 0;
   width: 100%;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px 0 0 8px;
+  outline: none;
+  background: #fff;
 }
 
 .search-button {
   padding: 12px 24px;
-  background-color: var(--accent-color);
+  background-color: #8b5cf6;
   color: white;
   border: none;
   border-radius: 0 8px 8px 0;
   cursor: pointer;
-  font-size: 16px;
   font-weight: 500;
   transition: background-color 0.2s;
 }
 
 .search-button:hover {
-  background-color: var(--accent-hover);
+  background-color: #7c3aed;
 }
 
 .search-button:disabled {
@@ -101,36 +95,35 @@
 }
 
 /* Username suggestions dropdown */
-.username-suggestions {
+.farcaster-suggestions {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
-  z-index: 10;
-  background-color: #ffffff;
-  border: 1px solid var(--input-border);
-  border-top: none;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  max-height: 240px;
-  overflow-y: auto;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  margin-top: 4px;
+  z-index: 1000000;
 }
 
-.username-suggestion-item {
-  padding: 12px 16px;
+.suggestion-item {
+  padding: 12px 15px;
   display: flex;
   align-items: center;
+  border-bottom: 1px solid #f3f4f6;
   cursor: pointer;
   transition: background-color 0.2s;
-  border-bottom: 1px solid #f0f0f0;
 }
 
-.username-suggestion-item:last-child {
+.suggestion-item:last-child {
   border-bottom: none;
 }
 
-.username-suggestion-item:hover {
-  background-color: #f8f9fa;
+.suggestion-item:hover {
+  background-color: #f9fafb;
 }
 
 .username-suggestion-item img {
