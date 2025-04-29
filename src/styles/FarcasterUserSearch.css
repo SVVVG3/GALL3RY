@@ -23,6 +23,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative; /* Add relative positioning */
 }
 
 .farcaster-user-search {
@@ -31,7 +32,9 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
   flex: 1; /* Allow search area to grow */
-  position: relative; /* Ensure this is relative for absolute positioning of suggestions */
+  position: relative; /* Keep relative positioning */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Search form */
@@ -115,6 +118,7 @@
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   z-index: 1000000;
   margin-top: 4px;
+  max-height: 400px; /* Add max height */
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -618,24 +622,22 @@
 
   .farcaster-suggestions {
     position: fixed;
-    top: auto;
     bottom: 0;
     left: 0;
     right: 0;
-    width: 100%;
-    max-width: 100%;
+    top: auto;
     transform: none;
+    max-width: none;
+    width: 100%;
     margin: 0;
     border-radius: 16px 16px 0 0;
-    border-bottom: none;
-    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
     max-height: 60vh;
+    z-index: 1000001; /* Ensure it's above footer */
     padding-bottom: env(safe-area-inset-bottom);
   }
-
-  /* Ensure suggestions are above everything else */
-  body > .farcaster-suggestions {
-    z-index: 1000001;
+  
+  .app-footer {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   }
 
   .suggestion-item {
@@ -1058,10 +1060,13 @@
 
 /* Footer styling */
 .app-footer {
-  padding: 1.5rem;
+  width: 100%;
+  padding: 1rem;
+  background-color: var(--component-bg);
   text-align: center;
-  font-size: 0.9rem;
-  color: var(--color-gray-600);
+  margin-top: auto; /* Push footer to bottom */
+  position: relative; /* Change to relative */
+  z-index: 1; /* Lower z-index */
 }
 
 .footer-link {
