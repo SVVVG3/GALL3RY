@@ -450,7 +450,7 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
               type="text"
               value={formSearchQuery}
               onChange={(e) => setFormSearchQuery(e.target.value)}
-              placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
+              placeholder="Enter Farcaster username (e.g. dwr.eth, v)"
               className="search-input"
               aria-label="Farcaster username"
               disabled={isSearching}

@@ -27,7 +27,7 @@ const SimpleSearch = ({ onSearch }) => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
+            placeholder="Enter Farcaster username (e.g. dwr.eth, v)"
             className="search-input"
             aria-label="Farcaster username"
             autocapitalize="none"
