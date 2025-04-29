@@ -350,10 +350,11 @@
 
 /* NFT container with adjusted width */
 .nft-container {
-  margin-top: 2rem;
   width: 100%;
-  padding: 0 1rem;
+  padding: 0;
   box-sizing: border-box;
+  overflow: visible;
+  margin-top: 2rem;
 }
 
 /* Style the NFT header with reduced top padding */
@@ -413,11 +414,12 @@
   text-decoration: underline;
 }
 
-/* NFT display area - IMPORTANT: Let nft-unified.css handle the actual grid */
+/* NFT display area */
 .nft-display {
   width: 100%;
-  height: 100%;
-  overflow: auto;
+  min-height: 200px;
+  height: auto;
+  overflow: visible;
 }
 
 .loading-spinner {
@@ -631,19 +633,11 @@
     grid-gap: 16px !important;
   }
   
-  .nft-display {
-    padding: 0;
-  }
-  
   /* Improve mobile card appearance */
   .nft-card {
     max-width: 100%;
     margin: 0 auto;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  .nft-details {
-    padding: 10px;
   }
   
   /* Increase title size for better readability in single column */
@@ -768,9 +762,8 @@
 /* NFT section */
 .nft-section {
   width: 100%;
-  max-width: 100%;
-  margin-top: 20px;
-  padding: 0 5px;
+  box-sizing: border-box;
+  overflow: visible;
 }
 
 /* NFT Count Info */
@@ -1942,9 +1935,11 @@
 .farcaster-search-container .nft-grid {
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
-  grid-auto-rows: 1fr !important;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)) !important;
+  grid-auto-rows: auto !important;
   grid-gap: 20px !important;
+  padding: 0 !important;
+  overflow: visible !important;
 }
 
 /* Adjust container width for proper display */
