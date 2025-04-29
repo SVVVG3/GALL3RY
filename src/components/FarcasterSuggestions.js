@@ -1,22 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import '../styles/FarcasterUserSearch.css';
+import farcasterService from '../services/farcasterService';
 
-interface User {
-  fid: number;
-  username: string;
-  displayName?: string;
-  pfp?: string;
-}
-
-interface FarcasterSuggestionsProps {
-  suggestions: User[];
-  onSelect: (user: User) => void;
-  visible: boolean;
-  loading: boolean;
-}
-
-const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }: FarcasterSuggestionsProps) => {
+/**
+ * A completely standalone component for farcaster username suggestions
+ */
+const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 480);
   const [portalContainer, setPortalContainer] = useState(null);
 
@@ -65,9 +55,8 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }: Farca
                 alt={user.username}
                 className="suggestion-avatar"
                 onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.onerror = null;
-                  target.src = '/assets/placeholder-profile.png';
+                  e.target.onerror = null;
+                  e.target.src = '/assets/placeholder-profile.png';
                 }}
               />
             ) : (
