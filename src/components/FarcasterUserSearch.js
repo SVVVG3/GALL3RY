@@ -392,18 +392,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       if (!result || !Array.isArray(result)) {
         console.warn('filteredAndSortedNfts returned non-array result:', result);
-        return { count: 0, data: [], isLoading: false };
+        return [];
       }
       
-      return {
-        count: result.length,
-        data: result,
-        sample: result.length > 0 ? result[0] : null,
-        isLoading: false
-      };
+      return result;
     } catch (error) {
       console.error('Error in filteredAndSortedNfts:', error);
-      return { count: 0, data: [], isLoading: false };
+      return [];
     }
   }, [filterNftsBySearch, filterNftsByWallet, sortedNfts, userNfts.length]);
 
