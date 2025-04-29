@@ -112,10 +112,11 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
   };
 
   // Handle suggestion selection
-  const handleSuggestionSelect = (user) => {
+  const handleSuggestionSelect = async (user) => {
     setFormSearchQuery(user.username);
+    setSuggestions([]);
     setShowSuggestions(false);
-    handleSearch();
+    await handleSearch(user.username);
   };
   
   // Get sorted NFTs

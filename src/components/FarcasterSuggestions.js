@@ -49,9 +49,9 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
             className="suggestion-item"
             onClick={() => onSelect(user)}
           >
-            {user.pfp ? (
+            {user.imageUrl ? (
               <img
-                src={user.pfp}
+                src={user.imageUrl}
                 alt={user.username}
                 className="suggestion-avatar"
                 onError={(e) => {
