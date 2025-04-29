@@ -135,12 +135,75 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
       
       console.log('Initiating search for selected user:', username);
       
-      // Perform the search
-      await handleSearch(username);
+      // First try to get the full profile data
+      let profile;
+      try {
+        profile = await zapperService.getFarcasterProfile(username);
+        console.log('Zapper API returned profile:', profile);
+      } catch (zapperError) {
+        console.warn('Zapper API failed, falling back to farcasterService:', zapperError.message);
+        // Fallback to farcasterService if Zapper fails
+        profile = await farcasterService.getProfile({ username });
+      }
+      
+      if (!profile) {
+        throw new Error(`User ${username} not found`);
+      }
+      
+      console.log('User profile found:', profile);
+      
+      // Prepare wallet addresses
+      const walletAddresses = [
+        ...new Set([
+          profile.custodyAddress,
+          ...(profile.connectedAddresses || [])
+        ])
+      ].filter(address => isValidAddress(address));
+      
+      console.log(`Processing ${walletAddresses.length} valid wallet addresses`);
+      
+      // Update user profile and wallet addresses immediately
+      setUserProfile(profile);
+      setWalletAddresses(walletAddresses);
+      
+      if (walletAddresses.length === 0) {
+        throw new Error('No valid wallet addresses found');
+      }
+
+      // Define an update callback for progressive loading
+      const updateProgressCallback = (progressData) => {
+        if (progressData && progressData.nfts) {
+          // Format the NFTs for display
+          const formattedProgressNfts = formatNFTsForDisplay(progressData.nfts);
+          
+          console.log(`Progressive update: Received ${progressData.nfts.length} NFTs, after formatting: ${formattedProgressNfts.length}`);
+          
+          // Update the NFT state with the latest data
+          setUserNfts(formattedProgressNfts);
+          
+          // If this is a final update (not in progress), set searching to false
+          if (!progressData.inProgress) {
+            setIsSearching(false);
+          }
+        }
+      };
+
+      // Use our dedicated method for Farcaster users with pagination enabled
+      await fetchNftsForFarcaster(
+        walletAddresses,
+        {
+          chains: ['eth', 'polygon', 'opt', 'arb', 'base'],
+          excludeSpam: true,
+          excludeAirdrops: true,
+          pageSize: 100,
+          useAdvancedSpamFilter: true, // Enable advanced spam filtering
+          aggressiveSpamFiltering: true, // Use aggressive mode
+          updateCallback: updateProgressCallback // Pass the callback for progressive updates
+        }
+      );
     } catch (error) {
       console.error('Error in handleSuggestionSelect:', error);
       setSearchError(error.message);
-    } finally {
       setIsSearching(false);
     }
   };
