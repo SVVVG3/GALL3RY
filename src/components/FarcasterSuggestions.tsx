@@ -2,7 +2,21 @@ import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import '../styles/FarcasterUserSearch.css';
 
-const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
+interface User {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfp?: string;
+}
+
+interface FarcasterSuggestionsProps {
+  suggestions: User[];
+  onSelect: (user: User) => void;
+  visible: boolean;
+  loading: boolean;
+}
+
+const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }: FarcasterSuggestionsProps) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 480);
   const [portalContainer, setPortalContainer] = useState(null);
 
@@ -18,11 +32,14 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
   useEffect(() => {
     if (isMobile) {
       const container = document.createElement('div');
+      container.id = 'suggestion-portal';
       document.body.appendChild(container);
       setPortalContainer(container);
 
       return () => {
-        document.body.removeChild(container);
+        if (container.parentNode) {
+          container.parentNode.removeChild(container);
+        }
       };
     }
   }, [isMobile]);
@@ -42,14 +59,27 @@ const FarcasterSuggestions = ({ suggestions, onSelect, visible, loading }) => {
             className="suggestion-item"
             onClick={() => onSelect(user)}
           >
-            <img
-              src={user.pfp}
-              alt={user.username}
-              className="suggestion-avatar"
-            />
-            <div className="suggestion-info">
-              <div className="suggestion-display-name">{user.displayName}</div>
-              <div className="suggestion-username">@{user.username}</div>
+            {user.pfp ? (
+              <img
+                src={user.pfp}
+                alt={user.username}
+                className="suggestion-avatar"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.src = '/assets/placeholder-profile.png';
+                }}
+              />
+            ) : (
+              <div className="suggestion-avatar-placeholder">
+                {user.username.charAt(0).toUpperCase()}
+              </div>
+            )}
+            <div className="suggestion-user-info">
+              <span className="suggestion-display-name">
+                {user.displayName || user.username}
+              </span>
+              <span className="suggestion-username">@{user.username}</span>
             </div>
           </div>
         ))
