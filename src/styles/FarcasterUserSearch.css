@@ -20,7 +20,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   box-sizing: border-box;
   overflow-x: hidden;
-  min-height: calc(100vh - 100px); /* Ensure container takes up most of viewport height */
+  min-height: 100vh; /* Take up full viewport height */
   display: flex;
   flex-direction: column;
 }
@@ -31,6 +31,7 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-style: normal !important;
   flex: 1; /* Allow search area to grow */
+  position: relative; /* Ensure this is relative for absolute positioning of suggestions */
 }
 
 /* Search form */
@@ -111,8 +112,8 @@
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
   margin-top: 4px;
   z-index: 1000000;
-  max-height: 400px; /* Set a reasonable max height */
-  overflow-y: auto; /* Enable scrolling if content exceeds max height */
+  max-height: 400px;
+  overflow-y: auto;
 }
 
 .suggestion-item {
@@ -405,12 +406,15 @@
 }
 
 .footer {
-  margin-top: auto; /* Push footer to bottom */
+  margin-top: auto;
   padding: 1.5rem 0;
   text-align: center;
   font-size: 0.9rem;
   color: var(--secondary-text);
   border-top: 1px solid #e5e7eb;
+  position: relative; /* Ensure footer stays above fixed elements */
+  z-index: 999999; /* High z-index but below suggestions */
+  background: #fff; /* Ensure footer has a background */
 }
 
 .footer a {
@@ -571,32 +575,25 @@
   }
   
   .search-form {
-    max-width: 100%;
     padding: 0 10px;
-    flex-direction: column;
-    align-items: center;
+    margin-bottom: 1rem;
   }
   
   .search-input-wrapper {
-    width: 100%;
-    max-width: 100%;
     flex-direction: column;
-    margin-bottom: 8px;
+    gap: 8px;
   }
   
   .search-input {
-    padding: 14px 16px;
-    font-size: 16px;
     width: 100%;
     border-radius: 8px;
-    margin-bottom: 8px;
+    padding: 12px 16px;
   }
   
   .search-button {
-    padding: 14px 20px;
-    white-space: nowrap;
     width: 100%;
     border-radius: 8px;
+    padding: 12px 16px;
   }
   
   .nft-container {
@@ -604,59 +601,26 @@
   }
   
   .farcaster-search-container {
-    padding: 10px;
+    padding-bottom: 60px;
   }
   
-  .user-profile {
-    padding: 15px;
-  }
-  
-  /* Fix image styles - don't override object-fit */
-  .profile-image img {
+  .farcaster-suggestions {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
     width: 100%;
-    height: 100%;
-    object-fit: cover;
+    border-radius: 16px 16px 0 0;
+    border-bottom: none;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.1);
+    margin-top: 0;
+    max-height: 60vh;
+    z-index: 1000001; /* Ensure it's above everything */
   }
   
-  /* Sort button styling for mobile */
-  .sort-option, 
-  .sort-button,
-  .sort-order-toggle {
-    padding: 10px 12px;
-    min-height: 44px; /* Larger tap target */
-  }
-  
-  .nft-filter-input {
-    padding: 12px;
-    height: 44px;
-  }
-  
-  .nft-filter-clear {
-    width: 30px;
-    height: 30px;
-  }
-  
-  /* NFT grid styling for mobile */
-  .farcaster-search-container .nft-grid {
-    grid-template-columns: 1fr !important;
-    grid-gap: 16px !important;
-  }
-  
-  /* Improve mobile card appearance */
-  .nft-card {
-    max-width: 100%;
-    margin: 0 auto;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  
-  /* Increase title size for better readability in single column */
-  .nft-title {
-    font-size: 16px;
-    margin-bottom: 4px;
-  }
-  
-  .nft-collection {
-    font-size: 14px;
+  .suggestion-item {
+    padding: 16px;
   }
 }
 
