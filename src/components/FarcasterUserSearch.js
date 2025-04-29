@@ -662,44 +662,22 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
         handleSearch(e);
       }} className="search-form">
         <div className="search-input-wrapper">
-          <div className="username-input-container" style={{ 
-            position: "relative",
-            flex: "1",
-            display: "flex",
-            flexDirection: "column"
-          }}>
-            <div style={{ position: "relative", width: "100%" }}>
-              <input
-                type="text"
-                ref={inputRef}
-                value={formSearchQuery}
-                onChange={(e) => {
-                  setFormSearchQuery(e.target.value);
-                }}
-                placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
-                className="search-input"
-                style={{
-                  width: "100%",
-                  padding: "12px 16px",
-                  fontSize: "16px",
-                  border: "1px solid #d1d5db",
-                  borderRadius: "8px 0 0 8px",
-                  outline: "none"
-                }}
-                aria-label="Farcaster username"
-                disabled={isSearching}
-                autoCapitalize="none"
-                autoCorrect="off"
-                spellCheck="false"
-              />
-              
-              {/* Use our new standalone suggestions component */}
-              <FarcasterSuggestions 
-                inputValue={formSearchQuery}
-                onSelectSuggestion={handleSuggestionSelect}
-                inputRef={inputRef}
-              />
-            </div>
+          <div className="username-input-container">
+            <input
+              type="text"
+              ref={inputRef}
+              value={formSearchQuery}
+              onChange={(e) => {
+                setFormSearchQuery(e.target.value);
+              }}
+              placeholder="Enter Farcaster username (e.g. dwr, vitalik)"
+              className="search-input"
+              aria-label="Farcaster username"
+              disabled={isSearching}
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck="false"
+            />
           </div>
           
           <button 
@@ -710,6 +688,13 @@ const FarcasterUserSearch = ({ initialUsername, onNFTsDisplayChange }) => {
             {isSearching ? 'Searching...' : 'Search'}
           </button>
         </div>
+
+        {/* Move FarcasterSuggestions here, directly under search-input-wrapper */}
+        <FarcasterSuggestions 
+          inputValue={formSearchQuery}
+          onSelectSuggestion={handleSuggestionSelect}
+          inputRef={inputRef}
+        />
       </form>
       
       {searchError && (
